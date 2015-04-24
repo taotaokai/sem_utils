@@ -1,0 +1,8 @@
+these header files must come from the project you are currently work with,
+i.e. the header files that you used to compile the specfem3d_globe,
+which generates the data files that you are working with.
+
+these header files are from specfem3d_globe/
+
+setup/*.h
+OUTPUT_FILES/values_from_mesher.h

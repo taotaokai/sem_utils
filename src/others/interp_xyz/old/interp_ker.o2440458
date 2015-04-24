@@ -1,0 +1,342 @@
+TACC: Setting memory limits for job 2440458 to unlimited KB
+TACC: Dumping job script:
+--------------------------------------------------------------------------------
+#!/bin/bash
+#$ -V                     		# Inherit the submission environment 
+#$ -cwd                   		# Start job in submission directory
+#$ -N interp_ker           		# Job Name
+#$ -j y                   		# combine stderr & stdout into stdout  
+#$ -o interp_ker.o$JOB_ID  	# Name of the output file (eg. myMPI.oJobID)
+#$ -pe 12way 12           		# Requests 12 cores/node, 24 cores total: 12way 24
+#$ -q normal              		# Queue name
+#$ -l h_rt=03:00:00   # Run time (hh:mm:ss) - 1.5 hours
+#$ -M kai.tao@utexas.edu
+#$ -m bea
+#$ -hold_jid -1
+
+# Run the MPI executable
+mesh_dir=plot/mesh
+model_str=alpha_kernel,beta_kernel,rho_kernel
+
+out_dir=plot/event_kernel
+for profile in GUL TNC YCH
+do
+  for iter in 1 2 3 4 5 6
+  do
+    echo ----------------
+    echo $(date)
+    echo $profile $iter
+    #topo_dir=/scratch/03244/ktao/China_13s/SEM_iterations/$iter/DATABASES_MPI
+    topo_dir=/scratch/03244/ktao/China_13s/SEM_iterations/$iter/EVENT_KERNELS/20030727_0625
+    bin/interp_xyz $mesh_dir/$profile.xyz $model_str $topo_dir $topo_dir \
+                   $out_dir/${profile}_iter${iter}.out
+  done
+done
+
+
+out_dir=plot/kernel_sum
+for profile in GUL TNC YCH
+do
+  for iter in 1 2 3 4 5 6
+  do
+    echo ----------------
+    echo $(date)
+    echo $profile $iter
+    topo_dir=/scratch/03244/ktao/China_13s/SEM_iterations/$iter/DATABASES_MPI
+    model_dir=/scratch/03244/ktao/China_13s/SEM_iterations/$iter/KERNEL_SUM
+    bin/interp_xyz $mesh_dir/$profile.xyz $model_str $model_dir $topo_dir \
+                   $out_dir/${profile}_iter${iter}.out
+  done
+done
+--------------------------------------------------------------------------------
+TACC: Done.
+----------------
+Thu Feb 19 22:10:02 CST 2015
+GUL 1
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:12:28 CST 2015
+GUL 2
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:14:57 CST 2015
+GUL 3
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:17:21 CST 2015
+GUL 4
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:19:43 CST 2015
+GUL 5
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:22:10 CST 2015
+GUL 6
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:24:40 CST 2015
+TNC 1
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:25:33 CST 2015
+TNC 2
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:26:50 CST 2015
+TNC 3
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:27:51 CST 2015
+TNC 4
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:28:55 CST 2015
+TNC 5
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:29:58 CST 2015
+TNC 6
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:31:00 CST 2015
+YCH 1
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:31:55 CST 2015
+YCH 2
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:32:51 CST 2015
+YCH 3
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:33:51 CST 2015
+YCH 4
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:35:01 CST 2015
+YCH 5
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:36:19 CST 2015
+YCH 6
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:37:29 CST 2015
+GUL 1
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:39:59 CST 2015
+GUL 2
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:42:25 CST 2015
+GUL 3
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:45:08 CST 2015
+GUL 4
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:48:01 CST 2015
+GUL 5
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:50:55 CST 2015
+GUL 6
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:53:31 CST 2015
+TNC 1
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:55:19 CST 2015
+TNC 2
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:57:25 CST 2015
+TNC 3
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 22:59:29 CST 2015
+TNC 4
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 23:01:56 CST 2015
+TNC 5
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 23:03:13 CST 2015
+TNC 6
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 23:05:16 CST 2015
+YCH 1
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 23:06:48 CST 2015
+YCH 2
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 23:08:03 CST 2015
+YCH 3
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 23:09:19 CST 2015
+YCH 4
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 23:10:32 CST 2015
+YCH 5
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+----------------
+Thu Feb 19 23:11:50 CST 2015
+YCH 6
+ num_xyz=       20000
+ num_model=           3
+ res_dist(1)=  1.0000000E+30
+ model_interp(1,1)=  0.0000000E+00
+  0.1000000E+31    0.0000000E+00
+TACC: Cleaning up after job: 2440458
+TACC: Done.

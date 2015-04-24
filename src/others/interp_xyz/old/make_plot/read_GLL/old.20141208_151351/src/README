@@ -1,0 +1,6 @@
+program used to interpolate GLL model from DATABASES_MPI/
+
+To compile, copy OUTPUT_FILES/constants.h and OUTPUT_FILES/values_from_mesher.h
+to the current directory, and then run "make"
+
+usage: see example in the shell script: interp_section.sh

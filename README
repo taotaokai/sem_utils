@@ -1,0 +1,19 @@
+DESCRIPTION
+
+  this package is used for post-processing with specfem3d_globe
+
+
+LIBRARIES
+
+  fortran90 modules: 
+
+  sem_constants, sem_parallel: 
+
+  sem_io, sem_tomo:
+
+
+PROGRAMS
+
+  xmeasure_adj: measure adjoint source
+
+  xsem_interpolate: interpolate SEM mesh data(e.g. make new mesh or create profiles)

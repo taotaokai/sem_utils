@@ -1,9 +1,9 @@
-module parallel
+module sem_parallel
 
 !======== specification part ==========
 
   use mpi
-  use constants, only: CUSTOM_REAL,CUSTOM_MPI_TYPE
+  use sem_constants, only: CUSTOM_REAL
 
   implicit none
 
@@ -166,4 +166,4 @@ subroutine bcast_all_singlecr(buffer)
 end subroutine bcast_all_singlecr
 
 
-end module parallel
+end module sem_parallel

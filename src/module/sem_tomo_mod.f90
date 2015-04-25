@@ -1,23 +1,21 @@
-module sem_tomography
+module sem_tomo
 
 !----------------------------------
 ! specification part
 !----------------------------------
 
-  use constants,only: CUSTOM_REAL,MAX_STRING_LEN,IIN,IOUT, &
-    NGLLX,NGLLY,NGLLZ
-
-  use sem_IO
+  use sem_constants
+  use sem_io
 
   implicit none
 
 private
 
   ! public subroutines
-  public :: sem_sum_kernels
-  public :: sem_sum_kernels_cijkl
-  public :: sem_reduce_kernel_cijkl_to_iso
-  public :: sem_inner_prod
+  public :: sem_tomo_sum_kernels
+  public :: sem_tomo_sum_kernels_cijkl
+  public :: sem_tomo_reduce_kernel_cijkl_to_iso
+  public :: sem_tomo_inner_prod
 
 !----------------------------------
 ! implementation part
@@ -26,7 +24,7 @@ contains
 
 !//////////////////////////
 ! sum kernels that only consist of only one model property, e.g. rho_kernel
-subroutine sem_sum_kernels(kernel_sum, nker, kernel_dirs, iproc, iregion, kernel_name, flag_mask, mask_name)
+subroutine sem_tomo_sum_kernels(kernel_sum, nker, kernel_dirs, iproc, iregion, kernel_name, flag_mask, mask_name)
 
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC), intent(out) :: kernel_sum 
   integer, intent(in) :: nker, iproc, iregion
@@ -117,29 +115,31 @@ end subroutine
 subroutine sem_inner_prod(mesh_data, nmodel, model_array1, model_array2, inner_prod)
 
   integer, intent(in) :: nmodel
-  type(sem_mesh), intent(in) :: mesh_data
+  type(mesh), intent(in) :: mesh_data
   real(kind=CUSTOM_REAL), dimension(nmodel,NGLLX,NGLLY,NGLLZ,NSPEC), intent(in) :: model_array1, model_array2
   real(kind=CUSTOM_REAL), intent(out) :: inner_prod
 
   integer :: i
-  real(kind=8), dimension(NGLLX,NGLLY,NGLLZ,NSPEC) :: model_prod
+  real(kind=8), dimension(NGLLX,NGLLY,NGLLZ,NSPEC) :: model_prod, volume_gll
   real(kind=8) :: sumval, model_sum
+
+  call sem_mesh_get_volume_gll(mesh_data, volume_gll)
 
   model_sum = 0.d0
   do i = 1, nmodel
-    model_prod = DBLE(model_array1(i,:,:,:,:)) * &
-                 DBLE(model_array2(i,:,:,:,:)) * &
-                 DBLE(mesh_data%volume_gll)
-    call _Kahan_sum(model_prod, sumval)
+    model_prod = DBLE(model_array1(i,:,:,:,:)) &
+                * DBLE(model_array2(i,:,:,:,:)) &
+                * volume_gll
+    call kahan_sum(model_prod, sumval)
     model_sum = model_sum + sumval 
   end do
 
-  inner_prod = REAL(model_sum, kind=CUSTOM_REAL)
+  inner_prod = real(model_sum, kind=CUSTOM_REAL)
 
 end subroutine
 
 !//////////////////////////
-subroutine _Kahan_sum(model_array, model_sum)
+subroutine kahan_sum(model_array, model_sum)
   
   real(kind=8), dimension(:,:,:,:), intent(in) :: model_array
   real(kind=8), intent(out) :: model_sum
@@ -165,4 +165,4 @@ subroutine _Kahan_sum(model_array, model_sum)
 
 end subroutine
 
-end module sem_tomography
+end module sem_tomo

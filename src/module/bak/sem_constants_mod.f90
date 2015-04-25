@@ -6,6 +6,8 @@ module sem_constants
 
   implicit none
 
+  private
+
   include "constants.h"
 
   include "values_from_mesher.h"
@@ -16,18 +18,18 @@ module sem_constants
   integer :: NSPEC, NGLOB
 
   !---- public varaibles
-  !public :: CUSTOM_REAL, MAX_STRING_LEN, IIN, IOUT
-  !public :: NGLLX, NGLLY, NGLLZ, NSPEC, NGLOB
+  public :: CUSTOM_REAL, MAX_STRING_LEN, IIN, IOUT
+  public :: NGLLX, NGLLY, NGLLZ, NSPEC, NGLOB
   ! sem_mesh: 
-  !public :: GAUSSALPHA, GAUSSBETA
-  !public :: NDIM, NGNOD
-  !public :: ANGULAR_WIDTH_XI_IN_DEGREES_VAL
-  !public :: DEGREES_TO_RADIANS, R_UNIT_SPHERE
-  !public :: NEX_XI_VAL
-  !public :: NUM_ITER
+  public :: GAUSSALPHA, GAUSSBETA
+  public :: NDIM, NGNOD
+  public :: ANGULAR_WIDTH_XI_IN_DEGREES_VAL
+  public :: DEGREES_TO_RADIANS, R_UNIT_SPHERE
+  public :: NEX_XI_VAL
+  public :: NUM_ITER
 
   !---- public operations
-  !public :: sem_constants_set
+  public :: sem_constants_set
 
 !----------------------------------
 ! implementation part

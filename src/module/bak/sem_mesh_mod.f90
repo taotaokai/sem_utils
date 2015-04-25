@@ -20,14 +20,14 @@ module sem_mesh
   real(kind=CUSTOM_REAL) :: wgll_cube(NGLLX,NGLLY,NGLLZ)
 
   ! mesh data type 
-  type, public :: mesh
+  type, public :: sem_mesh
     real(kind=CUSTOM_REAL), dimension(:,:), allocatable :: xyz
     integer, dimension(:,:,:,:), allocatable :: ibool
     integer, dimension(:), allocatable :: idoubling
     logical, dimension(:), allocatable :: ispec_is_tiso 
     real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: &
       xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz
-  end type mesh
+  end type sem_mesh
 
   ! public operations
   public :: sem_mesh_init
@@ -43,7 +43,7 @@ contains
 !///////////////////////////////////////////////////////////////////////////////
 subroutine sem_mesh_init(mesh_data)
 
-  type (mesh), intent(inout) :: mesh_data
+  type(sem_mesh), intent(inout) :: mesh_data
 
   if (allocated(mesh_data%xyz)) then
     deallocate(mesh_data%xyz, &
@@ -75,16 +75,13 @@ subroutine sem_mesh_init(mesh_data)
            mesh_data%gammay(1:NGLLX,1:NGLLY,1:NGLLZ,1:NSPEC), &
            mesh_data%gammaz(1:NGLLX,1:NGLLY,1:NGLLZ,1:NSPEC))
 
-  ! compute local coordinates of gll points, integration weight
-  call compute_wgll_cube()
-
 end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
 subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
 
-  type (mesh), intent(inout) :: mesh_data
+  type(sem_mesh), intent(inout) :: mesh_data
   character(len=*), intent(in) :: basedir
   integer, intent(in) :: iproc, iregion
 
@@ -140,7 +137,7 @@ subroutine sem_mesh_get_gll_volume(mesh_data, gll_volume)
 ! gll_volume = jacobian * wgll_cube
 ! jacobian = det(d(x,y,z)/d(xi,eta,gamma)), volumetric deformation ratio from cube to actual element 
 
-  type (mesh), intent(in) :: mesh_data
+  type(sem_mesh), intent(inout) :: mesh_data
   real(kind=CUSTOM_REAL), intent(out) :: gll_volume(NGLLX,NGLLY,NGLLZ,NSPEC)
 
   integer :: i,j,k,ispec
@@ -148,7 +145,7 @@ subroutine sem_mesh_get_gll_volume(mesh_data, gll_volume)
   real(kind=CUSTOM_REAL) :: jacobianl
 
   ! calculate gll quad weight in the reference cube
-  !call compute_wgll_cube()
+  call compute_wgll_cube()
 
   ! calculate volume integration weight on gll
   do ispec = 1, NSPEC
@@ -208,11 +205,11 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, uvw, hlagrange, misloc, elem_ind, stat_loc)
+subroutine sem_mesh_locate_xyz(mesh, npoint, xyz, uvw, hlagrange, misloc, elem_ind, stat_loc)
 !-locate xyz(3,npoint) inside the mesh
 !
 !-input
-! type(mesh) mesh_data
+! type(sem_mesh) mesh
 ! xyz(3, npoint): coordinates to interpolate
 !
 !-output
@@ -222,30 +219,27 @@ subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, uvw, hlagrange, misloc, e
 ! elem_ind(npoint): element index contains the located point
 ! stat_loc(npoint): location status (1: inside, 0: close to the element, -1: far away)
 
-  type (mesh), intent(in) :: mesh_data
+  type(sem_mesh), intent(in) :: mesh
   integer, intent(in) :: npoint
   ! points to locate
-  real(kind=CUSTOM_REAL), intent(in) :: xyz(NDIM, npoint)
+  real(kind=CUSTOM_REAL), intent(in) :: xyz(3, npoint)
 
   ! local coordinates
-  real(kind=CUSTOM_REAL), intent(out) :: uvw(NDIM, npoint)
-  real(kind=CUSTOM_REAL), intent(out) :: hlagrange(NGLLX, NGLLY, NGLLZ, npoint)
+  real(kind=CUSTOM_REAL), intent(inout) :: uvw(3, npoint)
   ! mis-location: abs(xyz - XYZ(uvw))
-  real(kind=CUSTOM_REAL), intent(out) :: misloc(npoint)
+  real(kind=CUSTOM_REAL), intent(inout) :: misloc(npoint)
   ! index of the element inside which the point is located
-  integer, intent(out) :: elem_ind(npoint)
+  integer, intent(inout) :: elem_ind(npoint)
   ! location status: 1 inside, 0 close, -1 away from a typical distance
-  integer, intent(out) :: stat_loc(npoint)
+  integer, intent(inout) :: stat_loc(npoint)
 
   ! local varaibles
-  integer :: i, ia, nsel, ispec, iglob, ipoint, isel
+  integer :: i, ia, nsel, ispec, isel
   integer :: RANGE_1_NSPEC(NSPEC), ind_sel(NSPEC), ind_sort(NSPEC)
   real(kind=CUSTOM_REAL) :: typical_size, HUGEVAL, dist_sq(NSPEC)
   real(kind=CUSTOM_REAL) :: max_x, min_x, max_y, min_y, max_z, min_z
   real(kind=CUSTOM_REAL) :: xyz1(3), uvw1(3), misloc1
   logical :: idx_sel(NSPEC), is_inside
-  integer :: igllx, iglly, igllz
-  double precision :: lagx(NGLLX), lagy(NGLLY), lagz(NGLLZ)
 
   integer, dimension(NGNOD) :: iaddx, iaddy, iaddz ! index of anchor points
   real(kind=CUSTOM_REAL) :: center_xyz(3, NSPEC)
@@ -260,12 +254,12 @@ subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, uvw, hlagrange, misloc, e
   HUGEVAL = huge(1.0_CUSTOM_REAL)
   RANGE_1_NSPEC = (/(i, i=1,NSPEC)/)
 
-  max_x = maxval(center_xyz(1,:)) + typical_size
-  min_x = minval(center_xyz(1,:)) - typical_size
-  max_y = maxval(center_xyz(2,:)) + typical_size
-  min_y = minval(center_xyz(2,:)) - typical_size
-  max_z = maxval(center_xyz(3,:)) + typical_size
-  min_z = minval(center_xyz(3,:)) - typical_size
+  max_x = max(center_xyz(1,:)) + typical_size
+  min_x = min(center_xyz(1,:)) - typical_size
+  max_y = max(center_xyz(2,:)) + typical_size
+  min_y = min(center_xyz(2,:)) - typical_size
+  max_z = max(center_xyz(3,:)) + typical_size
+  min_z = min(center_xyz(3,:)) - typical_size
 
   ! get index of anchor points in the GLL element
   call hex_nodes(iaddx,iaddy,iaddz)
@@ -273,11 +267,11 @@ subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, uvw, hlagrange, misloc, e
   ! get anchor and center points of each GLL element 
   do ispec = 1, NSPEC
     do ia = 1, NGNOD
-      iglob = mesh_data%ibool(iaddx(ia),iaddy(ia),iaddz(ia),ispec)
-      anchor_xyz(:,ia,ispec) = mesh_data%xyz(:,iglob)
+      iglob = ibool(iaddx(ia),iaddy(ia),iaddz(ia),ispec)
+      anchor_xyz(:,ia,ispec) = mesh%xyz(:,iglob)
     enddo
     ! the last anchor point is the element center
-    center_xyz(:,ispec) = mesh_data%xyz(:,iglob)
+    center_xyz(:,ispec) = mesh%xyz(:,iglob)
   enddo
 
   ! locate each point
@@ -287,8 +281,8 @@ subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, uvw, hlagrange, misloc, e
     xyz1 = xyz(:,ipoint)
 
     ! skip points based on coordinate ranges
-    if (     xyz1(1)<min_x .or. xyz1(1)>max_x &
-        .or. xyz1(2)<min_y .or. xyz1(2)>max_y &
+    if (     xyz1(1)<min_x .or. xyz1(1)>max_x
+        .or. xyz1(2)<min_y .or. xyz1(2)>max_y 
         .or. xyz1(3)<min_z .or. xyz1(3)>max_z) then
       stat_loc(ipoint) = -1
       elem_ind(ipoint) = -1
@@ -346,61 +340,10 @@ subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, uvw, hlagrange, misloc, e
 
     enddo ! isel
 
-    ! set GLL interpolating values if located
-    if (stat_loc(ipoint) /= -1) then
-      call lagrange_poly(DBLE(uvw(1,ipoint)), NGLLX, xigll, lagx)
-      call lagrange_poly(DBLE(uvw(2,ipoint)), NGLLY, yigll, lagy)
-      call lagrange_poly(DBLE(uvw(3,ipoint)), NGLLZ, zigll, lagz)
-
-      do igllz = 1, NGLLZ
-        do iglly = 1, NGLLY
-          do igllx = 1, NGLLX
-            hlagrange(igllx,iglly,igllz,ipoint) &
-              = real(lagx(igllx) * lagy(iglly) * lagz(igllz), kind=CUSTOM_REAL)
-          enddo
-        enddo
-      enddo 
-
-    endif
-
   enddo ! ipoint
 
 end subroutine
 
-!///////////////////////////////////////////////////////////////////////////////
-subroutine lagrange_poly(x, ngll, xgll, lagrange)
-!-get lagrange interpolation coefficients: L_i(x)
-!
-!-input
-! x: coordinates of interpolating point
-! ngll: number of colocation points
-! xgll(ngll): coordinates of colocation points
-!
-!-output
-! lagrange(ngll): interpolation coeff.
-!
-
-  double precision, intent(in) :: x
-  integer, intent(in) :: ngll
-  double precision, intent(in) :: xgll(ngll)
-
-  double precision, intent(out) :: lagrange(ngll)
-
-  ! local variables
-  integer :: i
-  integer, dimension(ngll) :: ind
-  double precision, dimension(ngll) :: xx, yy
-
-  ! lagrange(ngll) 
-  ind = (/(i, i=1,ngll)/)
-  xx = x - xgll
-
-  do i = 1, ngll
-    yy = xgll(i) - xgll
-    lagrange(i) = product(xx/yy, mask=(ind/=i))
-  end do
-
-end subroutine lagrange_poly
 
 !///////////////////////////////////////////////////////////////////////////////
 subroutine xyz2cube_bounded(anchor_xyz, xyz, uvw, misloc, is_inside )
@@ -463,7 +406,7 @@ subroutine xyz2cube_bounded(anchor_xyz, xyz, uvw, misloc, is_inside )
   end do ! do iter_loop = 1,NUM_ITER
   
   ! calculate the predicted position 
-  call cube2xyz(anchor_xyz, uvw, xyzi, DuvwDxyz)
+  call cube2xyz(anchor_xyza, uvw, xyzi, DuvwDxyz)
 
   ! residual distance from the target point
   misloc = sqrt(sum((xyz-xyzi)**2))
@@ -578,8 +521,8 @@ subroutine cube2xyz(anchor_xyz, uvw, xyz, DuvwDxyz)
   dershape3D(27,:) = (/ lag2p(1)*lag2(2)*lag2(3), lag2(1)*lag2p(2)*lag2(3), lag2(1)*lag2(2)*lag2p(3) /)
 
   ! xyz and Dxyz/Duvw
-  xyz = matmul(anchor_xyz, shape3D)
-  DxyzDuvw = matmul(anchor_xyz, dershape3D)
+  xyz = matmul(xyza,shape3D)
+  DxyzDuvw = matmul(xyza,dershape3D)
 
   ! adjoint matrix: adj(Dxyz/Duvw)
   DuvwDxyz(1,1) =   DxyzDuvw(2,2)*DxyzDuvw(3,3)-DxyzDuvw(3,2)*DxyzDuvw(2,3)
@@ -672,7 +615,7 @@ subroutine heap_sort(N,RA,IX)
   integer, intent(out) :: IX(N)
 
   ! local variables
-  integer :: I, J, L, IR, IIX
+  integer :: I, J, L, N, IR, IIX
 
   L=N/2+1
   IR=N

@@ -82,15 +82,15 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
+subroutine sem_mesh_read(basedir, iproc, iregion, mesh_data)
 
-  type (mesh), intent(inout) :: mesh_data
   character(len=*), intent(in) :: basedir
   integer, intent(in) :: iproc, iregion
+  type (mesh), intent(inout) :: mesh_data
 
   integer :: ival
 
-  call sem_open_file_for_read(IIN,basedir,iproc,iregion,'solver_data')
+  call sem_io_open_proc_file_for_read(IIN,basedir,iproc,iregion,'solver_data')
 
   ! nspec
   read(IIN) ival

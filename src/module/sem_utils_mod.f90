@@ -12,7 +12,7 @@ private
 
   !---- public subroutines
   public :: sem_utils_read_line
-  public :: sem_utils_split_string
+  public :: sem_utils_delimit_string
   public :: sem_utils_time_stamp
 
 !----------------------------------
@@ -95,7 +95,7 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine sem_utils_split_string(source_string, delimiter, split_array, n)
+subroutine sem_utils_delimit_string(source_string, delimiter, split_array, n)
 ! split delimited string into an array of strings
 
   character(len=*), intent(in) :: source_string

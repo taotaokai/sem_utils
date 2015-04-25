@@ -11,132 +11,149 @@ module sem_io
   private
 
   !---- public operations
-  public :: sem_io_open_file_for_read
-  public :: sem_io_open_file_for_write
+  public :: sem_io_open_proc_file_for_read
+  public :: sem_io_open_proc_file_for_write
   public :: sem_io_read_kernel_cijkl
-  public :: sem_io_read_model
-  public :: sem_io_read_modeln
-  public :: sem_io_write_model
-  public :: sem_io_write_modeln
+  public :: sem_io_read_gll_model
+  public :: sem_io_read_gll_modeln
+  public :: sem_io_write_gll_model
+  public :: sem_io_write_gll_modeln
 
 !----------------------------------
 ! implementation part
 !----------------------------------
 contains
 
-!//////////////////////////
-subroutine sem_io_open_file_for_read(IIN,basedir,iproc,iregion,model_name)
+!///////////////////////////////////////////////////////////////////////////////
+subroutine sem_io_open_proc_file_for_read(fileid, basedir, iproc, iregion, tag)
 
-  character(len=*), intent(in) :: basedir, model_name
-  integer, intent(in) :: iproc, iregion, IIN
+  character(len=*), intent(in) :: basedir, tag 
+  integer, intent(in) :: iproc, iregion, fileid 
 
   integer :: ier
   character(len=MAX_STRING_LEN) :: filename
 
   write(filename,"(a,'/proc',i6.6,'_reg',i1,'_',a,'.bin')") &
-    trim(basedir), iproc, iregion, trim(model_name)
-  open(IIN,file=trim(filename),status='old', &
+    trim(basedir), iproc, iregion, trim(tag)
+
+  open(unit=fileid, file=trim(filename), status='old', &
     form='unformatted',action='read',iostat=ier)
+
   if (ier /= 0) then
-    write(*,*) 'sem_io: Error open file for read: ', trim(filename)
+    write(*,*) 'ERROR:sem_io_open_proc_file_for_read: failed to open file: ', trim(filename)
     stop
   endif
 
 end subroutine
 
-!//////////////////////////
-subroutine sem_io_open_file_for_write(IOUT,basedir,iproc,iregion,model_name)
 
-  character(len=*), intent(in) :: basedir, model_name
-  integer, intent(in) :: iproc, iregion, IOUT
+!///////////////////////////////////////////////////////////////////////////////
+subroutine sem_io_open_proc_file_for_write(fileid, basedir, iproc, iregion, tag)
+
+  character(len=*), intent(in) :: basedir, tag 
+  integer, intent(in) :: iproc, iregion, fileid 
 
   integer :: ier
   character(len=MAX_STRING_LEN) :: filename
 
-  write(filename,"(a,'/proc',i6.6,'_reg',i1,'_',a,'.bin')") &
-    trim(basedir), iproc, iregion, trim(model_name)
-  open(IOUT,file=trim(filename),status='unknown', &
+  write(filename, "(a,'/proc',i6.6,'_reg',i1,'_',a,'.bin')") &
+    trim(basedir), iproc, iregion, trim(tag)
+
+  open(fileid, file=trim(filename), status='unknown', &
     form='unformatted',action='write',iostat=ier)
+
   if (ier /= 0) then
-    write(*,*) 'sem_io: Error open file for write: ', trim(filename)
+    write(*,*) 'ERROR:sem_io_open_proc_file_for_write: failed to open file: ', trim(filename)
     stop
   endif
 
 end subroutine
 
-!//////////////////////////
-subroutine sem_io_read_model(model_array, basedir, iproc, iregion, model_name)
 
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC), intent(out) :: model_array
+!///////////////////////////////////////////////////////////////////////////////
+subroutine sem_io_read_gll_model(basedir, iproc, iregion, model_name, model_gll)
+
   character(len=*), intent(in) :: basedir, model_name
   integer, intent(in) :: iproc, iregion
 
+  real(kind=CUSTOM_REAL), intent(out) :: model_gll(NGLLX,NGLLY,NGLLZ,NSPEC)
+
   integer :: ier
 
-  call sem_io_open_file_for_read(IIN,basedir,iproc,iregion,model_name)
-  read(IIN, iostat=ier) model_array
-  if (ier /= 0) stop "sem_io_read_model:read error"
+  call sem_io_open_proc_file_for_read(IIN,basedir,iproc,iregion,model_name)
+  read(IIN, iostat=ier) model_gll
+  if (ier /= 0) stop "ERROR: sem_io_read_gll_model: failed to read gll model"
 
   close(IIN)
 
 end subroutine
 
 !//////////////////////////
-subroutine sem_io_read_modeln(model_array, basedir, iproc, iregion, nmodel, model_names)
+subroutine sem_io_read_gll_modeln(basedir, iproc, iregion, nmodel, model_names &
+                                  , model_gll)
 
   integer, intent(in) :: nmodel
-  real(kind=CUSTOM_REAL), dimension(nmodel,NGLLX,NGLLY,NGLLZ,NSPEC), intent(out) :: model_array
   character(len=*), intent(in) :: basedir
   character(len=MAX_STRING_LEN), dimension(nmodel), intent(in) :: model_names
   integer, intent(in) :: iproc, iregion
 
+  real(kind=CUSTOM_REAL), intent(out) :: model_gll(nmodel,NGLLX,NGLLY,NGLLZ,NSPEC)
+
   integer :: i
 
   do i = 1, nmodel
-    call sem_io_read_model(model_array(i,:,:,:,:), basedir, iproc, iregion, model_names(i))
+    call sem_io_read_gll_model(basedir, iproc, iregion, model_names(i) &
+                               , model_gll(i,:,:,:,:))
   end do
 
 end subroutine
 
-!//////////////////////////
-subroutine sem_io_read_kernel_cijkl(model_array, basedir, iproc, iregion)
 
-  real(kind=CUSTOM_REAL), dimension(21,NGLLX,NGLLY,NGLLZ,NSPEC), intent(out) :: model_array
+!//////////////////////////
+subroutine sem_io_read_kernel_cijkl(basedir, iproc, iregion, kernel_cijkl)
+
   character(len=*), intent(in) :: basedir
   integer, intent(in) :: iproc, iregion
 
-  call sem_io_open_datafile_for_read(IIN,basedir,iproc,iregion,'cijkl_kernel')
-  read(IIN) model_array
+  real(kind=CUSTOM_REAL), intent(out) :: kernel_cijkl(21,NGLLX,NGLLY,NGLLZ,NSPEC)
+
+  call sem_io_open_proc_file_for_read(IIN,basedir,iproc,iregion,'cijkl_kernel')
+  read(IIN) kernel_cijkl
   close(IIN)
 
 end subroutine
 
-!//////////////////////////
-subroutine sem_io_write_model(model_array, basedir, iproc, iregion, model_name)
 
-  real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC), intent(in) :: model_array
+!//////////////////////////
+subroutine sem_io_write_gll_model(basedir, iproc, iregion, model_name, model_gll)
+
   character(len=*), intent(in) :: basedir, model_name
   integer, intent(in) :: iproc, iregion
+  real(kind=CUSTOM_REAL), intent(in) :: model_gll(NGLLX,NGLLY,NGLLZ,NSPEC)
 
-  call sem_io_open_datafile_for_write(IOUT,basedir,iproc,iregion,model_name)
-  write(IOUT) model_array
+  call sem_io_open_proc_file_for_write(IOUT,basedir,iproc,iregion,model_name)
+  write(IOUT) model_gll
   close(IOUT)
 
 end subroutine
 
+
 !//////////////////////////
-subroutine sem_io_write_modeln(model_array, basedir, iproc, iregion, nmodel, model_names)
+subroutine sem_io_write_gll_modeln( &
+  basedir, iproc, iregion, nmodel, model_names, model_gll)
+
 
   integer, intent(in) :: nmodel
-  real(kind=CUSTOM_REAL), dimension(nmodel,NGLLX,NGLLY,NGLLZ,NSPEC), intent(in) :: model_array
+  integer, intent(in) :: iproc, iregion
   character(len=*), intent(in) :: basedir
   character(len=MAX_STRING_LEN), dimension(nmodel), intent(in) :: model_names
-  integer, intent(in) :: iproc, iregion
+  real(kind=CUSTOM_REAL), intent(in) :: model_gll(nmodel,NGLLX,NGLLY,NGLLZ,NSPEC)
 
   integer :: i
 
   do i = 1, nmodel
-    call sem_io_write_model(model_array(i,:,:,:,:), basedir, iproc, iregion, model_names(i))
+    call sem_io_write_gll_model(basedir, iproc, iregion, model_names(i) &
+                                , model_gll(i,:,:,:,:))
   end do
 
 end subroutine

@@ -11,11 +11,16 @@ module_dir = ${srcdir}/module
 shared_dir = ${srcdir}/shared
 program_dir = ${srcdir}/tomography
 
-FCFLAGS = -g -fbounds-check -Wall -pedantic # gfortran
+# gfortran
+#FCFLAGS = -g -fbounds-check -Wall -pedantic
 #FCFLAGS = -O2
-#FCFLAGS += $(FFLAGS_INC) -mod $(ODIR) # ifort
-#FCFLAGS += $(FFLAGS_INC) -O3 -module $(ODIR) -assume byterecl # mpif90 
-FCFLAGS += -I$(incdir) -J$(objdir)
+#FCFLAGS += -I$(incdir) -J$(objdir)
+#LDFLAGS =
+
+# ifort
+FCFLAGS = -g
+#FCFLAGS = -O2
+FCFLAGS += -I $(incdir) -module $(objdir) -assume byterecl
 LDFLAGS =
 
 module = sem_constants_mod sem_io_mod sem_mesh_mod \

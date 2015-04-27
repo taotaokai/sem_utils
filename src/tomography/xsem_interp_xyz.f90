@@ -56,7 +56,6 @@ program xsem_interp_xyz
   character(len=MAX_STRING_LEN), allocatable :: xyz_strings(:) 
 
   type (mesh) :: mesh_data
-  integer :: igllx, iglly, igllz
   real(CUSTOM_REAL), allocatable :: model_gll(:,:,:,:,:), model_interp(:,:)
   real(CUSTOM_REAL), allocatable :: uvw(:,:), hlagrange(:,:,:,:), misloc(:)
   integer, allocatable :: elem_ind(:), stat_loc(:), stat_loc_final(:)
@@ -100,7 +99,7 @@ program xsem_interp_xyz
   call sem_constants_set(iregion)
 
   ! initialize arrays for each mesh chunk
-  allocate(model_gll(nmodel,NGLLX,NGLLY,NGLLZ,NSPEC), &
+  allocate(model_gll(NGLLX,NGLLY,NGLLZ,NSPEC,nmodel), &
            model_interp(nmodel,npoint), &
            uvw(NDIM,npoint), &
            hlagrange(NGLLX,NGLLY,NGLLZ,npoint), &
@@ -133,24 +132,19 @@ program xsem_interp_xyz
 
         ! should not happen unless exactly on the element surface
         if (stat_loc_final(ipoint) == 1) then
-          print '(a)', "WARN: multiple element locating point ", ipoint
+          print '(a)', "WARN: more than one elements locate point ", ipoint
+          print '(a)', "WARN: only use the first located element."
           cycle
         endif
 
         ! interpolate model
-        do igllz = 1, NGLLZ
-          do iglly = 1, NGLLY
-            do igllx = 1, NGLLX
-              do imodel = 1, nmodel
-                model_interp(imodel,ipoint) = model_interp(imodel,ipoint) &
-                  + ( hlagrange(igllx,iglly,igllz,ipoint) &
-                     * model_gll(imodel, igllx, iglly, igllz, elem_ind(ipoint)))
-              enddo
-            enddo
-          enddo
+        do imodel = 1, nmodel
+          model_interp(imodel,ipoint) = sum( &
+            hlagrange(:,:,:,ipoint) * model_gll(:,:,:,elem_ind(ipoint),imodel) )
         enddo
 
         stat_loc_final(ipoint) = 1
+
       endif
 
     enddo ! ipoint

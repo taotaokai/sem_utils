@@ -12,20 +12,20 @@ shared_dir = ${srcdir}/shared
 program_dir = ${srcdir}/tomography
 
 # gfortran
-#FCFLAGS = -g -fbounds-check -Wall -pedantic
+FCFLAGS = -g -fbounds-check -Wall -pedantic
 #FCFLAGS = -O2
-#FCFLAGS += -I$(incdir) -J$(objdir)
-#LDFLAGS =
+FCFLAGS += -I$(incdir) -J$(objdir)
+LDFLAGS =
 
 # ifort
-FCFLAGS = -g
-#FCFLAGS = -O2
-FCFLAGS += -I $(incdir) -module $(objdir) -assume byterecl
-LDFLAGS =
+#FCFLAGS = -g
+##FCFLAGS = -O2
+#FCFLAGS += -I $(incdir) -module $(objdir) -assume byterecl
+#LDFLAGS =
 
 module = sem_constants_mod sem_io_mod sem_mesh_mod \
 		  sem_parallel_mod sem_utils_mod
-shared = gll_library
+shared = gll_library geographic_mod
 program = xsem_interp_xyz
 
 #------------------------------------------

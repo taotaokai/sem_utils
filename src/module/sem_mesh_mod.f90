@@ -433,8 +433,12 @@ subroutine xyz2cube_bounded(anchor_xyz, xyz, uvw, misloc, is_inside )
   real(kind=CUSTOM_REAL), dimension(NDIM,NDIM) :: DuvwDxyz
   real(kind=CUSTOM_REAL), dimension(NDIM) :: dxyz, duvw
 
+  real(kind=CUSTOM_REAL), parameter ::  zero = 0.0_CUSTOM_REAL & 
+                                      , one = 1.0_CUSTOM_REAL &
+                                      , minus_one = -1.0_CUSTOM_REAL
+
   ! initialize 
-  uvw = 0.0
+  uvw = zero
   is_inside = .true.
 
   ! iteratively update local coordinate uvw to approach the target xyz
@@ -453,9 +457,9 @@ subroutine xyz2cube_bounded(anchor_xyz, xyz, uvw, misloc, is_inside )
     uvw = uvw + duvw
 
     ! limit inside the cube
-    if (any(uvw<=-1.0 .or. uvw>=1.0)) then 
-      where (uvw<-1.0) uvw = -1.0
-      where (uvw>1.0) uvw = 1.0
+    if (any(uvw < minus_one .or. uvw > one)) then 
+      where (uvw < minus_one) uvw = minus_one
+      where (uvw > one) uvw = one
       ! flag inside in the last iteration step
       if (iter_loop == NUM_ITER) is_inside = .false.
     end if

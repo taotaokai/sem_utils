@@ -97,13 +97,13 @@ subroutine sem_io_read_gll_modeln(basedir, iproc, iregion, nmodel, model_names &
   character(len=MAX_STRING_LEN), dimension(nmodel), intent(in) :: model_names
   integer, intent(in) :: iproc, iregion
 
-  real(kind=CUSTOM_REAL), intent(out) :: model_gll(nmodel,NGLLX,NGLLY,NGLLZ,NSPEC)
+  real(kind=CUSTOM_REAL), intent(out) :: model_gll(NGLLX,NGLLY,NGLLZ,NSPEC,nmodel)
 
-  integer :: i
+  integer :: imodel
 
-  do i = 1, nmodel
-    call sem_io_read_gll_model(basedir, iproc, iregion, model_names(i) &
-                               , model_gll(i,:,:,:,:))
+  do imodel = 1, nmodel
+    call sem_io_read_gll_model(basedir, iproc, iregion, model_names(imodel) &
+                               , model_gll(:,:,:,:,imodel))
   end do
 
 end subroutine
@@ -142,18 +142,17 @@ end subroutine
 subroutine sem_io_write_gll_modeln( &
   basedir, iproc, iregion, nmodel, model_names, model_gll)
 
-
-  integer, intent(in) :: nmodel
-  integer, intent(in) :: iproc, iregion
   character(len=*), intent(in) :: basedir
-  character(len=MAX_STRING_LEN), dimension(nmodel), intent(in) :: model_names
-  real(kind=CUSTOM_REAL), intent(in) :: model_gll(nmodel,NGLLX,NGLLY,NGLLZ,NSPEC)
+  integer, intent(in) :: iproc, iregion
+  integer, intent(in) :: nmodel
+  character(len=MAX_STRING_LEN), intent(in) :: model_names(nmodel)
+  real(kind=CUSTOM_REAL), intent(in) :: model_gll(NGLLX,NGLLY,NGLLZ,NSPEC,nmodel)
 
-  integer :: i
+  integer :: imodel
 
-  do i = 1, nmodel
-    call sem_io_write_gll_model(basedir, iproc, iregion, model_names(i) &
-                                , model_gll(i,:,:,:,:))
+  do imodel = 1, nmodel
+    call sem_io_write_gll_model(basedir, iproc, iregion, model_names(imodel) &
+                                , model_gll(:,:,:,:,imodel))
   end do
 
 end subroutine

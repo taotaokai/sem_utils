@@ -38,26 +38,26 @@
  ! angular size in first direction in degrees =    20.0000000    
  ! angular size in second direction in degrees =    20.0000000    
  !
- ! longitude of center in degrees =    25.0000000    
- ! latitude of center in degrees =    40.0000000    
+ ! longitude of center in degrees =    135.983994    
+ ! latitude of center in degrees =    37.6590004    
  !
- ! angle of rotation of the first chunk =    0.00000000    
+ ! angle of rotation of the first chunk =   -6.69999981    
  !
  ! corner            1
- ! longitude in degrees =    13.661882747982684     
- ! latitude in degrees =    29.677869656290330     
+ ! longitude in degrees =    123.52994859379010     
+ ! latitude in degrees =    28.460309587776248     
  !
  ! corner            2
- ! longitude in degrees =    36.338117252017327     
- ! latitude in degrees =    29.677869656290330     
+ ! longitude in degrees =    145.61020836088025     
+ ! latitude in degrees =    26.414880872256532     
  !
  ! corner            3
- ! longitude in degrees =    9.8824891302835294     
- ! latitude in degrees =    49.192981807843722     
+ ! longitude in degrees =    123.03384133337009     
+ ! latitude in degrees =    48.188913751221484     
  !
  ! corner            4
- ! longitude in degrees =    40.117510869716469     
- ! latitude in degrees =    49.192981807843722     
+ ! longitude in degrees =    151.66195832275645     
+ ! latitude in degrees =    45.550442233913806     
  !
  ! resolution of the mesh at the surface:
  ! -------------------------------------
@@ -78,10 +78,10 @@
  !  by typing "size -d bin/xspecfem3D"
  !  after compiling the code with the DATA/Par_file you plan to use)
  !
- ! size of static arrays per slice =    390.58845600000001       MB
- !                                 =    372.49417877197266       MiB
- !                                 =   0.39058845599999997       GB
- !                                 =   0.36376384645700455       GiB
+ ! size of static arrays per slice =    166.75147600000000       MB
+ !                                 =    159.02659988403320       MiB
+ !                                 =   0.16675147600000001       GB
+ !                                 =   0.15529941394925117       GiB
  !
  ! (should be below to 80% or 90% of the memory installed per core)
  ! (if significantly more, the job will not run by lack of memory )
@@ -90,12 +90,12 @@
  ! (but that can be perfectly acceptable if you can afford it and
  !  want faster results by using more cores)
  !
- ! size of static arrays for all slices =    1562.3538240000000       MB
- !                                      =    1489.9767150878906       MiB
- !                                      =    1.5623538239999999       GB
- !                                      =    1.4550553858280182       GiB
- !                                      =    1.5623538240000000E-003  TB
- !                                      =    1.4209525252226740E-003  TiB
+ ! size of static arrays for all slices =    667.00590399999999       MB
+ !                                      =    636.10639953613281       MiB
+ !                                      =   0.66700590400000004       GB
+ !                                      =   0.62119765579700470       GiB
+ !                                      =    6.6700590399999999E-004  TB
+ !                                      =    6.0663833573926240E-004  TiB
  !
 
  integer, parameter :: NEX_XI_VAL =           64
@@ -112,14 +112,14 @@
  integer, parameter :: NSPECMAX_ANISO_IC =            1
 
  integer, parameter :: NSPECMAX_ISO_MANTLE =        11264
- integer, parameter :: NSPECMAX_TISO_MANTLE =        11264
+ integer, parameter :: NSPECMAX_TISO_MANTLE =            1
  integer, parameter :: NSPECMAX_ANISO_MANTLE =            1
 
- integer, parameter :: NSPEC_CRUST_MANTLE_ATTENUATION =        11264
- integer, parameter :: NSPEC_INNER_CORE_ATTENUATION =           48
+ integer, parameter :: NSPEC_CRUST_MANTLE_ATTENUATION =            1
+ integer, parameter :: NSPEC_INNER_CORE_ATTENUATION =            1
 
- integer, parameter :: NSPEC_CRUST_MANTLE_STR_OR_ATT =        11264
- integer, parameter :: NSPEC_INNER_CORE_STR_OR_ATT =           48
+ integer, parameter :: NSPEC_CRUST_MANTLE_STR_OR_ATT =            1
+ integer, parameter :: NSPEC_INNER_CORE_STR_OR_ATT =            1
 
  integer, parameter :: NSPEC_CRUST_MANTLE_STR_AND_ATT =            1
  integer, parameter :: NSPEC_INNER_CORE_STR_AND_ATT =            1
@@ -138,42 +138,42 @@
  integer, parameter :: NSPEC_CRUST_MANTLE_STACEY =        11264
  integer, parameter :: NSPEC_OUTER_CORE_STACEY =         1120
 
- integer, parameter :: NGLOB_CRUST_MANTLE_OCEANS =       750417
+ integer, parameter :: NGLOB_CRUST_MANTLE_OCEANS =            1
 
- logical, parameter :: TRANSVERSE_ISOTROPY_VAL = .true.
+ logical, parameter :: TRANSVERSE_ISOTROPY_VAL = .false.
 
  logical, parameter :: ANISOTROPIC_3D_MANTLE_VAL = .false.
 
  logical, parameter :: ANISOTROPIC_INNER_CORE_VAL = .false.
 
- logical, parameter :: ATTENUATION_VAL = .true.
+ logical, parameter :: ATTENUATION_VAL = .false.
 
  logical, parameter :: ATTENUATION_3D_VAL = .false.
 
- logical, parameter :: ELLIPTICITY_VAL = .true.
+ logical, parameter :: ELLIPTICITY_VAL = .false.
 
- logical, parameter :: GRAVITY_VAL = .true.
+ logical, parameter :: GRAVITY_VAL = .false.
 
- logical, parameter :: OCEANS_VAL = .true.
+ logical, parameter :: OCEANS_VAL = .false.
 
- integer, parameter :: NX_BATHY_VAL =         5400
- integer, parameter :: NY_BATHY_VAL =         2700
+ integer, parameter :: NX_BATHY_VAL = 1
+ integer, parameter :: NY_BATHY_VAL = 1
 
- logical, parameter :: ROTATION_VAL = .true.
- integer, parameter :: NSPEC_OUTER_CORE_ROTATION =         1120
+ logical, parameter :: ROTATION_VAL = .false.
+ integer, parameter :: NSPEC_OUTER_CORE_ROTATION =            1
 
- logical, parameter :: PARTIAL_PHYS_DISPERSION_ONLY_VAL = .true.
+ logical, parameter :: PARTIAL_PHYS_DISPERSION_ONLY_VAL = .false.
 
  integer, parameter :: NPROC_XI_VAL =            2
  integer, parameter :: NPROC_ETA_VAL =            2
  integer, parameter :: NCHUNKS_VAL =            1
  integer, parameter :: NPROCTOT_VAL =            4
 
- integer, parameter :: ATT1_VAL =            5
- integer, parameter :: ATT2_VAL =            5
- integer, parameter :: ATT3_VAL =            5
- integer, parameter :: ATT4_VAL =        11264
- integer, parameter :: ATT5_VAL =           48
+ integer, parameter :: ATT1_VAL =            1
+ integer, parameter :: ATT2_VAL =            1
+ integer, parameter :: ATT3_VAL =            1
+ integer, parameter :: ATT4_VAL =            1
+ integer, parameter :: ATT5_VAL =            1
 
  integer, parameter :: NSPEC2DMAX_XMIN_XMAX_CM =          640
  integer, parameter :: NSPEC2DMAX_YMIN_YMAX_CM =          640
@@ -201,7 +201,7 @@
  integer, parameter :: NM_KL_REG_PTS_VAL = 1
 
  integer, parameter :: NGLOB_XY_CM =       750417
- integer, parameter :: NGLOB_XY_IC =         3757
+ integer, parameter :: NGLOB_XY_IC =            1
 
  logical, parameter :: ATTENUATION_1D_WITH_3D_STORAGE_VAL = .true.
 
@@ -211,7 +211,7 @@
 
  double precision, parameter :: ANGULAR_WIDTH_ETA_IN_DEGREES_VAL =    20.000000
  double precision, parameter :: ANGULAR_WIDTH_XI_IN_DEGREES_VAL =    20.000000
- double precision, parameter :: CENTER_LATITUDE_IN_DEGREES_VAL =    40.000000
- double precision, parameter :: CENTER_LONGITUDE_IN_DEGREES_VAL =    25.000000
- double precision, parameter :: GAMMA_ROTATION_AZIMUTH_VAL =     0.000000
+ double precision, parameter :: CENTER_LATITUDE_IN_DEGREES_VAL =    37.659000
+ double precision, parameter :: CENTER_LONGITUDE_IN_DEGREES_VAL =   135.984000
+ double precision, parameter :: GAMMA_ROTATION_AZIMUTH_VAL =    -6.700000
 

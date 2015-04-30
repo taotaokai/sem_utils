@@ -12,8 +12,8 @@ shared_dir = ${srcdir}/shared
 program_dir = ${srcdir}/tomography
 
 # gfortran
-FCFLAGS = -g -fbounds-check -Wall -pedantic
-#FCFLAGS = -O2
+#FCFLAGS = -g -Wall -pedantic
+FCFLAGS = -O2
 FCFLAGS += -I$(incdir) -J$(objdir)
 LDFLAGS =
 

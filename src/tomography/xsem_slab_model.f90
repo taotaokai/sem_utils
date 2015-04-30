@@ -63,7 +63,8 @@ program xsem_vertical_slice
 
   double precision :: x, y, z, north, east, down, r, d, radius, ratio
   double precision :: mow_d0, mow_d1, mow_radius0, mow_radius1, mow_dlen
-  double precision :: slab_rlen, mow_r0_upper, mow_r0_lower, mow_r1, mow_r0 
+  double precision :: slab_rlen, mow_r0_upper, mow_r0_lower, mow_r1
+  double precision :: mow_r1_this, mow_r0_this
 
   !---- read command line arguments
   do i = 1, nargs
@@ -104,8 +105,8 @@ program xsem_vertical_slice
   !---- read model tags
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
 
-  print '(a)', '# nmodel=', nmodel
-  print '(a)', '# model_names=', model_names
+  print *, '# nmodel=', nmodel
+  print *, '# model_names=', model_names
 
   !---- locate xyz in the mesh 
   call sem_constants_set(iregion)
@@ -116,7 +117,7 @@ program xsem_vertical_slice
   ! loop each mesh chunk
   do iproc = 0, NPROCTOT_VAL-1
 
-    print '(a)', '# iproc=', iproc
+    print *, '# iproc=', iproc
 
     call sem_mesh_init(mesh_data)
     call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
@@ -151,11 +152,11 @@ program xsem_vertical_slice
             endif
 
             ! assign velocity perturbation for metastable olive wedge
-            mow_r1 = mow_r0_upper + (d - mow_d0)/mow_dlen * (mow_r1 - mow_r0_upper)
-            mow_r0 = mow_r0_lower + (d - mow_d0)/mow_dlen * (mow_r1 - mow_r0_lower)
+            mow_r1_this = mow_r0_upper + (down - mow_d0)/mow_dlen * (mow_r1 - mow_r0_upper)
+            mow_r0_this = mow_r0_lower + (down - mow_d0)/mow_dlen * (mow_r1 - mow_r0_lower)
 
             if (radius > mow_radius0 .and. radius < mow_radius1 &
-                .and. r >= mow_r0 .and. r <= mow_r1) then
+                .and. r >= mow_r0_this .and. r <= mow_r1_this) then
               ratio = dlnv_mow
             endif
 

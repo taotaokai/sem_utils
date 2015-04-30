@@ -204,7 +204,7 @@ character(len=MAX_STRING_LEN) function strtok (source_string, delimiters)
   ifinish = ibegin
 
   DO
-     IF ((ifinish .LE. isource_len) .AND.  (INDEX(delimiters,saved_string(ifinish:ifinish)) .EQ. 0)) THEN
+     IF ((ifinish .LE. isource_len) .AND. (INDEX(delimiters,saved_string(ifinish:ifinish)) .EQ. 0)) THEN
          ifinish = ifinish + 1
      ELSE
          EXIT

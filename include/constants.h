@@ -174,8 +174,7 @@
   integer, parameter :: TOPO_MAXIMUM = + 9000 ! (height in m, Mount Everest)
 
 ! minimum thickness in meters to include the effect of the oceans and topo
-! double precision, parameter :: MINIMUM_THICKNESS_3D_OCEANS = 50.d0
-  double precision, parameter :: MINIMUM_THICKNESS_3D_OCEANS = 100.d0
+  double precision, parameter :: MINIMUM_THICKNESS_3D_OCEANS = 50.d0
 
 
 !!-----------------------------------------------------------
@@ -204,7 +203,7 @@
 
 ! use sedimentary layers in crustal model
   logical, parameter :: INCLUDE_SEDIMENTS_IN_CRUST = .true.
-  logical, parameter :: INCLUDE_ICE_IN_CRUST = .false. ! always set this to false except for Roland_Sylvain gravity calculations
+  logical, parameter :: INCLUDE_ICE_IN_CRUST = .false. ! always set this to false except for gravity integral calculations
   double precision, parameter :: MINIMUM_SEDIMENT_THICKNESS = 2.d0 ! minimim thickness in km
 
 ! default crustal model
@@ -326,6 +325,9 @@
 
 ! mesh coloring
 ! add mesh coloring for the GPU + MPI implementation
+! this is needed on NVIDIA hardware up to FERMI boards, included.
+! Starting on KEPLER boards you can leave it off because on KEPLER hardware
+! or higher atomic reduction operations have become as fast as resorting to mesh coloring.
   logical, parameter :: USE_MESH_COLORING_GPU = .false.
   integer, parameter :: MAX_NUMBER_OF_COLORS = 1000
 ! enhanced coloring:
@@ -419,11 +421,11 @@
 
 !!-----------------------------------------------------------
 !!
-!! for Roland_Sylvain integrals
+!! for gravity integrals
 !!
 !!-----------------------------------------------------------
 
-  logical, parameter :: ROLAND_SYLVAIN = .false.
+  logical, parameter :: GRAVITY_INTEGRALS = .false.
 
 ! reuse an existing observation surface created in another run and stored to disk,
 ! so that we are sure that they are exactly the same (for instance when comparing results for a reference ellipsoidal Earth
@@ -459,7 +461,7 @@
 
 ! number of points in each horizontal direction of the observation grid of each cubed-sphere chunk
 ! at the altitude of the observation point
-!! DK DK 4 is a fictitious value used to save memory when the ROLAND_SYLVAIN option is off
+!! DK DK 4 is a fictitious value used to save memory when the GRAVITY_INTEGRALS option is off
   integer, parameter :: NX_OBSERVATION = 4 ! 500
   integer, parameter :: NY_OBSERVATION = NX_OBSERVATION
 
@@ -783,6 +785,10 @@
 ! to create a reference model based on 1D_REF but with 3D crust and 410/660 topography
   logical,parameter :: USE_1D_REFERENCE = .false.
 
+!!-- uncomment for using PREM as reference model (used in CEM inversion)
+!  integer, parameter :: GLL_REFERENCE_1D_MODEL = REFERENCE_MODEL_PREM
+!  integer, parameter :: GLL_REFERENCE_MODEL = REFERENCE_MODEL_PREM
+
 !!-- uncomment for using S362ANI as reference model
   integer, parameter :: GLL_REFERENCE_1D_MODEL = REFERENCE_MODEL_1DREF
   integer, parameter :: GLL_REFERENCE_MODEL = THREE_D_MODEL_S362ANI
@@ -801,17 +807,17 @@
 ! (values are chosen for 3D models to have RMOHO_FICTICIOUS at 35 km
 !  and RMIDDLE_CRUST to become 15 km with stretching function stretch_tab)
   double precision, parameter :: MAX_RATIO_CRUST_STRETCHING = 0.75d0
-! double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = 5000.d0 ! moho up to 35km
+  double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = 5000.d0 ! moho up to 35km
   double precision, parameter :: R80_STRETCH_ADJUSTMENT = -40000.d0 ! r80 down to 120km
 
 ! adapted regional moho stretching
 ! 1 chunk simulations, 3-layer crust
-  logical, parameter :: REGIONAL_MOHO_MESH = .true.
+  logical, parameter :: REGIONAL_MOHO_MESH = .false.
   logical, parameter :: REGIONAL_MOHO_MESH_EUROPE = .false. ! used only for fixing time step
   logical, parameter :: REGIONAL_MOHO_MESH_ASIA = .false.   ! used only for fixing time step
   logical, parameter :: HONOR_DEEP_MOHO = .false.
 !!-- uncomment for e.g. Europe case, where deep moho is rare
-  double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = -15000.d0  ! moho mesh boundary down to 55km
+!  double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = -15000.d0  ! moho mesh boundary down to 55km
 !!-- uncomment for deep moho cases, e.g. Asia case (Himalayan moho)
 !  double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = -20000.d0  ! moho mesh boundary down to 60km
 

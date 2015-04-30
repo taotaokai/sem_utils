@@ -26,7 +26,7 @@ LDFLAGS =
 module = sem_constants_mod sem_io_mod sem_mesh_mod \
 		  sem_parallel_mod sem_utils_mod
 shared = gll_library geographic_mod
-program = xsem_interp_xyz
+program = xsem_interp_xyz xsem_slab_model
 
 #------------------------------------------
 module_obj = $(patsubst %,$(objdir)/%.o, $(module))

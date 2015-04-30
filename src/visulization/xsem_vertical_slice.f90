@@ -38,6 +38,7 @@ program xsem_vertical_slice
   use sem_io
   use sem_mesh
   use sem_utils
+  use geographic
   use netcdf
 
   implicit none
@@ -58,7 +59,6 @@ program xsem_vertical_slice
 
   integer :: ipoint, npoint
   real(CUSTOM_REAL), allocatable :: xyz(:,:)
-  character(len=MAX_STRING_LEN), allocatable :: xyz_strings(:) 
 
   type (mesh) :: mesh_data
   integer :: igllx, iglly, igllz
@@ -80,27 +80,42 @@ program xsem_vertical_slice
   read(args(4), '(a)') xyz_list
   read(args(5), '(a)') out_list
 
-  !---- make grid xyz
+  !---- generate mesh grid of the cross-section
   call geodetic2ecef(lat0,lon0,0.0,x0,y0,z0)
   call geodetic2ecef(lat1,lon1,0.0,x1,y1,z1)
 
-  ! get rotation axis
-  v_axis
+  ! normalize v0,v1 to uint vector 
+  norm_v0 = sqrt(sum(x0**2 + y0**2 + z0**2))
+  v0(1) = x0 / norm_v0
+  v0(2) = y0 / norm_v0
+  v0(3) = z0 / norm_v0
 
-  ! get intervals
-  dtheta = 
-  dradius = 
+  norm_v1 = sqrt(sum(x1**2 + y1**2 + z1**2))
+  v1(1) = x1 / norm_v1
+  v1(2) = y1 / norm_v1
+  v1(3) = z1 / norm_v1
 
-  ! 
-  allocate(xyz(3,nradius*ntheta))
+  ! rotation axis = v0 cross-product v1
+  v_axis(1) = v0(2)*v1(3) - v0(3)*v1(2)
+  v_axis(2) = v0(3)*v1(1) - v0(1)*v1(3)
+  v_axis(3) = v0(1)*v1(2) - v0(2)*v1(1)
+
+  ! get gird intervals
+  dtheta = acos(dot_product(v0,v1)) / (ntheta - 1)
+  dradius = (r0 - r1) / (nradius - 1)
+
+  ! get mesh grid
+  theta = (/(i * detha, i=0,nthta-1 )/)
+  radius = (/(r0 + i*dradius, i=0,nradius-1 )/)
+
+  npoint = nradius * ntheta
+  allocate(xyz(3,npoint))
+
   do itheta = 1, ntheta
-    ! unit direction
-    theta = dtheta * (itheta - 1)
-    v = Rotate(v_axis, theta, v0)
+    call rotation_matrix(v_axis, theta(itheta), rotmat)
     do iradius = 1, nradius
-      radius = r0 + dradius * (iradius - 1) 
       idx = iradius + nradius*(itheta - 1)
-      xyz(:,idx) = v * radius
+      xyz(:,idx) = radius(iradius) * matmul(rotmat, v0)
     enddo
   enddo
 

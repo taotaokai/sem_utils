@@ -16,9 +16,9 @@ module geographic
   real(wp), parameter :: wgs84_a = 6378137.0_wp
   real(wp), parameter :: wgs84_invf = 298.257223563_wp
   ! derived constants 
-  real(wp), parameter :: wgs84_f = 1.0 / wgs84_invf
-  real(wp), parameter :: wgs84_ecc2 = wgs84_f * (2.0 - wgs84_f)
-  real(wp), parameter :: wgs84_one_minus_ecc2 = 1.0 - wgs84_ecc2
+  real(wp), parameter :: wgs84_f = 1.0_wp / wgs84_invf
+  real(wp), parameter :: wgs84_ecc2 = wgs84_f * (2.0_wp - wgs84_f)
+  real(wp), parameter :: wgs84_one_minus_ecc2 = 1.0_wp - wgs84_ecc2
 
   ! exported opertations 
   public :: geographic_geodetic2ecef
@@ -33,7 +33,7 @@ subroutine geographic_geodetic2ecef(lat, lon, height, x, y, z)
 ! ECEF: earth centered earth fixed
 ! reference datum: WGS84
 !
-!-inputs: lat,lon[degree], height[meter]
+!-inputs: lat,lon[radians], height[meter]
 !-outputs: x,y,z[meter]
   
   real(wp), intent(in) :: lat, lon, height
@@ -42,12 +42,12 @@ subroutine geographic_geodetic2ecef(lat, lon, height, x, y, z)
   real(wp) :: sinlat, coslat, sinlon, coslon
   real(wp) :: normal
 
-  sinlat = sin(lat * DEG2RAD)
-  coslat = cos(lat * DEG2RAD)
-  sinlon = sin(lon * DEG2RAD)
-  coslon = cos(lon * DEG2RAD)
+  sinlat = sin(lat)
+  coslat = cos(lat)
+  sinlon = sin(lon)
+  coslon = cos(lon)
 
-  normal = wgs84_a / sqrt(1.0 - wgs84_ecc2*sinlat**2)
+  normal = wgs84_a / sqrt(1.0_wp - wgs84_ecc2*sinlat**2)
 
   x = (normal + height) * coslat * coslon
   y = (normal + height) * coslat * sinlon
@@ -62,7 +62,7 @@ subroutine geographic_ecef2ned(x, y, z, olat, olon, oheight, xnorth, yeast, zdow
 ! origin(olat,olon,oheight)
 ! reference datum: WGS84
 !
-!-input: x,y,z[meter], olat,olon[degree],oheigth[meter]
+!-input: x,y,z[meter], olat,olon[radians], oheigth[meter]
 !-output: xnorth,yeast,zdown[meter]
   
   real(wp), intent(in) :: x, y, z, olat, olon, oheight
@@ -74,10 +74,10 @@ subroutine geographic_ecef2ned(x, y, z, olat, olon, oheight, xnorth, yeast, zdow
 
   call geographic_geodetic2ecef(olat, olon, oheight, ox, oy, oz)
 
-  sinlat = sin(olat * DEG2RAD)
-  coslat = cos(olat * DEG2RAD)
-  sinlon = sin(olon * DEG2RAD)
-  coslon = cos(olon * DEG2RAD)
+  sinlat = sin(olat)
+  coslat = cos(olat)
+  sinlon = sin(olon)
+  coslon = cos(olon)
 
   dx = x - ox
   dy = y - oy

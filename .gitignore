@@ -4,8 +4,8 @@ bak
 
 # Build time
 bin
-lib
 obj
+include
 
 # Trash files
 .*swp

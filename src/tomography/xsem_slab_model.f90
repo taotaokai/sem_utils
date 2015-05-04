@@ -15,7 +15,8 @@ subroutine selfdoc()
   print '(a)', "DESCRIPTION"
   print '(a)', ""
   print '(a)', "  Slab is a planar slice through the sphere, and " 
-  print '(a)', "  MOW is an inverted triangular region inside the slab" 
+  print '(a)', "  MOW is an inverted triangular region inside the slab, and"
+  print '(a)', "  forms a body of revolution " 
   print '(a)', ""
   print '(a)', "PARAMETERS"
   print '(a)', ""
@@ -79,14 +80,14 @@ program xsem_vertical_slice
 
   double precision, dimension(3) :: slab_origin_north, slab_origin_east, &
                                     slab_origin, slab_normal, trench_normal, &
+                                    slab_parallel, trench_parallel, &
                                     mow_v0, mow_v1, mow_v2, v01, v02, &
+                                    mow_upper_normal0, mow_lower_normal0, &
                                     mow_upper_normal, mow_lower_normal
 
-  double precision :: xyz(3), radius, ratio
+  double precision :: xyz(3), radius, ratio, v(3), vx, vy, theta, rotmat(3,3)
   double precision :: dist_xyz_slab_normal, dist_xyz_mow_upper_normal, &
                       dist_xyz_mow_lower_normal
-
-
 
   !---- read command line arguments
   do i = 1, nargs
@@ -156,6 +157,16 @@ program xsem_vertical_slice
   slab_normal =   cos(slab_dip) * slab_origin &
                 + sin(slab_dip) * trench_normal
 
+  ! slab parallel direction vector
+  slab_parallel =   sin(slab_dip) * slab_origin &
+                  - cos(slab_dip) * trench_normal
+
+  ! trench parallel direction vector: slab_normal x slab_parallel
+  trench_parallel = [ &
+    slab_normal(2)*slab_parallel(3) - slab_normal(3)*slab_parallel(2), &
+    slab_normal(3)*slab_parallel(1) - slab_normal(1)*slab_parallel(3), &
+    slab_normal(1)*slab_parallel(2) - slab_normal(2)*slab_parallel(1) ]
+
   ! distance from earth center to slab upper/lower plane
   slab_upper_dist = cos(slab_dip)
   slab_lower_dist = slab_upper_dist - slab_thick
@@ -177,21 +188,21 @@ program xsem_vertical_slice
   mow_v2 = mow_top_radius *    (  cos(slab_dip - theta_v2_slab_normal) * slab_origin &
                                 + sin(slab_dip - theta_v2_slab_normal) * trench_normal )
 
-  ! normal vector of MOW upper plane v0-v1
+  ! normal vector of MOW upper plane v0-v1 (in the plane of slab_normal and slas_origin )
   v01 = mow_v1 - mow_v0
   v01 = v01 / sqrt(sum(v01**2))
 
-  mow_upper_normal = mow_v1 - sum(mow_v1*v01)*v01
-  mow_upper_dist = sqrt(sum(mow_upper_normal**2))
-  mow_upper_normal = mow_upper_normal / mow_upper_dist
+  mow_upper_normal0 = mow_v1 - sum(mow_v1*v01)*v01
+  mow_upper_dist = sqrt(sum(mow_upper_normal0**2))
+  mow_upper_normal0 = mow_upper_normal0 / mow_upper_dist
 
   ! normal vector of MOW lower plane x0-x2
   v02 = mow_v2 - mow_v0
   v02 = v02 / sqrt(sum(v02**2))
 
-  mow_lower_normal = mow_v2 - sum(mow_v2*v02)*v02
-  mow_lower_dist = sqrt(sum(mow_lower_normal**2))
-  mow_lower_normal = mow_lower_normal / mow_lower_dist
+  mow_lower_normal0 = mow_v2 - sum(mow_v2*v02)*v02
+  mow_lower_dist = sqrt(sum(mow_lower_normal0**2))
+  mow_lower_normal0 = mow_lower_normal0 / mow_lower_dist
 
   !---- read model tags
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
@@ -243,6 +254,17 @@ program xsem_vertical_slice
               ! inside MOW region
               if (radius >= mow_bottom_radius .and. radius <= mow_top_radius) &
               then
+
+                ! compute the mow_upper/lower_normal for the current point
+                v = xyz - sum(xyz*slab_normal)*slab_normal
+                vx = sum(v*slab_parallel)
+                vy = sum(v*trench_parallel)
+                theta = atan2(vy,vx)
+
+                call rotation_matrix(slab_normal, theta, rotmat)  
+
+                mow_upper_normal = matmul(rotmat, mow_upper_normal0)
+                mow_lower_normal = matmul(rotmat, mow_lower_normal0)
 
                 ! distance along normals of MOW upper/lower plane
                 dist_xyz_mow_upper_normal = sum(xyz * mow_upper_normal)

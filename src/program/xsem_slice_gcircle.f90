@@ -65,6 +65,12 @@ program xsem_vertical_slice
 
   !-- interpolation points 
   integer :: ipoint, npoint
+  real(dp) :: x0, y0, z0, x1, y1, z1
+  real(dp) :: v0(3), v1(3), v_axis(3), rotmat(3,3)
+  real(dp) :: norm_v0, norm_v1
+  real(dp) :: dtheta, dradius
+  real(dp), allocatable :: theta(:), radius(:)
+  integer :: itheta, iradius, idx
   real(CUSTOM_REAL), allocatable :: xyz(:,:)
 
   !-- sem interpolation
@@ -78,11 +84,10 @@ program xsem_vertical_slice
   integer :: ncid
   ! define dimensions: theta, radius
   integer, parameter :: NDIMS = 2
-  integer :: ntheta, nradius
   integer :: theta_dimid, radius_dimid, dimids(NDIMS)
   ! define coordinate variables/units
   integer :: theta_varid, radius_varid
-  real(dp), dimension(:), allocatable :: theta, radius
+
   character(len=*), parameter :: UNITS = "units"
   character(len=*), parameter :: theta_name = "theta"
   character(len=*), parameter :: theta_units = "degree"
@@ -126,15 +131,15 @@ program xsem_vertical_slice
   radius1 = radius1 / R_EARTH_KM
 
   ! unit direction vectors at point 0,1
-  call geographic_geodetic2ecef(lat0,lon0,0.0,x0,y0,z0)
-  call geographic_geodetic2ecef(lat1,lon1,0.0,x1,y1,z1)
+  call geographic_geodetic2ecef(lat0, lon0, 0.d0, x0, y0, z0)
+  call geographic_geodetic2ecef(lat1, lon1, 0.d0, x1, y1, z1)
 
-  norm_v0 = sqrt(sum(x0**2 + y0**2 + z0**2))
+  norm_v0 = sqrt(x0**2 + y0**2 + z0**2)
   v0(1) = x0 / norm_v0
   v0(2) = y0 / norm_v0
   v0(3) = z0 / norm_v0
 
-  norm_v1 = sqrt(sum(x1**2 + y1**2 + z1**2))
+  norm_v1 = sqrt(x1**2 + y1**2 + z1**2)
   v1(1) = x1 / norm_v1
   v1(2) = y1 / norm_v1
   v1(3) = z1 / norm_v1
@@ -150,7 +155,7 @@ program xsem_vertical_slice
 
   ! mesh grid xyz(:, radius+theta)
   allocate(theta(ntheta), radius(nradius))
-  theta = (/(i * detha, i=0,ntheta-1 )/)
+  theta = (/(i * dtheta, i=0,ntheta-1 )/)
   radius = (/(radius0 + i*dradius, i=0,nradius-1 )/)
 
   npoint = nradius * ntheta

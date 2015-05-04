@@ -2,41 +2,44 @@
 #FC = gfortran 
 FC = mpif90
 
-objdir = obj
-bindir = bin
-incdir = include
-srcdir = src
+obj_dir = obj
+bin_dir = bin
+inc_dir = include
+src_dir = src
 
-module_dir = ${srcdir}/module
-shared_dir = ${srcdir}/shared
-program_dir = ${srcdir}/tomography
+netcdf_mod = /opt/local/include
+
+module_dir = ${src_dir}/module
+shared_dir = ${src_dir}/shared
+program_dir = ${src_dir}/program
 
 # gfortran
 #FCFLAGS = -g -Wall -pedantic
 FCFLAGS = -O2
-FCFLAGS += -I$(incdir) -J$(objdir)
-LDFLAGS =
+FCFLAGS += -I$(inc_dir) -J$(obj_dir) -I$(netcdf_mod)
+LDFLAGS = -L$(netcdf_mod) -lnetcdff
 
 # ifort
 #FCFLAGS = -g
 ##FCFLAGS = -O2
-#FCFLAGS += -I $(incdir) -module $(objdir) -assume byterecl
+#FCFLAGS += -I $(inc_dir) -module $(obj_dir) -assume byterecl
 #LDFLAGS =
 
 module = sem_constants_mod sem_io_mod sem_mesh_mod \
 		  sem_parallel_mod sem_utils_mod
 shared = gll_library geographic_mod
-program = xsem_interp_xyz xsem_slab_model
+program = xsem_interp_xyz \
+		  xsem_slab_model \
+		  xsem_slice_gcircle
 
 #------------------------------------------
-module_obj = $(patsubst %,$(objdir)/%.o, $(module))
-shared_obj = $(patsubst %,$(objdir)/%.o, $(shared))
-program_obj = $(patsubst %,$(objdir)/%.o, $(program))
+module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))
+shared_obj = $(patsubst  %,$(obj_dir)/%.o, $(shared))
+program_obj = $(patsubst %,$(obj_dir)/%.o, $(program))
 
-#all : $(shared_obj) $(module_obj) $(program_obj) $(program)
 all : $(program)
 
-$(shared_obj) : 
+$(shared_obj) :
 	$(FC) -c $(shared_dir)/$(patsubst %.o,%.f90,$(@F)) -o $@ $(FCFLAGS)
 
 $(module_obj) : $(shared_obj)
@@ -45,9 +48,12 @@ $(module_obj) : $(shared_obj)
 $(program_obj) : $(shared_obj) $(module_obj)
 	$(FC) -c $(program_dir)/$(patsubst %.o,%.f90,$(@F)) -o $@ $(FCFLAGS)
 
+#xsem_slice_gcircle : $(program_obj) $(shared_obj) $(module_obj)
+#	$(FC) -o $(bin_dir)/$@ $@ $(shared_obj) $(module_obj) $(FCFLAGS) $(LDFLAGS)
+
 $(program) : $(program_obj) $(shared_obj) $(module_obj)
-	$(FC) -o $(bindir)/$(@F) $(patsubst %,$(objdir)/%.o, $(@F)) $(shared_obj) \
-		$(module_obj) $(FCFLAGS)
+	$(FC) -o $(bin_dir)/$(@F) $(patsubst %,$(obj_dir)/%.o, $(@F)) \
+		$(shared_obj) $(module_obj) $(FCFLAGS) $(LDFLAGS)
 
 # explicit specified dependencies
 #$(module): $(shared)
@@ -57,4 +63,4 @@ $(program) : $(program_obj) $(shared_obj) $(module_obj)
 .PHONY: clean
 
 clean :
-	\rm $(bindir)/* $(objdir)/*
+	\rm $(bin_dir)/* $(obj_dir)/*

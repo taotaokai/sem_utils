@@ -7,8 +7,9 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_slice_gcircle <mesh_dir> <model_dir> <model_tags> "
-  print '(a)', "                     <lat0> <lon0> <lat1> <lon1> <ntheta>"
-  print '(a)', "                     <radius0> <radius1> <nradius> <out_file>"
+  print '(a)', "                     <lat0> <lon0> <azimuth> "
+  print '(a)', "                     <theta0> <theta1> <ntheta> "
+  print '(a)', "                     <radius0> <radius1> <nradius> <out_file> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -17,13 +18,14 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "PARAMETERS"
   print '(a)', ""
-  print '(a)', "  (string) mesh_dir: directory containing proc000***_reg1_solver_data.bin"
+  print '(a)', "  (string) mesh_dir: directory containing proc*_reg1_solver_data.bin"
   print '(a)', "  (string) model_dir: directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (string) model_tags: comma delimited string, e.g. vsv,vsh,rho "
-  print '(a)', "  (float) lat0,lon0: starting point on the great circle "
-  print '(a)', "  (float) lat1,lon1: end point on the great circle "
+  print '(a)', "  (float) lat0,lon0: origin point on the great circle (degrees)"
+  print '(a)', "  (float) azimuth: shooting azimuth of the great circle (degrees)"
+  print '(a)', "  (float) theta0, theta1: begin/end angles along great circle (degrees) "
   print '(a)', "  (integer) ntheta: number of grids along the great cicle "
-  print '(a)', "  (float) radius0,radius1: begin/end radius "
+  print '(a)', "  (float) radius0,radius1: begin/end radius (km) "
   print '(a)', "  (integer) nradius: number of grids along the radius "
   print '(a)', "  (string) out_file: output file name (netcdf format) "
   print '(a)', ""
@@ -48,10 +50,10 @@ program xsem_vertical_slice
   integer, parameter :: dp = 8
 
   !-- command line args
-  integer, parameter :: nargs = 12
+  integer, parameter :: nargs = 13
   character(len=MAX_STRING_LEN) :: args(nargs)
   character(len=MAX_STRING_LEN) :: mesh_dir, model_dir, model_tags, out_file
-  real(dp) :: lat0, lon0, lat1, lon1, radius0, radius1
+  real(dp) :: lat0, lon0, azimuth, theta0, theta1, radius0, radius1
   integer :: ntheta, nradius
 
   !-- local variables
@@ -65,7 +67,7 @@ program xsem_vertical_slice
 
   !-- interpolation points 
   integer :: ipoint, npoint
-  real(dp) :: v0(3), v1(3), v_axis(3), vr(3), rotmat(3,3)
+  real(dp) :: v0(3), v1(3), vnorth(3), veast(3), v_axis(3), vr(3), rotmat(3,3)
   real(dp) :: dtheta, dradius
   real(dp), allocatable :: theta(:), radius(:)
   integer :: itheta, iradius, idx
@@ -119,31 +121,39 @@ program xsem_vertical_slice
   read(args(3), '(a)') model_tags
   read(args(4), *) lat0
   read(args(5), *) lon0
-  read(args(6), *) lat1
-  read(args(7), *) lon1
-  read(args(8), *) ntheta
-  read(args(9), *) radius0
-  read(args(10), *) radius1
-  read(args(11), *) nradius
-  read(args(12), '(a)') out_file
+  read(args(6), *) azimuth
+  read(args(7), *) theta0
+  read(args(8), *) theta1 
+  read(args(9), *) ntheta
+  read(args(10), *) radius0
+  read(args(11), *) radius1
+  read(args(12), *) nradius
+  read(args(13), '(a)') out_file
 
   !===== generate mesh grid of the cross-section
 
   ! convert units, non-dimensionalize as in SPECFEM3D_GLOBE 
   lat0 = lat0 * DEGREES_TO_RADIANS
   lon0 = lon0 * DEGREES_TO_RADIANS
-  lat1 = lat1 * DEGREES_TO_RADIANS
-  lon1 = lon1 * DEGREES_TO_RADIANS
+  azimuth = azimuth * DEGREES_TO_RADIANS
+
+  theta0 = theta0 * DEGREES_TO_RADIANS
+  theta1 = theta1 * DEGREES_TO_RADIANS
 
   radius0 = radius0 / R_EARTH_KM
   radius1 = radius1 / R_EARTH_KM
 
-  ! unit direction vectors at point 0,1
+  ! unit direction vector v0 at origin point of the great circle
   call geographic_geodetic2ecef(lat0, lon0, 0.d0, v0(1), v0(2), v0(3))
-  call geographic_geodetic2ecef(lat1, lon1, 0.d0, v1(1), v1(2), v1(3))
-
   v0 = v0 / sqrt(sum(v0**2))
-  v1 = v1 / sqrt(sum(v1**2))
+
+  ! unit direction vector v1 along the shooting azimuth of the great circle
+  vnorth = [ - sin(lat0) * cos(lon0), &
+             - sin(lat0) * sin(lon0), &
+               cos(lat0) ]
+  veast = [ - sin(lon0), cos(lon0), 0.d0 ]
+
+  v1 = cos(azimuth) * vnorth + sin(azimuth) * veast
 
   ! rotation axis = v0 cross-product v1
   v_axis(1) = v0(2)*v1(3) - v0(3)*v1(2)
@@ -152,13 +162,13 @@ program xsem_vertical_slice
   v_axis = v_axis / sqrt(sum(v_axis**2))
 
   ! get grid intervals
-  dtheta = acos(sum(v0*v1)) / (ntheta - 1)
+  dtheta = (theta1 - theta0) / (ntheta - 1)
   dradius = (radius1 - radius0) / (nradius - 1)
 
   ! mesh grid xyz(1:3, radius*theta)
   allocate(theta(ntheta), radius(nradius))
-  theta = [ (i * dtheta, i=0,ntheta-1) ]
-  radius = [ (radius0 + i*dradius, i=0,nradius-1 ) ]
+  theta = [ (theta0 + i * dtheta, i=0,ntheta-1) ]
+  radius = [ (radius0 + i * dradius, i=0,nradius-1 ) ]
 
   npoint = nradius * ntheta
   allocate(xyz(3,npoint))
@@ -171,10 +181,6 @@ program xsem_vertical_slice
       xyz(1:3,idx+iradius) = REAL(radius(iradius) * vr, kind=CUSTOM_REAL)
     enddo
   enddo
-
-  !do i = 1, npoint
-  !  print *, xyz(:,i)
-  !enddo
 
   !===== read model tags
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
@@ -254,17 +260,8 @@ program xsem_vertical_slice
   ! convert misloc to relative to typical element size
   where (statloc_final /= -1) misloc_final = misloc_final / typical_size
 
-  !!debug
-  !do itheta = 1, ntheta
-  !  do iradius = 1, nradius
-  !    idx = iradius + nradius*(itheta - 1)
-  !    print *, radius(iradius)*R_EARTH_KM, theta(itheta)*RADIANS_TO_DEGREES, &
-  !      model_interp(1,idx), statloc_final(idx), misloc_final(idx), &
-  !      elem_ind_final(idx)
-  !  enddo
-  !enddo
-
   !===== output netcdf file
+
   ! create the file
   call check( nf90_create(out_file, NF90_CLOBBER, ncid))
 
@@ -280,7 +277,7 @@ program xsem_vertical_slice
   call check( nf90_put_att(ncid, radius_varid, UNITS, radius_units) )
 
   ! define data variables: model values
-  dimids = [radius_dimid, theta_dimid]
+  dimids = [theta_dimid, radius_dimid]
   allocate(model_varids(nmodel))
   do imodel = 1, nmodel
     call check( nf90_def_var(ncid, trim(model_names(imodel)), NF90_REAL& 
@@ -298,14 +295,14 @@ program xsem_vertical_slice
   call check( nf90_put_var(ncid, radius_varid, radius * R_EARTH_KM) )
 
   ! write data: interpolated model values
-  allocate(model_var(nradius,ntheta))
+  allocate(model_var(ntheta, nradius))
   do imodel = 1, nmodel
 
     ! reshape model variable into a NDIMS matrix
     do itheta = 1, ntheta
       idx = nradius*(itheta - 1)
       do iradius = 1, nradius
-        model_var(iradius, itheta) = model_interp(imodel, idx + iradius)
+        model_var(itheta, iradius) = model_interp(imodel, idx + iradius)
       enddo
     enddo
 
@@ -314,21 +311,23 @@ program xsem_vertical_slice
 
   ! write data: status of location and mislocation
   ! reshape variable into an NDIMS matrix
-  allocate(statloc_var(nradius, ntheta), misloc_var(nradius, ntheta))
+  allocate(statloc_var(ntheta, nradius), misloc_var(ntheta, nradius))
   do itheta = 1, ntheta
     idx = nradius*(itheta - 1)
     do iradius = 1, nradius
-      statloc_var(iradius, itheta) = statloc_final(idx + iradius)
-      misloc_var(iradius, itheta) = misloc_final(idx + iradius)
+      statloc_var(itheta, iradius) = statloc_final(idx + iradius)
+      misloc_var(itheta, iradius) = misloc_final(idx + iradius)
     enddo
   enddo
+
   call check( nf90_put_var(ncid, statloc_varid, statloc_var) )
   call check( nf90_put_var(ncid, misloc_varid, misloc_var) )
 
   ! close file 
   call check( nf90_close(ncid) )
 
-!-------------------
+
+!********************
 contains
 
 subroutine check(status)
@@ -339,5 +338,6 @@ subroutine check(status)
     stop "Stopped"
   endif
 end subroutine check 
+
 
 end program

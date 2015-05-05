@@ -29,6 +29,20 @@ subroutine selfdoc()
   print '(a)', "  (integer) nradius: number of grids along the radius "
   print '(a)', "  (string) out_file: output file name (netcdf format) "
   print '(a)', ""
+  print '(a)', "NOTES"
+  print '(a)', ""
+  print '(a)', "  1. Example of plot: bash scripts using GMT5"
+  print '(a)', "    ~~~~~~~~~~~~~~~~"
+  print '(a)', "    #!/bin/bash "
+  print '(a)', "    ps=<model_tag>.ps "
+  print '(a)', "    R=<theta0>/<theta1>/<radius0>/<radius1>"
+  print '(a)', "    gmt grdreformat <out_file>?<model_tag> <model_tag>.grd "
+  print '(a)', "    gmt grd2cpt <model_tag>.grd -Cseis -R$R -Z -D > cpt "
+  print '(a)', "    gmt grdimage <model_tag>.grd -R$R -JPa6iz -Ccpt \"
+  print '(a)', "      -BNSEW -Bxa10f5 -Bya100f50 > $ps "
+  print '(a)', "    gs $ps" 
+  print '(a)', "    ~~~~~~~~~~~~~~~~"
+  print '(a)', ""
 
 end subroutine
 

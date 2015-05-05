@@ -231,6 +231,8 @@ program xsem_vertical_slice
   ! loop each mesh chunk
   do iproc = 0, NPROCTOT_VAL-1
 
+    print *, "iproc=", iproc
+
     call sem_mesh_init(mesh_data)
     call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
     call sem_io_read_gll_modeln(model_dir, iproc, iregion, nmodel, model_names &

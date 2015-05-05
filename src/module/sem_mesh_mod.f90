@@ -208,7 +208,8 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, uvw, hlagrange, misloc, elem_ind, stat_loc)
+subroutine sem_mesh_locate_xyz( &
+  mesh_data, npoint, xyz, uvw, hlagrange, misloc, elem_ind, stat_loc)
 !-locate xyz(3,npoint) inside the mesh
 !
 !-input
@@ -225,10 +226,10 @@ subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, uvw, hlagrange, misloc, e
   type (mesh), intent(in) :: mesh_data
   integer, intent(in) :: npoint
   ! points to locate
-  real(kind=CUSTOM_REAL), intent(in) :: xyz(NDIM, npoint)
+  real(kind=CUSTOM_REAL), intent(in) :: xyz(3, npoint)
 
   ! local coordinates
-  real(kind=CUSTOM_REAL), intent(out) :: uvw(NDIM, npoint)
+  real(kind=CUSTOM_REAL), intent(out) :: uvw(3, npoint)
   real(kind=CUSTOM_REAL), intent(out) :: hlagrange(NGLLX, NGLLY, NGLLZ, npoint)
   ! mis-location: abs(xyz - XYZ(uvw))
   real(kind=CUSTOM_REAL), intent(out) :: misloc(npoint)
@@ -240,45 +241,49 @@ subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, uvw, hlagrange, misloc, e
   ! local varaibles
   integer :: i, ia, nsel, ispec, iglob, ipoint, isel
   integer :: RANGE_1_NSPEC(NSPEC), ind_sel(NSPEC), ind_sort(NSPEC)
-  real(kind=CUSTOM_REAL) :: typical_size, HUGEVAL, dist_sq(NSPEC)
+  real(kind=CUSTOM_REAL) :: typical_size2, typical_size, HUGEVAL, dist_sq(NSPEC)
   real(kind=CUSTOM_REAL) :: max_x, min_x, max_y, min_y, max_z, min_z
   real(kind=CUSTOM_REAL) :: xyz1(3), uvw1(3), misloc1
   logical :: idx_sel(NSPEC), is_inside
   integer :: igllx, iglly, igllz
   double precision :: lagx(NGLLX), lagy(NGLLY), lagz(NGLLZ)
-
-  integer, dimension(NGNOD) :: iaddx, iaddy, iaddz ! index of anchor points
+  ! index of anchor points inside the spectral element
+  integer, dimension(NGNOD) :: iax, iay, iaz 
+  ! center and anchor points inside each spectral element
   real(kind=CUSTOM_REAL) :: center_xyz(3, NSPEC)
   real(kind=CUSTOM_REAL) :: anchor_xyz(3, NGNOD, NSPEC)
 
-  ! initialize some parameters
-
-  ! search range: 5 * typical element width at surface
-  typical_size = 5 * real((ANGULAR_WIDTH_XI_IN_DEGREES_VAL &
-                * DEGREES_TO_RADIANS / NEX_XI_VAL) * R_UNIT_SPHERE &
-                , kind=CUSTOM_REAL)
-  HUGEVAL = huge(1.0_CUSTOM_REAL)
-  RANGE_1_NSPEC = (/(i, i=1,NSPEC)/)
-
-  max_x = maxval(center_xyz(1,:)) + typical_size
-  min_x = minval(center_xyz(1,:)) - typical_size
-  max_y = maxval(center_xyz(2,:)) + typical_size
-  min_y = minval(center_xyz(2,:)) - typical_size
-  max_z = maxval(center_xyz(3,:)) + typical_size
-  min_z = minval(center_xyz(3,:)) - typical_size
-
   ! get index of anchor points in the GLL element
-  call hex_nodes(iaddx,iaddy,iaddz)
+  call anchor_point_index(iax,iay,iaz)
 
   ! get anchor and center points of each GLL element 
   do ispec = 1, NSPEC
     do ia = 1, NGNOD
-      iglob = mesh_data%ibool(iaddx(ia),iaddy(ia),iaddz(ia),ispec)
+      iglob = mesh_data%ibool(iax(ia),iay(ia),iaz(ia),ispec)
       anchor_xyz(:,ia,ispec) = mesh_data%xyz(:,iglob)
     enddo
     ! the last anchor point is the element center
     center_xyz(:,ispec) = mesh_data%xyz(:,iglob)
   enddo
+
+  ! initialize some parameters for locating
+  HUGEVAL = huge(1.0_CUSTOM_REAL)
+  RANGE_1_NSPEC = [ (i, i=1,NSPEC) ]
+  misloc = HUGEVAL
+  stat_loc = -1
+  elem_ind = 0
+  ! search range: typical element width at surface
+  typical_size = real( max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
+                           ANGULAR_WIDTH_ETA_IN_DEGREES_VAL/ NEX_ETA_VAL) &
+                       * DEGREES_TO_RADIANS * R_UNIT_SPHERE, kind=CUSTOM_REAL)
+  typical_size2 = 5.0 * typical_size
+  ! minimum/maximum x,y,z coordinates in the mesh
+  max_x = maxval(center_xyz(1,:)) + typical_size2
+  min_x = minval(center_xyz(1,:)) - typical_size2
+  max_y = maxval(center_xyz(2,:)) + typical_size2
+  min_y = minval(center_xyz(2,:)) - typical_size2
+  max_z = maxval(center_xyz(3,:)) + typical_size2
+  min_z = minval(center_xyz(3,:)) - typical_size2
 
   ! locate each point
   do ipoint = 1, npoint
@@ -296,12 +301,12 @@ subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, uvw, hlagrange, misloc, e
     end if
 
     ! select elements close to the target point based on box coordinate range
-    idx_sel =      (center_xyz(1,:)>xyz1(1)-typical_size) &
-             .and. (center_xyz(1,:)<xyz1(1)+typical_size) &
-             .and. (center_xyz(2,:)>xyz1(2)-typical_size) &
-             .and. (center_xyz(2,:)<xyz1(2)+typical_size) &
-             .and. (center_xyz(3,:)>xyz1(3)-typical_size) &
-             .and. (center_xyz(3,:)<xyz1(3)+typical_size)
+    idx_sel =      (center_xyz(1,:)>xyz1(1)-typical_size2) &
+             .and. (center_xyz(1,:)<xyz1(1)+typical_size2) &
+             .and. (center_xyz(2,:)>xyz1(2)-typical_size2) &
+             .and. (center_xyz(2,:)<xyz1(2)+typical_size2) &
+             .and. (center_xyz(3,:)>xyz1(3)-typical_size2) &
+             .and. (center_xyz(3,:)<xyz1(3)+typical_size2)
 
     nsel = count(idx_sel)
 
@@ -321,7 +326,7 @@ subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, uvw, hlagrange, misloc, e
     call heap_sort(nsel, dist_sq, ind_sort)
 
     ! loop all selected elements to find the one containing the target xyz 
-    misloc(ipoint) = HUGEVAL
+
 
     do isel = 1, nsel
 
@@ -505,14 +510,14 @@ subroutine cube2xyz(anchor_xyz, uvw, xyz, DuvwDxyz)
   if (NGNOD /= 27) stop "ERROR: elements should have 27 control nodes"
 
   ! lagrange polynomials of order 3 on [-1,1], with collocation points: -1,0,1 
-  lag1 = uvw*(uvw-1.0)/2.0
-  lag2 = 1.0-uvw**2
-  lag3 = uvw*(uvw+1.0)/2.0
+  lag1 = uvw * (uvw-1.0)/2.0
+  lag2 = 1.0 - uvw**2
+  lag3 = uvw * (uvw+1.0)/2.0
   
   ! derivative of lagrange polynomials
-  lag1p = uvw-0.5
-  lag2p = -2.0*uvw
-  lag3p = uvw+0.5
+  lag1p = uvw - 0.5
+  lag2p = -2.0 * uvw
+  lag3p = uvw + 0.5
   
   ! construct the shape function
   shape3D = (/ &
@@ -657,6 +662,60 @@ subroutine hex_nodes(iaddx, iaddy, iaddz)
 
 end subroutine hex_nodes
 
+
+!///////////////////////////////////////////////////////////////////////////////
+subroutine anchor_point_index(iax,iay,iaz)
+!-get the index of anchor points in the GLL points of spectral element
+! the topology of the nodes is described in UTILS/chunk_notes_scanned/numbering_convention_27_nodes.tif
+! currently anchor points are defined on 3x3x3 hex
+!
+!-output: iax, iay, iaz
+
+  ! index of anchor points
+  integer :: ia
+  integer, dimension(NGNOD), intent(out) :: iax,iay,iaz
+
+  ! topology of the control points of the surface element
+  integer, dimension(NGNOD) :: iaddx, iaddy, iaddz
+
+  ! define topology of the control element
+  call hex_nodes(iaddx,iaddy,iaddz)
+
+  do ia = 1,NGNOD
+
+    if (iaddx(ia) == 0) then
+      iax(ia) = 1
+    else if (iaddx(ia) == 1) then
+      iax(ia) = (NGLLX+1)/2
+    else if (iaddx(ia) == 2) then
+      iax(ia) = NGLLX
+    else
+      stop 'incorrect value of iaddx'
+    endif
+
+    if (iaddy(ia) == 0) then
+      iay(ia) = 1
+    else if (iaddy(ia) == 1) then
+      iay(ia) = (NGLLY+1)/2
+    else if (iaddy(ia) == 2) then
+      iay(ia) = NGLLY
+    else
+      stop 'incorrect value of iaddy'
+    endif
+
+    if (iaddz(ia) == 0) then
+      iaz(ia) = 1
+    else if (iaddz(ia) == 1) then
+      iaz(ia) = (NGLLZ+1)/2
+    else if (iaddz(ia) == 2) then
+      iaz(ia) = NGLLZ
+    else
+      stop 'incorrect value of iaddz'
+    endif
+
+  end do ! do ia = 1,NGNOD
+
+end subroutine anchor_point_index
 
 !///////////////////////////////////////////////////////////////////////////////
 subroutine heap_sort(N,RA,IX)

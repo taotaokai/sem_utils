@@ -17,9 +17,9 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "PARAMETERS"
   print '(a)', ""
-  print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
-  print '(a)', "  (string) model_dir:  directory holds proc*_reg1_<model_tag>.bin"
-  print '(a)', "  (string) model_tags:  comma delimited string, e.g. vsv,vsh,rho "
+  print '(a)', "  (string) mesh_dir: directory containing proc000***_reg1_solver_data.bin"
+  print '(a)', "  (string) model_dir: directory holds proc*_reg1_<model_tag>.bin"
+  print '(a)', "  (string) model_tags: comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', "  (float) lat0,lon0: starting point on the great circle "
   print '(a)', "  (float) lat1,lon1: end point on the great circle "
   print '(a)', "  (integer) ntheta: number of grids along the great cicle "
@@ -65,9 +65,7 @@ program xsem_vertical_slice
 
   !-- interpolation points 
   integer :: ipoint, npoint
-  real(dp) :: x0, y0, z0, x1, y1, z1
-  real(dp) :: v0(3), v1(3), v_axis(3), rotmat(3,3)
-  real(dp) :: norm_v0, norm_v1
+  real(dp) :: v0(3), v1(3), v_axis(3), vr(3), rotmat(3,3)
   real(dp) :: dtheta, dradius
   real(dp), allocatable :: theta(:), radius(:)
   integer :: itheta, iradius, idx
@@ -75,10 +73,12 @@ program xsem_vertical_slice
 
   !-- sem interpolation
   type (mesh) :: mesh_data
-  integer :: igllx, iglly, igllz
   real(CUSTOM_REAL), allocatable :: model_gll(:,:,:,:,:), model_interp(:,:)
-  real(CUSTOM_REAL), allocatable :: uvw(:,:), hlagrange(:,:,:,:), misloc(:)
-  integer, allocatable :: elem_ind(:), stat_loc(:), stat_loc_final(:)
+  real(CUSTOM_REAL), allocatable :: uvw(:,:), hlagrange(:,:,:,:)
+  real(CUSTOM_REAL), allocatable :: misloc(:), misloc_final(:)
+  integer, allocatable :: elem_ind(:), statloc(:)
+  integer, allocatable :: statloc_final(:), elem_ind_final(:)
+  real(CUSTOM_REAL) :: typical_size
 
   !-- netcdf data structure
   integer :: ncid
@@ -87,7 +87,6 @@ program xsem_vertical_slice
   integer :: theta_dimid, radius_dimid, dimids(NDIMS)
   ! define coordinate variables/units
   integer :: theta_varid, radius_varid
-
   character(len=*), parameter :: UNITS = "units"
   character(len=*), parameter :: theta_name = "theta"
   character(len=*), parameter :: theta_units = "degree"
@@ -95,9 +94,15 @@ program xsem_vertical_slice
   character(len=*), parameter :: radius_units = "km"
   ! define data variables
   ! this is defined from model_tags
-  ! data units is again not determined
+  ! data units is not determined
   integer, allocatable :: model_varids(:)
   real(CUSTOM_REAL), allocatable :: model_var(:,:)
+  ! define data: location status, mislocation
+  integer :: statloc_varid, misloc_varid
+  integer, allocatable :: statloc_var(:,:)
+  real(CUSTOM_REAL), allocatable :: misloc_var(:,:)
+  character(len=*), parameter :: statloc_name = "statloc"
+  character(len=*), parameter :: misloc_name = "misloc"
 
   !===== read command line arguments
 
@@ -127,53 +132,55 @@ program xsem_vertical_slice
   ! convert units, non-dimensionalize as in SPECFEM3D_GLOBE 
   lat0 = lat0 * DEGREES_TO_RADIANS
   lon0 = lon0 * DEGREES_TO_RADIANS
+  lat1 = lat1 * DEGREES_TO_RADIANS
+  lon1 = lon1 * DEGREES_TO_RADIANS
+
   radius0 = radius0 / R_EARTH_KM
   radius1 = radius1 / R_EARTH_KM
 
   ! unit direction vectors at point 0,1
-  call geographic_geodetic2ecef(lat0, lon0, 0.d0, x0, y0, z0)
-  call geographic_geodetic2ecef(lat1, lon1, 0.d0, x1, y1, z1)
+  call geographic_geodetic2ecef(lat0, lon0, 0.d0, v0(1), v0(2), v0(3))
+  call geographic_geodetic2ecef(lat1, lon1, 0.d0, v1(1), v1(2), v1(3))
 
-  norm_v0 = sqrt(x0**2 + y0**2 + z0**2)
-  v0(1) = x0 / norm_v0
-  v0(2) = y0 / norm_v0
-  v0(3) = z0 / norm_v0
-
-  norm_v1 = sqrt(x1**2 + y1**2 + z1**2)
-  v1(1) = x1 / norm_v1
-  v1(2) = y1 / norm_v1
-  v1(3) = z1 / norm_v1
+  v0 = v0 / sqrt(sum(v0**2))
+  v1 = v1 / sqrt(sum(v1**2))
 
   ! rotation axis = v0 cross-product v1
   v_axis(1) = v0(2)*v1(3) - v0(3)*v1(2)
   v_axis(2) = v0(3)*v1(1) - v0(1)*v1(3)
   v_axis(3) = v0(1)*v1(2) - v0(2)*v1(1)
+  v_axis = v_axis / sqrt(sum(v_axis**2))
 
   ! get grid intervals
-  dtheta = acos(dot_product(v0,v1)) / (ntheta - 1)
-  dradius = (radius0 - radius1) / (nradius - 1)
+  dtheta = acos(sum(v0*v1)) / (ntheta - 1)
+  dradius = (radius1 - radius0) / (nradius - 1)
 
-  ! mesh grid xyz(:, radius+theta)
+  ! mesh grid xyz(1:3, radius*theta)
   allocate(theta(ntheta), radius(nradius))
-  theta = (/(i * dtheta, i=0,ntheta-1 )/)
-  radius = (/(radius0 + i*dradius, i=0,nradius-1 )/)
+  theta = [ (i * dtheta, i=0,ntheta-1) ]
+  radius = [ (radius0 + i*dradius, i=0,nradius-1 ) ]
 
   npoint = nradius * ntheta
   allocate(xyz(3,npoint))
 
   do itheta = 1, ntheta
     call rotation_matrix(v_axis, theta(itheta), rotmat)
+    vr = matmul(rotmat, v0)
+    idx = nradius*(itheta - 1)
     do iradius = 1, nradius
-      idx = iradius + nradius*(itheta - 1)
-      xyz(:,idx) = radius(iradius) * matmul(rotmat, v0)
+      xyz(1:3,idx+iradius) = REAL(radius(iradius) * vr, kind=CUSTOM_REAL)
     enddo
   enddo
+
+  !do i = 1, npoint
+  !  print *, xyz(:,i)
+  !enddo
 
   !===== read model tags
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
 
-  print '(a)', '# nmodel=', nmodel
-  print '(a)', '# model_names=', model_names
+  print *, '# nmodel=', nmodel
+  print *, '# model_names=', (trim(model_names(i))//" ", i=1,nmodel)
 
   !===== locate xyz in the mesh
   call sem_constants_set(iregion)
@@ -184,38 +191,49 @@ program xsem_vertical_slice
            uvw(3,npoint), &
            hlagrange(NGLLX,NGLLY,NGLLZ,npoint), &
            misloc(npoint), &
+           misloc_final(npoint), &
            elem_ind(npoint), &
-           stat_loc(npoint), &
-           stat_loc_final(npoint))
+           elem_ind_final(npoint), &
+           statloc(npoint), &
+           statloc_final(npoint))
 
-  stat_loc_final = -1
-  model_interp = 0.0_CUSTOM_REAL
+  ! initialize some variables
+  statloc_final = -1
+  misloc_final = HUGE(1.0_CUSTOM_REAL)
+  elem_ind_final = -1
+  model_interp = -12345.0_CUSTOM_REAL
+
+  ! typical element size at surface
+  typical_size = real( max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
+                           ANGULAR_WIDTH_ETA_IN_DEGREES_VAL/ NEX_ETA_VAL) &
+                       * DEGREES_TO_RADIANS * R_UNIT_SPHERE, kind=CUSTOM_REAL)
 
   ! loop each mesh chunk
   do iproc = 0, NPROCTOT_VAL-1
-  !do iproc = 0, 0
-
-    print '(a)', '# iproc=', iproc
 
     call sem_mesh_init(mesh_data)
     call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
     call sem_io_read_gll_modeln(model_dir, iproc, iregion, nmodel, model_names &
                                 , model_gll)
     call sem_mesh_locate_xyz(mesh_data, npoint, xyz, uvw, hlagrange, misloc &
-                             , elem_ind, stat_loc)
+                             , elem_ind, statloc)
 
     ! interpolate model only on points located inside an element
     do ipoint = 1, npoint
 
-      ! for point located inside an element
-      if (stat_loc(ipoint) == 1) then
+      ! safety check
+      if (statloc_final(ipoint) == 1 .and. statloc(ipoint) == 1 ) then
+        print *, "WARN: ipoint=", ipoint
+        print *, "====: this point is located inside more than one element!"
+        print *, "====: some problem may occur."
+        print *, "====: only use the first located element."
+        cycle
+      endif
 
-        ! should not happen unless exactly on the element surface
-        if (stat_loc_final(ipoint) == 1) then
-          print '(a)', "WARN: more than one elements locate point ", ipoint
-          print '(a)', "WARN: only use the first located element."
-          cycle
-        endif
+      ! for point located inside one element but not happened before 
+      ! or closer to one element than located before
+      if ( (statloc(ipoint) == 1 .and. statloc_final(ipoint) /= 1 ) .or. &
+           (statloc(ipoint) == 0 .and. misloc(ipoint) < misloc_final(ipoint)) ) then
 
         ! interpolate model
         do imodel = 1, nmodel
@@ -223,7 +241,9 @@ program xsem_vertical_slice
             hlagrange(:,:,:,ipoint) * model_gll(:,:,:,elem_ind(ipoint),imodel) )
         enddo
 
-        stat_loc_final(ipoint) = 1
+        statloc_final(ipoint) = statloc(ipoint)
+        misloc_final(ipoint) = misloc(ipoint)
+        elem_ind_final(ipoint) = elem_ind(ipoint)
 
       endif
 
@@ -231,9 +251,22 @@ program xsem_vertical_slice
 
   enddo ! iproc
 
+  ! convert misloc to relative to typical element size
+  where (statloc_final /= -1) misloc_final = misloc_final / typical_size
+
+  !!debug
+  !do itheta = 1, ntheta
+  !  do iradius = 1, nradius
+  !    idx = iradius + nradius*(itheta - 1)
+  !    print *, radius(iradius)*R_EARTH_KM, theta(itheta)*RADIANS_TO_DEGREES, &
+  !      model_interp(1,idx), statloc_final(idx), misloc_final(idx), &
+  !      elem_ind_final(idx)
+  !  enddo
+  !enddo
+
   !===== output netcdf file
   ! create the file
-  call check( nf90_create(out_file, nf90_noclobber, ncid))
+  call check( nf90_create(out_file, NF90_CLOBBER, ncid))
 
   ! define the dimensions.
   call check( nf90_def_dim(ncid, theta_name, ntheta, theta_dimid) )
@@ -246,36 +279,51 @@ program xsem_vertical_slice
   call check( nf90_put_att(ncid, theta_varid, UNITS, theta_units) )
   call check( nf90_put_att(ncid, radius_varid, UNITS, radius_units) )
 
-  ! define data variables
+  ! define data variables: model values
   dimids = [radius_dimid, theta_dimid]
   allocate(model_varids(nmodel))
   do imodel = 1, nmodel
     call check( nf90_def_var(ncid, trim(model_names(imodel)), NF90_REAL& 
                 , dimids, model_varids(imodel)) )
   enddo
+  ! define data: location status and mislocation
+  call check( nf90_def_var(ncid, statloc_name, NF90_INT, dimids, statloc_varid) )
+  call check( nf90_def_var(ncid, misloc_name, NF90_FLOAT, dimids, misloc_varid) )
 
   ! end define mode.
   call check( nf90_enddef(ncid) )
 
   ! write the coordinate variable data.
-  call check( nf90_put_var(ncid, theta_varid, theta) )
-  call check( nf90_put_var(ncid, radius_varid, radius) )
+  call check( nf90_put_var(ncid, theta_varid, theta * RADIANS_TO_DEGREES) )
+  call check( nf90_put_var(ncid, radius_varid, radius * R_EARTH_KM) )
 
-  ! write data varaibles
+  ! write data: interpolated model values
   allocate(model_var(nradius,ntheta))
   do imodel = 1, nmodel
 
     ! reshape model variable into a NDIMS matrix
     do itheta = 1, ntheta
+      idx = nradius*(itheta - 1)
       do iradius = 1, nradius
-        idx = iradius + nradius*(itheta - 1)
-        model_var(iradius, itheta) = model_interp(imodel, idx)
+        model_var(iradius, itheta) = model_interp(imodel, idx + iradius)
       enddo
     enddo
 
     call check( nf90_put_var(ncid, model_varids(imodel), model_var) )
-
   enddo
+
+  ! write data: status of location and mislocation
+  ! reshape variable into an NDIMS matrix
+  allocate(statloc_var(nradius, ntheta), misloc_var(nradius, ntheta))
+  do itheta = 1, ntheta
+    idx = nradius*(itheta - 1)
+    do iradius = 1, nradius
+      statloc_var(iradius, itheta) = statloc_final(idx + iradius)
+      misloc_var(iradius, itheta) = misloc_final(idx + iradius)
+    enddo
+  enddo
+  call check( nf90_put_var(ncid, statloc_varid, statloc_var) )
+  call check( nf90_put_var(ncid, misloc_varid, misloc_var) )
 
   ! close file 
   call check( nf90_close(ncid) )
@@ -287,7 +335,7 @@ subroutine check(status)
   integer, intent (in) :: status
   
   if(status /= nf90_noerr) then 
-    print *, trim(nf90_strerror(status))
+    print "('ERROR: ',a)", trim(nf90_strerror(status))
     stop "Stopped"
   endif
 end subroutine check 

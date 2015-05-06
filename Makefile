@@ -2,6 +2,9 @@
 #FC = gfortran 
 FC = mpif90
 
+RM = \rm -rf
+MKDIR_P = \mkdir -p
+
 obj_dir = obj
 bin_dir = bin
 inc_dir = include
@@ -40,7 +43,12 @@ module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))
 shared_obj = $(patsubst  %,$(obj_dir)/%.o, $(shared))
 program_obj = $(patsubst %,$(obj_dir)/%.o, $(program))
 
-all : $(program)
+.PHONY: all clean directories
+
+all : directories $(program)
+
+directories:
+	$(MKDIR_P) $(bin_dir) $(obj_dir)
 
 $(shared_obj) :
 	$(FC) -c $(shared_dir)/$(patsubst %.o,%.f90,$(@F)) -o $@ $(FCFLAGS)
@@ -63,7 +71,6 @@ $(program) : $(program_obj) $(shared_obj) $(module_obj)
 #$(OBJ): $(SHARED) $(MOD)
 #$(SHARED) : $(ODIR)/constants_module.o
 
-.PHONY: clean
 
 clean :
-	\rm $(bin_dir)/* $(obj_dir)/*
+	$(RM)  $(bin_dir) $(obj_dir)

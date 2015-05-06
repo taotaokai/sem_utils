@@ -4,5 +4,6 @@ which generates the data files that you are working with.
 
 these header files are from specfem3d_globe/
 
-setup/*.h
+setup/constants.h
+setup/precision.h
 OUTPUT_FILES/values_from_mesher.h

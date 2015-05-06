@@ -13,7 +13,7 @@ private
   !---- public subroutines
   public :: sem_utils_read_line
   public :: sem_utils_delimit_string
-  public :: sem_utils_time_stamp
+  public :: sem_utils_timestamp
 
 !----------------------------------
 ! implementation part
@@ -68,10 +68,10 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine sem_utils_time_stamp(string_out)
-! time stamp: yyyy-mm-ddThh:mm:ss.sss
+function sem_utils_timestamp() result(string_out)
+! timestamp: yyyy-mm-ddThh:mm:ss.sss
 
-  character(len=MAX_STRING_LEN), intent(out) :: string_out
+  character(len=MAX_STRING_LEN) :: string_out
 
   character(len=8) :: date
   character(len=10) :: time
@@ -91,7 +91,7 @@ subroutine sem_utils_time_stamp(string_out)
   write(string_out,'(i0.4,"-",i0.2,"-",i0.2,"T",i0.2,":",i0.2,":",i0.2,".",i0.3)') &
         y, m, d, h, n, s, ms
 
-end subroutine
+end function 
 
 
 !///////////////////////////////////////////////////////////////////////////////

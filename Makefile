@@ -16,7 +16,7 @@ shared_dir = ${src_dir}/shared
 program_dir = ${src_dir}/program
 
 # gfortran
-FCFLAGS = -g -Wall -pedantic -fbounds-check
+FCFLAGS = -pg -Wall -pedantic -fbounds-check
 #FCFLAGS = -O2
 FCFLAGS += -I$(inc_dir) -J$(obj_dir) -I$(netcdf_mod)
 LDFLAGS = -L$(netcdf_lib) -lnetcdff

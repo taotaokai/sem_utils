@@ -23,18 +23,18 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) model_dir:  directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (string) model_tags:  comma delimited string, e.g. vsv,vsh,rho "
-  print '(a)', "  (float) slab_origin_lat/lon: slab origin point at surface"
-  print '(a)', "  (float) slab_dip/strike/thick: slab dip,strike angles and thickness(km)"
-  print '(a)', "  (float) slab_bottom_depth: slab bottom depth(km)"
-  print '(a)', "  (float) slab_dlnv: velocity perturbation in slab"
-  print '(a)', "  (float) mow_top/bottom_depth: top/bottom depth of MOW (km)"
-  print '(a)', "  (float) mow_xi0: distance of MOW bottom vertex below slab upper plane, "
+  print '(a)', "  (float) slab_origin_lat/lon:  slab origin point at surface"
+  print '(a)', "  (float) slab_dip/strike/thick:  slab dip,strike angles and thickness(km)"
+  print '(a)', "  (float) slab_bottom_depth:  slab bottom depth(km)"
+  print '(a)', "  (float) slab_dlnv:  velocity perturbation in slab"
+  print '(a)', "  (float) mow_top/bottom_depth:  top/bottom depth of MOW (km)"
+  print '(a)', "  (float) mow_xi0:  distance of MOW bottom vertex below slab upper plane, "
   print '(a)', "            measured as the ratio of the slab thickness"
-  print '(a)', "  (float) mw_xi1/2: distances of MOW top two vertices"
+  print '(a)', "  (float) mw_xi1/2:  distances of MOW top two vertices"
   print '(a)', "            below slab upper plane (x1 is closer to slab upper plane), "
   print '(a)', "            measured as the ratio of the slab thickness"
-  print '(a)', "  (float) mow_dlnv: velocity perturbation in MOW"
-  print '(a)', "  (string) out_dir: output directory"
+  print '(a)', "  (float) mow_dlnv:  velocity perturbation in MOW"
+  print '(a)', "  (string) out_dir:  output directory"
   print '(a)', ""
 
 end subroutine
@@ -241,7 +241,7 @@ program xsem_vertical_slice
 
             if (radius >= slab_bottom_radius ) then
 
-              ! distance along normal of slab plane
+              ! distance projected on the normal of slab plane
               dist_xyz_slab_normal = sum(xyz * slab_normal)
 
               ! inside slab region
@@ -266,7 +266,7 @@ program xsem_vertical_slice
                 mow_upper_normal = matmul(rotmat, mow_upper_normal0)
                 mow_lower_normal = matmul(rotmat, mow_lower_normal0)
 
-                ! distance along normals of MOW upper/lower plane
+                ! distances projected on the normals of MOW upper/lower plane
                 dist_xyz_mow_upper_normal = sum(xyz * mow_upper_normal)
                 dist_xyz_mow_lower_normal = sum(xyz * mow_lower_normal)
 

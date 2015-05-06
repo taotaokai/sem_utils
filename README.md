@@ -1,9 +1,11 @@
 DESCRIPTION
+----
 
   this package is used for post-processing with specfem3d\_globe
 
 
 LIBRARIES 
+----
 
   fortran90 modules: 
 
@@ -13,6 +15,7 @@ LIBRARIES
 
 
 PROGRAMS
+----
 
   xsem\_measure\_adj: measure adjoint source
 

@@ -1,13 +1,14 @@
 # other files
-others
-bak
+others/
+bak/
 
 # Build time
-bin
-obj
-include
+bin/
+obj/
+include/
 
 # Trash files
 .*swp
 .*swo
 *~
+*.o

@@ -105,7 +105,7 @@ program xsem_slice_sphere
   character(len=*), parameter :: UNITS = "units"
   character(len=*), parameter :: lon_name = "longitude"
   character(len=*), parameter :: lon_units = "degree"
-  character(len=*), parameter :: lat_name = "longitude"
+  character(len=*), parameter :: lat_name = "latitude"
   character(len=*), parameter :: lat_units = "degree"
   ! define data variables
   ! this is defined from model_tags

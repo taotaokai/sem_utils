@@ -71,6 +71,7 @@ program xsem_slice_sphere
 
   !-- local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
+  real(CUSTOM_REAL), parameter :: FILLVALUE = huge(0._CUSTOM_REAL)
   integer :: i, iproc, ier
 
   !-- model names
@@ -104,9 +105,9 @@ program xsem_slice_sphere
   integer :: lon_varid, lat_varid
   character(len=*), parameter :: UNITS = "units"
   character(len=*), parameter :: lon_name = "longitude"
-  character(len=*), parameter :: lon_units = "degree"
+  character(len=*), parameter :: lon_units = "degrees_east"
   character(len=*), parameter :: lat_name = "latitude"
-  character(len=*), parameter :: lat_units = "degree"
+  character(len=*), parameter :: lat_units = "degrees_north"
   ! define data variables
   ! this is defined from model_tags
   ! data units is not determined
@@ -217,7 +218,7 @@ program xsem_slice_sphere
   statloc_final = -1
   misloc_final = HUGE(1.0_CUSTOM_REAL)
   elem_ind_final = -1
-  model_interp = -12345.0_CUSTOM_REAL
+  model_interp = FILLVALUE
 
   ! typical element size at surface
   typical_size = real( max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
@@ -295,7 +296,9 @@ program xsem_slice_sphere
   allocate(model_varids(nmodel))
   do imodel = 1, nmodel
     call check( nf90_def_var(ncid, trim(model_names(imodel)), NF90_REAL& 
-                , dimids, model_varids(imodel)) )
+                             , dimids, model_varids(imodel)) )
+    call check( nf90_put_att(ncid, model_varids(imodel) &
+                             , "_FillValue", FILLVALUE) )
   enddo
   ! define data: location status and mislocation
   call check( nf90_def_var(ncid, statloc_name, NF90_INT, dimids, statloc_varid) )

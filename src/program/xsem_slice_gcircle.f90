@@ -27,7 +27,7 @@ subroutine selfdoc()
   print '(a)', "  (integer) ntheta: number of grids along the great cicle "
   print '(a)', "  (float) radius0,radius1: begin/end radius (km) "
   print '(a)', "  (integer) nradius: number of grids along the radius "
-  print '(a)', "  (string) out_file: output file name (netcdf format) "
+  print '(a)', "  (string) out_file: output file name (GMT netcdf format) "
   print '(a)', ""
   print '(a)', "NOTES"
   print '(a)', ""
@@ -72,6 +72,7 @@ program xsem_vertical_slice
 
   !-- local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
+  real(CUSTOM_REAL), parameter :: FILLVALUE = huge(0._CUSTOM_REAL)
   integer :: i, iproc, ier
 
   !-- model names
@@ -221,7 +222,7 @@ program xsem_vertical_slice
   statloc_final = -1
   misloc_final = HUGE(1.0_CUSTOM_REAL)
   elem_ind_final = -1
-  model_interp = -12345.0_CUSTOM_REAL
+  model_interp = FILLVALUE
 
   ! typical element size at surface
   typical_size = real( max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
@@ -298,8 +299,10 @@ program xsem_vertical_slice
   dimids = [theta_dimid, radius_dimid]
   allocate(model_varids(nmodel))
   do imodel = 1, nmodel
-    call check( nf90_def_var(ncid, trim(model_names(imodel)), NF90_REAL& 
-                , dimids, model_varids(imodel)) )
+    call check( nf90_def_var(ncid, trim(model_names(imodel)), NF90_REAL & 
+                             , dimids, model_varids(imodel)) )
+    call check( nf90_put_att(ncid, model_varids(imodel) &
+                             , "_FillValue", FILLVALUE) )
   enddo
   ! define data: location status and mislocation
   call check( nf90_def_var(ncid, statloc_name, NF90_INT, dimids, statloc_varid) )

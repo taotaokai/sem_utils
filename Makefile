@@ -19,7 +19,7 @@ shared_dir = ${src_dir}/shared
 program_dir = ${src_dir}/program
 
 # gfortran
-FCFLAGS = -pg -Wall -pedantic -fbounds-check
+FCFLAGS = -g -Wall -pedantic -fbounds-check
 #FCFLAGS = -O2
 FCFLAGS += -I$(inc_dir) -J$(obj_dir) -I$(netcdf_mod)
 LDFLAGS = -L$(netcdf_lib) -lnetcdff
@@ -36,7 +36,8 @@ shared = gll_library geographic_mod
 program = xsem_interp_xyz \
 		  xsem_slab_model \
 		  xsem_slice_gcircle \
-		  xsem_slice_sphere
+		  xsem_slice_sphere \
+		  xmap_gcircle
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))

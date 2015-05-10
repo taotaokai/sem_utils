@@ -4,25 +4,27 @@ module geographic
   implicit none
   private
 
-  ! working precision
-  integer, parameter :: wp = kind(0.d0)
+  ! working precision: double
+  integer, parameter :: dp = kind(0.d0)
 
   ! constants 
-  real(wp), parameter :: PI = 4.0_wp * atan(1.0_wp)
-  real(wp), parameter :: DEG2RAD = PI / 180.0_wp
-  real(wp), parameter :: RAD2DEG = 180.0_wp / PI
+  real(dp), parameter :: PI = 4.0_dp * atan(1.0_dp)
+  real(dp), parameter :: DEG2RAD = PI / 180.0_dp
+  real(dp), parameter :: RAD2DEG = 180.0_dp / PI
 
   ! WGS84 defining parameters (wikipedia:geodetic_datum)
-  real(wp), parameter :: wgs84_a = 6378137.0_wp
-  real(wp), parameter :: wgs84_invf = 298.257223563_wp
+  real(dp), parameter :: wgs84_a = 6378137.0_dp
+  real(dp), parameter :: wgs84_invf = 298.257223563_dp
   ! derived constants 
-  real(wp), parameter :: wgs84_f = 1.0_wp / wgs84_invf
-  real(wp), parameter :: wgs84_ecc2 = wgs84_f * (2.0_wp - wgs84_f)
-  real(wp), parameter :: wgs84_one_minus_ecc2 = 1.0_wp - wgs84_ecc2
+  real(dp), parameter :: wgs84_f = 1.0_dp / wgs84_invf
+  real(dp), parameter :: wgs84_ecc2 = wgs84_f * (2.0_dp - wgs84_f)
+  real(dp), parameter :: wgs84_one_minus_ecc2 = 1.0_dp - wgs84_ecc2
+  real(dp), parameter :: wgs84_sq_one_minus_f = (1.0_dp - wgs84_f)**2
 
   ! exported opertations 
   public :: geographic_geodetic2ecef
   public :: geographic_ecef2ned 
+  public :: geographic_ecef2latlon0
   public :: rotation_matrix
 
 contains
@@ -36,18 +38,18 @@ subroutine geographic_geodetic2ecef(lat, lon, height, x, y, z)
 !-inputs: lat,lon[radians], height[meter]
 !-outputs: x,y,z[meter]
   
-  real(wp), intent(in) :: lat, lon, height
-  real(wp), intent(out) :: x, y, z
+  real(dp), intent(in) :: lat, lon, height
+  real(dp), intent(out) :: x, y, z
 
-  real(wp) :: sinlat, coslat, sinlon, coslon
-  real(wp) :: normal
+  real(dp) :: sinlat, coslat, sinlon, coslon
+  real(dp) :: normal
 
   sinlat = sin(lat)
   coslat = cos(lat)
   sinlon = sin(lon)
   coslon = cos(lon)
 
-  normal = wgs84_a / sqrt(1.0_wp - wgs84_ecc2*sinlat**2)
+  normal = wgs84_a / sqrt(1.0_dp - wgs84_ecc2*sinlat**2)
 
   x = (normal + height) * coslat * coslon
   y = (normal + height) * coslat * sinlon
@@ -65,12 +67,12 @@ subroutine geographic_ecef2ned(x, y, z, olat, olon, oheight, xnorth, yeast, zdow
 !-input: x,y,z[meter], olat,olon[radians], oheigth[meter]
 !-output: xnorth,yeast,zdown[meter]
   
-  real(wp), intent(in) :: x, y, z, olat, olon, oheight
-  real(wp), intent(out) :: xnorth, yeast, zdown
+  real(dp), intent(in) :: x, y, z, olat, olon, oheight
+  real(dp), intent(out) :: xnorth, yeast, zdown
 
-  real(wp) :: ox, oy, oz
-  real(wp) :: sinlat, coslat, sinlon, coslon
-  real(wp) :: dx, dy, dz
+  real(dp) :: ox, oy, oz
+  real(dp) :: sinlat, coslat, sinlon, coslon
+  real(dp) :: dx, dy, dz
 
   call geographic_geodetic2ecef(olat, olon, oheight, ox, oy, oz)
 
@@ -100,12 +102,11 @@ subroutine rotation_matrix(v_axis, theta, R)
 !
 !-output:
 ! R: rotation matrix
-!
 
-  real(wp), intent(in) :: v_axis(3), theta
-  real(wp), intent(out) :: R(3,3)
+  real(dp), intent(in) :: v_axis(3), theta
+  real(dp), intent(out) :: R(3,3)
 
-  real(wp) :: sint, cost, one_minus_cost, v(3)
+  real(dp) :: sint, cost, one_minus_cost, v(3)
 
   sint = sin(theta)
   cost = cos(theta)
@@ -127,6 +128,28 @@ subroutine rotation_matrix(v_axis, theta, R)
 
   R(2,3) = one_minus_cost*v_axis(2)*v_axis(3) - sint * v_axis(1)
   R(3,2) = one_minus_cost*v_axis(2)*v_axis(3) + sint * v_axis(1)
+
+end subroutine
+
+
+!///////////////////////////////////////////////////////////////////////////////
+subroutine geographic_ecef2latlon0(x, y, z, lat, lon)
+!- get (lat,lon) where the vector (x,y,z) in ECEF intercepts the WGS84 ellipsoid
+!
+!-input:
+! x,y,z: vector(x,y,z), the magnitude is always ignored
+!-output:
+! lat,lon: geodetic coordinates where the vector(x,y,z) will intercept the
+!          ellipsoid
+
+  real(dp), intent(in) :: x, y, z
+  real(dp), intent(out) :: lat, lon
+
+  ! get longitude
+  lon = atan2(y, x)
+
+  ! convert from geocentric to geolatitude latitude (zero elevation)
+  lat = atan2(z, sqrt(x**2 + y**2)/wgs84_sq_one_minus_f)
 
 end subroutine
 

@@ -19,7 +19,7 @@ module geographic
   real(dp), parameter :: wgs84_f = 1.0_dp / wgs84_invf
   real(dp), parameter :: wgs84_ecc2 = wgs84_f * (2.0_dp - wgs84_f)
   real(dp), parameter :: wgs84_one_minus_ecc2 = 1.0_dp - wgs84_ecc2
-  real(dp), parameter :: wgs84_sq_one_minus_f = (1.0_dp - wgs84_f)**2
+  real(dp), parameter :: wgs84_sq_one_minus_f = wgs84_one_minus_ecc2
 
   ! exported opertations 
   public :: geographic_geodetic2ecef
@@ -149,7 +149,7 @@ subroutine geographic_ecef2latlon0(x, y, z, lat, lon)
   lon = atan2(y, x)
 
   ! convert from geocentric to geolatitude latitude (zero elevation)
-  lat = atan2(z, sqrt(x**2 + y**2)/wgs84_sq_one_minus_f)
+  lat = atan2(z, sqrt(x**2 + y**2) * wgs84_sq_one_minus_f)
 
 end subroutine
 

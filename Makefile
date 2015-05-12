@@ -37,7 +37,8 @@ program = xsem_interp_xyz \
 		  xsem_slab_model \
 		  xsem_slice_gcircle \
 		  xsem_slice_sphere \
-		  xmap_gcircle
+		  xmap_gcircle \
+		  xlatlonhkm_to_vtk
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))

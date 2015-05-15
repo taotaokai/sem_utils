@@ -25,8 +25,8 @@ program_dir = ${src_dir}/program
 #LDFLAGS = -L$(netcdf_mod) -lnetcdff
 
 # ifort
-FCFLAGS = -g
-#FCFLAGS = -O2
+#FCFLAGS = -g
+FCFLAGS = -O2
 FCFLAGS += -I $(inc_dir) -I$(netcdf_mod) -module $(obj_dir) -assume byterecl
 LDFLAGS = -L$(netcdf_lib) -lnetcdff
 
@@ -37,7 +37,8 @@ program = xsem_interp_xyz \
 		  xsem_slab_model \
 		  xsem_slice_gcircle \
 		  xsem_slice_sphere \
-		  xmap_gcircle
+		  xmap_gcircle \
+		  xlatlonhkm_to_vtk
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))

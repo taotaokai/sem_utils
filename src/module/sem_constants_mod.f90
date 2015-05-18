@@ -13,7 +13,7 @@ module sem_constants
 ! include 'constants_tomography.h'
 
   ! array dimension
-  integer :: NSPEC, NGLOB
+  !integer :: NSPEC, NGLOB
 
   !---- public varaibles
   !public :: CUSTOM_REAL, MAX_STRING_LEN, IIN, IOUT
@@ -32,29 +32,31 @@ module sem_constants
 !----------------------------------
 ! implementation part
 !----------------------------------
-contains
+!contains
 
 !//////////////////////////
-subroutine sem_constants_set(iregion)
-
-  integer, intent(in) :: iregion
-
-  select case (iregion)
-    case (IREGION_CRUST_MANTLE)
-      NSPEC = NSPEC_CRUST_MANTLE
-      NGLOB = NGLOB_CRUST_MANTLE
-!   case (IREGION_OUTER_CORE)
-!     NSPEC = NSPEC_CRUST_MANTLE
-!     NGLOB = NGLOB_CRUST_MANTLE
-!   case (IREGION_INNER_CORE)
-!     NSPEC = NSPEC_CRUST_MANTLE
-!     NGLOB = NGLOB_CRUST_MANTLE
-    case default
-      write(*,*) 'sem_constants_set: unrecognized region code ( ', iregion, ' )'
-      stop
-  end select
-
-end subroutine
+!subroutine sem_constants_getdim(iregion, nspec, nglob)
+!
+!  integer, intent(in) :: iregion
+!
+!  integer, intent(out) :: iregion
+!
+!  select case (iregion)
+!    case (IREGION_CRUST_MANTLE)
+!      nspec = NSPEC_CRUST_MANTLE
+!      nglob = NGLOB_CRUST_MANTLE
+!!   case (IREGION_OUTER_CORE)
+!!     nspec = NSPEC_CRUST_MANTLE
+!!     nglob = NGLOB_CRUST_MANTLE
+!!   case (IREGION_INNER_CORE)
+!!     nspec = NSPEC_CRUST_MANTLE
+!!     nglob = NGLOB_CRUST_MANTLE
+!    case default
+!      write(*,*) '[ERROR] sem_constants_getdim: unrecognized region code ( ', iregion, ' )'
+!      stop
+!  end select
+!
+!end subroutine
 
 
 end module sem_constants

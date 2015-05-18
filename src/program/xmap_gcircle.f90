@@ -22,7 +22,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "NOTES"
   print '(a)', ""
-  print '(a)', "  1. This program is used to plot the great circle path on a map"
+  print '(a)', "  1. This auxiliary program is used to plot the great circle path on a map"
   print '(a)', "      in conjuction with xsem_slice_gcircle"
   print '(a)', "    ~~~~~~~~~~~~~~~~"
   print '(a)', "    #!/bin/bash "

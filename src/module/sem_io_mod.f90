@@ -4,7 +4,9 @@ module sem_io
 ! specification part
 !----------------------------------
 
+  use sem_constants, only: dp
   use sem_constants, only: CUSTOM_REAL, MAX_STRING_LEN, IIN, IOUT
+  use sem_constants, only: NGLLX, NGLLY, NGLLZ
 
   implicit none
 
@@ -76,47 +78,46 @@ end subroutine
 
 !///////////////////////////////////////////////////////////////////////////////
 subroutine sem_io_read_gll_file_1(basedir, iproc, iregion, model_name, &
-                                  dims, model_gll)
+                                  model_gll)
 !-read one GLL file into an array
 !
 !-inputs:
 ! (string) basedir,iproc,iregion,model_name: specify the GLL file
-! (integer) dims(4) = [NGLLX,NGLLY,NGLLZ,NSPEC]
-!   specify the array dimension in the GLL file
-!   (i.e. dimensions of GLL points of the SEM mesh)
 !
 !-output:
 ! (real) model_gll(NGLLX,NGLLY,NGLLZ,NSPEC): GLL array
 
   character(len=*), intent(in) :: basedir, model_name
-  integer, intent(in) :: iproc, iregion, dims(4)
+  integer, intent(in) :: iproc, iregion
 
-  real(kind=CUSTOM_REAL), intent(out) :: &
-    model_gll(dims(1), dims(2), dims(3), dims(4))
+  real(dp), intent(out) :: model_gll(:,:,:,:)
 
-  integer :: ier
+  integer :: ier, nspec
+  real(kind=CUSTOM_REAL), allocatable :: dummy(:,:,:,:)
+
+  nspec = size(model_gll,4)
+  allocate(dummy(NGLLX,NGLLY,NGLLZ,nspec))
 
   call sem_io_open_file_for_read(IIN,basedir,iproc,iregion,model_name)
 
-  read(IIN, iostat=ier) model_gll
+  read(IIN, iostat=ier) dummy
 
   if (ier /= 0) stop "[ERROR] sem_io_read_gll_1: failed to read in gll file"
 
   close(IIN)
+
+  model_gll = real(dummy, kind=dp)
 
 end subroutine
 
 
 !//////////////////////////
 subroutine sem_io_read_gll_file_n(basedir, iproc, iregion, nmodel, model_names, &
-                             dims, model_gll)
+                                  model_gll)
 !-read n GLL files into one array
 !
 !-inputs:
 ! (string) basedir,iproc,iregion,model_names(nmodel): specify the GLL file
-! (integer) dims(4) = [NGLLX,NGLLY,NGLLZ,NSPEC]
-!   specify the array dimension in the GLL file
-!   (i.e. dimensions of GLL points of the SEM mesh)
 !
 !-output:
 ! (real) model_gll(nmodel,NGLLX,NGLLY,NGLLZ,NSPEC): GLL array
@@ -124,49 +125,50 @@ subroutine sem_io_read_gll_file_n(basedir, iproc, iregion, nmodel, model_names, 
   integer, intent(in) :: nmodel
   character(len=*), intent(in) :: basedir
   character(len=MAX_STRING_LEN), dimension(nmodel), intent(in) :: model_names
-  integer, intent(in) :: iproc, iregion, dims(4)
+  integer, intent(in) :: iproc, iregion
 
-  real(kind=CUSTOM_REAL), intent(out) :: &
-    model_gll(nmodel, dims(1), dims(2), dims(3), dims(4))
+  real(dp), intent(out) :: model_gll(:,:,:,:,:)
 
   integer :: imodel
 
   do imodel = 1, nmodel
-    call sem_io_read_gll_file_1(basedir, iproc, iregion, model_names(imodel) &
-                                dims, model_gll(imodel,:,:,:,:))
+    call sem_io_read_gll_file_1(basedir, iproc, iregion, model_names(imodel), &
+                                model_gll(imodel,:,:,:,:))
   enddo
 
 end subroutine
 
 
 !//////////////////////////
-subroutine sem_io_read_gll_file_cijkl(basedir, iproc, iregion, dims, gll_cijkl)
+subroutine sem_io_read_gll_file_cijkl(basedir, iproc, iregion, gll_cijkl)
 !-read the special GLL file (c_ijkl) into one array
 !
 !-inputs:
 ! (string) basedir,iproc,iregion,model_names(nmodel): specify the GLL file
-! (integer) dims(4) = [NGLLX,NGLLY,NGLLZ,NSPEC]
-!   specify the array dimension in the GLL file
-!   (i.e. dimensions of GLL points of the SEM mesh)
 !
 !-output:
 ! (real) model_gll(21,NGLLX,NGLLY,NGLLZ,NSPEC): GLL array
 
   character(len=*), intent(in) :: basedir
-  integer, intent(in) :: iproc, iregion, dims(4)
+  integer, intent(in) :: iproc, iregion
 
-  real(kind=CUSTOM_REAL), intent(out) :: &
-    gll_cijkl(21, dims(1), dims(2), dims(3), dims(4))
+  real(dp), intent(out) :: gll_cijkl(:,:,:,:,:)
 
-  integer :: ier
+  integer :: ier, nspec
+  real(kind=CUSTOM_REAL), allocatable :: dummy(:,:,:,:,:)
+
+  nspec = size(gll_cijkl,5)
+  allocate(dummy(21,NGLLX,NGLLY,NGLLZ,nspec))
 
   call sem_io_open_file_for_read(IIN, basedir,iproc,iregion,'cijkl_kernel')
 
-  read(IIN, iostat=ier) gll_cijkl
+  read(IIN, iostat=ier) dummy 
 
   close(IIN)
 
   if (ier /= 0) stop "[ERROR] sem_io_read_gll_file_ciikl: failed to read in gll file"
+
+  gll_cijkl = real(dummy, kind=dp)
 
 end subroutine
 
@@ -184,11 +186,13 @@ subroutine sem_io_write_gll_file_1( &
 
   character(len=*), intent(in) :: basedir, model_name
   integer, intent(in) :: iproc, iregion
-  real(kind=CUSTOM_REAL), intent(in) :: model_gll(:,:,:,:)
+  real(dp), intent(in) :: model_gll(:,:,:,:)
+
+  integer :: ier
 
   call sem_io_open_file_for_write(IOUT,basedir,iproc,iregion,model_name)
 
-  write(IOUT, iostat=ier) model_gll
+  write(IOUT, iostat=ier) real(model_gll, kind=CUSTOM_REAL)
 
   close(IOUT)
 
@@ -213,7 +217,7 @@ subroutine sem_io_write_gll_file_n( &
   integer, intent(in) :: nmodel
   character(len=MAX_STRING_LEN), intent(in) :: model_names(nmodel)
 
-  real(kind=CUSTOM_REAL), intent(in) :: model_gll(nmodel,:,:,:,:)
+  real(dp), intent(in) :: model_gll(:,:,:,:,:)
 
   integer :: imodel
 

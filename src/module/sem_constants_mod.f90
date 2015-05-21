@@ -11,7 +11,7 @@ module sem_constants
   include "values_from_mesher.h"
 
   integer, parameter :: dp = kind(1.d0)
-! integer, parameter :: sp = kind(1.0)
+  integer, parameter :: sp = kind(1.0)
 
 ! include 'constants_tomography.h'
 

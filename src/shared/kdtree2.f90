@@ -336,45 +336,45 @@ bigloop:  do
 
   end function pq_insert
 
-  subroutine pq_adjust_heap(a,i)
-    type(pq),pointer  :: a
-    integer, intent(in) :: i
-    !
-    ! nominally arguments (a,i), but specialize for a=1
-    !
-    ! This routine assumes that the trees with roots 2 and 3 are already heaps, i.e.
-    ! the children of '1' are heaps.  When the procedure is completed, the
-    ! tree rooted at 1 is a heap.
-    real(kdkind) :: prichild
-    integer :: parent, child, N
+! subroutine pq_adjust_heap(a,i)
+!   type(pq),pointer  :: a
+!   integer, intent(in) :: i
+!   !
+!   ! nominally arguments (a,i), but specialize for a=1
+!   !
+!   ! This routine assumes that the trees with roots 2 and 3 are already heaps, i.e.
+!   ! the children of '1' are heaps.  When the procedure is completed, the
+!   ! tree rooted at 1 is a heap.
+!   real(kdkind) :: prichild
+!   integer :: parent, child, N
 
-    type(kdtree2_result) :: e
+!   type(kdtree2_result) :: e
 
-    e = a%elems(i) 
+!   e = a%elems(i) 
 
-    parent = i
-    child = 2*i
-    N = a%heap_size
-    
-    do while (child .le. N)
-       if (child .lt. N) then
-          if (a%elems(child)%dis .lt. a%elems(child+1)%dis) then
-             child = child+1
-          endif
-       endif
-       prichild = a%elems(child)%dis
-       if (e%dis .ge. prichild) then
-          exit 
-       else
-          ! move child into parent.
-          a%elems(parent) = a%elems(child) 
-          parent = child
-          child = 2*parent
-       end if
-    end do
-    a%elems(parent) = e
-    return
-  end subroutine pq_adjust_heap
+!   parent = i
+!   child = 2*i
+!   N = a%heap_size
+!   
+!   do while (child .le. N)
+!      if (child .lt. N) then
+!         if (a%elems(child)%dis .lt. a%elems(child+1)%dis) then
+!            child = child+1
+!         endif
+!      endif
+!      prichild = a%elems(child)%dis
+!      if (e%dis .ge. prichild) then
+!         exit 
+!      else
+!         ! move child into parent.
+!         a%elems(parent) = a%elems(child) 
+!         parent = child
+!         child = 2*parent
+!      end if
+!   end do
+!   a%elems(parent) = e
+!   return
+! end subroutine pq_adjust_heap
     
 
   real(kdkind) function pq_replace_max(a,dis,idx) 
@@ -1459,36 +1459,36 @@ contains
     return
   end function dis2_from_bnd
 
-  logical function box_in_search_range(node, sr) result(res)
-    !
-    ! Return the distance from 'qv' to the CLOSEST corner of node's
-    ! bounding box
-    ! for all coordinates outside the box.   Coordinates inside the box
-    ! contribute nothing to the distance.
-    !
-    type (tree_node), pointer :: node
-    type (tree_search_record), pointer :: sr
+! logical function box_in_search_range(node, sr) result(res)
+!   !
+!   ! Return the distance from 'qv' to the CLOSEST corner of node's
+!   ! bounding box
+!   ! for all coordinates outside the box.   Coordinates inside the box
+!   ! contribute nothing to the distance.
+!   !
+!   type (tree_node), pointer :: node
+!   type (tree_search_record), pointer :: sr
 
-    integer :: dimen, i
-    real(kdkind)    :: dis, ballsize
-    real(kdkind)    :: l, u
+!   integer :: dimen, i
+!   real(kdkind)    :: dis, ballsize
+!   real(kdkind)    :: l, u
 
-    dimen = sr%dimen
-    ballsize = sr%ballsize
-    dis = 0.0
-    res = .true.
-    do i=1,dimen
-       l = node%box(i)%lower
-       u = node%box(i)%upper
-       dis = dis + (dis2_from_bnd(sr%qv(i),l,u))
-       if (dis > ballsize) then
-          res = .false.
-          return
-       endif
-    end do
-    res = .true.
-    return
-  end function box_in_search_range
+!   dimen = sr%dimen
+!   ballsize = sr%ballsize
+!   dis = 0.0
+!   res = .true.
+!   do i=1,dimen
+!      l = node%box(i)%lower
+!      u = node%box(i)%upper
+!      dis = dis + (dis2_from_bnd(sr%qv(i),l,u))
+!      if (dis > ballsize) then
+!         res = .false.
+!         return
+!      endif
+!   end do
+!   res = .true.
+!   return
+! end function box_in_search_range
 
 
   subroutine process_terminal_node(node)
@@ -1782,64 +1782,64 @@ contains
     return
   end subroutine kdtree2_sort_results
 
-  subroutine heapsort(a,ind,n)
-    !
-    ! Sort a(1:n) in ascending order, permuting ind(1:n) similarly.
-    ! 
-    ! If ind(k) = k upon input, then it will give a sort index upon output.
-    !
-    integer,intent(in)          :: n
-    real(kdkind), intent(inout)         :: a(:) 
-    integer, intent(inout)      :: ind(:)
+! subroutine heapsort(a,ind,n)
+!   !
+!   ! Sort a(1:n) in ascending order, permuting ind(1:n) similarly.
+!   ! 
+!   ! If ind(k) = k upon input, then it will give a sort index upon output.
+!   !
+!   integer,intent(in)          :: n
+!   real(kdkind), intent(inout)         :: a(:) 
+!   integer, intent(inout)      :: ind(:)
 
-    !
-    !
-    real(kdkind)        :: value   ! temporary for a value from a()
-    integer     :: ivalue  ! temporary for a value from ind()
+!   !
+!   !
+!   real(kdkind)        :: value   ! temporary for a value from a()
+!   integer     :: ivalue  ! temporary for a value from ind()
 
-    integer     :: i,j
-    integer     :: ileft,iright
+!   integer     :: i,j
+!   integer     :: ileft,iright
 
-    ileft=n/2+1
-    iright=n
+!   ileft=n/2+1
+!   iright=n
 
-    !    do i=1,n
-    !       ind(i)=i
-    ! Generate initial idum array
-    !    end do
+!   !    do i=1,n
+!   !       ind(i)=i
+!   ! Generate initial idum array
+!   !    end do
 
-    if(n.eq.1) return                  
+!   if(n.eq.1) return                  
 
-    do 
-       if(ileft > 1)then
-          ileft=ileft-1
-          value=a(ileft); ivalue=ind(ileft)
-       else
-          value=a(iright); ivalue=ind(iright)
-          a(iright)=a(1); ind(iright)=ind(1)
-          iright=iright-1
-          if (iright == 1) then
-             a(1)=value;ind(1)=ivalue
-             return
-          endif
-       endif
-       i=ileft
-       j=2*ileft
-       do while (j <= iright) 
-          if(j < iright) then
-             if(a(j) < a(j+1)) j=j+1
-          endif
-          if(value < a(j)) then
-             a(i)=a(j); ind(i)=ind(j)
-             i=j
-             j=j+j
-          else
-             j=iright+1
-          endif
-       end do
-       a(i)=value; ind(i)=ivalue
-    end do
-  end subroutine heapsort
+!   do 
+!      if(ileft > 1)then
+!         ileft=ileft-1
+!         value=a(ileft); ivalue=ind(ileft)
+!      else
+!         value=a(iright); ivalue=ind(iright)
+!         a(iright)=a(1); ind(iright)=ind(1)
+!         iright=iright-1
+!         if (iright == 1) then
+!            a(1)=value;ind(1)=ivalue
+!            return
+!         endif
+!      endif
+!      i=ileft
+!      j=2*ileft
+!      do while (j <= iright) 
+!         if(j < iright) then
+!            if(a(j) < a(j+1)) j=j+1
+!         endif
+!         if(value < a(j)) then
+!            a(i)=a(j); ind(i)=ind(j)
+!            i=j
+!            j=j+j
+!         else
+!            j=iright+1
+!         endif
+!      end do
+!      a(i)=value; ind(i)=ivalue
+!   end do
+! end subroutine heapsort
 
   subroutine heapsort_struct(a,n)
     !

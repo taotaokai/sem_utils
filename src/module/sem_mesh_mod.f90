@@ -10,7 +10,8 @@ module sem_mesh
 ! use sem_constants, only: ANGULAR_WIDTH_XI_IN_DEGREES_VAL
 ! use sem_constants, only: DEGREES_TO_RADIANS, R_UNIT_SPHERE
 ! use sem_constants, only: NEX_XI_VAL
-  use sem_constants, only: NUM_ITER
+! use sem_constants, only: NUM_ITER
+  use sem_constants, only: R_EARTH_KM
   use sem_constants, only: REGIONAL_MOHO_MESH
   use sem_constants, only: IFLAG_CRUST, IFLAG_670_220, IFLAG_DUMMY
 
@@ -37,7 +38,7 @@ module sem_mesh
     integer :: eid
     real(dp) :: uvw(3)
     real(dp) :: misloc
-    !real(dp) :: lagrange(NGLLX, NGLLY, NGLLZ)
+    real(dp) :: lagrange(NGLLX, NGLLY, NGLLZ)
   end type sem_mesh_location
 
   ! public data types
@@ -143,7 +144,7 @@ subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
 
   read(IIN) mesh_data%ibool
   read(IIN) mesh_data%idoubling
-  read(IIN) mesh_data%ispec_is_tiso
+  !read(IIN) mesh_data%ispec_is_tiso
 
   !read(IIN) mesh_data%xix
   !read(IIN) mesh_data%xiy
@@ -300,9 +301,9 @@ subroutine sem_mesh_locate_kdtree2( &
   integer :: i, ipoint, ispec, iglob
 
   !-- anchor points
-  integer :: ianchor
+  integer :: ia
   integer, dimension(NGNOD) :: iax, iay, iaz 
-  real(dp) :: xyz_anchor(:,:,:)
+  real(dp), allocatable :: xyz_anchor(:,:,:)
 
   !-- kdtree2
   type(kdtree2), pointer :: tree
@@ -311,35 +312,30 @@ subroutine sem_mesh_locate_kdtree2( &
   !-- find element 
   integer :: inn, isel, nsel
   real(dp) :: two_max_misloc
-  integer :: RANGE_1_NSPEC(:), eid_sel(:)
+  integer, allocatable :: RANGE_1_NSPEC(:), eid_sel(:)
+  logical, allocatable :: flag_ibool(:,:,:,:), flag_nspec(:)
+
+  !-- locate inside element
+  integer, parameter :: niter_xyz2cube = 4
   real(dp) :: xyz1(3), uvw1(3), misloc1
-  logical :: flag_ibool(:,:,:,:), flag_nspec(:), flag_inside
+  logical :: flag_inside
 
   !-- GLL colocation points and lagrange interpolation weights
-  !real(dp), dimension(NGLLX) :: xigll, wxgll
-  !real(dp), dimension(NGLLY) :: yigll, wygll
-  !real(dp), dimension(NGLLZ) :: zigll, wzgll
-  !real(dp) :: hlagx(NGLLX), hlagy(NGLLY), hlagz(NGLLZ)
+  real(dp), dimension(NGLLX) :: xigll, wxgll
+  real(dp), dimension(NGLLY) :: yigll, wygll
+  real(dp), dimension(NGLLZ) :: zigll, wzgll
+  real(dp) :: hlagx(NGLLX), hlagy(NGLLY), hlagz(NGLLZ)
+  integer :: igllx, iglly, igllz
 
-  !===== initialize varaibles and arrays
+  !===== mesh dimension variable
 
-  two_max_misloc = 2.0 * max_misloc
   nspec = mesh_data%nspec
 
-  ! initialize location results
-  location_result(:)%stat = -1
-  location_result(:)%eid = -1
-  location_result(:)%misloc = huge(1.0_dp)
+  !===== coordinates of GLL points
 
-  ! nearest points/elements
-  allocate(search_result(nnearest))
-  allocate(RANGE_1_NSPEC(nspec), eid_sel(nspec), flag_nspec(nspec))
-  allocate(flag_ibool(NGLLX, NGLLY, NGLLZ, nspec))
-
-  RANGE_1_NSPEC = [ (i, i=1,nspec) ]
-
-  ! element shape
-  allocate(xyz_anchor(3, NGNOD, nspec))
+  call zwgljd(xigll, wxgll, NGLLX, GAUSSALPHA, GAUSSBETA)
+  call zwgljd(yigll, wygll, NGLLY, GAUSSALPHA, GAUSSBETA)
+  call zwgljd(zigll, wzgll, NGLLZ, GAUSSALPHA, GAUSSBETA)
 
   !===== anchor points of mesh elements 
 
@@ -347,10 +343,11 @@ subroutine sem_mesh_locate_kdtree2( &
   call anchor_point_index(iax, iay, iaz)
 
   ! get anchor and center points of each GLL element 
+  allocate(xyz_anchor(3, NGNOD, nspec))
   do ispec = 1, nspec
-    do ianchor = 1, NGNOD
+    do ia = 1, NGNOD
       iglob = mesh_data%ibool(iax(ia), iay(ia), iaz(ia), ispec)
-      xyz_anchor(:, ianchor, ispec) = mesh_data%xyz_glob(:, iglob)
+      xyz_anchor(:, ia, ispec) = mesh_data%xyz_glob(:, iglob)
     enddo
     ! the last anchor point is the element center
     !xyz_center(:,ispec) = mesh_data%xyz(:,iglob)
@@ -361,6 +358,20 @@ subroutine sem_mesh_locate_kdtree2( &
   tree => kdtree2_create(mesh_data%xyz_glob, sort=.true., rearrange=.true.)
 
   !===== locate each point
+
+  !-- intialize variables and arrays
+  two_max_misloc = 2.0 * max_misloc
+
+  allocate(search_result(nnearest))
+  allocate(RANGE_1_NSPEC(nspec), eid_sel(nspec), flag_nspec(nspec))
+  allocate(flag_ibool(NGLLX, NGLLY, NGLLZ, nspec))
+
+  RANGE_1_NSPEC = [ (i, i=1,nspec) ]
+
+  ! initialize location results
+  location_result(:)%stat = -1
+  location_result(:)%eid = -1
+  location_result(:)%misloc = huge(1.0_dp)
 
   loop_points: do ipoint = 1, npoint
 
@@ -373,7 +384,7 @@ subroutine sem_mesh_locate_kdtree2( &
     !-- find the elements associated with the n nearest points
     flag_ibool = .false.
     do inn = 1, nnearest
-      if (search_result(i)%dis > two_max_misloc) then
+      if (search_result(inn)%dis > two_max_misloc) then
         cycle
       endif
       iglob = search_result(inn)%idx
@@ -396,13 +407,13 @@ subroutine sem_mesh_locate_kdtree2( &
       ispec = eid_sel(isel)
 
       ! test layer id (if used)
-      if (idoubling_query(ipoint) /= IFLAG_DUMMY .and. &
-          idoubling_query(ipoint) /= mesh_data%idoubling(ispec)) then
+      if (idoubling(ipoint) /= IFLAG_DUMMY .and. &
+          idoubling(ipoint) /= mesh_data%idoubling(ispec)) then
         cycle
       endif
 
       ! locate point to this element
-      call xyz2cube_bounded(xyz_anchor(:,:,ispec), xyz1, &
+      call xyz2cube_bounded(xyz_anchor(:,:,ispec), xyz1, niter_xyz2cube, &
         uvw1, misloc1, flag_inside)
 
       if (flag_inside) then ! record this element and exit looping the rest elements
@@ -427,6 +438,24 @@ subroutine sem_mesh_locate_kdtree2( &
       endif ! flag_inside
 
     enddo ! isel
+
+    ! set interpolation weights on GLL points if located
+    if (location_result(ipoint)%stat /= -1) then
+
+      call lagrange_poly(location_result(ipoint)%uvw(1), NGLLX, xigll, hlagx)
+      call lagrange_poly(location_result(ipoint)%uvw(2), NGLLY, yigll, hlagy)
+      call lagrange_poly(location_result(ipoint)%uvw(3), NGLLZ, zigll, hlagz)
+
+      do igllz = 1, NGLLZ
+        do iglly = 1, NGLLY
+          do igllx = 1, NGLLX
+            location_result(ipoint)%lagrange(igllx,iglly,igllz) = &
+              hlagx(igllx) * hlagy(iglly) * hlagz(igllz)
+          enddo
+        enddo
+      enddo 
+
+    endif
 
   enddo loop_points 
 
@@ -654,7 +683,7 @@ subroutine lagrange_poly(x, ngll, xgll, lagrange)
 end subroutine lagrange_poly
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine xyz2cube_bounded(anchor_xyz, xyz, uvw, misloc, is_inside )
+subroutine xyz2cube_bounded(xyz_anchor, xyz, niter, uvw, misloc, flag_inside )
 !-mapping a given point in physical space (xyz) to the 
 ! reference cube (uvw), 
 ! and also flag whether the point is inside the cube
@@ -662,23 +691,25 @@ subroutine xyz2cube_bounded(anchor_xyz, xyz, uvw, misloc, is_inside )
 ! inside or on the surface of the reference unit cube.
 !
 !-inputs:
-! anchor_xyz: anchor points of the element
+! (real) xyz_anchor(3, NGNOD): anchor points of the element
 ! xyz: coordinates of the target point
+! (int) niter: number of iterations to invert for uvw
 !
 !-outputs:
-! uvw: local coordinates in reference cube
+! uvw(3): local coordinates in reference cube
 ! misloc: location misfit abs(xyz - XYZ(uvw))
-! is_inside: flag whether the target point locates inside the element
+! flag_inside: flag whether the target point locates inside the element
 
-  real(dp), intent(in) :: anchor_xyz(3, NGNOD)
+  real(dp), intent(in) :: xyz_anchor(3, NGNOD)
   real(dp), intent(in) :: xyz(3)
+  integer, intent(in) :: niter
 
   real(dp), intent(out) :: uvw(3)
   real(dp), intent(out) :: misloc 
-  logical, intent(out) :: is_inside
+  logical, intent(out) :: flag_inside
   
   ! local variables
-  integer :: iter_loop
+  integer :: iter
   real(dp), dimension(3) :: xyzi ! iteratively improved xyz
   real(dp), dimension(3,3) :: DuvwDxyz
   real(dp), dimension(3) :: dxyz, duvw
@@ -689,13 +720,13 @@ subroutine xyz2cube_bounded(anchor_xyz, xyz, uvw, misloc, is_inside )
 
   ! initialize 
   uvw = zero
-  is_inside = .true.
+  flag_inside = .true.
 
   ! iteratively update local coordinate uvw to approach the target xyz
-  do iter_loop = 1, NUM_ITER
+  do iter = 1, niter
 
     ! predicted xyzi and Jacobian for the current uvw
-    call cube2xyz(anchor_xyz, uvw, xyzi, DuvwDxyz)
+    call cube2xyz(xyz_anchor, uvw, xyzi, DuvwDxyz)
 
     ! compute difference
     dxyz = xyz - xyzi
@@ -711,15 +742,15 @@ subroutine xyz2cube_bounded(anchor_xyz, xyz, uvw, misloc, is_inside )
       where (uvw < minus_one) uvw = minus_one
       where (uvw > one) uvw = one
       ! set is_inside to false based on the last iteration
-      if (iter_loop == NUM_ITER) then
-        is_inside = .false.
+      if (iter == niter) then
+        flag_inside = .false.
       endif
     endif
 
   enddo ! do iter_loop = 1,NUM_ITER
   
   ! calculate the predicted position 
-  call cube2xyz(anchor_xyz, uvw, xyzi, DuvwDxyz)
+  call cube2xyz(xyz_anchor, uvw, xyzi, DuvwDxyz)
 
   ! residual distance from the target point
   misloc = sqrt(sum((xyz-xyzi)**2))

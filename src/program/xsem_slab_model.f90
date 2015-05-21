@@ -221,10 +221,12 @@ program xsem_vertical_slice
 
     print *, '# iproc=', iproc
 
-    call sem_mesh_init(mesh_data)
-    call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
-    call sem_io_read_gll_modeln(model_dir, iproc, iregion, nmodel, model_names &
-                                , model_gll)
+    call sem_mesh_read(mesh_data, mesh_dir, iproc, iregion)
+
+    dims = [NGLLX, NGLLY, NGLLZ, mesh_data%nspec]
+
+    call sem_io_read_gll_file_n(model_dir, iproc, iregion, &
+                                nmodel, model_names, dims, model_gll)
 
     ! add slab model on each gll point 
     do ispec = 1, NSPEC
@@ -290,8 +292,8 @@ program xsem_vertical_slice
     enddo
 
     ! write out model
-    call sem_io_write_gll_modeln(out_dir, iproc, iregion, nmodel, model_names &
-                                 , model_gll)
+    call sem_io_write_gll_file_n(out_dir, iproc, iregion, nmodel, model_names, &
+                                 model_gll)
 
   enddo ! iproc
 

@@ -10,8 +10,10 @@ module sem_mesh
   use sem_constants, only: DEGREES_TO_RADIANS, R_UNIT_SPHERE
   use sem_constants, only: NEX_XI_VAL
   use sem_constants, only: NUM_ITER
+  use sem_constants, only: REGIONAL_MOHO_MESH
+  use sem_constants, only: IFLAG_CRUST, IFLAG_670_220, IFLAG_DUMMY
 
-  use sem_io, only: sem_io_open_for_read
+  use sem_io, only: sem_io_open_file_for_read
 
   implicit none
 
@@ -19,24 +21,29 @@ module sem_mesh
 
   integer, parameter :: dp = kind(0.d0)
 
-  !! for calculation of volume correspoding to each gll point
-  !! Gauss-Lobatto-Legendre points of integration and weights
-  !real(dp), dimension(NGLLX) :: xigll, wxgll
-  !real(dp), dimension(NGLLY) :: yigll, wygll
-  !real(dp), dimension(NGLLZ) :: zigll, wzgll
-  !! integration weights on GLL points in the unit cube [-1,1]^3
-  !real(dp) :: wgll_cube(NGLLX,NGLLY,NGLLZ)
-
   ! mesh data type 
-  type, public :: mesh
+  type :: sem_mesh_data
     integer :: nspec, nglob
-    real(kind=CUSTOM_REAL), dimension(:,:), allocatable :: xyz
+    real(kind=CUSTOM_REAL), dimension(:,:), allocatable :: xyz_glob
     integer, dimension(:,:,:,:), allocatable :: ibool
     integer, dimension(:), allocatable :: idoubling
-    logical, dimension(:), allocatable :: ispec_is_tiso 
+    logical, dimension(:), allocatable :: ispec_is_tiso
     real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: &
       xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz
-  end type mesh
+  end type sem_mesh_data
+
+  ! location result data type 
+  type :: sem_mesh_location
+    integer :: stat
+    integer :: eid
+    real(dp) :: uvw(3)
+    real(dp) :: misloc
+    real(dp) :: lagrange(NGLLX, NGLLY, NGLLZ)
+  end type sem_mesh_location
+
+  ! public data types
+  public :: sem_mesh_data
+  public :: sem_mesh_location
 
   ! public operations
   public :: sem_mesh_init
@@ -57,9 +64,9 @@ subroutine sem_mesh_init(mesh_data, nspec, nglob)
 
   integer, intent(in) :: nspec, nglob
 
-  if (allocated(mesh_data%xyz)) then
+  if (allocated(mesh_data%xyz_glob)) then
 
-    deallocate(mesh_data%xyz, &
+    deallocate(mesh_data%xyz_glob, &
                mesh_data%ibool, &
                mesh_data%idoubling, &
                mesh_data%ispec_is_tiso, &
@@ -74,19 +81,19 @@ subroutine sem_mesh_init(mesh_data, nspec, nglob)
                mesh_data%gammaz)
   end if
 
-  allocate(mesh_data%xyz(1:3,1:nglob), &
-           mesh_data%ibool(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec), &
-           mesh_data%idoubling(1:nspec), &
-           mesh_data%ispec_is_tiso(1:nspec), &
-              mesh_data%xix(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec), &
-              mesh_data%xiy(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec), &
-              mesh_data%xiz(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec), &
-             mesh_data%etax(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec), &
-             mesh_data%etay(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec), &
-             mesh_data%etaz(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec), &
-           mesh_data%gammax(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec), &
-           mesh_data%gammay(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec), &
-           mesh_data%gammaz(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec))
+  allocate(mesh_data%xyz_glob(3, nglob), &
+           mesh_data%ibool(NGLLX, NGLLY, NGLLZ, nspec), &
+           mesh_data%idoubling(nspec), &
+           mesh_data%ispec_is_tiso(nspec), &
+              mesh_data%xix(NGLLX, NGLLY, NGLLZ, nspec), &
+              mesh_data%xiy(NGLLX, NGLLY, NGLLZ, nspec), &
+              mesh_data%xiz(NGLLX, NGLLY, NGLLZ, nspec), &
+             mesh_data%etax(NGLLX, NGLLY, NGLLZ, nspec), &
+             mesh_data%etay(NGLLX, NGLLY, NGLLZ, nspec), &
+             mesh_data%etaz(NGLLX, NGLLY, NGLLZ, nspec), &
+           mesh_data%gammax(NGLLX, NGLLY, NGLLZ, nspec), &
+           mesh_data%gammay(NGLLX, NGLLY, NGLLZ, nspec), &
+           mesh_data%gammaz(NGLLX, NGLLY, NGLLZ, nspec))
 
 end subroutine
 
@@ -107,8 +114,10 @@ subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
   integer, intent(in) :: iproc, iregion
 
   integer :: nspec, nglob
+  integer :: num, id, ispec, iglob
+  real(kind=CUSTOM_REAL) :: xyz_center, depth
 
-  call sem_io_open_file_read(IIN,basedir,iproc,iregion,'solver_data')
+  call sem_io_open_file_for_read(IIN,basedir,iproc,iregion,'solver_data')
 
   ! get mesh dimensions
   read(IIN) nspec 
@@ -120,25 +129,59 @@ subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
   mesh_data%nspec = nspec
   mesh_data%nglob = nglob
 
-  read(IIN) mesh_data%xyz(1,1:nglob)
-  read(IIN) mesh_data%xyz(2,1:nglob)
-  read(IIN) mesh_data%xyz(3,1:nglob)
+  read(IIN) mesh_data%xyz_glob(1,:)
+  read(IIN) mesh_data%xyz_glob(2,:)
+  read(IIN) mesh_data%xyz_glob(3,:)
 
-  read(IIN) mesh_data%ibool(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec)
-  read(IIN) mesh_data%idoubling(1:nspec)
-  read(IIN) mesh_data%ispec_is_tiso(1:nspec)
+  read(IIN) mesh_data%ibool
+  read(IIN) mesh_data%idoubling
+  read(IIN) mesh_data%ispec_is_tiso
 
-  read(IIN)    mesh_data%xix(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec)
-  read(IIN)    mesh_data%xiy(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec)
-  read(IIN)    mesh_data%xiz(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec)
-  read(IIN)   mesh_data%etax(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec)
-  read(IIN)   mesh_data%etay(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec)
-  read(IIN)   mesh_data%etaz(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec)
-  read(IIN) mesh_data%gammax(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec)
-  read(IIN) mesh_data%gammay(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec)
-  read(IIN) mesh_data%gammaz(1:NGLLX,1:NGLLY,1:NGLLZ,1:nspec)
+  read(IIN) mesh_data%xix
+  read(IIN) mesh_data%xiy
+  read(IIN) mesh_data%xiz
+  read(IIN) mesh_data%etax
+  read(IIN) mesh_data%etay
+  read(IIN) mesh_data%etaz
+  read(IIN) mesh_data%gammax
+  read(IIN) mesh_data%gammay
+  read(IIN) mesh_data%gammaz
 
   close(IIN)
+
+  ! separate crustal mesh layers for REGIONAL_MOHO_MESH 
+  ! 3-layer crust: 10(third layer), 11, 12(shallowest layer)
+  if (REGIONAL_MOHO_MESH) then
+    num = 0
+    do ispec = 1, nspec
+      if (mesh_data%idoubling(ispec) == IFLAG_CRUST) then
+        id = num - (num/3)*3
+        mesh_data%idoubling(ispec) = 10*IFLAG_CRUST + id
+        num = num + 1
+      endif
+    enddo
+  endif
+
+  ! separate mesh layers across 410-km
+  ! 40: above 410, 41: below 410
+  do ispec = 1, nspec
+
+    if (mesh_data%idoubling(ispec) == IFLAG_670_220) then
+
+      iglob = mesh_data%ibool(NGLLX/2, NGLLY/2, NGLLZ/2, ispec)
+      ! element center coordinate
+      xyz_center = mesh_data%xyz_glob(:,iglob)
+      depth = (1.0 - sqrt(sum(mesh_data%xyz_glob(:,iglob)**2))) * R_EARTH_KM
+
+      if (depth < 405.0_CUSTOM_REAL) then
+        mesh_data%idoubling(ispec) = 10*IFLAG_670_220
+      else ! below 410-km
+        mesh_data%idoubling(ispec) = 10*IFLAG_670_220 + 1
+      endif
+
+    endif
+
+  enddo
 
 end subroutine
 
@@ -217,14 +260,86 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, num_typical_size, &
+subroutine sem_mesh_locate_kdtree2( &
+  mesh_data, npoint, xyz_query, idoubling, npts_nearest, max_misloc, &
+  location_result)
+
+  use kdtree2
+
+  type(sem_mesh_data), intent(in) :: mesh_data
+  integer, intent(in) :: npoint
+  real(dp), intent(in) :: xyz_query(3, npoint)
+  integer, intent(in) :: idoubling(npoint)
+  integer, intent(in) :: npts_nearest
+  real(dp), intent(in) :: max_misloc
+
+  type(sem_mesh_location), intent(out) :: location_result(npoint) 
+
+  ! local varaibles
+  integer :: nspec, nglob
+  integer :: i, ia, nsel, ispec, iglob, ipoint, isel
+  integer :: RANGE_1_NSPEC(nspec), eid_sel(nspec), ind_sort(nspec)
+  real(dp) :: dist_sq(nspec)
+  real(dp) :: xyz1(3), uvw1(3), misloc1
+  logical :: idx_sel(nspec), is_inside
+  integer :: igllx, iglly, igllz
+
+  !-- kdtree 
+  type(kdtree2), pointer :: tree
+  type(kdtree2_result), allocatable :: search_result(:)
+
+  !-- GLL colocation points and lagrange interpolation weights
+  real(dp), dimension(NGLLX) :: xigll, wxgll
+  real(dp), dimension(NGLLY) :: yigll, wygll
+  real(dp), dimension(NGLLZ) :: zigll, wzgll
+  real(dp) :: hlagx(NGLLX), hlagy(NGLLY), hlagz(NGLLZ)
+
+  !===== build kdtree
+  tree => kdtree2_create(mesh_data%xyz_glob, sort=.true., rearange=.true.)
+
+  !===== locate each point
+
+  ! initialize the location results
+  location_result(:)%stat = -1
+  location_result(:)%misloc = huge(1.0_dp)
+
+  allocate(search_result(npts_nearest))
+
+  do ipoint = 1, npoint
+    
+    !-- get the n closest points in the mesh
+    call kdtree2_n_nearest(tp=tree, qv=xyz_query(:,ipoint), nn=npts_nearest, &
+      results=search_result)
+
+    do i = 1, npts_nearest
+      if (search_result(i)%dis > max_misloc) then
+        cycle
+      endif
+
+      ! get neighboring element ID's
+      iglob = search_result(i)%idx
+
+      (mesh_data%ibool == iglob)
+      
+    enddo
+
+  enddo
+
+end subroutine
+
+
+!///////////////////////////////////////////////////////////////////////////////
+subroutine sem_mesh_locate_xyz( &
+  mesh_data, npoint, xyz, idoubling, num_typical_size, &
   uvw, hlagrange, misloc, eid, locstat)
 !-locate xyz(3,npoint) inside a given SEM mesh
 !
 !-inputs:
 ! type(mesh) mesh_data
 ! (real) xyz(3, npoint): target points to locate
-! (integer) num_typical_size: number of typical element size for locating points
+! (int) idoubling(npoint): layer id of targt points 
+!   not specified if = IFLAG_DUMMY, see sem_mesh_read() for more
+! (int) num_typical_size: number of typical element size for locating points
 !
 !-output
 ! uvw(3, npoint): local coordinates inside the located element
@@ -238,6 +353,7 @@ subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, num_typical_size, &
   type (mesh), intent(in) :: mesh_data
   integer, intent(in) :: npoint
   real(dp), intent(in) :: xyz(3, npoint)
+  integer, intent(in) :: idoubling(npoint)
   integer, intent(in) :: num_typical_size
 
   real(dp), intent(out) :: uvw(3, npoint)
@@ -321,16 +437,23 @@ subroutine sem_mesh_locate_xyz(mesh_data, npoint, xyz, num_typical_size, &
       cycle
     end if
 
-    ! select elements close to the target point within a certain range
-    idx_sel =      (center_xyz(1,:)>xyz1(1)-typical_size2) &
-             .and. (center_xyz(1,:)<xyz1(1)+typical_size2) &
-             .and. (center_xyz(2,:)>xyz1(2)-typical_size2) &
-             .and. (center_xyz(2,:)<xyz1(2)+typical_size2) &
-             .and. (center_xyz(3,:)>xyz1(3)-typical_size2) &
-             .and. (center_xyz(3,:)<xyz1(3)+typical_size2)
-
+    ! select elements of the same layer id (idoubling)
+    idx_sel = .true.
+    if (idoubling(ipoint) /= IFLAG_DUMMY) then
+      idx_sel = mesh_data%idoubling == idoubling(ipoint)
+      if (count(idx_sel) == 0) then 
+        cycle
+      endif
+    endif
+    ! also select elements close to the target point within a certain range
+    idx_sel = idx_sel .and. &
+              (center_xyz(1,:)>xyz1(1)-typical_size2) .and. &
+              (center_xyz(1,:)<xyz1(1)+typical_size2) .and. &
+              (center_xyz(2,:)>xyz1(2)-typical_size2) .and. &
+              (center_xyz(2,:)<xyz1(2)+typical_size2) .and. &
+              (center_xyz(3,:)>xyz1(3)-typical_size2) .and. &
+              (center_xyz(3,:)<xyz1(3)+typical_size2)
     nsel = count(idx_sel)
-
     if (nsel == 0) then 
       cycle
     endif

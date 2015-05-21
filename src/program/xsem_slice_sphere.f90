@@ -226,16 +226,19 @@ program xsem_slice_sphere
                        * DEGREES_TO_RADIANS * R_UNIT_SPHERE, kind=CUSTOM_REAL)
 
   ! loop each mesh chunk
-  call sem_mesh_init(mesh_data)
   do iproc = 0, NPROCTOT_VAL-1
 
     print *, "# iproc=", iproc
 
-    call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
-    call sem_io_read_gll_modeln(model_dir, iproc, iregion, nmodel, model_names &
-                                , model_gll)
-    call sem_mesh_locate_xyz(mesh_data, npoint, xyz, uvw, hlagrange, misloc &
-                             , elem_ind, statloc)
+    call sem_mesh_read(mesh_data, mesh_dir, iproc, iregion)
+
+    dims = [NGLLX, NGLLY, NGLLZ, mesh_data%nspec]
+
+    call sem_io_read_gll_modeln(model_dir, iproc, iregion, &
+      nmodel, model_names, dims, model_gll)
+
+    call sem_mesh_locate_xyz(mesh_data, npoint, xyz, idoubling, &
+      uvw, hlagrange, misloc, elem_ind, statloc)
 
     print *, "# number of located points: ", count(statloc>=0)
 

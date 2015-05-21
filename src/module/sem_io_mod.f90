@@ -11,13 +11,13 @@ module sem_io
   private
 
   !---- public operations
-  public :: sem_io_open_file_read
-  public :: sem_io_open_file_write
-  public :: sem_io_read_gll_1
-  public :: sem_io_read_gll_n
-  public :: sem_io_read_gll_cijkl
-  public :: sem_io_write_gll_1
-  public :: sem_io_write_gll_n
+  public :: sem_io_open_file_for_read
+  public :: sem_io_open_file_for_write
+  public :: sem_io_read_gll_file_1
+  public :: sem_io_read_gll_file_n
+  public :: sem_io_read_gll_file_cijkl
+  public :: sem_io_write_gll_file_1
+  public :: sem_io_write_gll_file_n
 
 !----------------------------------
 ! implementation part
@@ -25,7 +25,7 @@ module sem_io
 contains
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine sem_io_open_file_read(fileid, basedir, iproc, iregion, tag)
+subroutine sem_io_open_file_for_read(fileid, basedir, iproc, iregion, tag)
 ! open a GLL file, read only
 
   character(len=*), intent(in) :: basedir, tag 
@@ -41,7 +41,7 @@ subroutine sem_io_open_file_read(fileid, basedir, iproc, iregion, tag)
     form='unformatted',action='read',iostat=ier)
 
   if (ier /= 0) then
-    write(*,'(a)') '[ERROR] sem_io_open_file_read: failed to open file ', &
+    write(*,'(a)') '[ERROR] sem_io_open_file_for_read: failed to open file ', &
                     trim(filename)
     stop
   endif
@@ -50,7 +50,7 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine sem_io_open_file_write(fileid, basedir, iproc, iregion, tag)
+subroutine sem_io_open_file_for_write(fileid, basedir, iproc, iregion, tag)
 ! open a GLL file to write
 
   character(len=*), intent(in) :: basedir, tag 
@@ -66,7 +66,7 @@ subroutine sem_io_open_file_write(fileid, basedir, iproc, iregion, tag)
     form='unformatted',action='write',iostat=ier)
 
   if (ier /= 0) then
-    write(*,'(a)') '[ERROR] sem_io_open_file_write: failed to open file ', &
+    write(*,'(a)') '[ERROR] sem_io_open_file_for_write: failed to open file ', &
                     trim(filename)
     stop
   endif
@@ -75,8 +75,8 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine sem_io_read_gll_1(basedir, iproc, iregion, model_name, &
-                             dims, model_gll)
+subroutine sem_io_read_gll_file_1(basedir, iproc, iregion, model_name, &
+                                  dims, model_gll)
 !-read one GLL file into an array
 !
 !-inputs:
@@ -96,7 +96,7 @@ subroutine sem_io_read_gll_1(basedir, iproc, iregion, model_name, &
 
   integer :: ier
 
-  call sem_io_open_file_read(IIN,basedir,iproc,iregion,model_name)
+  call sem_io_open_file_for_read(IIN,basedir,iproc,iregion,model_name)
 
   read(IIN, iostat=ier) model_gll
 
@@ -108,7 +108,7 @@ end subroutine
 
 
 !//////////////////////////
-subroutine sem_io_read_gll_n(basedir, iproc, iregion, nmodel, model_names, &
+subroutine sem_io_read_gll_file_n(basedir, iproc, iregion, nmodel, model_names, &
                              dims, model_gll)
 !-read n GLL files into one array
 !
@@ -132,15 +132,15 @@ subroutine sem_io_read_gll_n(basedir, iproc, iregion, nmodel, model_names, &
   integer :: imodel
 
   do imodel = 1, nmodel
-    call sem_io_read_gll_1(basedir, iproc, iregion, model_names(imodel) &
-                           dims, model_gll(imodel,:,:,:,:))
+    call sem_io_read_gll_file_1(basedir, iproc, iregion, model_names(imodel) &
+                                dims, model_gll(imodel,:,:,:,:))
   enddo
 
 end subroutine
 
 
 !//////////////////////////
-subroutine sem_io_read_gll_cijkl(basedir, iproc, iregion, dims, gll_cijkl)
+subroutine sem_io_read_gll_file_cijkl(basedir, iproc, iregion, dims, gll_cijkl)
 !-read the special GLL file (c_ijkl) into one array
 !
 !-inputs:
@@ -160,19 +160,19 @@ subroutine sem_io_read_gll_cijkl(basedir, iproc, iregion, dims, gll_cijkl)
 
   integer :: ier
 
-  call sem_io_open_file_read(IIN, basedir,iproc,iregion,'cijkl_kernel')
+  call sem_io_open_file_for_read(IIN, basedir,iproc,iregion,'cijkl_kernel')
 
   read(IIN, iostat=ier) gll_cijkl
 
   close(IIN)
 
-  if (ier /= 0) stop "[ERROR] sem_io_read_gll_ciikl: failed to read in gll file"
+  if (ier /= 0) stop "[ERROR] sem_io_read_gll_file_ciikl: failed to read in gll file"
 
 end subroutine
 
 
 !//////////////////////////
-subroutine sem_io_write_gll_1( &
+subroutine sem_io_write_gll_file_1( &
   basedir, iproc, iregion, model_name, model_gll)
 !-write out one GLL array onto disk
 !
@@ -186,19 +186,19 @@ subroutine sem_io_write_gll_1( &
   integer, intent(in) :: iproc, iregion
   real(kind=CUSTOM_REAL), intent(in) :: model_gll(:,:,:,:)
 
-  call sem_io_open_file_write(IOUT,basedir,iproc,iregion,model_name)
+  call sem_io_open_file_for_write(IOUT,basedir,iproc,iregion,model_name)
 
   write(IOUT, iostat=ier) model_gll
 
   close(IOUT)
 
-  if (ier /= 0) stop "[ERROR] sem_io_write_gll_1: failed to write out gll file"
+  if (ier /= 0) stop "[ERROR] sem_io_write_gll_file_1: failed to write out gll file"
 
 end subroutine
 
 
 !//////////////////////////
-subroutine sem_io_write_gll_n( &
+subroutine sem_io_write_gll_file_n( &
   basedir, iproc, iregion, nmodel, model_names, model_gll)
 !-write out GLL array of multi-parameters into multiple files
 !
@@ -218,8 +218,8 @@ subroutine sem_io_write_gll_n( &
   integer :: imodel
 
   do imodel = 1, nmodel
-    call sem_io_write_gll_1(basedir, iproc, iregion, model_names(imodel), &
-                            model_gll(imodel,:,:,:,:))
+    call sem_io_write_gll_file_1(basedir, iproc, iregion, model_names(imodel), &
+                                 model_gll(imodel,:,:,:,:))
   end do
 
 end subroutine

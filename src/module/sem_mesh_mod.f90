@@ -4,11 +4,12 @@ module sem_mesh
 ! specification part
 !----------------------------------
 
-  use sem_constants, only: CUSTOM_REAL, MAX_STRING_LEN, IIN, IOUT
-  use sem_constants, only: GAUSSALPHA, GAUSSBETA, NGLLX, NGLLY, NGLLZ, NGNOD
-  use sem_constants, only: ANGULAR_WIDTH_XI_IN_DEGREES_VAL
-  use sem_constants, only: DEGREES_TO_RADIANS, R_UNIT_SPHERE
-  use sem_constants, only: NEX_XI_VAL
+  use sem_constants, only: dp, CUSTOM_REAL, MAX_STRING_LEN, IIN, IOUT
+  use sem_constants, only: GAUSSALPHA, GAUSSBETA
+  use sem_constants, only: NGLLX, NGLLY, NGLLZ, NGNOD
+! use sem_constants, only: ANGULAR_WIDTH_XI_IN_DEGREES_VAL
+! use sem_constants, only: DEGREES_TO_RADIANS, R_UNIT_SPHERE
+! use sem_constants, only: NEX_XI_VAL
   use sem_constants, only: NUM_ITER
   use sem_constants, only: REGIONAL_MOHO_MESH
   use sem_constants, only: IFLAG_CRUST, IFLAG_670_220, IFLAG_DUMMY
@@ -19,26 +20,24 @@ module sem_mesh
 
   private
 
-  integer, parameter :: dp = kind(0.d0)
-
-  ! mesh data type 
+  ! mesh data type
   type :: sem_mesh_data
     integer :: nspec, nglob
-    real(kind=CUSTOM_REAL), dimension(:,:), allocatable :: xyz_glob
+    real(dp), dimension(:,:), allocatable :: xyz_glob
     integer, dimension(:,:,:,:), allocatable :: ibool
     integer, dimension(:), allocatable :: idoubling
-    logical, dimension(:), allocatable :: ispec_is_tiso
-    real(kind=CUSTOM_REAL), dimension(:,:,:,:), allocatable :: &
-      xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz
+    !logical, dimension(:), allocatable :: ispec_is_tiso
+    !real(dp), dimension(:,:,:,:), allocatable :: &
+    !  xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz
   end type sem_mesh_data
 
-  ! location result data type 
+  ! location within sem mesh data type 
   type :: sem_mesh_location
     integer :: stat
     integer :: eid
     real(dp) :: uvw(3)
     real(dp) :: misloc
-    real(dp) :: lagrange(NGLLX, NGLLY, NGLLZ)
+    !real(dp) :: lagrange(NGLLX, NGLLY, NGLLZ)
   end type sem_mesh_location
 
   ! public data types
@@ -49,7 +48,8 @@ module sem_mesh
   public :: sem_mesh_init
   public :: sem_mesh_read
   !public :: sem_mesh_get_gll_volume
-  public :: sem_mesh_locate_xyz
+  !public :: sem_mesh_locate_xyz
+  public :: sem_mesh_locate_kdtree2
 
 !----------------------------------
 ! implementation part
@@ -60,7 +60,7 @@ contains
 subroutine sem_mesh_init(mesh_data, nspec, nglob)
 ! allocate struct of mesh
 
-  type (mesh), intent(inout) :: mesh_data
+  type(sem_mesh_data), intent(inout) :: mesh_data
 
   integer, intent(in) :: nspec, nglob
 
@@ -68,32 +68,32 @@ subroutine sem_mesh_init(mesh_data, nspec, nglob)
 
     deallocate(mesh_data%xyz_glob, &
                mesh_data%ibool, &
-               mesh_data%idoubling, &
-               mesh_data%ispec_is_tiso, &
-               mesh_data%xix, &
-               mesh_data%xiy, &
-               mesh_data%xiz, &
-               mesh_data%etax, &
-               mesh_data%etay, &
-               mesh_data%etaz, &
-               mesh_data%gammax, &
-               mesh_data%gammay, &
-               mesh_data%gammaz)
+               mesh_data%idoubling) !, &
+               !mesh_data%ispec_is_tiso, &
+               !mesh_data%xix, &
+               !mesh_data%xiy, &
+               !mesh_data%xiz, &
+               !mesh_data%etax, &
+               !mesh_data%etay, &
+               !mesh_data%etaz, &
+               !mesh_data%gammax, &
+               !mesh_data%gammay, &
+               !mesh_data%gammaz)
   end if
 
   allocate(mesh_data%xyz_glob(3, nglob), &
            mesh_data%ibool(NGLLX, NGLLY, NGLLZ, nspec), &
-           mesh_data%idoubling(nspec), &
-           mesh_data%ispec_is_tiso(nspec), &
-              mesh_data%xix(NGLLX, NGLLY, NGLLZ, nspec), &
-              mesh_data%xiy(NGLLX, NGLLY, NGLLZ, nspec), &
-              mesh_data%xiz(NGLLX, NGLLY, NGLLZ, nspec), &
-             mesh_data%etax(NGLLX, NGLLY, NGLLZ, nspec), &
-             mesh_data%etay(NGLLX, NGLLY, NGLLZ, nspec), &
-             mesh_data%etaz(NGLLX, NGLLY, NGLLZ, nspec), &
-           mesh_data%gammax(NGLLX, NGLLY, NGLLZ, nspec), &
-           mesh_data%gammay(NGLLX, NGLLY, NGLLZ, nspec), &
-           mesh_data%gammaz(NGLLX, NGLLY, NGLLZ, nspec))
+           mesh_data%idoubling(nspec)) !, &
+           !mesh_data%ispec_is_tiso(nspec), &
+           !   mesh_data%xix(NGLLX, NGLLY, NGLLZ, nspec), &
+           !   mesh_data%xiy(NGLLX, NGLLY, NGLLZ, nspec), &
+           !   mesh_data%xiz(NGLLX, NGLLY, NGLLZ, nspec), &
+           !  mesh_data%etax(NGLLX, NGLLY, NGLLZ, nspec), &
+           !  mesh_data%etay(NGLLX, NGLLY, NGLLZ, nspec), &
+           !  mesh_data%etaz(NGLLX, NGLLY, NGLLZ, nspec), &
+           !mesh_data%gammax(NGLLX, NGLLY, NGLLZ, nspec), &
+           !mesh_data%gammay(NGLLX, NGLLY, NGLLZ, nspec), &
+           !mesh_data%gammaz(NGLLX, NGLLY, NGLLZ, nspec))
 
 end subroutine
 
@@ -108,14 +108,15 @@ subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
 ! (integer) ngllxyz(3) = [NGLLX, NGLLY, NGLLZ]
 !   gll points dimensions of the reference cube
 
-  type (mesh), intent(inout) :: mesh_data
+  type(sem_mesh_data), intent(inout) :: mesh_data
 
   character(len=*), intent(in) :: basedir
   integer, intent(in) :: iproc, iregion
 
   integer :: nspec, nglob
   integer :: num, id, ispec, iglob
-  real(kind=CUSTOM_REAL) :: xyz_center, depth
+  real(dp) :: xyz_center(3), depth
+  real(CUSTOM_REAL), allocatable :: dummy(:)
 
   call sem_io_open_file_for_read(IIN,basedir,iproc,iregion,'solver_data')
 
@@ -129,23 +130,30 @@ subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
   mesh_data%nspec = nspec
   mesh_data%nglob = nglob
 
-  read(IIN) mesh_data%xyz_glob(1,:)
-  read(IIN) mesh_data%xyz_glob(2,:)
-  read(IIN) mesh_data%xyz_glob(3,:)
+  allocate(dummy(nglob))
+
+  read(IIN) dummy
+  mesh_data%xyz_glob(1,:) = real(dummy, kind=dp)
+
+  read(IIN) dummy
+  mesh_data%xyz_glob(2,:) = real(dummy, kind=dp)
+
+  read(IIN) dummy
+  mesh_data%xyz_glob(3,:) = real(dummy, kind=dp)
 
   read(IIN) mesh_data%ibool
   read(IIN) mesh_data%idoubling
   read(IIN) mesh_data%ispec_is_tiso
 
-  read(IIN) mesh_data%xix
-  read(IIN) mesh_data%xiy
-  read(IIN) mesh_data%xiz
-  read(IIN) mesh_data%etax
-  read(IIN) mesh_data%etay
-  read(IIN) mesh_data%etaz
-  read(IIN) mesh_data%gammax
-  read(IIN) mesh_data%gammay
-  read(IIN) mesh_data%gammaz
+  !read(IIN) mesh_data%xix
+  !read(IIN) mesh_data%xiy
+  !read(IIN) mesh_data%xiz
+  !read(IIN) mesh_data%etax
+  !read(IIN) mesh_data%etay
+  !read(IIN) mesh_data%etaz
+  !read(IIN) mesh_data%gammax
+  !read(IIN) mesh_data%gammay
+  !read(IIN) mesh_data%gammaz
 
   close(IIN)
 
@@ -156,7 +164,7 @@ subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
     do ispec = 1, nspec
       if (mesh_data%idoubling(ispec) == IFLAG_CRUST) then
         id = num - (num/3)*3
-        mesh_data%idoubling(ispec) = 10*IFLAG_CRUST + id
+        mesh_data%idoubling(ispec) = 10 * IFLAG_CRUST + id
         num = num + 1
       endif
     enddo
@@ -174,9 +182,9 @@ subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
       depth = (1.0 - sqrt(sum(mesh_data%xyz_glob(:,iglob)**2))) * R_EARTH_KM
 
       if (depth < 405.0_CUSTOM_REAL) then
-        mesh_data%idoubling(ispec) = 10*IFLAG_670_220
+        mesh_data%idoubling(ispec) = 10 * IFLAG_670_220
       else ! below 410-km
-        mesh_data%idoubling(ispec) = 10*IFLAG_670_220 + 1
+        mesh_data%idoubling(ispec) = 10 * IFLAG_670_220 + 1
       endif
 
     endif
@@ -261,256 +269,353 @@ end subroutine
 
 !///////////////////////////////////////////////////////////////////////////////
 subroutine sem_mesh_locate_kdtree2( &
-  mesh_data, npoint, xyz_query, idoubling, npts_nearest, max_misloc, &
+  mesh_data, npoint, xyz, idoubling, nnearest, max_misloc, &
   location_result)
+!-locate xyz(3,npoint) inside a given SEM mesh
+!
+!-inputs:
+! type(sem_mesh_data) mesh_data
+! (real) xyz(3, npoint): target points to locate
+! (int) idoubling(npoint): layer id of targt points 
+!   not specified if = IFLAG_DUMMY, see sem_mesh_read() for more
+! (int) nnearest: number of nearest global points in SEM mesh for kdtree search
+! (real) max_misloc: mislocation threshold
+!
+!-output
+! type(sem_mesh_location) location_result(npoint): location results
 
-  use kdtree2
+  use kdtree2_module
 
   type(sem_mesh_data), intent(in) :: mesh_data
   integer, intent(in) :: npoint
-  real(dp), intent(in) :: xyz_query(3, npoint)
+  real(dp), intent(in) :: xyz(3, npoint)
   integer, intent(in) :: idoubling(npoint)
-  integer, intent(in) :: npts_nearest
+  integer, intent(in) :: nnearest
   real(dp), intent(in) :: max_misloc
 
   type(sem_mesh_location), intent(out) :: location_result(npoint) 
 
-  ! local varaibles
-  integer :: nspec, nglob
-  integer :: i, ia, nsel, ispec, iglob, ipoint, isel
-  integer :: RANGE_1_NSPEC(nspec), eid_sel(nspec), ind_sort(nspec)
-  real(dp) :: dist_sq(nspec)
-  real(dp) :: xyz1(3), uvw1(3), misloc1
-  logical :: idx_sel(nspec), is_inside
-  integer :: igllx, iglly, igllz
+  !-- local varaibles
+  integer :: nspec
+  integer :: i, ipoint, ispec, iglob
 
-  !-- kdtree 
+  !-- anchor points
+  integer :: ianchor
+  integer, dimension(NGNOD) :: iax, iay, iaz 
+  real(dp) :: xyz_anchor(:,:,:)
+
+  !-- kdtree2
   type(kdtree2), pointer :: tree
   type(kdtree2_result), allocatable :: search_result(:)
 
+  !-- find element 
+  integer :: inn, isel, nsel
+  real(dp) :: two_max_misloc
+  integer :: RANGE_1_NSPEC(:), eid_sel(:)
+  real(dp) :: xyz1(3), uvw1(3), misloc1
+  logical :: flag_ibool(:,:,:,:), flag_nspec(:), flag_inside
+
   !-- GLL colocation points and lagrange interpolation weights
-  real(dp), dimension(NGLLX) :: xigll, wxgll
-  real(dp), dimension(NGLLY) :: yigll, wygll
-  real(dp), dimension(NGLLZ) :: zigll, wzgll
-  real(dp) :: hlagx(NGLLX), hlagy(NGLLY), hlagz(NGLLZ)
+  !real(dp), dimension(NGLLX) :: xigll, wxgll
+  !real(dp), dimension(NGLLY) :: yigll, wygll
+  !real(dp), dimension(NGLLZ) :: zigll, wzgll
+  !real(dp) :: hlagx(NGLLX), hlagy(NGLLY), hlagz(NGLLZ)
+
+  !===== initialize varaibles and arrays
+
+  two_max_misloc = 2.0 * max_misloc
+  nspec = mesh_data%nspec
+
+  ! initialize location results
+  location_result(:)%stat = -1
+  location_result(:)%eid = -1
+  location_result(:)%misloc = huge(1.0_dp)
+
+  ! nearest points/elements
+  allocate(search_result(nnearest))
+  allocate(RANGE_1_NSPEC(nspec), eid_sel(nspec), flag_nspec(nspec))
+  allocate(flag_ibool(NGLLX, NGLLY, NGLLZ, nspec))
+
+  RANGE_1_NSPEC = [ (i, i=1,nspec) ]
+
+  ! element shape
+  allocate(xyz_anchor(3, NGNOD, nspec))
+
+  !===== anchor points of mesh elements 
+
+  ! get index of anchor points in the GLL element
+  call anchor_point_index(iax, iay, iaz)
+
+  ! get anchor and center points of each GLL element 
+  do ispec = 1, nspec
+    do ianchor = 1, NGNOD
+      iglob = mesh_data%ibool(iax(ia), iay(ia), iaz(ia), ispec)
+      xyz_anchor(:, ianchor, ispec) = mesh_data%xyz_glob(:, iglob)
+    enddo
+    ! the last anchor point is the element center
+    !xyz_center(:,ispec) = mesh_data%xyz(:,iglob)
+  enddo
 
   !===== build kdtree
-  tree => kdtree2_create(mesh_data%xyz_glob, sort=.true., rearange=.true.)
+
+  tree => kdtree2_create(mesh_data%xyz_glob, sort=.true., rearrange=.true.)
 
   !===== locate each point
 
-  ! initialize the location results
-  location_result(:)%stat = -1
-  location_result(:)%misloc = huge(1.0_dp)
+  loop_points: do ipoint = 1, npoint
 
-  allocate(search_result(npts_nearest))
-
-  do ipoint = 1, npoint
+    xyz1 = xyz(:,ipoint)
     
-    !-- get the n closest points in the mesh
-    call kdtree2_n_nearest(tp=tree, qv=xyz_query(:,ipoint), nn=npts_nearest, &
+    !-- get the n nearest points in the mesh
+    call kdtree2_n_nearest(tp=tree, qv=xyz1, nn=nnearest, &
       results=search_result)
 
-    do i = 1, npts_nearest
-      if (search_result(i)%dis > max_misloc) then
+    !-- find the elements associated with the n nearest points
+    flag_ibool = .false.
+    do inn = 1, nnearest
+      if (search_result(i)%dis > two_max_misloc) then
+        cycle
+      endif
+      iglob = search_result(inn)%idx
+      flag_ibool = flag_ibool .or. (mesh_data%ibool==iglob)
+    enddo
+
+    flag_nspec = .false.
+    do ispec = 1, nspec
+      if (any(flag_ibool(:,:,:,ispec))) then
+        flag_nspec(ispec) = .true.
+      endif
+    enddo
+
+    !-- test each potential element 
+    nsel = count(flag_nspec)
+    eid_sel = pack(RANGE_1_NSPEC, mask=flag_nspec)
+
+    do isel = 1, nsel
+
+      ispec = eid_sel(isel)
+
+      ! test layer id (if used)
+      if (idoubling_query(ipoint) /= IFLAG_DUMMY .and. &
+          idoubling_query(ipoint) /= mesh_data%idoubling(ispec)) then
         cycle
       endif
 
-      ! get neighboring element ID's
-      iglob = search_result(i)%idx
+      ! locate point to this element
+      call xyz2cube_bounded(xyz_anchor(:,:,ispec), xyz1, &
+        uvw1, misloc1, flag_inside)
 
-      (mesh_data%ibool == iglob)
-      
-    enddo
+      if (flag_inside) then ! record this element and exit looping the rest elements
+        location_result(ipoint)%stat = 1
+        location_result(ipoint)%eid = ispec
+        location_result(ipoint)%misloc = misloc1
+        location_result(ipoint)%uvw = uvw1
+        exit
 
-  enddo
+      else ! accept this element if misloc smaller than 
+           ! max_misloc and previous misloc
+
+        if (misloc1 < max_misloc .and. &
+            misloc1 < location_result(ipoint)%misloc) then
+
+          location_result(ipoint)%stat = 0
+          location_result(ipoint)%eid = ispec
+          location_result(ipoint)%misloc = misloc1
+          location_result(ipoint)%uvw = uvw1
+        endif
+
+      endif ! flag_inside
+
+    enddo ! isel
+
+  enddo loop_points 
 
 end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine sem_mesh_locate_xyz( &
-  mesh_data, npoint, xyz, idoubling, num_typical_size, &
-  uvw, hlagrange, misloc, eid, locstat)
-!-locate xyz(3,npoint) inside a given SEM mesh
+!subroutine sem_mesh_locate_xyz( &
+!  mesh_data, npoint, xyz, idoubling, num_typical_size, &
+!  uvw, hlagrange, misloc, eid, locstat)
+!!-locate xyz(3,npoint) inside a given SEM mesh
+!!
+!!-inputs:
+!! type(mesh) mesh_data
+!! (real) xyz(3, npoint): target points to locate
+!! (int) idoubling(npoint): layer id of targt points 
+!!   not specified if = IFLAG_DUMMY, see sem_mesh_read() for more
+!! (int) num_typical_size: number of typical element size for locating points
+!!
+!!-output
+!! uvw(3, npoint): local coordinates inside the located element
+!! hlagrange(NGLLX, NGLLY, NGLLZ, npoint): GLL interpolation weight at each GLL
+!!   point inside the element
+!! misloc(npoint): distance between the target and predicted position abs(xyz - XYZ(uvw))
+!! eid(npoint): id of the element which contains the target point
+!! locstat(npoint): status of location 
+!!   (1: inside, 0: close to the element, -1: out)
 !
-!-inputs:
-! type(mesh) mesh_data
-! (real) xyz(3, npoint): target points to locate
-! (int) idoubling(npoint): layer id of targt points 
-!   not specified if = IFLAG_DUMMY, see sem_mesh_read() for more
-! (int) num_typical_size: number of typical element size for locating points
+!  type (mesh), intent(in) :: mesh_data
+!  integer, intent(in) :: npoint
+!  real(dp), intent(in) :: xyz(3, npoint)
+!  integer, intent(in) :: idoubling(npoint)
+!  integer, intent(in) :: num_typical_size
 !
-!-output
-! uvw(3, npoint): local coordinates inside the located element
-! hlagrange(NGLLX, NGLLY, NGLLZ, npoint): GLL interpolation weight at each GLL
-!   point inside the element
-! misloc(npoint): distance between the target and predicted position abs(xyz - XYZ(uvw))
-! eid(npoint): id of the element which contains the target point
-! locstat(npoint): status of location 
-!   (1: inside, 0: close to the element, -1: out)
-
-  type (mesh), intent(in) :: mesh_data
-  integer, intent(in) :: npoint
-  real(dp), intent(in) :: xyz(3, npoint)
-  integer, intent(in) :: idoubling(npoint)
-  integer, intent(in) :: num_typical_size
-
-  real(dp), intent(out) :: uvw(3, npoint)
-  real(dp), intent(out) :: hlagrange(NGLLX, NGLLY, NGLLZ, npoint)
-  real(dp), intent(out) :: misloc(npoint)
-  integer, intent(out) :: eid(npoint)
-  integer, intent(out) :: locstat(npoint)
-
-  ! local varaibles
-  integer :: nspec, nglob
-  integer :: i, ia, nsel, ispec, iglob, ipoint, isel
-  integer :: RANGE_1_NSPEC(nspec), eid_sel(nspec), ind_sort(nspec)
-  real(dp) :: typical_size2, typical_size, dist_sq(nspec)
-  real(dp) :: max_x, min_x, max_y, min_y, max_z, min_z
-  real(dp) :: xyz1(3), uvw1(3), misloc1
-  logical :: idx_sel(nspec), is_inside
-  integer :: igllx, iglly, igllz
-  real(dp) :: hlagx(NGLLX), hlagy(NGLLY), hlagz(NGLLZ)
-  !-- index of anchor points inside the spectral element
-  integer, dimension(NGNOD) :: iax, iay, iaz 
-  !-- center and anchor points inside each spectral element
-  real(dp) :: center_xyz(3, NSPEC)
-  real(dp) :: anchor_xyz(3, NGNOD, NSPEC)
-
-  !-- GLL points
-  real(dp), dimension(NGLLX) :: xigll, wxgll
-  real(dp), dimension(NGLLY) :: yigll, wygll
-  real(dp), dimension(NGLLZ) :: zigll, wzgll
-
-  !==== initialization
-
-  ! get index of anchor points in the GLL element
-  call anchor_point_index(iax,iay,iaz)
-
-  ! get anchor and center points of each GLL element 
-  do ispec = 1, NSPEC
-    do ia = 1, NGNOD
-      iglob = mesh_data%ibool(iax(ia),iay(ia),iaz(ia),ispec)
-      anchor_xyz(:,ia,ispec) = mesh_data%xyz(:,iglob)
-    enddo
-    ! the last anchor point is the element center
-    center_xyz(:,ispec) = mesh_data%xyz(:,iglob)
-  enddo
-
-  ! initialize some parameters for locating
-  RANGE_1_NSPEC = [ (i, i=1,nspec) ]
-  uvw = huge(1.0_dp)
-  hlagrange = huge(1.0_dp)
-  misloc = huge(1.0_dp)
-  locstat = -1
-  eid = -1
-  ! search range: typical element size at surface
-  typical_size = max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
-                     ANGULAR_WIDTH_ETA_IN_DEGREES_VAL/ NEX_ETA_VAL) &
-                 * DEGREES_TO_RADIANS * R_UNIT_SPHERE
-  typical_size2 = typical_size * num_typical_size
-  ! minimum/maximum x,y,z coordinates in the mesh
-  max_x = maxval(center_xyz(1,:)) + typical_size2
-  min_x = minval(center_xyz(1,:)) - typical_size2
-  max_y = maxval(center_xyz(2,:)) + typical_size2
-  min_y = minval(center_xyz(2,:)) - typical_size2
-  max_z = maxval(center_xyz(3,:)) + typical_size2
-  min_z = minval(center_xyz(3,:)) - typical_size2
-
-  ! coordinates of GLL points
-  call zwgljd(xigll, wxgll, NGLLX, GAUSSALPHA, GAUSSBETA)
-  call zwgljd(yigll, wygll, NGLLY, GAUSSALPHA, GAUSSBETA)
-  call zwgljd(zigll, wzgll, NGLLZ, GAUSSALPHA, GAUSSBETA)
-
-  !===== locate each point
-
-  do ipoint = 1, npoint
-
-    ! target point
-    xyz1 = xyz(:,ipoint)
-
-    ! skip points based on coordinate ranges
-    if (     xyz1(1)<min_x .or. xyz1(1)>max_x &
-        .or. xyz1(2)<min_y .or. xyz1(2)>max_y &
-        .or. xyz1(3)<min_z .or. xyz1(3)>max_z) then
-      cycle
-    end if
-
-    ! select elements of the same layer id (idoubling)
-    idx_sel = .true.
-    if (idoubling(ipoint) /= IFLAG_DUMMY) then
-      idx_sel = mesh_data%idoubling == idoubling(ipoint)
-      if (count(idx_sel) == 0) then 
-        cycle
-      endif
-    endif
-    ! also select elements close to the target point within a certain range
-    idx_sel = idx_sel .and. &
-              (center_xyz(1,:)>xyz1(1)-typical_size2) .and. &
-              (center_xyz(1,:)<xyz1(1)+typical_size2) .and. &
-              (center_xyz(2,:)>xyz1(2)-typical_size2) .and. &
-              (center_xyz(2,:)<xyz1(2)+typical_size2) .and. &
-              (center_xyz(3,:)>xyz1(3)-typical_size2) .and. &
-              (center_xyz(3,:)<xyz1(3)+typical_size2)
-    nsel = count(idx_sel)
-    if (nsel == 0) then 
-      cycle
-    endif
-
-    ! sort selected elements based on distaces to the target point
-    eid_sel(1:nsel) = pack(RANGE_1_NSPEC, idx_sel)
-    dist_sq(1:nsel) =  (center_xyz(1,eid_sel(1:nsel)) - xyz1(1))**2 & 
-                     + (center_xyz(2,eid_sel(1:nsel)) - xyz1(2))**2 &
-                     + (center_xyz(3,eid_sel(1:nsel)) - xyz1(3))**2
-
-    call heap_sort(nsel, dist_sq, ind_sort)
-
-    ! loop all selected elements to find the one containing the target xyz 
-    do isel = 1, nsel
-
-      ispec = eid_sel(ind_sort(isel))
-
-      call xyz2cube_bounded(anchor_xyz(:,:,ispec),xyz1,uvw1,misloc1,is_inside)
-
-      if (is_inside) then ! record this element and exit looping the rest elements
-        locstat(ipoint) = 1
-        eid(ipoint) = ispec
-        misloc(ipoint) = misloc1
-        uvw(:,ipoint) = uvw1
-        exit
-      else ! record this element if smaller misloc
-        if (misloc1 < misloc(ipoint)) then
-          locstat(ipoint) = 0
-          eid(ipoint) = ispec
-          misloc(ipoint) = misloc1
-          uvw(:,ipoint) = uvw1
-        endif
-      endif !inside
-
-    enddo ! isel
-
-    ! set interpolation weights on GLL points if located
-    if (locstat(ipoint) /= -1) then
-
-      call lagrange_poly(uvw(1,ipoint), NGLLX, xigll, hlagx)
-      call lagrange_poly(uvw(2,ipoint), NGLLY, yigll, hlagy)
-      call lagrange_poly(uvw(3,ipoint), NGLLZ, zigll, hlagz)
-
-      do igllz = 1, NGLLZ
-        do iglly = 1, NGLLY
-          do igllx = 1, NGLLX
-            hlagrange(igllx,iglly,igllz,ipoint) &
-              = hlagx(igllx) * hlagy(iglly) * hlagz(igllz)
-          enddo
-        enddo
-      enddo 
-
-    endif
-
-  enddo ! ipoint
-
-end subroutine
+!  real(dp), intent(out) :: uvw(3, npoint)
+!  real(dp), intent(out) :: hlagrange(NGLLX, NGLLY, NGLLZ, npoint)
+!  real(dp), intent(out) :: misloc(npoint)
+!  integer, intent(out) :: eid(npoint)
+!  integer, intent(out) :: locstat(npoint)
+!
+!  ! local varaibles
+!  integer :: nspec, nglob
+!  integer :: i, ia, nsel, ispec, iglob, ipoint, isel
+!  integer :: RANGE_1_NSPEC(nspec), eid_sel(nspec), ind_sort(nspec)
+!  real(dp) :: typical_size2, typical_size, dist_sq(nspec)
+!  real(dp) :: max_x, min_x, max_y, min_y, max_z, min_z
+!  real(dp) :: xyz1(3), uvw1(3), misloc1
+!  logical :: idx_sel(nspec), is_inside
+!  integer :: igllx, iglly, igllz
+!  real(dp) :: hlagx(NGLLX), hlagy(NGLLY), hlagz(NGLLZ)
+!  !-- index of anchor points inside the spectral element
+!  integer, dimension(NGNOD) :: iax, iay, iaz 
+!  !-- center and anchor points inside each spectral element
+!  real(dp) :: center_xyz(3, NSPEC)
+!  real(dp) :: anchor_xyz(3, NGNOD, NSPEC)
+!
+!  !-- GLL points
+!  real(dp), dimension(NGLLX) :: xigll, wxgll
+!  real(dp), dimension(NGLLY) :: yigll, wygll
+!  real(dp), dimension(NGLLZ) :: zigll, wzgll
+!
+!  !==== initialization
+!
+!  ! get index of anchor points in the GLL element
+!  call anchor_point_index(iax,iay,iaz)
+!
+!  ! get anchor and center points of each GLL element 
+!  do ispec = 1, NSPEC
+!    do ia = 1, NGNOD
+!      iglob = mesh_data%ibool(iax(ia),iay(ia),iaz(ia),ispec)
+!      anchor_xyz(:,ia,ispec) = mesh_data%xyz(:,iglob)
+!    enddo
+!    ! the last anchor point is the element center
+!    center_xyz(:,ispec) = mesh_data%xyz(:,iglob)
+!  enddo
+!
+!  ! initialize some parameters for locating
+!  RANGE_1_NSPEC = [ (i, i=1,nspec) ]
+!  uvw = huge(1.0_dp)
+!  hlagrange = huge(1.0_dp)
+!  misloc = huge(1.0_dp)
+!  locstat = -1
+!  eid = -1
+!  ! search range: typical element size at surface
+!  typical_size = max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
+!                     ANGULAR_WIDTH_ETA_IN_DEGREES_VAL/ NEX_ETA_VAL) &
+!                 * DEGREES_TO_RADIANS * R_UNIT_SPHERE
+!  typical_size2 = typical_size * num_typical_size
+!  ! minimum/maximum x,y,z coordinates in the mesh
+!  max_x = maxval(center_xyz(1,:)) + typical_size2
+!  min_x = minval(center_xyz(1,:)) - typical_size2
+!  max_y = maxval(center_xyz(2,:)) + typical_size2
+!  min_y = minval(center_xyz(2,:)) - typical_size2
+!  max_z = maxval(center_xyz(3,:)) + typical_size2
+!  min_z = minval(center_xyz(3,:)) - typical_size2
+!
+!  ! coordinates of GLL points
+!  call zwgljd(xigll, wxgll, NGLLX, GAUSSALPHA, GAUSSBETA)
+!  call zwgljd(yigll, wygll, NGLLY, GAUSSALPHA, GAUSSBETA)
+!  call zwgljd(zigll, wzgll, NGLLZ, GAUSSALPHA, GAUSSBETA)
+!
+!  !===== locate each point
+!
+!  do ipoint = 1, npoint
+!
+!    ! target point
+!    xyz1 = xyz(:,ipoint)
+!
+!    ! skip points based on coordinate ranges
+!    if (     xyz1(1)<min_x .or. xyz1(1)>max_x &
+!        .or. xyz1(2)<min_y .or. xyz1(2)>max_y &
+!        .or. xyz1(3)<min_z .or. xyz1(3)>max_z) then
+!      cycle
+!    end if
+!
+!    ! select elements of the same layer id (idoubling)
+!    idx_sel = .true.
+!    if (idoubling(ipoint) /= IFLAG_DUMMY) then
+!      idx_sel = mesh_data%idoubling == idoubling(ipoint)
+!      if (count(idx_sel) == 0) then 
+!        cycle
+!      endif
+!    endif
+!    ! also select elements close to the target point within a certain range
+!    idx_sel = idx_sel .and. &
+!              (center_xyz(1,:)>xyz1(1)-typical_size2) .and. &
+!              (center_xyz(1,:)<xyz1(1)+typical_size2) .and. &
+!              (center_xyz(2,:)>xyz1(2)-typical_size2) .and. &
+!              (center_xyz(2,:)<xyz1(2)+typical_size2) .and. &
+!              (center_xyz(3,:)>xyz1(3)-typical_size2) .and. &
+!              (center_xyz(3,:)<xyz1(3)+typical_size2)
+!    nsel = count(idx_sel)
+!    if (nsel == 0) then 
+!      cycle
+!    endif
+!
+!    ! sort selected elements based on distaces to the target point
+!    eid_sel(1:nsel) = pack(RANGE_1_NSPEC, idx_sel)
+!    dist_sq(1:nsel) =  (center_xyz(1,eid_sel(1:nsel)) - xyz1(1))**2 & 
+!                     + (center_xyz(2,eid_sel(1:nsel)) - xyz1(2))**2 &
+!                     + (center_xyz(3,eid_sel(1:nsel)) - xyz1(3))**2
+!
+!    call heap_sort(nsel, dist_sq, ind_sort)
+!
+!    ! loop all selected elements to find the one containing the target xyz 
+!    do isel = 1, nsel
+!
+!      ispec = eid_sel(ind_sort(isel))
+!
+!      call xyz2cube_bounded(anchor_xyz(:,:,ispec),xyz1,uvw1,misloc1,is_inside)
+!
+!      if (is_inside) then ! record this element and exit looping the rest elements
+!        locstat(ipoint) = 1
+!        eid(ipoint) = ispec
+!        misloc(ipoint) = misloc1
+!        uvw(:,ipoint) = uvw1
+!        exit
+!      else ! record this element if smaller misloc
+!        if (misloc1 < misloc(ipoint)) then
+!          locstat(ipoint) = 0
+!          eid(ipoint) = ispec
+!          misloc(ipoint) = misloc1
+!          uvw(:,ipoint) = uvw1
+!        endif
+!      endif !inside
+!
+!    enddo ! isel
+!
+!    ! set interpolation weights on GLL points if located
+!    if (locstat(ipoint) /= -1) then
+!
+!      call lagrange_poly(uvw(1,ipoint), NGLLX, xigll, hlagx)
+!      call lagrange_poly(uvw(2,ipoint), NGLLY, yigll, hlagy)
+!      call lagrange_poly(uvw(3,ipoint), NGLLZ, zigll, hlagz)
+!
+!      do igllz = 1, NGLLZ
+!        do iglly = 1, NGLLY
+!          do igllx = 1, NGLLX
+!            hlagrange(igllx,iglly,igllz,ipoint) &
+!              = hlagx(igllx) * hlagy(iglly) * hlagz(igllz)
+!          enddo
+!        enddo
+!      enddo 
+!
+!    endif
+!
+!  enddo ! ipoint
+!
+!end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
@@ -864,71 +969,6 @@ subroutine anchor_point_index(iax,iay,iaz)
   end do ! do ia = 1,NGNOD
 
 end subroutine anchor_point_index
-
-
-!///////////////////////////////////////////////////////////////////////////////
-subroutine heap_sort(N, RA, IX)
-!- Index an array RA of length N in ascending order by the Heapsort method
-!
-!-INPUTS:                                           
-!      N     size of table RA                       
-!      RA    table to be sorted                     
-!-OUTPUT:                                           
-!      IX    index table sorted in ascending order  
-!                                                   
-!-NOTE: The Heapsort method is a N Log2 N routine,  
-!       and can be used for very large arrays.      
-
-  integer, intent(in) :: N
-  real(dp), intent(in) :: RA(N)
-
-  integer, intent(out) :: IX(N)
-
-  ! local variables
-  integer :: I, J, L, IR, IIX
-
-  L=N/2+1
-  IR=N
-  do I=1,N
-    IX(I) = I
-  end do
-
-  if (N<2) return 
-
-  do
-
-    if(L>1)then
-      L=L-1
-      IIX=IX(L)
-    else
-      IIX=IX(IR)
-      IX(IR)=IX(1)
-      IR=IR-1
-      if(IR.eq.1)then
-        IX(1)=IIX
-        return
-      end if
-    end if
-  
-    I=L
-    J=L+L
-  
-    do while (J <= IR)
-      if (J < IR)then
-        if(RA(IX(J)) < RA(IX(J+1)))  J=J+1
-      end if
-      if (RA(IIX) < RA(IX(J)))then
-        IX(I)=IX(J)
-        I=J; J=J+J
-      else
-        J=IR+1
-      end if
-    end do
-  
-    IX(I)=IIX
-  end do
-
-end subroutine heap_sort
 
 
 end module sem_mesh

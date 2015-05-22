@@ -93,8 +93,8 @@ program xsem_vertical_slice
   !-- sem location 
   type(sem_mesh_data) :: mesh_data
   type(sem_mesh_location), allocatable :: location_1slice(:)
-  integer, parameter :: nnearest = 5
-  real(dp) :: max_misloc, typical_size
+  integer, parameter :: nnearest = 10
+  real(dp) :: typical_size, max_search_dist, max_misloc
   real(dp), allocatable :: final_misloc(:)
   integer, allocatable :: final_stat(:)
   !-- model interpolation
@@ -227,7 +227,9 @@ program xsem_vertical_slice
                      ANGULAR_WIDTH_ETA_IN_DEGREES_VAL/ NEX_ETA_VAL) &
                  * DEGREES_TO_RADIANS * R_UNIT_SPHERE
 
-  max_misloc = typical_size/4.0
+  max_search_dist = 5.0 * typical_size
+
+  max_misloc = typical_size / 4.0
 
   !-- loop each mesh slice
   loop_proc: do iproc = 0, (nproc - 1)
@@ -249,7 +251,7 @@ program xsem_vertical_slice
 
     ! locate points in this mesh slice
     call sem_mesh_locate_kdtree2(mesh_data, npoint, xyz, idoubling, &
-      nnearest, max_misloc, location_1slice)
+      nnearest, max_search_dist, max_misloc, location_1slice)
 
     print *, "# number of located points: ", count(location_1slice%stat>=0)
 

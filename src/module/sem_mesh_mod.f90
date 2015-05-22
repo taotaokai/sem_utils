@@ -7,10 +7,6 @@ module sem_mesh
   use sem_constants, only: dp, CUSTOM_REAL, MAX_STRING_LEN, IIN, IOUT
   use sem_constants, only: GAUSSALPHA, GAUSSBETA
   use sem_constants, only: NGLLX, NGLLY, NGLLZ, NGNOD
-! use sem_constants, only: ANGULAR_WIDTH_XI_IN_DEGREES_VAL
-! use sem_constants, only: DEGREES_TO_RADIANS, R_UNIT_SPHERE
-! use sem_constants, only: NEX_XI_VAL
-! use sem_constants, only: NUM_ITER
   use sem_constants, only: R_EARTH_KM
   use sem_constants, only: REGIONAL_MOHO_MESH
   use sem_constants, only: IFLAG_CRUST, IFLAG_670_220, IFLAG_DUMMY
@@ -270,7 +266,7 @@ end subroutine
 
 !///////////////////////////////////////////////////////////////////////////////
 subroutine sem_mesh_locate_kdtree2( &
-  mesh_data, npoint, xyz, idoubling, nnearest, max_misloc, &
+  mesh_data, npoint, xyz, idoubling, nnearest, max_search_dist, max_misloc, &
   location_result)
 !-locate xyz(3,npoint) inside a given SEM mesh
 !
@@ -280,10 +276,16 @@ subroutine sem_mesh_locate_kdtree2( &
 ! (int) idoubling(npoint): layer id of targt points 
 !   not specified if = IFLAG_DUMMY, see sem_mesh_read() for more
 ! (int) nnearest: number of nearest global points in SEM mesh for kdtree search
-! (real) max_misloc: mislocation threshold
+! (real) max_search_dist: maximum search distance (to mesh element centers)
+! (real) max_misloc: maximum mislocation
+!   only used when target point locates slightly outside the element)
 !
-!-output
+!-outputs:
 ! type(sem_mesh_location) location_result(npoint): location results
+!
+!-notes:
+! 1. max_search_dist and max_misloc are distances used in normalized dimension
+!     by the R_EARTH
 
   use kdtree2_module
 
@@ -292,31 +294,30 @@ subroutine sem_mesh_locate_kdtree2( &
   real(dp), intent(in) :: xyz(3, npoint)
   integer, intent(in) :: idoubling(npoint)
   integer, intent(in) :: nnearest
+  real(dp), intent(in) :: max_search_dist
   real(dp), intent(in) :: max_misloc
 
   type(sem_mesh_location), intent(out) :: location_result(npoint) 
 
   !-- local varaibles
   integer :: nspec
-  integer :: i, ipoint, ispec, iglob
+  integer :: ipoint, ispec, iglob
+
+  !-- element centers
+  real(dp), allocatable :: xyz_elem(:,:)
 
   !-- anchor points
   integer :: ia
   integer, dimension(NGNOD) :: iax, iay, iaz 
   real(dp), allocatable :: xyz_anchor(:,:,:)
 
-  !-- kdtree2
+  !-- kdtree2: find nearest elements
+  integer :: inn
   type(kdtree2), pointer :: tree
   type(kdtree2_result), allocatable :: search_result(:)
 
-  !-- find element 
-  integer :: inn, isel, nsel
-  real(dp) :: two_max_misloc
-  integer, allocatable :: RANGE_1_NSPEC(:), eid_sel(:)
-  logical, allocatable :: flag_ibool(:,:,:,:), flag_nspec(:)
-
   !-- locate inside element
-  integer, parameter :: niter_xyz2cube = 4
+  real(dp) :: dist
   real(dp) :: xyz1(3), uvw1(3), misloc1
   logical :: flag_inside
 
@@ -344,29 +345,24 @@ subroutine sem_mesh_locate_kdtree2( &
 
   ! get anchor and center points of each GLL element 
   allocate(xyz_anchor(3, NGNOD, nspec))
+  allocate(xyz_elem(3, nspec))
   do ispec = 1, nspec
     do ia = 1, NGNOD
       iglob = mesh_data%ibool(iax(ia), iay(ia), iaz(ia), ispec)
       xyz_anchor(:, ia, ispec) = mesh_data%xyz_glob(:, iglob)
     enddo
     ! the last anchor point is the element center
-    !xyz_center(:,ispec) = mesh_data%xyz(:,iglob)
+    xyz_elem(:,ispec) = mesh_data%xyz_glob(:,iglob)
   enddo
 
   !===== build kdtree
 
-  tree => kdtree2_create(mesh_data%xyz_glob, sort=.true., rearrange=.true.)
+  tree => kdtree2_create(xyz_elem, sort=.true., rearrange=.true.)
 
   !===== locate each point
 
-  !-- intialize variables and arrays
-  two_max_misloc = 2.0 * max_misloc
-
+  ! intialize variables and arrays
   allocate(search_result(nnearest))
-  allocate(RANGE_1_NSPEC(nspec), eid_sel(nspec), flag_nspec(nspec))
-  allocate(flag_ibool(NGLLX, NGLLY, NGLLZ, nspec))
-
-  RANGE_1_NSPEC = [ (i, i=1,nspec) ]
 
   ! initialize location results
   location_result(:)%stat = -1
@@ -377,43 +373,31 @@ subroutine sem_mesh_locate_kdtree2( &
 
     xyz1 = xyz(:,ipoint)
     
-    !-- get the n nearest points in the mesh
+    !-- get the n nearest elements in the mesh
     call kdtree2_n_nearest(tp=tree, qv=xyz1, nn=nnearest, &
       results=search_result)
 
-    !-- find the elements associated with the n nearest points
-    flag_ibool = .false.
+    !-- test each potential element to see if target point is located inside
+
+    ! skip if the nearest element is a certain distance away
+    dist = sqrt(sum(xyz_elem(:, search_result(1)%idx) - xyz1)**2)
+    if (dist > max_search_dist) then
+      cycle
+    endif
+
+    ! loop each elements
     do inn = 1, nnearest
-      if (search_result(inn)%dis > two_max_misloc) then
-        cycle
-      endif
-      iglob = search_result(inn)%idx
-      flag_ibool = flag_ibool .or. (mesh_data%ibool==iglob)
-    enddo
 
-    flag_nspec = .false.
-    do ispec = 1, nspec
-      if (any(flag_ibool(:,:,:,ispec))) then
-        flag_nspec(ispec) = .true.
-      endif
-    enddo
+      ispec = search_result(inn)%idx
 
-    !-- test each potential element 
-    nsel = count(flag_nspec)
-    eid_sel = pack(RANGE_1_NSPEC, mask=flag_nspec)
-
-    do isel = 1, nsel
-
-      ispec = eid_sel(isel)
-
-      ! test layer id (if used)
+      ! test if layer_id(idoubling) matches (if used)
       if (idoubling(ipoint) /= IFLAG_DUMMY .and. &
           idoubling(ipoint) /= mesh_data%idoubling(ispec)) then
         cycle
       endif
 
       ! locate point to this element
-      call xyz2cube_bounded(xyz_anchor(:,:,ispec), xyz1, niter_xyz2cube, &
+      call xyz2cube_bounded(xyz_anchor(:,:,ispec), xyz1, &
         uvw1, misloc1, flag_inside)
 
       if (flag_inside) then ! record this element and exit looping the rest elements
@@ -437,7 +421,7 @@ subroutine sem_mesh_locate_kdtree2( &
 
       endif ! flag_inside
 
-    enddo ! isel
+    enddo ! inn
 
     ! set interpolation weights on GLL points if located
     if (location_result(ipoint)%stat /= -1) then
@@ -458,6 +442,9 @@ subroutine sem_mesh_locate_kdtree2( &
     endif
 
   enddo loop_points 
+
+  !===== destroy kdtree
+  call kdtree2_destroy(tree)
 
 end subroutine
 
@@ -683,7 +670,7 @@ subroutine lagrange_poly(x, ngll, xgll, lagrange)
 end subroutine lagrange_poly
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine xyz2cube_bounded(xyz_anchor, xyz, niter, uvw, misloc, flag_inside )
+subroutine xyz2cube_bounded(xyz_anchor, xyz, uvw, misloc, flag_inside )
 !-mapping a given point in physical space (xyz) to the 
 ! reference cube (uvw), 
 ! and also flag whether the point is inside the cube
@@ -693,7 +680,6 @@ subroutine xyz2cube_bounded(xyz_anchor, xyz, niter, uvw, misloc, flag_inside )
 !-inputs:
 ! (real) xyz_anchor(3, NGNOD): anchor points of the element
 ! xyz: coordinates of the target point
-! (int) niter: number of iterations to invert for uvw
 !
 !-outputs:
 ! uvw(3): local coordinates in reference cube
@@ -702,11 +688,14 @@ subroutine xyz2cube_bounded(xyz_anchor, xyz, niter, uvw, misloc, flag_inside )
 
   real(dp), intent(in) :: xyz_anchor(3, NGNOD)
   real(dp), intent(in) :: xyz(3)
-  integer, intent(in) :: niter
 
   real(dp), intent(out) :: uvw(3)
   real(dp), intent(out) :: misloc 
   logical, intent(out) :: flag_inside
+
+  ! parameters
+  ! number of iterations used to locate point inside one element 
+  integer, parameter :: niter = 5
   
   ! local variables
   integer :: iter

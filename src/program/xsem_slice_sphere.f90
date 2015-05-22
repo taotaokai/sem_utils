@@ -6,10 +6,11 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xsem_slice_shpere <mesh_dir> <model_dir> <model_tags> "
-  print '(a)', "                    <lat0> <lat1> <nlat> "
-  print '(a)', "                    <lon0> <lon1> <nlon> "
-  print '(a)', "                    <radius> <out_file> "
+  print '(a)', "  xsem_slice_shpere \ " 
+  print '(a)', "    <mesh_dir> <nproc> <model_dir> <model_tags> "
+  print '(a)', "    <lat0> <lat1> <nlat> "
+  print '(a)', "    <lon0> <lon1> <nlon> "
+  print '(a)', "    <radius> <out_file> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -19,6 +20,7 @@ subroutine selfdoc()
   print '(a)', "PARAMETERS"
   print '(a)', ""
   print '(a)', "  (string) mesh_dir:  directory containing proc*_reg1_solver_data.bin"
+  print '(a)', "  (int) nproc: number of mesh slices"
   print '(a)', "  (string) model_dir:  directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (string) model_tags:  comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', "  (float) lat0, lat1:  begin/end latitudes (degrees) "
@@ -60,23 +62,20 @@ program xsem_slice_sphere
 
   !===== declare variables
 
-  integer, parameter :: dp = 8
-
   !-- command line args
-  integer, parameter :: nargs = 11
+  integer, parameter :: nargs = 12
   character(len=MAX_STRING_LEN) :: args(nargs)
   character(len=MAX_STRING_LEN) :: mesh_dir, model_dir, model_tags, out_file
   real(dp) :: lat0, lat1, lon0, lon1, radius
-  integer :: nlat, nlon
+  integer :: nlat, nlon, nproc
 
   !-- local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
-  real(CUSTOM_REAL), parameter :: FILLVALUE = huge(0._CUSTOM_REAL)
-  integer :: i, iproc, ier
+  real(sp), parameter :: FILLVALUE_sp = huge(0._sp)
+  integer :: i, iproc
 
   !-- model names
   integer :: imodel, nmodel
-  character(len=1), parameter :: delimiter = ','
   character(len=MAX_STRING_LEN), allocatable :: model_names(:)
 
   !-- interpolation points 
@@ -85,16 +84,19 @@ program xsem_slice_sphere
   real(dp) :: vr(3)
   real(dp), allocatable :: lon(:), lat(:)
   integer :: ilon, ilat, idx
-  real(CUSTOM_REAL), allocatable :: xyz(:,:)
+  real(dp), allocatable :: xyz(:,:)
+  integer, allocatable :: idoubling(:)
 
-  !-- sem interpolation
-  type (mesh) :: mesh_data
-  real(CUSTOM_REAL), allocatable :: model_gll(:,:,:,:,:), model_interp(:,:)
-  real(CUSTOM_REAL), allocatable :: uvw(:,:), hlagrange(:,:,:,:)
-  real(CUSTOM_REAL), allocatable :: misloc(:), misloc_final(:)
-  integer, allocatable :: elem_ind(:), statloc(:)
-  integer, allocatable :: statloc_final(:), elem_ind_final(:)
-  real(CUSTOM_REAL) :: typical_size
+  !-- sem location 
+  type(sem_mesh_data) :: mesh_data
+  type(sem_mesh_location), allocatable :: location_1slice(:)
+  integer, parameter :: nnearest = 10
+  real(dp) :: typical_size, max_search_dist, max_misloc
+  real(dp), allocatable :: final_misloc(:)
+  integer, allocatable :: final_stat(:)
+  !-- model interpolation
+  integer :: nspec
+  real(dp), allocatable :: model_gll(:,:,:,:,:), model_interp(:,:)
 
   !-- netcdf data structure
   integer :: ncid
@@ -112,35 +114,33 @@ program xsem_slice_sphere
   ! this is defined from model_tags
   ! data units is not determined
   integer, allocatable :: model_varids(:)
-  real(CUSTOM_REAL), allocatable :: model_var(:,:)
+  real(sp), allocatable :: model_var(:,:)
   ! define data: location status, mislocation
-  integer :: statloc_varid, misloc_varid
-  integer, allocatable :: statloc_var(:,:)
-  real(CUSTOM_REAL), allocatable :: misloc_var(:,:)
-  character(len=*), parameter :: statloc_name = "statloc"
+  integer :: stat_varid, misloc_varid
+  integer, allocatable :: stat_var(:,:)
+  real(sp), allocatable :: misloc_var(:,:)
+  character(len=*), parameter :: stat_name = "location_status"
   character(len=*), parameter :: misloc_name = "misloc"
 
   !===== read command line arguments
 
-  do i = 1, nargs
-    call get_command_argument(i, args(i), status=ier)
-    if (len_trim(args(i)) == 0) then
-      call selfdoc()
-      stop "ERROR: check your input arguments!"
-    endif
-  enddo
+  if (command_argument_count() /= nargs) then
+    call selfdoc()
+    stop "[ERROR] xsem_slice_sphere: check your input arguments."
+  endif
 
   read(args(1), '(a)') mesh_dir
-  read(args(2), '(a)') model_dir
-  read(args(3), '(a)') model_tags
-  read(args(4), *) lat0
-  read(args(5), *) lat1
-  read(args(6), *) nlat
-  read(args(7), *) lon0
-  read(args(8), *) lon1
-  read(args(9), *) nlon
-  read(args(10), *) radius 
-  read(args(11), '(a)') out_file
+  read(args(2), *) nproc
+  read(args(3), '(a)') model_dir
+  read(args(4), '(a)') model_tags
+  read(args(5), *) lat0
+  read(args(6), *) lat1
+  read(args(7), *) nlat
+  read(args(8), *) lon0
+  read(args(9), *) lon1
+  read(args(10), *) nlon
+  read(args(11), *) radius 
+  read(args(12), '(a)') out_file
 
   !-- check validity of parameters
 
@@ -148,17 +148,17 @@ program xsem_slice_sphere
   if ( .not.(lat0 >= -90.d0 .and. lat0 <= 90.d0 .and. &
              lat1 >= -90.d0 .and. lat1 <= 90.d0 .and. &
              lat0 < lat1) ) then
-    stop "ERROR: wrong inputs of lat0,lat1"
+    stop "[ERROR] wrong inputs of lat0,lat1"
   endif
 
   !-180 <= lon0,lon1 <=180
   if ( .not.(lon0 >= -180.d0 .and. lat0 <= 180.d0 .and. &
              lon1 >= -180.d0 .and. lat1 <= 180.d0) ) then
-    stop "ERROR: wrong range of lon0,lon1"
+    stop "[ERROR] wrong range of lon0,lon1"
   endif
   ! in the case of great circle on longitude
   if (lon0 > lon1) then
-    print *, "# lon0 > lon1, so 360.0 is added to lon1 "
+    print '(a)', "[WARN] lon0 > lon1, so 360.0 is added to lon1 "
     lon1 = lon1 + 360.d0
   endif
 
@@ -189,94 +189,105 @@ program xsem_slice_sphere
       call geographic_geodetic2ecef(lat(ilat), lon(ilon), 0.0d0, &
                                     vr(1), vr(2), vr(3)) 
       vr = vr / sqrt(sum(vr**2))
-      xyz(:,idx) = real(vr * radius, kind=CUSTOM_REAL)
+      xyz(:,idx) = vr * radius
     enddo
   enddo
 
-  !===== read model tags
+  ! layer ID 
+  allocate(idoubling(npoint))
+  idoubling = IFLAG_DUMMY
+
+  !===== parse model tags
+
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
 
   print *, '# nmodel=', nmodel
   print *, '# model_names=', (trim(model_names(i))//" ", i=1,nmodel)
 
-  !===== locate xyz in the mesh
-  call sem_constants_set(iregion)
+  !===== locate xyz in each mesh slice
 
-  ! initialize arrays for each mesh chunk
-  allocate(model_gll(NGLLX,NGLLY,NGLLZ,NSPEC,nmodel), &
-           model_interp(nmodel,npoint), &
-           uvw(3,npoint), &
-           hlagrange(NGLLX,NGLLY,NGLLZ,npoint), &
-           misloc(npoint), &
-           misloc_final(npoint), &
-           elem_ind(npoint), &
-           elem_ind_final(npoint), &
-           statloc(npoint), &
-           statloc_final(npoint))
+  !-- initialize variables
+  allocate(location_1slice(npoint))
 
-  ! initialize some variables
-  statloc_final = -1
-  misloc_final = HUGE(1.0_CUSTOM_REAL)
-  elem_ind_final = -1
-  model_interp = FILLVALUE
+  allocate(final_stat(npoint), final_misloc(npoint))
+  final_stat = -1
+  final_misloc = HUGE(1.0_dp)
+
+  allocate(model_interp(nmodel, npoint))
+  model_interp = FILLVALUE_sp
 
   ! typical element size at surface
-  typical_size = real( max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
-                           ANGULAR_WIDTH_ETA_IN_DEGREES_VAL/ NEX_ETA_VAL) &
-                       * DEGREES_TO_RADIANS * R_UNIT_SPHERE, kind=CUSTOM_REAL)
+  typical_size = max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
+                     ANGULAR_WIDTH_ETA_IN_DEGREES_VAL/ NEX_ETA_VAL) &
+                 * DEGREES_TO_RADIANS * R_UNIT_SPHERE
 
-  ! loop each mesh chunk
-  do iproc = 0, NPROCTOT_VAL-1
+  max_search_dist = 5.0 * typical_size
+
+  max_misloc = typical_size / 4.0
+
+  !-- loop each mesh slice
+  loop_proc: do iproc = 0, (nproc - 1)
 
     print *, "# iproc=", iproc
 
+    ! read mesh
     call sem_mesh_read(mesh_data, mesh_dir, iproc, iregion)
 
-    dims = [NGLLX, NGLLY, NGLLZ, mesh_data%nspec]
+    ! read model
+    nspec = mesh_data%nspec
+    if (allocated(model_gll)) then
+      deallocate(model_gll)
+    endif
+    allocate(model_gll(nmodel, NGLLX, NGLLY, NGLLZ, nspec))
 
-    call sem_io_read_gll_modeln(model_dir, iproc, iregion, &
-      nmodel, model_names, dims, model_gll)
+    call sem_io_read_gll_file_n(model_dir, iproc, iregion, &
+      nmodel, model_names, model_gll)
 
-    call sem_mesh_locate_xyz(mesh_data, npoint, xyz, idoubling, &
-      uvw, hlagrange, misloc, elem_ind, statloc)
+    ! locate points in this mesh slice
+    call sem_mesh_locate_kdtree2(mesh_data, npoint, xyz, idoubling, &
+      nnearest, max_search_dist, max_misloc, location_1slice)
 
-    print *, "# number of located points: ", count(statloc>=0)
+    print *, "# number of located points: ", count(location_1slice%stat>=0)
 
     ! interpolate model only on points located inside an element
     do ipoint = 1, npoint
 
       ! safety check
-      if (statloc_final(ipoint) == 1 .and. statloc(ipoint) == 1 ) then
-        print *, "WARN: ipoint=", ipoint
-        print *, "====: this point is located inside more than one element!"
-        print *, "====: some problem may occur."
-        print *, "====: only use the first located element."
+      if (final_stat(ipoint) == 1 .and. &
+          location_1slice(ipoint)%stat == 1 ) then
+        print *, "[WARN] ipoint=", ipoint
+        print *, "------ this point is located inside more than one element!"
+        print *, "------ some problem may occur."
+        print *, "------ only use the first located element."
         cycle
       endif
 
       ! for point located inside one element but not happened before 
       ! or closer to one element than located before
-      if ( (statloc(ipoint) == 1 .and. statloc_final(ipoint) /= 1 ) .or. &
-           (statloc(ipoint) == 0 .and. misloc(ipoint) < misloc_final(ipoint)) ) then
+      if (location_1slice(ipoint)%stat == 1 &
+          .or. &
+          (location_1slice(ipoint)%stat == 0 .and. &
+           location_1slice(ipoint)%misloc < final_misloc(ipoint)) ) &
+      then
 
         ! interpolate model
         do imodel = 1, nmodel
-          model_interp(imodel,ipoint) = sum( &
-            hlagrange(:,:,:,ipoint) * model_gll(:,:,:,elem_ind(ipoint),imodel) )
+          model_interp(imodel, ipoint) = &
+            sum( location_1slice(ipoint)%lagrange * &
+                 model_gll(imodel, :, :, :, location_1slice(ipoint)%eid) )
         enddo
 
-        statloc_final(ipoint) = statloc(ipoint)
-        misloc_final(ipoint) = misloc(ipoint)
-        elem_ind_final(ipoint) = elem_ind(ipoint)
+        final_stat(ipoint)   = location_1slice(ipoint)%stat
+        final_misloc(ipoint) = location_1slice(ipoint)%misloc
 
       endif
 
     enddo ! ipoint
 
-  enddo ! iproc
+  enddo loop_proc 
 
   ! convert misloc to relative to typical element size
-  where (statloc_final /= -1) misloc_final = misloc_final / typical_size
+  where (final_stat /= -1) final_misloc = final_misloc / typical_size
 
   !===== output netcdf file
 
@@ -301,10 +312,10 @@ program xsem_slice_sphere
     call check( nf90_def_var(ncid, trim(model_names(imodel)), NF90_REAL& 
                              , dimids, model_varids(imodel)) )
     call check( nf90_put_att(ncid, model_varids(imodel) &
-                             , "_FillValue", FILLVALUE) )
+                             , "_FillValue", FILLVALUE_sp) )
   enddo
   ! define data: location status and mislocation
-  call check( nf90_def_var(ncid, statloc_name, NF90_INT, dimids, statloc_varid) )
+  call check( nf90_def_var(ncid, stat_name, NF90_INT, dimids, stat_varid) )
   call check( nf90_def_var(ncid, misloc_name, NF90_FLOAT, dimids, misloc_varid) )
 
   ! end define mode.
@@ -325,9 +336,10 @@ program xsem_slice_sphere
 
     ! reshape model variable into a NDIMS matrix
     do ilat = 1, nlat
+      idx = nlon * (ilat - 1)
       do ilon = 1, nlon
-        idx = ilon + nlon*(ilat - 1)
-        model_var(ilon, ilat) = model_interp(imodel, idx)
+        model_var(ilon, ilat) = &
+          real(model_interp(imodel, idx + ilon), kind=sp)
       enddo
     enddo
 
@@ -336,16 +348,16 @@ program xsem_slice_sphere
 
   ! write data: status of location and mislocation
   ! reshape variable into an NDIMS matrix
-  allocate(statloc_var(nlon, nlat), misloc_var(nlon, nlat))
+  allocate(stat_var(nlon, nlat), misloc_var(nlon, nlat))
   do ilat = 1, nlat
+    idx = nlon*(ilat - 1)
     do ilon = 1, nlon
-      idx = ilon + nlon*(ilat - 1)
-      statloc_var(ilon, ilat) = statloc_final(idx)
-      misloc_var(ilon, ilat) = misloc_final(idx)
+      stat_var(ilon, ilat) = final_stat(idx + ilon)
+      misloc_var(ilon, ilat) = real(final_misloc(idx + ilon), kind=sp)
     enddo
   enddo
 
-  call check( nf90_put_var(ncid, statloc_varid, statloc_var) )
+  call check( nf90_put_var(ncid, stat_varid, stat_var) )
   call check( nf90_put_var(ncid, misloc_varid, misloc_var) )
 
   ! close file 

@@ -7,7 +7,7 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_slice_gcircle \"
-  print '(a)', "    <mesh_dir> <model_dir> <nproc> <model_tags> "
+  print '(a)', "    <mesh_dir> <nproc> <model_dir> <model_tags> "
   print '(a)', "    <lat0> <lon0> <azimuth> "
   print '(a)', "    <theta0> <theta1> <ntheta> "
   print '(a)', "    <radius0> <radius1> <nradius> "
@@ -21,8 +21,8 @@ subroutine selfdoc()
   print '(a)', "PARAMETERS"
   print '(a)', ""
   print '(a)', "  (string) mesh_dir: directory containing proc*_reg1_solver_data.bin"
-  print '(a)', "  (string) model_dir: directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (int) nproc: number of mesh slices"
+  print '(a)', "  (string) model_dir: directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (string) model_tags: comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', "  (float) lat0,lon0: origin point on the great circle (degrees)"
   print '(a)', "  (float) azimuth: shooting azimuth of the great circle (degrees)"
@@ -126,6 +126,7 @@ program xsem_vertical_slice
   character(len=*), parameter :: misloc_name = "misloc"
 
   !===== read command line arguments
+
   if (command_argument_count() /= nargs) then
     call selfdoc()
     stop "[ERROR] xsem_slice_gcircle: check your input arguments."
@@ -135,8 +136,8 @@ program xsem_vertical_slice
     call get_command_argument(i, args(i), status=ier)
   enddo
   read(args(1), '(a)') mesh_dir
-  read(args(2), '(a)') model_dir
-  read(args(3), *) nproc
+  read(args(2), *) nproc
+  read(args(3), '(a)') model_dir
   read(args(4), '(a)') model_tags
   read(args(5), *) lat0
   read(args(6), *) lon0
@@ -191,6 +192,7 @@ program xsem_vertical_slice
 
   npoint = nradius * ntheta
   allocate(xyz(3, npoint))
+
   do itheta = 1, ntheta
     call rotation_matrix(v_axis, theta(itheta), rotmat)
     vr = matmul(rotmat, v0)

@@ -9,6 +9,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  xsem_interp_mesh \ "
   print '(a)', "    <old_mesh_dir> <nproc_old> <old_model_dir> <model_tags> "
+! print '(a)', "    <max_search_dist> <max_misloc> "
   print '(a)', "    <new_mesh_dir> <nproc_new> <new_model_dir> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
@@ -22,13 +23,20 @@ subroutine selfdoc()
   print '(a)', "  (int) nproc_old: number of slices of the old mesh"
   print '(a)', "  (string) old_model_dir: directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (string) model_tags: comma delimited string, e.g. vsv,vsh,rho "
+! print '(a)', "  (float) max_search_dist: maximum distance to "
+! print '(a)', "    the n nearest elements from target point "
+! print '(a)', "  (float) max_misloc: maximum location error for points "
+! print '(a)', "    lying outside target mesh/layer volume "
   print '(a)', "  (string) new_mesh_dir: directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (int) nproc_new: number of slices of the new mesh"
   print '(a)', "  (string) new_model_dir: directory holds output model files"
   print '(a)', ""
   print '(a)', "NOTES"
   print '(a)', ""
-  print '(a)', "  This program must run in parallel, e.g. mpirun -n <nproc> ..."
+  print '(a)', "  1) This program must run in parallel, e.g. mpirun -n <nproc> ..."
+  print '(a)', "  2) use values_from_mesh.h for old mesh to compile"
+! print '(a)', "  2) max_misloc ~ 0.25 * typical element size of old mesh "
+! print '(a)', "  3) max_search_dist ~ 5.0 * typical element size of old mesh"
 
 end subroutine
 
@@ -71,7 +79,7 @@ program xsem_interp_mesh
 
   !-- old mesh slice
   type(sem_mesh_data) :: mesh_old
-  integer :: iproc_old, nspec_old
+  integer :: iproc_old
   real(dp), allocatable :: model_gll_old(:,:,:,:,:)
 
   !-- new mesh slice
@@ -81,17 +89,17 @@ program xsem_interp_mesh
 
   !-- interpolation points
   real(dp), allocatable :: xyz_new(:,:)
-  integer, allocatable :: idoubling_new(:,:,:,:)
-  real(sp), parameter :: FILLVALUE_sp = huge(1.0_sp)
-  integer :: igll, igllx, iglly, igllz
+  integer, allocatable :: idoubling_new(:)
+  real(dp), parameter :: FILLVALUE_dp = huge(1.0_dp)
+  integer :: igll, igllx, iglly, igllz, ngll_new
+  real(dp), allocatable :: model_interp(:,:)
 
   !-- sem location
   type(sem_mesh_location), allocatable :: location_1slice(:)
   integer, parameter :: nnearest = 10
   real(dp) :: typical_size, max_search_dist, max_misloc
-  real(dp), allocatable :: misloc(:), misloc_final(:)
-  integer, allocatable :: stat(:), stat_final(:)
-  real(dp), allocatable :: model_interp(:,:)
+  real(dp), allocatable :: misloc_final(:)
+  integer, allocatable :: stat_final(:)
 
   !===== start MPI
 
@@ -128,16 +136,27 @@ program xsem_interp_mesh
     print '(a)', '# model_names=', (trim(model_names(i))//" ", i=1,nmodel)
   endif
 
-  !===== loop each slices of the new mesh
+  !===== interpolate old mesh/model onto new mesh
+
+  ! typical element size at surface for old mesh
+  ! read from values_from_mesher.h for old mesh
+  typical_size = max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
+                     ANGULAR_WIDTH_ETA_IN_DEGREES_VAL/ NEX_ETA_VAL) &
+                 * DEGREES_TO_RADIANS * R_UNIT_SPHERE
+
+  max_search_dist = 5.0 * typical_size
+
+  max_misloc = typical_size / 4.0
+
+  !-- loop each new mesh slice
 
   do iproc_new = myrank, (nproc_new - 1), nrank
 
     !-- read new mesh slice
     call sem_mesh_read(mesh_new, new_mesh_dir, iproc_new, iregion)
 
-    !-- initialize arrays of xyz points
+    !-- make arrays of xyz points
     nspec_new = mesh_new%nspec
-    nglob_new = mesh_new%nglob
     ngll_new = NGLLX * NGLLY * NGLLZ * nspec_new
 
     if (allocated(xyz_new)) then
@@ -161,15 +180,25 @@ program xsem_interp_mesh
       enddo
     enddo
 
-    !-- initialize variables
+    !-- initialize variables for interpolation
+    if (allocated(location_1slice)) then
+      deallocate(location_1slice)
+    endif
     allocate(location_1slice(ngll_new))
 
-    allocate(stat(ngll_new), misloc(ngll_new))
-    stat = -1
-    misloc = HUGE(1.0_dp)
+    if (allocated(stat_final)) then
+      deallocate(stat_final, misloc_final)
+    endif
+    allocate(stat_final(ngll_new), misloc_final(ngll_new))
+    stat_final = -1
+    misloc_final = huge(1.0_dp)
 
+    if (allocated(model_interp)) then
+      deallocate(model_interp, model_gll_new)
+    endif
     allocate(model_interp(nmodel, ngll_new))
-    model_interp = FILLVALUE_sp
+    allocate(model_gll_new(nmodel, NGLLX, NGLLY, NGLLZ, nspec_new))
+    model_interp = FILLVALUE_dp
  
     !-- loop each slices of the old mesh
 
@@ -184,8 +213,8 @@ program xsem_interp_mesh
       endif
       allocate(model_gll_old(nmodel, NGLLX, NGLLY, NGLLZ, mesh_old%nspec))
 
-      call sem_io_read_gll_n(old_model_dir, iproc, iregion, &
-                             model_names, nmodel, model_gll_old)
+      call sem_io_read_gll_file_n(old_model_dir, iproc, iregion, &
+        model_names, nmodel, model_gll_old)
 
       ! locate points in this mesh slice
       call sem_mesh_locate_kdtree2(mesh_old, ngll_new, xyz_new, idoubling_new, &
@@ -196,10 +225,12 @@ program xsem_interp_mesh
 
         ! safety check
         if (stat_final(igll) == 1 .and. location_1slice(igll)%stat == 1 ) then
-          print *, "[WARN] igll=", igll
-          print *, "------ this point is located inside more than one element!"
-          print *, "------ some problem may occur."
-          print *, "------ only use the first located element."
+          print *, "[WARN] iproc_new=", iproc_new, &
+                   " iproc_old=", iproc_old, &
+                   " igll=", igll, &
+                   " this point is located inside more than one element!", &
+                   " some problem may occur.", &
+                   " only use the first located element."
           cycle
         endif
 
@@ -213,7 +244,7 @@ program xsem_interp_mesh
           ! interpolate model
           do imodel = 1, nmodel
             model_interp(imodel,igll) = &
-              sum(location_1slice(ipoint)%lagrange * &
+              sum(location_1slice(igll)%lagrange * &
                 model_gll_old(imodel, :, :, :, location_1slice(igll)%eid))
           enddo
 
@@ -226,15 +257,9 @@ program xsem_interp_mesh
 
     enddo ! iproc_old
 
-    !-- output location information
+    !-- write out gll files for this new mesh slice
 
-    ! convert misloc relative to typical element size
-    where (stat_final /= -1)
-      misloc_final = misloc_final / typical_size
-    endwhere
-
-    !-- write out gll files for new mesh slice
-
+    ! reshape model_interp to model_gll
     do ispec = 1, nspec_new
       do igllz = 1, NGLLZ
         do iglly = 1, NGLLY
@@ -243,7 +268,7 @@ program xsem_interp_mesh
                    NGLLX * ( (iglly-1) + & 
                    NGLLY * ( (igllz-1) + & 
                    NGLLZ * ( (ispec-1))))
-            if (locstat_final /= -1) then
+            if (stat_final(igll) /= -1) then
               model_gll_new(:, igllx, iglly, igllz, ispec) = &
                 model_interp(:, igll)
             endif

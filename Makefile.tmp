@@ -34,7 +34,8 @@ module = sem_constants_mod sem_io_mod sem_mesh_mod \
 		  sem_parallel_mod sem_utils_mod
 shared = gll_library geographic_mod kdtree2
 program = xsem_slice_gcircle \
-          xsem_slice_sphere
+		  xmap_gcircle \
+		  xsem_interp_mesh
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))

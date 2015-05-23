@@ -2,14 +2,18 @@ subroutine selfdoc()
 
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_slab_model - add planar slab with metastable olivin wedge(MOW) into SEM model"
+  print '(a)', "  xsem_slab_mow_model "
+  print '(a)', "    - add planar slab with metastable olivin wedge(MOW) into SEM model"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xsem_slab_model <mesh_dir> <model_dir> <model_tags> "
-  print '(a)', "    <slab_origin_lat> <slab_origin_lon> <slab_dip> <slab_strike> "
+  print '(a)', "  xsem_slab_model \"
+  print '(a)', "    <mesh_dir> <model_dir> <model_tags> "
+  print '(a)', "    <slab_origin_lat> <slab_origin_lon> "
+  print '(a)', "    <slab_dip> <slab_strike> "
   print '(a)', "    <slab_thick> <slab_bottom_depth> <slab_dlnv> "
-  print '(a)', "    <mow_top_depth> <mow_bottom_depth> <mow_xi0> <mow_xi1> <mow_xi2> "
+  print '(a)', "    <mow_top_depth> <mow_bottom_depth> "
+  print '(a)', "    <mow_xi0> <mow_xi1> <mow_xi2> "
   print '(a)', "    <mow_dlnv> <out_dir> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
@@ -51,15 +55,16 @@ program xsem_vertical_slice
 
   implicit none
 
-  !---- declare variables
+  !===== declare variables
+
   ! command line args
   integer, parameter :: nargs = 17
   character(len=MAX_STRING_LEN) :: args(nargs)
   character(len=MAX_STRING_LEN) :: mesh_dir, model_dir, model_tags, out_dir
-  double precision :: slab_origin_lat, slab_origin_lon, slab_dip, slab_strike &
-                      , slab_thick, slab_bottom_depth, slab_dlnv
-  double precision :: mow_top_depth, mow_bottom_depth &
-                      , mow_xi0, mow_xi1, mow_xi2, mow_dlnv
+  real(dp) :: slab_origin_lat, slab_origin_lon, slab_dip, slab_strike, &
+              slab_thick, slab_bottom_depth, slab_dlnv
+  real(dp) :: mow_top_depth, mow_bottom_depth, &
+              mow_xi0, mow_xi1, mow_xi2, mow_dlnv
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
@@ -70,33 +75,32 @@ program xsem_vertical_slice
   character(len=MAX_STRING_LEN), allocatable :: model_names(:)
 
   type (mesh) :: mesh_data
-  integer :: iglob, igllx, iglly, igllz, ispec
-  real(CUSTOM_REAL), allocatable :: model_gll(:,:,:,:,:)
+  integer :: iglob, igllx, iglly, igllz, ispec, nspec
+  real(dp), allocatable :: model_gll(:,:,:,:,:)
 
-  double precision :: slab_bottom_radius, slab_upper_dist, slab_lower_dist, &
-                      mow_top_radius, mow_bottom_radius, &
-                      mow_upper_dist, mow_lower_dist, &
-                      theta_v0_slab_normal, theta_v1_slab_normal, theta_v2_slab_normal
+  real(dp) :: slab_bottom_radius, slab_upper_dist, slab_lower_dist, &
+              mow_top_radius, mow_bottom_radius, &
+              mow_upper_dist, mow_lower_dist, &
+              theta_v0_slab_normal, &
+              theta_v1_slab_normal, theta_v2_slab_normal
 
-  double precision, dimension(3) :: slab_origin_north, slab_origin_east, &
-                                    slab_origin, slab_normal, trench_normal, &
-                                    slab_parallel, trench_parallel, &
-                                    mow_v0, mow_v1, mow_v2, v01, v02, &
-                                    mow_upper_normal0, mow_lower_normal0, &
-                                    mow_upper_normal, mow_lower_normal
+  real(dp), dimension(3) :: slab_origin_north, slab_origin_east, &
+                            slab_origin, slab_normal, trench_normal, &
+                            slab_parallel, trench_parallel, &
+                            mow_v0, mow_v1, mow_v2, v01, v02, &
+                            mow_upper_normal0, mow_lower_normal0, &
+                            mow_upper_normal, mow_lower_normal
 
-  double precision :: xyz(3), radius, ratio, v(3), vx, vy, theta, rotmat(3,3)
-  double precision :: dist_xyz_slab_normal, dist_xyz_mow_upper_normal, &
-                      dist_xyz_mow_lower_normal
+  real(dp) :: xyz(3), radius, ratio, v(3), vx, vy, theta, rotmat(3,3)
+  real(dp) :: dist_xyz_slab_normal, dist_xyz_mow_upper_normal, &
+              dist_xyz_mow_lower_normal
 
-  !---- read command line arguments
-  do i = 1, nargs
-    call get_command_argument(i, args(i), status=ier)
-    if (len_trim(args(i)) == 0) then
-      call selfdoc()
-      stop
-    endif
-  enddo
+  !===== read command line arguments
+
+  if (command_argument_count() /= nargs) then
+    call selfdoc()
+    stop "[ERROR] xsem_slab_mow_model: check your input arguments."
+  endif
 
   read(args(1), '(a)') mesh_dir
   read(args(2), '(a)') model_dir
@@ -116,8 +120,8 @@ program xsem_vertical_slice
   read(args(16), *) mow_dlnv
   read(args(17), '(a)') out_dir
 
-  !---- geometric parameters of slab and MOW
-  !---- use ECEF coordinate frame
+  !===== geometric parameters of slab and MOW
+  ! use ECEF coordinate frame
 
   ! change unit: degree -> radians
   slab_origin_lat = slab_origin_lat * DEGREES_TO_RADIANS
@@ -132,22 +136,22 @@ program xsem_vertical_slice
   ! radius of slab bottom depth
   slab_bottom_radius = 1.d0 - slab_bottom_depth / R_EARTH_KM
 
-  print *, "slab_bottom_radius=", slab_bottom_radius
+  print *, "# slab_bottom_radius=", slab_bottom_radius
 
   ! direction vector of slab origin
-  call geographic_geodetic2ecef(slab_origin_lat, slab_origin_lon, 0.d0, &
+  call geographic_geodetic2ecef(slab_origin_lat, slab_origin_lon, 0.0_dp, &
                                 slab_origin(1), slab_origin(2), slab_origin(3))
 
   slab_origin = slab_origin / sqrt(sum(slab_origin**2))
 
-  print *, "slab_origin=", slab_origin
+  print *, "# slab_origin=", slab_origin
 
   ! north and east directions at slab origin
   slab_origin_north = [ - sin(slab_origin_lat) * cos(slab_origin_lon), &
                         - sin(slab_origin_lat) * sin(slab_origin_lon), &
                           cos(slab_origin_lat) ]
 
-  slab_origin_east =  [ - sin(slab_origin_lon), cos(slab_origin_lon), 0.d0 ]
+  slab_origin_east =  [ - sin(slab_origin_lon), cos(slab_origin_lon), 0.0_dp ]
 
   ! trench normal direction at slab origin
   trench_normal = - sin(slab_strike) * slab_origin_north &
@@ -172,23 +176,30 @@ program xsem_vertical_slice
   slab_lower_dist = slab_upper_dist - slab_thick
 
   ! MOW top/bottom radius
-  mow_top_radius = 1.d0 - mow_top_depth / R_EARTH_KM
-  mow_bottom_radius = 1.d0 - mow_bottom_depth / R_EARTH_KM
+  mow_top_radius = 1.0 - mow_top_depth / R_EARTH_KM
+  mow_bottom_radius = 1.0 - mow_bottom_depth / R_EARTH_KM
 
   ! angles between MOW vertices and slab normal vector
-  theta_v0_slab_normal = acos((slab_upper_dist - slab_thick*mow_xi0) / mow_bottom_radius)
-  theta_v1_slab_normal = acos((slab_upper_dist - slab_thick*mow_xi1) / mow_top_radius)
-  theta_v2_slab_normal = acos((slab_upper_dist - slab_thick*mow_xi2) / mow_top_radius)
+  theta_v0_slab_normal = acos((slab_upper_dist - slab_thick*mow_xi0) &
+                              / mow_bottom_radius)
+  theta_v1_slab_normal = acos((slab_upper_dist - slab_thick*mow_xi1) &
+                              / mow_top_radius)
+  theta_v2_slab_normal = acos((slab_upper_dist - slab_thick*mow_xi2) &
+                              / mow_top_radius)
 
   ! MOW vertices vectors 
-  mow_v0 = mow_bottom_radius * (  cos(slab_dip - theta_v0_slab_normal) * slab_origin &
-                                + sin(slab_dip - theta_v0_slab_normal) * trench_normal )
-  mow_v1 = mow_top_radius *    (  cos(slab_dip - theta_v1_slab_normal) * slab_origin &
-                                + sin(slab_dip - theta_v1_slab_normal) * trench_normal )
-  mow_v2 = mow_top_radius *    (  cos(slab_dip - theta_v2_slab_normal) * slab_origin &
-                                + sin(slab_dip - theta_v2_slab_normal) * trench_normal )
+  mow_v0 = mow_bottom_radius * &
+    (  cos(slab_dip - theta_v0_slab_normal) * slab_origin &
+     + sin(slab_dip - theta_v0_slab_normal) * trench_normal )
+  mow_v1 = mow_top_radius * &   
+    (  cos(slab_dip - theta_v1_slab_normal) * slab_origin &
+     + sin(slab_dip - theta_v1_slab_normal) * trench_normal )
+  mow_v2 = mow_top_radius * &
+    (  cos(slab_dip - theta_v2_slab_normal) * slab_origin &
+     + sin(slab_dip - theta_v2_slab_normal) * trench_normal )
 
-  ! normal vector of MOW upper plane v0-v1 (in the plane of slab_normal and slas_origin )
+  ! normal vector of MOW upper plane v0-v1 
+  ! (in the plane of slab_normal and slas_origin )
   v01 = mow_v1 - mow_v0
   v01 = v01 / sqrt(sum(v01**2))
 
@@ -204,40 +215,41 @@ program xsem_vertical_slice
   mow_lower_dist = sqrt(sum(mow_lower_normal0**2))
   mow_lower_normal0 = mow_lower_normal0 / mow_lower_dist
 
-  !---- read model tags
+  !+==== parse model tags
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
 
   print *, '# nmodel=', nmodel
   print *, '# model_names=', (trim(model_names(i))//"  ", i=1,nmodel) 
 
-  !---- locate xyz in the mesh 
-  call sem_constants_set(iregion)
-
-  ! initialize arrays for each mesh chunk
-  allocate(model_gll(NGLLX,NGLLY,NGLLZ,NSPEC,nmodel))
-
-  ! loop each mesh chunk
-  do iproc = 0, NPROCTOT_VAL-1
+  !===== loop each mesh slice
+  do iproc = 0, (nproc - 1)
 
     print *, '# iproc=', iproc
 
+    ! read mesh data 
     call sem_mesh_read(mesh_data, mesh_dir, iproc, iregion)
 
-    dims = [NGLLX, NGLLY, NGLLZ, mesh_data%nspec]
+    nspec = mesh_data%nspec
+
+    ! read model gll 
+    if (allocated(model_gll)) then
+      deallocate(model_gll)
+    endif
+    allocate(model_gll(nmodel, NGLLX,NGLLY,NGLLZ,nspec))
 
     call sem_io_read_gll_file_n(model_dir, iproc, iregion, &
-                                nmodel, model_names, dims, model_gll)
+                                nmodel, model_names, model_gll)
 
     ! add slab model on each gll point 
-    do ispec = 1, NSPEC
+    do ispec = 1, nspec
       do igllz = 1, NGLLZ
         do iglly = 1, NGLLY
           do igllx = 1, NGLLX
     
             iglob = mesh_data%ibool(igllx,iglly,igllz,ispec)
-            xyz = mesh_data%xyz(:,iglob)
+            xyz = mesh_data%xyz_glob(:,iglob)
 
-            ratio = 0.0d0
+            ratio = 0.0_dp
 
             radius = sqrt(sum(xyz**2))
 
@@ -283,8 +295,8 @@ program xsem_vertical_slice
             endif ! above slab bottom depth
 
             ! get the new model
-            model_gll(igllx,iglly,igllz,ispec,:) = REAL((1.0d0 + ratio) * &
-              model_gll(igllx,iglly,igllz,ispec,:), kind=CUSTOM_REAL)
+            model_gll(igllx,iglly,igllz,ispec,:) = &
+              (1.0_dp + ratio) * model_gll(:, igllx,iglly,igllz,ispec)
 
           enddo
         enddo

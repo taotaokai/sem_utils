@@ -50,8 +50,6 @@ program xmap_gcircle
 
   !===== declare variables
 
-  integer, parameter :: dp = 8
-
   !-- command line args
   integer, parameter :: nargs = 4
   character(len=MAX_STRING_LEN) :: args(nargs)

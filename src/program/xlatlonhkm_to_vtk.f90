@@ -37,8 +37,6 @@ program xlatlonhkm_to_vtk
 
   !===== declare variables
 
-  integer, parameter :: dp = 8
-
   !-- command line args
   integer, parameter :: nargs = 2
   character(len=MAX_STRING_LEN) :: args(nargs)

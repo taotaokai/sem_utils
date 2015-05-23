@@ -112,8 +112,8 @@ end subroutine
 
 
 !//////////////////////////
-subroutine sem_io_read_gll_file_n(basedir, iproc, iregion, nmodel, model_names, &
-                                  model_gll)
+subroutine sem_io_read_gll_file_n(basedir, iproc, iregion, &
+  model_names,nmodel, model_gll)
 !-read n GLL files into one array
 !
 !-inputs:
@@ -174,8 +174,8 @@ end subroutine
 
 
 !//////////////////////////
-subroutine sem_io_write_gll_file_1( &
-  basedir, iproc, iregion, model_name, model_gll)
+subroutine sem_io_write_gll_file_1(basedir, iproc, iregion, &
+  model_name, model_gll)
 !-write out one GLL array onto disk
 !
 !-inputs:
@@ -202,8 +202,8 @@ end subroutine
 
 
 !//////////////////////////
-subroutine sem_io_write_gll_file_n( &
-  basedir, iproc, iregion, nmodel, model_names, model_gll)
+subroutine sem_io_write_gll_file_n(basedir, iproc, iregion, &
+  model_names, nmodel, model_gll)
 !-write out GLL array of multi-parameters into multiple files
 !
 !-inputs:

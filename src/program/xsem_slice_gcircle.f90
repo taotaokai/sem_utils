@@ -54,6 +54,7 @@ end subroutine
 program xsem_vertical_slice
   
   use sem_constants
+  use sem_parallel
   use sem_io
   use sem_mesh
   use sem_utils
@@ -95,11 +96,21 @@ program xsem_vertical_slice
   type(sem_mesh_location), allocatable :: location_1slice(:)
   integer, parameter :: nnearest = 10
   real(dp) :: typical_size, max_search_dist, max_misloc
-  real(dp), allocatable :: final_misloc(:)
-  integer, allocatable :: final_stat(:)
+  real(dp), allocatable :: misloc_myrank(:), misloc_gather(:), misloc_copy(:)
+  integer, allocatable :: stat_myrank(:), stat_gather(:), stat_copy(:)
   !-- model interpolation
   integer :: nspec
-  real(dp), allocatable :: model_gll(:,:,:,:,:), model_interp(:,:)
+  real(dp), allocatable :: model_gll(:,:,:,:,:)
+  real(dp), allocatable :: model_interp_myrank(:,:)
+  real(dp), allocatable :: model_interp_gather(:,:)
+  real(dp), allocatable :: model_interp_copy(:,:)
+
+  !-- mpi 
+  integer :: myrank, nrank, iworker
+  ! mpi_send/recv
+  integer, parameter :: ITAG_stat = 10
+  integer, parameter :: ITAG_misloc = 11
+  integer, parameter :: ITAG_model_interp = 12
 
   !-- netcdf data structure
   integer :: ncid
@@ -125,11 +136,19 @@ program xsem_vertical_slice
   character(len=*), parameter :: stat_name = "location_status"
   character(len=*), parameter :: misloc_name = "misloc"
 
+  !===== start MPI
+
+  call init_mpi()
+  call world_size(nrank)
+  call world_rank(myrank)
+
   !===== read command line arguments
 
   if (command_argument_count() /= nargs) then
-    call selfdoc()
-    stop "[ERROR] xsem_slice_gcircle: check your input arguments."
+    if (myrank == 0) then
+      call selfdoc()
+      stop "[ERROR] xsem_slice_gcircle: check your input arguments."
+    endif
   endif
 
   do i = 1, nargs
@@ -149,6 +168,8 @@ program xsem_vertical_slice
   read(args(12), *) radius1
   read(args(13), *) nradius
   read(args(14), '(a)') out_file
+
+  call synchronize_all()
 
   !===== generate mesh grid of the cross-section
 
@@ -206,23 +227,30 @@ program xsem_vertical_slice
   allocate(idoubling(npoint))
   idoubling = IFLAG_DUMMY
 
+  call synchronize_all()
+
   !===== parse model tags
+
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
 
-  print *, '# nmodel=', nmodel
-  print *, '# model_names=', (trim(model_names(i))//" ", i=1,nmodel)
+  if (myrank == 0) then
+    print *, '# nmodel=', nmodel
+    print *, '# model_names=', (trim(model_names(i))//" ", i=1,nmodel)
+  endif
+
+  call synchronize_all()
 
   !===== locate xyz in each mesh slice
 
   !-- initialize variables
   allocate(location_1slice(npoint))
 
-  allocate(final_stat(npoint), final_misloc(npoint))
-  final_stat = -1
-  final_misloc = HUGE(1.0_dp)
+  allocate(stat_myrank(npoint), misloc_myrank(npoint))
+  stat_myrank = -1
+  misloc_myrank = HUGE(1.0_dp)
 
-  allocate(model_interp(nmodel, npoint))
-  model_interp = FILLVALUE_sp
+  allocate(model_interp_myrank(nmodel, npoint))
+  model_interp_myrank = FILLVALUE_sp
 
   ! typical element size at surface
   typical_size = max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
@@ -233,10 +261,8 @@ program xsem_vertical_slice
 
   max_misloc = typical_size / 4.0
 
-  !-- loop each mesh slice
-  loop_proc: do iproc = 0, (nproc - 1)
-
-    print *, "# iproc=", iproc
+  !-- loop mesh slices for myrank
+  loop_proc: do iproc = myrank, (nproc - 1), nrank
 
     ! read mesh
     call sem_mesh_read(mesh_data, mesh_dir, iproc, iregion)
@@ -249,20 +275,22 @@ program xsem_vertical_slice
     allocate(model_gll(nmodel, NGLLX, NGLLY, NGLLZ, nspec))
 
     call sem_io_read_gll_file_n(model_dir, iproc, iregion, &
-      nmodel, model_names, model_gll)
+      model_names, nmodel, model_gll)
 
     ! locate points in this mesh slice
     call sem_mesh_locate_kdtree2(mesh_data, npoint, xyz, idoubling, &
       nnearest, max_search_dist, max_misloc, location_1slice)
 
-    print *, "# number of located points: ", count(location_1slice%stat>=0)
+    print *, "# iproc=", iproc, &
+      " number of located points: ", count(location_1slice%stat>=0)
 
     ! interpolate model only on points located inside an element
     do ipoint = 1, npoint
 
       ! safety check
-      if (final_stat(ipoint) == 1 .and. &
+      if (stat_myrank(ipoint) == 1 .and. &
           location_1slice(ipoint)%stat == 1 ) then
+        print *, "[WARN] iproc=", iproc
         print *, "[WARN] ipoint=", ipoint
         print *, "------ this point is located inside more than one element!"
         print *, "------ some problem may occur."
@@ -275,96 +303,168 @@ program xsem_vertical_slice
       if (location_1slice(ipoint)%stat == 1 &
           .or. &
           (location_1slice(ipoint)%stat == 0 .and. &
-           location_1slice(ipoint)%misloc < final_misloc(ipoint)) ) &
+           location_1slice(ipoint)%misloc < misloc_myrank(ipoint)) ) &
       then
 
         ! interpolate model
         do imodel = 1, nmodel
-          model_interp(imodel, ipoint) = &
+          model_interp_myrank(imodel, ipoint) = &
             sum( location_1slice(ipoint)%lagrange * &
                  model_gll(imodel, :, :, :, location_1slice(ipoint)%eid) )
         enddo
 
-        final_stat(ipoint)   = location_1slice(ipoint)%stat
-        final_misloc(ipoint) = location_1slice(ipoint)%misloc
+        stat_myrank(ipoint)   = location_1slice(ipoint)%stat
+        misloc_myrank(ipoint) = location_1slice(ipoint)%misloc
 
       endif
 
     enddo ! ipoint
 
-  enddo loop_proc 
+  enddo loop_proc
 
-  ! convert misloc to relative to typical element size
-  where (final_stat /= -1) final_misloc = final_misloc / typical_size
+  !-- gather all location results from work processors
+  call synchronize_all()
 
-  !===== output netcdf file
+  if (myrank /= 0) then
 
-  ! create the file
-  call check( nf90_create(out_file, NF90_CLOBBER, ncid))
+    ! send stat/misloc/model_interp on myrank to MASTER 
 
-  ! define the dimensions.
-  call check( nf90_def_dim(ncid, theta_name, ntheta, theta_dimid) )
-  call check( nf90_def_dim(ncid, radius_name, nradius, radius_dimid) )
+    call send_i(stat_myrank, npoint, 0, ITAG_stat)
+    call send_dp(misloc_myrank, npoint, 0, ITAG_misloc)
+    call send2_dp(model_interp_myrank, nmodel*npoint, 0, ITAG_model_interp)
 
-  ! define the coordinate variables.
-  call check( nf90_def_var(ncid, theta_name, NF90_DOUBLE, theta_dimid, theta_varid) )
-  call check( nf90_def_var(ncid, radius_name, NF90_DOUBLE, radius_dimid, radius_varid) )
-  ! coordinate units
-  call check( nf90_put_att(ncid, theta_varid, UNITS, theta_units) )
-  call check( nf90_put_att(ncid, radius_varid, UNITS, radius_units) )
+  else ! gather data on MASTER processor (0)
 
-  ! define data variables: model values
-  dimids = [theta_dimid, radius_dimid]
-  allocate(model_varids(nmodel))
-  do imodel = 1, nmodel
-    call check( nf90_def_var(ncid, trim(model_names(imodel)), NF90_REAL & 
-                             , dimids, model_varids(imodel)) )
-    call check( nf90_put_att(ncid, model_varids(imodel) &
-                             , "_FillValue", FILLVALUE_sp) )
-  enddo
-  ! define data: location status and mislocation
-  call check( nf90_def_var(ncid, stat_name, NF90_INT, dimids, stat_varid) )
-  call check( nf90_def_var(ncid, misloc_name, NF90_FLOAT, dimids, misloc_varid) )
+    allocate(stat_gather(npoint), misloc_gather(npoint), &
+      model_interp_gather(nmodel, npoint))
 
-  ! end define mode.
-  call check( nf90_enddef(ncid) )
+   allocate(stat_copy(npoint), misloc_copy(npoint), &
+      model_interp_copy(nmodel, npoint))
 
-  ! write the coordinate variable data.
-  call check( nf90_put_var(ncid, theta_varid, theta * RADIANS_TO_DEGREES) )
-  call check( nf90_put_var(ncid, radius_varid, radius * R_EARTH_KM) )
+    stat_gather = stat_myrank 
+    misloc_gather = misloc_myrank 
+    model_interp_gather = model_interp_myrank 
 
-  ! write data: interpolated model values
-  allocate(model_var(ntheta, nradius))
-  do imodel = 1, nmodel
+    do iworker = 1, (nrank -1)
 
-    ! reshape model variable into a NDIMS matrix
+      ! receive stat/misloc/model_interp from each worker processes 
+      call recv_i(stat_copy, npoint, iworker , ITAG_stat)
+      call recv_dp(misloc_copy, npoint, iworker, ITAG_misloc)
+      call recv2_dp(model_interp_copy, nmodel*npoint, iworker, ITAG_model_interp)
+
+      ! gather data
+      do ipoint = 1, npoint
+
+        ! safety check
+        if (stat_gather(ipoint) == 1) then
+          if (stat_copy(ipoint) == 1) then
+            print *, "[WARN] ipoint=", ipoint
+            print *, "------ this point is located inside more than one element!"
+            print *, "------ some problem may occur."
+            print *, "------ only use the first located element."
+          endif
+          cycle
+        endif
+
+        ! for point located inside one element but not happened before 
+        ! or closer to one element than located before
+        if (stat_copy(ipoint) == 1 &
+            .or. &
+            (stat_copy(ipoint) == 0 .and. &
+             misloc_copy(ipoint) < misloc_gather(ipoint)) ) &
+        then
+          stat_gather(ipoint) = stat_copy(ipoint)
+          misloc_gather(ipoint) = misloc_copy(ipoint)
+          model_interp_gather(:, ipoint) = model_interp_copy(:,ipoint) 
+        endif
+
+      enddo ! ipoint
+
+    enddo ! iworker
+
+    ! convert misloc relative to typical element size
+    where (stat_gather /= -1)
+      misloc_gather = misloc_gather / typical_size
+    endwhere
+
+  endif ! myrank /= 0
+  
+  !===== output netcdf file on the MASTER processor
+
+  if (myrank == 0) then
+
+    ! create the file
+    call check( nf90_create(out_file, NF90_CLOBBER, ncid))
+
+    ! define the dimensions.
+    call check( nf90_def_dim(ncid, theta_name, ntheta, theta_dimid) )
+    call check( nf90_def_dim(ncid, radius_name, nradius, radius_dimid) )
+
+    ! define the coordinate variables.
+    call check( nf90_def_var(ncid, theta_name, NF90_DOUBLE, theta_dimid, theta_varid) )
+    call check( nf90_def_var(ncid, radius_name, NF90_DOUBLE, radius_dimid, radius_varid) )
+    ! coordinate units
+    call check( nf90_put_att(ncid, theta_varid, UNITS, theta_units) )
+    call check( nf90_put_att(ncid, radius_varid, UNITS, radius_units) )
+
+    ! define data variables: model values
+    dimids = [theta_dimid, radius_dimid]
+    allocate(model_varids(nmodel))
+    do imodel = 1, nmodel
+      call check( nf90_def_var(ncid, trim(model_names(imodel)), NF90_REAL & 
+                               , dimids, model_varids(imodel)) )
+      call check( nf90_put_att(ncid, model_varids(imodel) &
+                               , "_FillValue", FILLVALUE_sp) )
+    enddo
+    ! define data: location status and mislocation
+    call check( nf90_def_var(ncid, stat_name, NF90_INT, dimids, stat_varid) )
+    call check( nf90_def_var(ncid, misloc_name, NF90_FLOAT, dimids, misloc_varid) )
+
+    ! end define mode.
+    call check( nf90_enddef(ncid) )
+
+    ! write the coordinate variable data.
+    call check( nf90_put_var(ncid, theta_varid, theta * RADIANS_TO_DEGREES) )
+    call check( nf90_put_var(ncid, radius_varid, radius * R_EARTH_KM) )
+
+    ! write data: interpolated model values
+    allocate(model_var(ntheta, nradius))
+    do imodel = 1, nmodel
+
+      ! reshape model variable into a NDIMS matrix
+      do itheta = 1, ntheta
+        idx = nradius * (itheta - 1)
+        do iradius = 1, nradius
+          model_var(itheta, iradius) = &
+            real(model_interp_gather(imodel, idx + iradius), kind=sp)
+        enddo
+      enddo
+
+      call check( nf90_put_var(ncid, model_varids(imodel), model_var) )
+    enddo
+
+    ! write data: status of location and mislocation
+    ! reshape variable into an NDIMS matrix
+    allocate(stat_var(ntheta, nradius), misloc_var(ntheta, nradius))
     do itheta = 1, ntheta
       idx = nradius * (itheta - 1)
       do iradius = 1, nradius
-        model_var(itheta, iradius) = &
-          real(model_interp(imodel, idx + iradius), kind=sp)
+        stat_var(itheta, iradius) = stat_gather(idx + iradius)
+        misloc_var(itheta, iradius) = real(misloc_gather(idx + iradius), kind=sp)
       enddo
     enddo
 
-    call check( nf90_put_var(ncid, model_varids(imodel), model_var) )
-  enddo
+    call check( nf90_put_var(ncid, stat_varid, stat_var) )
+    call check( nf90_put_var(ncid, misloc_varid, misloc_var) )
 
-  ! write data: status of location and mislocation
-  ! reshape variable into an NDIMS matrix
-  allocate(stat_var(ntheta, nradius), misloc_var(ntheta, nradius))
-  do itheta = 1, ntheta
-    idx = nradius*(itheta - 1)
-    do iradius = 1, nradius
-      stat_var(itheta, iradius) = final_stat(idx + iradius)
-      misloc_var(itheta, iradius) = real(final_misloc(idx + iradius), kind=sp)
-    enddo
-  enddo
+    ! close file 
+    call check( nf90_close(ncid) )
 
-  call check( nf90_put_var(ncid, stat_varid, stat_var) )
-  call check( nf90_put_var(ncid, misloc_varid, misloc_var) )
+  endif ! myrank == 0
 
-  ! close file 
-  call check( nf90_close(ncid) )
+  !===== end MPI
+  call synchronize_all()
+  call finalize_mpi()
 
 
 !********************

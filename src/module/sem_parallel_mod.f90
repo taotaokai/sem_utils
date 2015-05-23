@@ -166,4 +166,97 @@ subroutine bcast_all_singlecr(buffer)
 end subroutine bcast_all_singlecr
 
 
+!///////////////////////////////////
+subroutine send_i(sendbuf, sendcount, dest, sendtag)
+
+  implicit none
+
+  integer :: dest, sendtag
+  integer :: sendcount
+  integer, dimension(sendcount) :: sendbuf
+
+  integer :: ier
+
+  call MPI_SEND(sendbuf, sendcount, MPI_INTEGER, dest, sendtag, &
+    MPI_COMM_WORLD, ier)
+
+end subroutine send_i
+
+
+subroutine recv_i(recvbuf, recvcount, dest, recvtag)
+
+  implicit none
+
+  integer :: dest, recvtag
+  integer :: recvcount
+  integer, dimension(recvcount) :: recvbuf
+
+  integer :: ier
+
+  call MPI_RECV(recvbuf, recvcount, MPI_INTEGER, dest, recvtag, &
+    MPI_COMM_WORLD, MPI_STATUS_IGNORE, ier)
+
+end subroutine recv_i
+
+
+!///////////////////////////////////
+subroutine send_dp(sendbuf, sendcount, dest, sendtag)
+
+  implicit none
+  
+  integer :: dest, sendtag
+  integer :: sendcount
+  double precision, dimension(sendcount) :: sendbuf
+  integer :: ier
+  
+  call MPI_SEND(sendbuf, sendcount, MPI_DOUBLE_PRECISION, dest, sendtag, &
+    MPI_COMM_WORLD, ier)
+
+end subroutine send_dp
+
+subroutine send2_dp(sendbuf, sendcount, dest, sendtag)
+
+  implicit none
+  
+  integer :: dest, sendtag
+  integer :: sendcount
+  double precision, dimension(:,:) :: sendbuf
+  integer :: ier
+  
+  call MPI_SEND(sendbuf, sendcount, MPI_DOUBLE_PRECISION, dest, sendtag, &
+    MPI_COMM_WORLD, ier)
+
+end subroutine send2_dp
+
+subroutine recv_dp(recvbuf, recvcount, dest, recvtag)
+
+  implicit none
+
+  integer :: dest,recvtag
+  integer :: recvcount
+  double precision, dimension(recvcount) :: recvbuf
+
+  integer :: ier
+
+  call MPI_RECV(recvbuf, recvcount, MPI_DOUBLE_PRECISION, dest, recvtag, &
+    MPI_COMM_WORLD, MPI_STATUS_IGNORE, ier)
+
+end subroutine recv_dp
+
+subroutine recv2_dp(recvbuf, recvcount, dest, recvtag)
+
+  implicit none
+
+  integer :: dest,recvtag
+  integer :: recvcount
+  double precision, dimension(:,:) :: recvbuf
+
+  integer :: ier
+
+  call MPI_RECV(recvbuf, recvcount, MPI_DOUBLE_PRECISION, dest, recvtag, &
+    MPI_COMM_WORLD, MPI_STATUS_IGNORE, ier)
+
+end subroutine recv2_dp
+
+
 end module sem_parallel

@@ -10,6 +10,7 @@ module sem_constants
 
   include "values_from_mesher.h"
 
+  ! real kind
   integer, parameter :: dp = kind(1.d0)
   integer, parameter :: sp = kind(1.0)
 

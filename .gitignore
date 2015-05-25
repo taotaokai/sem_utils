@@ -1,6 +1,7 @@
 # other files
 others/
 bak/
+old/
 
 # Build time
 bin/

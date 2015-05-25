@@ -29,7 +29,7 @@ subroutine selfdoc()
 ! print '(a)', "    lying outside target mesh/layer volume "
   print '(a)', "  (string) new_mesh_dir: directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (int) nproc_new: number of slices of the new mesh"
-  print '(a)', "  (string) new_model_dir: directory holds output model files"
+  print '(a)', "  (string) new_model_dir: output directory for new model files"
   print '(a)', ""
   print '(a)', "NOTES"
   print '(a)', ""
@@ -68,7 +68,7 @@ program xsem_interp_mesh
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
 
   !-- local variables
-  integer :: i, iproc, ier, iglob, ispec
+  integer :: i, ier, iglob, ispec
 
   !-- mpi
   integer :: myrank, nrank
@@ -79,7 +79,7 @@ program xsem_interp_mesh
 
   !-- old mesh slice
   type(sem_mesh_data) :: mesh_old
-  integer :: iproc_old
+  integer :: iproc_old, nspec_old
   real(dp), allocatable :: model_gll_old(:,:,:,:,:)
 
   !-- new mesh slice
@@ -132,8 +132,8 @@ program xsem_interp_mesh
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
 
   if (myrank == 0) then
-    print '(a)', '# nmodel=', nmodel
-    print '(a)', '# model_names=', (trim(model_names(i))//" ", i=1,nmodel)
+    print *, '# nmodel=', nmodel
+    print *, '# model_names=', (trim(model_names(i))//" ", i=1,nmodel)
   endif
 
   !===== interpolate old mesh/model onto new mesh
@@ -152,10 +152,14 @@ program xsem_interp_mesh
 
   do iproc_new = myrank, (nproc_new - 1), nrank
 
+    print *, "# iproc_new=", iproc_new
+
     !-- read new mesh slice
-    call sem_mesh_read(mesh_new, new_mesh_dir, iproc_new, iregion)
+    call sem_mesh_read(new_mesh_dir, iproc_new, iregion, mesh_new)
 
     !-- make arrays of xyz points
+    !TODO use global points with different idoubling values instead of 
+    ! all GLL points, as many GLL points are shared on the element faces
     nspec_new = mesh_new%nspec
     ngll_new = NGLLX * NGLLY * NGLLZ * nspec_new
 
@@ -204,16 +208,19 @@ program xsem_interp_mesh
 
     do iproc_old = 0, (nproc_old - 1)
 
+      print *, "# iproc_old=", iproc_old
+
       ! read old mesh slice
-      call sem_mesh_read(mesh_old, old_mesh_dir, iproc_old, iregion)
+      call sem_mesh_read(old_mesh_dir, iproc_old, iregion, mesh_old)
 
       ! read old model
+      nspec_old = mesh_old%nspec
       if (allocated(model_gll_old)) then
         deallocate(model_gll_old)
       endif
-      allocate(model_gll_old(nmodel, NGLLX, NGLLY, NGLLZ, mesh_old%nspec))
+      allocate(model_gll_old(nmodel, NGLLX, NGLLY, NGLLZ, nspec_old))
 
-      call sem_io_read_gll_file_n(old_model_dir, iproc, iregion, &
+      call sem_io_read_gll_file_n(old_model_dir, iproc_old, iregion, &
         model_names, nmodel, model_gll_old)
 
       ! locate points in this mesh slice
@@ -223,14 +230,17 @@ program xsem_interp_mesh
       ! interpolate model only on points located inside an element
       do igll = 1, ngll_new
 
-        ! safety check
-        if (stat_final(igll) == 1 .and. location_1slice(igll)%stat == 1 ) then
-          print *, "[WARN] iproc_new=", iproc_new, &
-                   " iproc_old=", iproc_old, &
-                   " igll=", igll, &
-                   " this point is located inside more than one element!", &
-                   " some problem may occur.", &
-                   " only use the first located element."
+        ! skip points located inside more than one element 
+        ! this would occur if the point lies exactly on the faces between two
+        ! elements
+        if (stat_final(igll)==1 .and. location_1slice(igll)%stat==1) then
+!         print *, "[WARN] iproc_new=", iproc_new, &
+!                  " iproc_old=", iproc_old, &
+!                  " igll=", igll, &
+!                  " this point is located inside more than one element!", &
+!                  " some problem may occur.", &
+!                  " only use the first located element."
+          print *, "# multi-located ", xyz_new(:,igll)
           cycle
         endif
 

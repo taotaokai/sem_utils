@@ -96,14 +96,17 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
+subroutine sem_mesh_read(basedir, iproc, iregion, mesh_data)
 !-read mesh data (solver_data.bin)
 !
 !-inputs:
-! (type mesh) mesh_data: structure mesh
-! (string) basedir,iproc,iregion: specify the mesh file
-! (integer) ngllxyz(3) = [NGLLX, NGLLY, NGLLZ]
-!   gll points dimensions of the reference cube
+! (string) basedir
+! (integer) iproc,iregion
+!   specify path of the mesh file: 
+!   <basedir>/proc<iproc>_<iregion>_solver_data.bin
+!
+!-outputs:
+! (type mesh) mesh_data: data structure of mesh
 
   type(sem_mesh_data), intent(inout) :: mesh_data
 
@@ -115,10 +118,10 @@ subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
   real(dp) :: xyz_center(3), depth
   real(CUSTOM_REAL), allocatable :: dummy(:)
 
-  call sem_io_open_file_for_read(IIN,basedir,iproc,iregion,'solver_data')
+  call sem_io_open_file_for_read(basedir, iproc, iregion, 'solver_data', IIN)
 
   ! get mesh dimensions
-  read(IIN) nspec 
+  read(IIN) nspec
   read(IIN) nglob
 
   ! allocate memory for mesh_data
@@ -157,6 +160,7 @@ subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
   ! separate crustal mesh layers for REGIONAL_MOHO_MESH 
   ! 3-layer crust: 10(third layer), 11, 12(shallowest layer)
   if (REGIONAL_MOHO_MESH) then
+    print *, "# separate crustal mesh into 3 layers for REGIONAL_MOHO_MESH"
     num = 0
     do ispec = 1, nspec
       if (mesh_data%idoubling(ispec) == IFLAG_CRUST) then
@@ -169,6 +173,7 @@ subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
 
   ! separate mesh layers across 410-km
   ! 40: above 410, 41: below 410
+  print *, "# separate mesh layer at 410km"
   do ispec = 1, nspec
 
     if (mesh_data%idoubling(ispec) == IFLAG_670_220) then
@@ -178,7 +183,8 @@ subroutine sem_mesh_read(mesh_data, basedir, iproc, iregion)
       xyz_center = mesh_data%xyz_glob(:,iglob)
       depth = (1.0 - sqrt(sum(mesh_data%xyz_glob(:,iglob)**2))) * R_EARTH_KM
 
-      if (depth < 405.0_CUSTOM_REAL) then
+      !this is dangerous since 410 can have undulations
+      if (depth < 410) then
         mesh_data%idoubling(ispec) = 10 * IFLAG_670_220
       else ! below 410-km
         mesh_data%idoubling(ispec) = 10 * IFLAG_670_220 + 1
@@ -390,7 +396,7 @@ subroutine sem_mesh_locate_kdtree2( &
 
       ispec = search_result(inn)%idx
 
-      ! test if layer_id(idoubling) matches (if used)
+      ! only use element with the same layer_id(i.e. idoubling)
       if (idoubling(ipoint) /= IFLAG_DUMMY .and. &
           idoubling(ipoint) /= mesh_data%idoubling(ispec)) then
         cycle
@@ -670,7 +676,7 @@ subroutine lagrange_poly(x, ngll, xgll, lagrange)
 end subroutine lagrange_poly
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine xyz2cube_bounded(xyz_anchor, xyz, uvw, misloc, flag_inside )
+subroutine xyz2cube_bounded(xyz_anchor, xyz, uvw, misloc, flag_inside)
 !-mapping a given point in physical space (xyz) to the 
 ! reference cube (uvw), 
 ! and also flag whether the point is inside the cube
@@ -679,12 +685,12 @@ subroutine xyz2cube_bounded(xyz_anchor, xyz, uvw, misloc, flag_inside )
 !
 !-inputs:
 ! (real) xyz_anchor(3, NGNOD): anchor points of the element
-! xyz: coordinates of the target point
+! (real) xyz(3): coordinates of the target point
 !
 !-outputs:
-! uvw(3): local coordinates in reference cube
-! misloc: location misfit abs(xyz - XYZ(uvw))
-! flag_inside: flag whether the target point locates inside the element
+! (real) uvw(3): local coordinates in reference cube
+! (real) misloc: location misfit abs(xyz - XYZ(uvw))
+! (logical) flag_inside: flag whether the target point locates inside the element
 
   real(dp), intent(in) :: xyz_anchor(3, NGNOD)
   real(dp), intent(in) :: xyz(3)

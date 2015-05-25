@@ -265,7 +265,7 @@ program xsem_vertical_slice
   loop_proc: do iproc = myrank, (nproc - 1), nrank
 
     ! read mesh
-    call sem_mesh_read(mesh_data, mesh_dir, iproc, iregion)
+    call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
 
     ! read model
     nspec = mesh_data%nspec

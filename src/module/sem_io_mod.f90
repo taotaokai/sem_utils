@@ -5,8 +5,9 @@ module sem_io
 !----------------------------------
 
   use sem_constants, only: dp
-  use sem_constants, only: CUSTOM_REAL, MAX_STRING_LEN, IIN, IOUT
+  use sem_constants, only: CUSTOM_REAL
   use sem_constants, only: NGLLX, NGLLY, NGLLZ
+  use sem_constants, only: MAX_STRING_LEN, IIN, IOUT
 
   implicit none
 
@@ -27,11 +28,11 @@ module sem_io
 contains
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine sem_io_open_file_for_read(fileid, basedir, iproc, iregion, tag)
+subroutine sem_io_open_file_for_read(basedir, iproc, iregion, tag, fileid)
 ! open a GLL file, read only
 
   character(len=*), intent(in) :: basedir, tag 
-  integer, intent(in) :: iproc, iregion, fileid 
+  integer, intent(in) :: iproc, iregion, fileid
 
   integer :: ier
   character(len=MAX_STRING_LEN) :: filename
@@ -52,7 +53,7 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine sem_io_open_file_for_write(fileid, basedir, iproc, iregion, tag)
+subroutine sem_io_open_file_for_write(basedir, iproc, iregion, tag, fileid)
 ! open a GLL file to write
 
   character(len=*), intent(in) :: basedir, tag 
@@ -64,7 +65,7 @@ subroutine sem_io_open_file_for_write(fileid, basedir, iproc, iregion, tag)
   write(filename, "(a,'/proc',i6.6,'_reg',i1,'_',a,'.bin')") &
     trim(basedir), iproc, iregion, trim(tag)
 
-  open(fileid, file=trim(filename), status='unknown', &
+  open(unit=fileid, file=trim(filename), status='unknown', &
     form='unformatted',action='write',iostat=ier)
 
   if (ier /= 0) then
@@ -98,11 +99,13 @@ subroutine sem_io_read_gll_file_1(basedir, iproc, iregion, model_name, &
   nspec = size(model_gll,4)
   allocate(dummy(NGLLX,NGLLY,NGLLZ,nspec))
 
-  call sem_io_open_file_for_read(IIN,basedir,iproc,iregion,model_name)
+  call sem_io_open_file_for_read(basedir,iproc,iregion,model_name,IIN)
 
   read(IIN, iostat=ier) dummy
 
-  if (ier /= 0) stop "[ERROR] sem_io_read_gll_1: failed to read in gll file"
+  if (ier /= 0) then
+    stop "[ERROR] sem_io_read_gll_1: failed to read in gll file"
+  endif
 
   close(IIN)
 
@@ -157,16 +160,18 @@ subroutine sem_io_read_gll_file_cijkl(basedir, iproc, iregion, gll_cijkl)
   integer :: ier, nspec
   real(kind=CUSTOM_REAL), allocatable :: dummy(:,:,:,:,:)
 
-  nspec = size(gll_cijkl,5)
-  allocate(dummy(21,NGLLX,NGLLY,NGLLZ,nspec))
+  nspec = size(gll_cijkl, 5)
+  allocate(dummy(21, NGLLX, NGLLY, NGLLZ, nspec))
 
-  call sem_io_open_file_for_read(IIN, basedir,iproc,iregion,'cijkl_kernel')
+  call sem_io_open_file_for_read(basedir, iproc, iregion, 'cijkl_kernel', IIN)
 
   read(IIN, iostat=ier) dummy 
 
   close(IIN)
 
-  if (ier /= 0) stop "[ERROR] sem_io_read_gll_file_ciikl: failed to read in gll file"
+  if (ier /= 0) then
+    stop "[ERROR] sem_io_read_gll_file_ciikl: failed to read in gll file"
+  endif
 
   gll_cijkl = real(dummy, kind=dp)
 
@@ -190,13 +195,15 @@ subroutine sem_io_write_gll_file_1(basedir, iproc, iregion, &
 
   integer :: ier
 
-  call sem_io_open_file_for_write(IOUT,basedir,iproc,iregion,model_name)
+  call sem_io_open_file_for_write(basedir, iproc, iregion, model_name, IOUT)
 
   write(IOUT, iostat=ier) real(model_gll, kind=CUSTOM_REAL)
 
   close(IOUT)
 
-  if (ier /= 0) stop "[ERROR] sem_io_write_gll_file_1: failed to write out gll file"
+  if (ier /= 0) then
+    stop "[ERROR] sem_io_write_gll_file_1: failed to write out gll file"
+  endif
 
 end subroutine
 

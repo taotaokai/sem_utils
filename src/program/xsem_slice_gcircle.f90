@@ -46,6 +46,9 @@ subroutine selfdoc()
   print '(a)', "    gs $ps" 
   print '(a)', "    ~~~~~~~~~~~~~~~~"
   print '(a)', ""
+  print '(a)', "  2. To run in parallel: "
+  print '(a)', "    mpirun -n <nproc_mpi> <program> <arguments>"
+  print '(a)', ""
 
 end subroutine
 
@@ -74,8 +77,7 @@ program xsem_vertical_slice
 
   !-- local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
-  real(sp), parameter :: FILLVALUE_sp = huge(0._sp)
-  integer :: i, iproc, ier
+  integer :: i, ier, iproc
 
   !-- model names
   integer :: imodel, nmodel
@@ -93,13 +95,15 @@ program xsem_vertical_slice
 
   !-- sem location 
   type(sem_mesh_data) :: mesh_data
+  integer :: ispec, nspec, iglob
+  real(dp) :: dist
   type(sem_mesh_location), allocatable :: location_1slice(:)
   integer, parameter :: nnearest = 10
   real(dp) :: typical_size, max_search_dist, max_misloc
   real(dp), allocatable :: misloc_myrank(:), misloc_gather(:), misloc_copy(:)
   integer, allocatable :: stat_myrank(:), stat_gather(:), stat_copy(:)
   !-- model interpolation
-  integer :: nspec
+  real(sp), parameter :: FILLVALUE_sp = huge(0.0_sp)
   real(dp), allocatable :: model_gll(:,:,:,:,:)
   real(dp), allocatable :: model_interp_myrank(:,:)
   real(dp), allocatable :: model_interp_gather(:,:)
@@ -108,9 +112,9 @@ program xsem_vertical_slice
   !-- mpi 
   integer :: myrank, nrank, iworker
   ! mpi_send/recv
-  integer, parameter :: ITAG_stat = 10
-  integer, parameter :: ITAG_misloc = 11
-  integer, parameter :: ITAG_model_interp = 12
+  integer, parameter :: MPI_TAG_stat = 10
+  integer, parameter :: MPI_TAG_misloc = 11
+  integer, parameter :: MPI_TAG_model_interp = 12
 
   !-- netcdf data structure
   integer :: ncid
@@ -147,9 +151,13 @@ program xsem_vertical_slice
   if (command_argument_count() /= nargs) then
     if (myrank == 0) then
       call selfdoc()
-      stop "[ERROR] xsem_slice_gcircle: check your input arguments."
+      print *, "[ERROR] xsem_slice_gcircle: check your input arguments."
+      call abort_mpi()
+      stop
     endif
   endif
+   
+  call synchronize_all()
 
   do i = 1, nargs
     call get_command_argument(i, args(i), status=ier)
@@ -264,11 +272,28 @@ program xsem_vertical_slice
   !-- loop mesh slices for myrank
   loop_proc: do iproc = myrank, (nproc - 1), nrank
 
+    print *, "# iproc=", iproc
+
     ! read mesh
     call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
 
-    ! read model
     nspec = mesh_data%nspec
+
+    ! test if the interpolation points and mesh are separated apart
+    ! only use mesh element centers
+    dist = huge(0.0_dp)
+    do ispec = 1, nspec
+      iglob = mesh_data%ibool(NGLLX/2, NGLLY/2, NGLLZ/2, ispec)
+      dist = min(dist, sqrt( minval( &
+        (xyz(1,:) - mesh_data%xyz_glob(1,iglob))**2 + &
+        (xyz(2,:) - mesh_data%xyz_glob(2,iglob))**2 + &
+        (xyz(3,:) - mesh_data%xyz_glob(3,iglob))**2)))
+    enddo
+    if (dist > max_search_dist) then
+      cycle
+    endif
+
+    ! read model
     if (allocated(model_gll)) then
       deallocate(model_gll)
     endif
@@ -290,11 +315,9 @@ program xsem_vertical_slice
       ! safety check
       if (stat_myrank(ipoint) == 1 .and. &
           location_1slice(ipoint)%stat == 1 ) then
-        print *, "[WARN] iproc=", iproc
-        print *, "[WARN] ipoint=", ipoint
-        print *, "------ this point is located inside more than one element!"
-        print *, "------ some problem may occur."
-        print *, "------ only use the first located element."
+        print *, "[WARN] iproc=", iproc, " ipoint=", ipoint, &
+          " This point is located inside more than one element!", &
+          " Only use the first located element."
         cycle
       endif
 
@@ -329,16 +352,16 @@ program xsem_vertical_slice
 
     ! send stat/misloc/model_interp on myrank to MASTER 
 
-    call send_i(stat_myrank, npoint, 0, ITAG_stat)
-    call send_dp(misloc_myrank, npoint, 0, ITAG_misloc)
-    call send2_dp(model_interp_myrank, nmodel*npoint, 0, ITAG_model_interp)
+    call send_i(stat_myrank, npoint, 0, MPI_TAG_stat)
+    call send_dp(misloc_myrank, npoint, 0, MPI_TAG_misloc)
+    call send2_dp(model_interp_myrank, nmodel*npoint, 0, MPI_TAG_model_interp)
 
   else ! gather data on MASTER processor (0)
 
     allocate(stat_gather(npoint), misloc_gather(npoint), &
       model_interp_gather(nmodel, npoint))
 
-   allocate(stat_copy(npoint), misloc_copy(npoint), &
+    allocate(stat_copy(npoint), misloc_copy(npoint), &
       model_interp_copy(nmodel, npoint))
 
     stat_gather = stat_myrank 
@@ -348,9 +371,10 @@ program xsem_vertical_slice
     do iworker = 1, (nrank -1)
 
       ! receive stat/misloc/model_interp from each worker processes 
-      call recv_i(stat_copy, npoint, iworker , ITAG_stat)
-      call recv_dp(misloc_copy, npoint, iworker, ITAG_misloc)
-      call recv2_dp(model_interp_copy, nmodel*npoint, iworker, ITAG_model_interp)
+      call recv_i(stat_copy, npoint, iworker , MPI_TAG_stat)
+      call recv_dp(misloc_copy, npoint, iworker, MPI_TAG_misloc)
+      call recv2_dp(model_interp_copy, nmodel*npoint, iworker, &
+        MPI_TAG_model_interp)
 
       ! gather data
       do ipoint = 1, npoint
@@ -388,7 +412,7 @@ program xsem_vertical_slice
     endwhere
 
   endif ! myrank /= 0
-  
+
   !===== output netcdf file on the MASTER processor
 
   if (myrank == 0) then
@@ -462,7 +486,8 @@ program xsem_vertical_slice
 
   endif ! myrank == 0
 
-  !===== end MPI
+  !===== Finalize MPI
+
   call synchronize_all()
   call finalize_mpi()
 

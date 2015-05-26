@@ -24,8 +24,10 @@ subroutine selfdoc()
   print '(a)', "  (string) model_dir:  directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (string) model_tags:  comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', "  (float) lat0, lat1:  begin/end latitudes (degrees) "
+  print '(a)', "    valid range: [-90, 90] "
   print '(a)', "  (integer) nlat:  number of latitudinal grids"
   print '(a)', "  (float) lon0, lon1:  begin/end longitudes (degrees)"
+  print '(a)', "    valid range: [-180, 180] "
   print '(a)', "  (integer) nlon:  number of longitudinal grids"
   print '(a)', "  (float) raidus:  radius of the spherical slice (km)"
   print '(a)', "  (string) out_file:  output file name (netcdf format)"
@@ -180,17 +182,21 @@ program xsem_slice_sphere
   if ( .not.(lat0 >= -90.d0 .and. lat0 <= 90.d0 .and. &
              lat1 >= -90.d0 .and. lat1 <= 90.d0 .and. &
              lat0 < lat1) ) then
-    stop "[ERROR] wrong inputs of lat0,lat1"
+    print *, "[ERROR] wrong inputs: lat0=", lat0, " lat1=", lat1
+    call abort_mpi()
+    stop
   endif
 
   !-180 <= lon0,lon1 <=180
   if ( .not.(lon0 >= -180.d0 .and. lat0 <= 180.d0 .and. &
              lon1 >= -180.d0 .and. lat1 <= 180.d0) ) then
-    stop "[ERROR] wrong range of lon0,lon1"
+    print *, "[ERROR] wrong ranges of input lat/lon"
+    call abort_mpi()
   endif
-  ! in the case of great circle on longitude
+  ! make sure the great circle path follows the Earth's rotation direction
+  ! from lon0 to lon1
   if (lon0 > lon1) then
-    print '(a)', "[WARN] lon0 > lon1, so 360.0 is added to lon1 "
+    print '(a)', "[WARN] lon0 > lon1, so 360 is added to lon1 "
     lon1 = lon1 + 360.d0
   endif
 

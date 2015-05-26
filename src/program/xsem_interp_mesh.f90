@@ -86,6 +86,7 @@ program xsem_interp_mesh
   type(sem_mesh_data) :: mesh_new
   integer :: iproc_new, nspec_new
   real(dp), allocatable :: model_gll_new(:,:,:,:,:)
+  real(dp), allocatable :: xyz_center_new(:,:)
 
   !-- interpolation points
   real(dp), allocatable :: xyz_new(:,:)
@@ -97,7 +98,7 @@ program xsem_interp_mesh
   !-- sem location
   type(sem_mesh_location), allocatable :: location_1slice(:)
   integer, parameter :: nnearest = 10
-  real(dp) :: typical_size, max_search_dist, max_misloc
+  real(dp) :: typical_size, max_search_dist, max_misloc, dist
   real(dp), allocatable :: misloc_final(:)
   integer, allocatable :: stat_final(:)
 
@@ -164,11 +165,16 @@ program xsem_interp_mesh
     ngll_new = NGLLX * NGLLY * NGLLZ * nspec_new
 
     if (allocated(xyz_new)) then
-      deallocate(xyz_new, idoubling_new)
+      deallocate(xyz_new, idoubling_new, xyz_center_new)
     endif
     allocate(xyz_new(3, ngll_new), idoubling_new(ngll_new))
+    allocate(xyz_center_new(3, nspec_new))
 
     do ispec = 1, nspec_new
+
+      iglob = mesh_new%ibool(NGLLX/2, NGLLY/2, NGLLZ/2, ispec)
+      xyz_center_new(:, ispec) = mesh_new%xyz_glob(:, iglob)
+
       do igllz = 1, NGLLZ
         do iglly = 1, NGLLY
           do igllx = 1, NGLLX
@@ -182,6 +188,7 @@ program xsem_interp_mesh
           enddo
         enddo
       enddo
+
     enddo
 
     !-- initialize variables for interpolation
@@ -213,8 +220,22 @@ program xsem_interp_mesh
       ! read old mesh slice
       call sem_mesh_read(old_mesh_dir, iproc_old, iregion, mesh_old)
 
-      ! read old model
       nspec_old = mesh_old%nspec
+
+      ! test if the new and old mesh slices are separated apart
+      dist = huge(0.0_dp)
+      do ispec = 1, nspec_old
+        iglob = mesh_old%ibool(NGLLX/2, NGLLY/2, NGLLZ/2, ispec)
+        dist = min(dist, sqrt( minval( &
+          (xyz_center_new(1,:) - mesh_old%xyz_glob(1,iglob))**2 + &
+          (xyz_center_new(2,:) - mesh_old%xyz_glob(2,iglob))**2 + &
+          (xyz_center_new(3,:) - mesh_old%xyz_glob(3,iglob))**2)))
+      enddo
+      if (dist > max_search_dist) then
+        cycle
+      endif
+
+      ! read old model
       if (allocated(model_gll_old)) then
         deallocate(model_gll_old)
       endif

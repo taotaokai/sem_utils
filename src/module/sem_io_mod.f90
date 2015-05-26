@@ -116,7 +116,7 @@ end subroutine
 
 !//////////////////////////
 subroutine sem_io_read_gll_file_n(basedir, iproc, iregion, &
-  model_names,nmodel, model_gll)
+  model_names, nmodel, model_gll)
 !-read n GLL files into one array
 !
 !-inputs:

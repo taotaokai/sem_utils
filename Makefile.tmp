@@ -36,7 +36,8 @@ shared = gll_library geographic_mod kdtree2
 program = xsem_slice_gcircle \
           xsem_slice_sphere \
 		  xmap_gcircle \
-		  xsem_interp_mesh
+		  xsem_interp_mesh \
+		  xlatlonhkm_to_vtk
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))

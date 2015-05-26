@@ -84,19 +84,14 @@ program xsem_interp_mesh
 
   !-- new mesh slice
   type(sem_mesh_data) :: mesh_new
-  integer :: iproc_new, nspec_new, nglob_new
+  integer :: iproc_new, nspec_new
   real(dp), allocatable :: model_gll_new(:,:,:,:,:)
 
   !-- interpolation points
-  real(dp), allocatable :: xyz_interp(:,:)
-  integer, allocatable :: idoubling_interp(:)
-  integer, allocatable :: ispec_interp(:), iglob_interp(:)
-  integer, allocatable :: RANGE_1_NPOINT(:)
-  integer, parameter :: nshare_max = 2
-  integer :: idoubling_share(nshare_max)
-  integer :: ncount
-  integer :: nshare, ipoint, npoint_interp, idoubling1
+  real(dp), allocatable :: xyz_new(:,:)
+  integer, allocatable :: idoubling_new(:)
   real(dp), parameter :: FILLVALUE_dp = huge(1.0_dp)
+  integer :: igll, igllx, iglly, igllz, ngll_new
   real(dp), allocatable :: model_interp(:,:)
 
   !-- sem location
@@ -105,11 +100,6 @@ program xsem_interp_mesh
   real(dp) :: typical_size, max_search_dist, max_misloc
   real(dp), allocatable :: misloc_final(:)
   integer, allocatable :: stat_final(:)
-
-  !-- model output
-  logical, allocatable :: idx_ispec(:), idx(:)
-  integer :: igllx, iglly, igllz
-  integer :: ipoint1(1)
 
   !===== start MPI
 
@@ -167,118 +157,50 @@ program xsem_interp_mesh
     !-- read new mesh slice
     call sem_mesh_read(new_mesh_dir, iproc_new, iregion, mesh_new)
 
+    !-- make arrays of xyz points
+    !TODO use global points with different idoubling values instead of 
+    ! all GLL points, as many GLL points are shared on the element faces
     nspec_new = mesh_new%nspec
-    nglob_new = mesh_new%nglob
+    ngll_new = NGLLX * NGLLY * NGLLZ * nspec_new
 
-    !-- make arrays of interpolation points
-
-    ! count the number of interpolation points from global points
-    ! the same global point with different idoubling values is taken 
-    ! as different interpolation points
-    npoint_interp = 0
-    do iglob = 1, nglob_new
-
-      ! count number of different idoubling values shared at one global point
-      nshare = 0
-      idoubling_share = huge(0) !make sure this value is NOT used as any layer id's
-      do ispec = 1, nspec_new
-        ncount = count(mesh_new%ibool(:,:,:,ispec) == iglob)
-        ! one global point can only occur once in each element
-        if (ncount == 1) then
-          idoubling1 = mesh_new%idoubling(ispec)
-          ! store idoubling1 if it is unique
-          if (all(idoubling_share /= idoubling1)) then
-            nshare = nshare + 1
-            if (nshare > nshare_max) then
-              print *, "[ERROR] iglob=", iglob, " ispec=", ispec, &
-                       " nshare is greater than nshare_max"
-              call abort_mpi()
-            endif
-            idoubling_share(nshare) = idoubling1
-          endif
-        elseif (ncount /= 0) then
-          print *, "[ERROR] ncount=", ncount, " ispec=", ispec, &
-                   " iglob=", iglob, &
-                   " two or more GLL points in one element refer to the same", &
-                   " global point. The mesh file could be wrong."
-          call abort_mpi()
-        endif
-      enddo
-
-      npoint_interp = npoint_interp + nshare
-
-    enddo
-
-    ! initialize arrays 
-    if (allocated(xyz_interp)) then
-      deallocate(xyz_interp, idoubling_interp, ispec_interp)
+    if (allocated(xyz_new)) then
+      deallocate(xyz_new, idoubling_new)
     endif
-    allocate(xyz_interp(3, npoint_interp), idoubling_interp(npoint_interp))
-    allocate(ispec_interp(npoint_interp), iglob_interp(npoint_interp))
-    allocate(RANGE_1_NPOINT(npoint_interp))
-    RANGE_1_NPOINT = [ (ipoint, ipoint=1,npoint_interp) ]
+    allocate(xyz_new(3, ngll_new), idoubling_new(ngll_new))
 
-    ! now get interpolation points
-    ! TODO: anyway to avoid the dumplication?
-    ipoint = 0
-    do iglob = 1, nglob_new
-      ! count number of different idoubling values shared at one global point
-      nshare = 0
-      idoubling_share = huge(0) ! make sure this value is NOT used as any layer id's
-      do ispec = 1, nspec_new
-        ncount = count(mesh_new%ibool(:,:,:,ispec) == iglob)
-        ! one global point can only occur once in each element
-        if (ncount == 1) then
-          idoubling1 = mesh_new%idoubling(ispec)
-          ! store idoubling1 if it is unique
-          if (all(idoubling_share /= idoubling1)) then
-            nshare = nshare + 1
-            idoubling_share(nshare) = idoubling1
-            ! interpolation points
-            ipoint = ipoint + 1
-            xyz_interp(:, ipoint) = mesh_new%xyz_glob(:, iglob)
-            idoubling_interp(ipoint) = mesh_new%idoubling(ispec)
-            iglob_interp(ipoint) = iglob
-            ispec_interp(ipoint) = ispec
-          endif
-        endif
+    do ispec = 1, nspec_new
+      do igllz = 1, NGLLZ
+        do iglly = 1, NGLLY
+          do igllx = 1, NGLLX
+            igll = igllx + &
+                   NGLLX * ( (iglly-1) + &
+                   NGLLY * ( (igllz-1) + &
+                   NGLLZ * ( (ispec-1))))
+            iglob = mesh_new%ibool(igllx, iglly, igllz, ispec)
+            xyz_new(:, igll) = mesh_new%xyz_glob(:, iglob)
+            idoubling_new(igll) = mesh_new%idoubling(ispec)
+          enddo
+        enddo
       enddo
     enddo
-
-!   npoint_interp = NGLLX * NGLLY * NGLLZ * nspec_new
-!   do ispec = 1, nspec_new
-!     do igllz = 1, NGLLZ
-!       do iglly = 1, NGLLY
-!         do igllx = 1, NGLLX
-!           igll = igllx + &
-!                  NGLLX * ( (iglly-1) + &
-!                  NGLLY * ( (igllz-1) + &
-!                  NGLLZ * ( (ispec-1))))
-!           iglob = mesh_new%ibool(igllx, iglly, igllz, ispec)
-!           xyz_interp(:, igll) = mesh_new%xyz_glob(:, iglob)
-!           idoubling_interp(igll) = mesh_new%idoubling(ispec)
-!         enddo
-!       enddo
-!     enddo
-!   enddo
 
     !-- initialize variables for interpolation
     if (allocated(location_1slice)) then
       deallocate(location_1slice)
     endif
-    allocate(location_1slice(npoint_interp))
+    allocate(location_1slice(ngll_new))
 
     if (allocated(stat_final)) then
       deallocate(stat_final, misloc_final)
     endif
-    allocate(stat_final(npoint_interp), misloc_final(npoint_interp))
+    allocate(stat_final(ngll_new), misloc_final(ngll_new))
     stat_final = -1
     misloc_final = huge(1.0_dp)
 
     if (allocated(model_interp)) then
       deallocate(model_interp, model_gll_new)
     endif
-    allocate(model_interp(nmodel, npoint_interp))
+    allocate(model_interp(nmodel, ngll_new))
     allocate(model_gll_new(nmodel, NGLLX, NGLLY, NGLLZ, nspec_new))
     model_interp = FILLVALUE_dp
  
@@ -302,103 +224,68 @@ program xsem_interp_mesh
         model_names, nmodel, model_gll_old)
 
       ! locate points in this mesh slice
-      call sem_mesh_locate_kdtree2(mesh_old, npoint_interp, xyz_interp, idoubling_interp, &
+      call sem_mesh_locate_kdtree2(mesh_old, ngll_new, xyz_new, idoubling_new, &
         nnearest, max_search_dist, max_misloc, location_1slice)
 
       ! interpolate model only on points located inside an element
-      do ipoint = 1, npoint_interp
+      do igll = 1, ngll_new
 
         ! skip points located inside more than one element 
         ! this would occur if the point lies exactly on the faces between two
         ! elements
-        if (stat_final(ipoint)==1 .and. location_1slice(ipoint)%stat==1) then
+        if (stat_final(igll)==1 .and. location_1slice(igll)%stat==1) then
 !         print *, "[WARN] iproc_new=", iproc_new, &
 !                  " iproc_old=", iproc_old, &
-!                  " ipoint=", ipoint, &
+!                  " igll=", igll, &
 !                  " this point is located inside more than one element!", &
 !                  " some problem may occur.", &
 !                  " only use the first located element."
-          print *, "# multi-located ", xyz_interp(:,ipoint)
+          print *, "# multi-located ", xyz_new(:,igll)
           cycle
         endif
 
         ! for point located inside one element in the first time
         ! or closer to one element than located before
-        if ( location_1slice(ipoint)%stat == 1 .or. &
-             (location_1slice(ipoint)%stat == 0 .and. &
-              location_1slice(ipoint)%misloc < misloc_final(ipoint)) ) &
+        if ( location_1slice(igll)%stat == 1 .or. &
+             (location_1slice(igll)%stat == 0 .and. &
+              location_1slice(igll)%misloc < misloc_final(igll)) ) &
         then
 
           ! interpolate model
           do imodel = 1, nmodel
-            model_interp(imodel,ipoint) = &
-              sum(location_1slice(ipoint)%lagrange * &
-                model_gll_old(imodel, :, :, :, location_1slice(ipoint)%eid))
+            model_interp(imodel,igll) = &
+              sum(location_1slice(igll)%lagrange * &
+                model_gll_old(imodel, :, :, :, location_1slice(igll)%eid))
           enddo
 
-          stat_final(ipoint)   = location_1slice(ipoint)%stat
-          misloc_final(ipoint) = location_1slice(ipoint)%misloc
+          stat_final(igll)   = location_1slice(igll)%stat
+          misloc_final(igll) = location_1slice(igll)%misloc
 
         endif
 
-      enddo ! ipoint = 1, npoint_interp
+      enddo ! igll = 1, ngll_new
 
     enddo ! iproc_old
 
     !-- write out gll files for this new mesh slice
 
-    if (allocated(idx_ispec)) then
-      deallocate(idx_ispec)
-    endif
-    allocate(idx_ispec(npoint_interp), idx(npoint_interp))
-
-    ! put model_interp back into model_gll shape
+    ! reshape model_interp to model_gll
     do ispec = 1, nspec_new
-
-      idx_ispec = (ispec_interp == ispec)
-
       do igllz = 1, NGLLZ
         do iglly = 1, NGLLY
           do igllx = 1, NGLLX
-
-            iglob = mesh_new%ibool(igllx, iglly, igllz, ispec)
-
-            idx = idx_ispec .and. (iglob_interp == iglob)
-
-            ncount = count(idx)
-            if (ncount /= 1) then
-              print *, "[ERROR] ispec_new=", ispec, " ncount=", ncount, &
-                " two or more interpolation points foound for one GLL point"
-              call abort_mpi()
-              stop
+            igll = igllx + &
+                   NGLLX * ( (iglly-1) + & 
+                   NGLLY * ( (igllz-1) + & 
+                   NGLLZ * ( (ispec-1))))
+            if (stat_final(igll) /= -1) then
+              model_gll_new(:, igllx, iglly, igllz, ispec) = &
+                model_interp(:, igll)
             endif
-
-            ipoint1 = pack(RANGE_1_NPOINT, mask=idx)
-            model_gll_new(:, igllx, iglly, igllz, ispec) = &
-              model_interp(:, ipoint1(1))
-
           enddo
         enddo
       enddo
     enddo
-
-!   ! reshape model_interp to model_gll
-!   do ispec = 1, nspec_new
-!     do igllz = 1, NGLLZ
-!       do iglly = 1, NGLLY
-!         do igllx = 1, NGLLX
-!           igll = igllx + &
-!                  NGLLX * ( (iglly-1) + & 
-!                  NGLLY * ( (igllz-1) + & 
-!                  NGLLZ * ( (ispec-1))))
-!           if (stat_final(igll) /= -1) then
-!             model_gll_new(:, igllx, iglly, igllz, ispec) = &
-!               model_interp(:, igll)
-!           endif
-!         enddo
-!       enddo
-!     enddo
-!   enddo
 
     call sem_io_write_gll_file_n(new_model_dir, iproc_new, iregion, &
       model_names, nmodel, model_gll_new)

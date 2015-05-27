@@ -8,7 +8,7 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_slab_model \"
-  print '(a)', "    <mesh_dir> <model_dir> <model_tags> "
+  print '(a)', "    <mesh_dir> <nproc> <model_dir> <model_tags> "
   print '(a)', "    <slab_origin_lat> <slab_origin_lon> "
   print '(a)', "    <slab_dip> <slab_strike> "
   print '(a)', "    <slab_thick> <slab_bottom_depth> <slab_dlnv> "
@@ -25,6 +25,7 @@ subroutine selfdoc()
   print '(a)', "PARAMETERS"
   print '(a)', ""
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
+  print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) model_dir:  directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (string) model_tags:  comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', "  (float) slab_origin_lat/lon:  slab origin point at surface"
@@ -58,9 +59,10 @@ program xsem_vertical_slice
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 17
+  integer, parameter :: nargs = 18
   character(len=MAX_STRING_LEN) :: args(nargs)
   character(len=MAX_STRING_LEN) :: mesh_dir, model_dir, model_tags, out_dir
+  integer :: nproc
   real(dp) :: slab_origin_lat, slab_origin_lon, slab_dip, slab_strike, &
               slab_thick, slab_bottom_depth, slab_dlnv
   real(dp) :: mow_top_depth, mow_bottom_depth, &
@@ -68,13 +70,13 @@ program xsem_vertical_slice
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
-  integer :: i, iproc, ier
+  integer :: i, iproc
 
   integer :: nmodel
   character(len=1), parameter :: delimiter = ','
   character(len=MAX_STRING_LEN), allocatable :: model_names(:)
 
-  type (mesh) :: mesh_data
+  type(sem_mesh_data) :: mesh_data
   integer :: iglob, igllx, iglly, igllz, ispec, nspec
   real(dp), allocatable :: model_gll(:,:,:,:,:)
 
@@ -99,26 +101,27 @@ program xsem_vertical_slice
 
   if (command_argument_count() /= nargs) then
     call selfdoc()
-    stop "[ERROR] xsem_slab_mow_model: check your input arguments."
+    print *, "[ERROR] xsem_slab_mow_model: check your input arguments."
+    stop
   endif
-
   read(args(1), '(a)') mesh_dir
-  read(args(2), '(a)') model_dir
-  read(args(3), '(a)') model_tags
-  read(args(4), *) slab_origin_lat
-  read(args(5), *) slab_origin_lon
-  read(args(6), *) slab_dip
-  read(args(7), *) slab_strike
-  read(args(8), *) slab_thick
-  read(args(9), *) slab_bottom_depth
-  read(args(10), *) slab_dlnv
-  read(args(11), *) mow_top_depth
-  read(args(12), *) mow_bottom_depth
-  read(args(13), *) mow_xi0
-  read(args(14), *) mow_xi1
-  read(args(15), *) mow_xi2
-  read(args(16), *) mow_dlnv
-  read(args(17), '(a)') out_dir
+  read(args(2), *) nproc
+  read(args(3), '(a)') model_dir
+  read(args(4), '(a)') model_tags
+  read(args(5), *) slab_origin_lat
+  read(args(6), *) slab_origin_lon
+  read(args(7), *) slab_dip
+  read(args(8), *) slab_strike
+  read(args(9), *) slab_thick
+  read(args(10), *) slab_bottom_depth
+  read(args(11), *) slab_dlnv
+  read(args(12), *) mow_top_depth
+  read(args(13), *) mow_bottom_depth
+  read(args(14), *) mow_xi0
+  read(args(15), *) mow_xi1
+  read(args(16), *) mow_xi2
+  read(args(17), *) mow_dlnv
+  read(args(18), '(a)') out_dir
 
   !===== geometric parameters of slab and MOW
   ! use ECEF coordinate frame
@@ -227,7 +230,7 @@ program xsem_vertical_slice
     print *, '# iproc=', iproc
 
     ! read mesh data 
-    call sem_mesh_read(mesh_data, mesh_dir, iproc, iregion)
+    call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
 
     nspec = mesh_data%nspec
 
@@ -238,7 +241,7 @@ program xsem_vertical_slice
     allocate(model_gll(nmodel, NGLLX,NGLLY,NGLLZ,nspec))
 
     call sem_io_read_gll_file_n(model_dir, iproc, iregion, &
-                                nmodel, model_names, model_gll)
+                                model_names, nmodel, model_gll)
 
     ! add slab model on each gll point 
     do ispec = 1, nspec
@@ -295,8 +298,8 @@ program xsem_vertical_slice
             endif ! above slab bottom depth
 
             ! get the new model
-            model_gll(igllx,iglly,igllz,ispec,:) = &
-              (1.0_dp + ratio) * model_gll(:, igllx,iglly,igllz,ispec)
+            model_gll(:, igllx, iglly, igllz, ispec) = &
+              (1.0_dp + ratio) * model_gll(:, igllx, iglly, igllz, ispec)
 
           enddo
         enddo
@@ -304,8 +307,8 @@ program xsem_vertical_slice
     enddo
 
     ! write out model
-    call sem_io_write_gll_file_n(out_dir, iproc, iregion, nmodel, model_names, &
-                                 model_gll)
+    call sem_io_write_gll_file_n(out_dir, iproc, iregion, &
+      model_names, nmodel, model_gll)
 
   enddo ! iproc
 

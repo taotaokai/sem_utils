@@ -499,8 +499,8 @@ subroutine check(status)
   integer, intent (in) :: status
   
   if(status /= nf90_noerr) then 
-    print "('ERROR: ',a)", trim(nf90_strerror(status))
-    stop "Stopped"
+    print "('[ERROR] ',a)", trim(nf90_strerror(status))
+    stop
   endif
 end subroutine check 
 

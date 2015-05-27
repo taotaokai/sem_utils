@@ -74,7 +74,8 @@ program xmap_gcircle
     call get_command_argument(i, args(i), status=ier)
     if (len_trim(args(i)) == 0) then
       call selfdoc()
-      stop "ERROR: check your input arguments!"
+      print *, "[ERROR] check your input arguments!"
+      stop
     endif
   enddo
 

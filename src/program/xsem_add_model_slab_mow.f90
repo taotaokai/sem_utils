@@ -104,6 +104,10 @@ program xsem_vertical_slice
     print *, "[ERROR] xsem_slab_mow_model: check your input arguments."
     stop
   endif
+
+  do i = 1, nargs
+    call get_command_argument(i, args(i), status=ier)
+  enddo
   read(args(1), '(a)') mesh_dir
   read(args(2), *) nproc
   read(args(3), '(a)') model_dir

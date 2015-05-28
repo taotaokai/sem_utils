@@ -90,7 +90,7 @@ program xsem_vertical_slice
   endif
 
   do i = 1, nargs
-    call get_command_argument(i, args(i), status=ier)
+    call get_command_argument(i, args(i))
   enddo
   read(args(1), '(a)') mesh_dir
   read(args(2), *) nproc

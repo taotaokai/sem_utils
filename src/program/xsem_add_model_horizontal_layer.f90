@@ -10,7 +10,7 @@ subroutine selfdoc()
   print '(a)', "  xsem_add_model_LVL1d \"
   print '(a)', "    <mesh_dir> <nproc> <model_dir> <model_tags> "
   print '(a)', "    <layer_r0> <layer_r1> <layer_taperwidth>"
-  print '(a)', "    <layer_dlnV> <out_dir>"
+  print '(a)', "    <layer_dlnV> <flag_output_dlnV> <out_dir>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -28,6 +28,7 @@ subroutine selfdoc()
   print '(a)', "  (float) layer_r0/r1:  radius range [r0,r1] of plume (km) "
   print '(a)', "  (float) layer_taperwidth:  width of the taper"
   print '(a)', "  (float) layer_dlnV:  velocity perturbation at plume axis"
+  print '(a)', "  (int) flag_output_dlnV:  (1/0) 1=output dlnV, 0=don't output dlnV"
   print '(a)', "  (string) out_dir:  output directory of new model"
   print '(a)', ""
 
@@ -48,10 +49,10 @@ program xsem_add_model_horizontal_layer
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 9
+  integer, parameter :: nargs = 10
   character(len=MAX_STRING_LEN) :: args(nargs)
   character(len=MAX_STRING_LEN) :: mesh_dir, model_dir, model_tags, out_dir
-  integer :: nproc
+  integer :: nproc, flag_output_dlnV
   real(dp) :: layer_r0, layer_r1, layer_taperwidth, layer_dlnV
 
   ! local variables
@@ -72,6 +73,8 @@ program xsem_add_model_horizontal_layer
   !-- calculate model perturbation
   real(dp) :: xyz(3), r, d
   real(dp) :: taper, layer_r0_add_taper, layer_r1_sub_taper
+  real(dp) :: dlnV
+  real(dp), allocatable :: dlnV_gll(:,:,:,:)
 
   !===== read command line arguments
 
@@ -92,7 +95,14 @@ program xsem_add_model_horizontal_layer
   read(args(6), *) layer_r1
   read(args(7), *) layer_taperwidth
   read(args(8), *) layer_dlnV
-  read(args(9), '(a)') out_dir
+  read(args(9), *) flag_output_dlnV
+  read(args(10), '(a)') out_dir
+
+  ! validate input arguments
+  if (flag_output_dlnV /= 0 .and. flag_output_dlnV /= 1) then
+    print *, "[ERROR] flag_output_dlnV must be 0 or 1"
+    stop
+  endif
 
   !===== geometric parameters of plume
 
@@ -131,6 +141,13 @@ program xsem_add_model_horizontal_layer
     endif
     allocate(model_gll(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
 
+    if (flag_output_dlnV == 1) then
+      if (allocated(dlnV_gll)) then
+        deallocate(dlnV_gll)
+      endif
+      allocate(dlnV_gll(NGLLX,NGLLY,NGLLZ,nspec))
+    endif
+
     call sem_io_read_gll_file_n(model_dir, iproc, iregion, &
                                 model_names, nmodel, model_gll)
 
@@ -158,10 +175,15 @@ program xsem_add_model_horizontal_layer
               taper = taper * 0.5 * (1 - cos(PI * d / layer_taperwidth))
             endif
 
+            dlnV = taper * layer_dlnV
+
             ! get the new model
-            model_gll(:,igllx,iglly,igllz,ispec) = &
-              (1.0_dp + taper * layer_dlnV) * &
+            model_gll(:,igllx,iglly,igllz,ispec) = (1.0_dp + dlnV) * &
               model_gll(:, igllx,iglly,igllz,ispec)
+
+            if (flag_output_dlnV == 1) then
+              dlnV_gll(igllx,iglly,igllz,ispec) = dlnV
+            endif
 
           enddo
         enddo
@@ -171,6 +193,10 @@ program xsem_add_model_horizontal_layer
     ! write out model
     call sem_io_write_gll_file_n(out_dir, iproc, iregion, &
       model_names, nmodel, model_gll)
+
+    if (flag_output_dlnV == 1) then
+      call sem_io_write_gll_file_1(out_dir, iproc, iregion, "dlnV", dlnV_gll)
+    endif
 
   enddo ! iproc
 

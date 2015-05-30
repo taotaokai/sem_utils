@@ -2,24 +2,22 @@ subroutine selfdoc()
 
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_add_model_plume "
-  print '(a)', "    - add vertical plume model into SEM model"
+  print '(a)', "  xsem_add_model_horizontal_layer"
+  print '(a)', "    - add one horizontal layer into SEM model"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xsem_add_model_plume \"
+  print '(a)', "  xsem_add_model_LVL1d \"
   print '(a)', "    <mesh_dir> <nproc> <model_dir> <model_tags> "
-  print '(a)', "    <plume_lat> <plume_lon> "
-  print '(a)', "    <plume_r0> <plume_r1> "
-  print '(a)', "    <plume_dlnV0> <plume_sigma> "
-  print '(a)', "    <flag_ellipticity> <out_dir> "
+  print '(a)', "    <layer_r0> <layer_r1> <layer_taperwidth>"
+  print '(a)', "    <layer_dlnV> <out_dir>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
-  print '(a)', "  The plume is a vertical cylinder and the velocity "
-  print '(a)', "  perturbation decays as a Gaussian function of the "
-  print '(a)', "  distance(d) from the vertical axis: "
-  print '(a)', "    V'(d) = V(d) * (1 + dlnV0 * exp(- d^2/2/sigma^2)) "
+  print '(a)', "  The low-velocity layer is a horizontal layer"
+  print '(a)', "  the perturbation is tapered near the boundaries"
+  print '(a)', "    taper = 0.5 * (1 - cos(PI * d / taper_width)) "
+  print '(a)', "  , d is the distance from the layer boundaries"
   print '(a)', ""
   print '(a)', "PARAMETERS"
   print '(a)', ""
@@ -27,11 +25,9 @@ subroutine selfdoc()
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) model_dir:  directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (string) model_tags:  comma delimited string, e.g. vsv,vsh,rho "
-  print '(a)', "  (float) plume_lat/lon:  surface location of plume axis(degrees) "
-  print '(a)', "  (float) plume_r0/r1:  radius range [r0,r1] of plume (km) "
-  print '(a)', "  (float) plume_dlnV0:  velocity perturbation at plume axis"
-  print '(a)', "  (float) plume_sigma:  guassian width of plume (km)"
-  print '(a)', "  (int) flag_ellipticity: 0: spherical; 1: WGS84 ellipsoid"
+  print '(a)', "  (float) layer_r0/r1:  radius range [r0,r1] of plume (km) "
+  print '(a)', "  (float) layer_taperwidth:  width of the taper"
+  print '(a)', "  (float) layer_dlnV:  velocity perturbation at plume axis"
   print '(a)', "  (string) out_dir:  output directory of new model"
   print '(a)', ""
 
@@ -39,7 +35,7 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-program xsem_vertical_slice
+program xsem_add_model_horizontal_layer
   
   use sem_constants
   use sem_io
@@ -52,19 +48,15 @@ program xsem_vertical_slice
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 12
+  integer, parameter :: nargs = 9
   character(len=MAX_STRING_LEN) :: args(nargs)
   character(len=MAX_STRING_LEN) :: mesh_dir, model_dir, model_tags, out_dir
-  integer :: nproc, flag_ellipticity
-  real(dp) :: plume_lat, plume_lon, plume_r0, plume_r1, &
-              plume_dlnV0, plume_sigma 
+  integer :: nproc
+  real(dp) :: layer_r0, layer_r1, layer_taperwidth, layer_dlnV
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
   integer :: i, iproc
-
-  ! plume geometry
-  real(dp) :: plume_v(3)
 
   ! model names
   integer :: nmodel
@@ -78,14 +70,14 @@ program xsem_vertical_slice
   real(dp), allocatable :: model_gll(:,:,:,:,:)
 
   !-- calculate model perturbation
-  real(dp) :: xyz(3), r, r_plume
-  real(dp) :: ratio
+  real(dp) :: xyz(3), r, d
+  real(dp) :: taper, layer_r0_add_taper, layer_r1_sub_taper
 
   !===== read command line arguments
 
   if (command_argument_count() /= nargs) then
     call selfdoc()
-    print *, "[ERROR] xsem_add_model_plume: check your input arguments."
+    print *, "[ERROR] xsem_add_model_horizontal_layer: check your input arguments."
     stop
   endif
 
@@ -96,42 +88,25 @@ program xsem_vertical_slice
   read(args(2), *) nproc
   read(args(3), '(a)') model_dir
   read(args(4), '(a)') model_tags
-  read(args(5), *) plume_lat
-  read(args(6), *) plume_lon
-  read(args(7), *) plume_r0
-  read(args(8), *) plume_r1
-  read(args(9), *) plume_dlnV0
-  read(args(10), *) plume_sigma
-  read(args(11), *) flag_ellipticity
-  read(args(12), '(a)') out_dir
+  read(args(5), *) layer_r0
+  read(args(6), *) layer_r1
+  read(args(7), *) layer_taperwidth
+  read(args(8), *) layer_dlnV
+  read(args(9), '(a)') out_dir
 
   !===== geometric parameters of plume
 
   ! change unit: degree -> radians
-  plume_lat = plume_lat * DEGREES_TO_RADIANS
-  plume_lon = plume_lon * DEGREES_TO_RADIANS
-
   ! normalize length by R_EARTH_KM
-  plume_r0 = plume_r0 / R_EARTH_KM
-  plume_r1 = plume_r1 / R_EARTH_KM
-  plume_sigma = plume_sigma / R_EARTH_KM
+  layer_r0 = layer_r0 / R_EARTH_KM
+  layer_r1 = layer_r1 / R_EARTH_KM
+  layer_taperwidth = layer_taperwidth / R_EARTH_KM
+  layer_r0_add_taper = layer_r0 + layer_taperwidth
+  layer_r1_sub_taper = layer_r1 - layer_taperwidth
 
-  ! unit directional vector of slab origin
-  if (flag_ellipticity == 0) then
-    plume_v(1) = cos(plume_lat) * cos(plume_lon)
-    plume_v(2) = cos(plume_lat) * sin(plume_lon)
-    plume_v(3) = sin(plume_lat)
-  elseif (flag_ellipticity == 1) then
-    call geographic_geodetic2ecef(plume_lat, plume_lon, 0.0_dp, &
-      plume_v(1), plume_v(2), plume_v(3)) 
-  else
-    print *, "[ERROR] flag_ellipticity must be 0/1"
-    stop
+  if (layer_r1_sub_taper < layer_r0_add_taper) then
+    print *, "[WARN] taper width larger than half layer width"
   endif
-
-  plume_v = plume_v / sqrt(sum(plume_v**2))
-
-  print *, "# plume_v=", plume_v
 
   !===== parse model tags
 
@@ -169,20 +144,24 @@ program xsem_vertical_slice
             xyz = mesh_data%xyz_glob(:,iglob)
 
             ! get the model perturbation
-            ratio = 0.0_dp
+            taper = 1.0_dp
 
             r = sqrt(sum(xyz**2))
-            ! projection on plume axis
-            r_plume = sum(xyz*plume_v)
 
-            if (r_plume > 0 .and. r >= plume_r0 .and. r <= plume_r1) then
-              ratio = plume_dlnV0 * &
-                exp(-0.5 * (r**2 - r_plume**2) / plume_sigma**2)
+            if (r >= layer_r0 .and. r <= layer_r0_add_taper) then
+              d = r - layer_r0
+              taper = taper * 0.5 * (1 - cos(PI * d / layer_taperwidth))
+            endif
+
+            if (r <= layer_r1 .and. r >= layer_r1_sub_taper) then
+              d = r - layer_r0
+              taper = taper * 0.5 * (1 - cos(PI * d / layer_taperwidth))
             endif
 
             ! get the new model
             model_gll(:,igllx,iglly,igllz,ispec) = &
-              (1.0_dp + ratio) * model_gll(:, igllx,iglly,igllz,ispec)
+              (1.0_dp + taper * layer_dlnV) * &
+              model_gll(:, igllx,iglly,igllz,ispec)
 
           enddo
         enddo

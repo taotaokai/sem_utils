@@ -161,6 +161,7 @@ program xsem_add_model_horizontal_layer
             xyz = mesh_data%xyz_glob(:,iglob)
 
             ! get the model perturbation
+            dlnV = 0.0_dp
             taper = 1.0_dp
 
             r = sqrt(sum(xyz**2))
@@ -175,7 +176,9 @@ program xsem_add_model_horizontal_layer
               taper = taper * 0.5 * (1 - cos(PI * d / layer_taperwidth))
             endif
 
-            dlnV = taper * layer_dlnV
+            if (r >= layer_r0 .and. r <= layer_r1) then
+              dlnV = taper * layer_dlnV
+            endif
 
             ! get the new model
             model_gll(:,igllx,iglly,igllz,ispec) = (1.0_dp + dlnV) * &

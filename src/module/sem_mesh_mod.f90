@@ -23,12 +23,12 @@ module sem_mesh
     real(dp), dimension(:,:), allocatable :: xyz_glob
     integer, dimension(:,:,:,:), allocatable :: ibool
     integer, dimension(:), allocatable :: idoubling
-    !logical, dimension(:), allocatable :: ispec_is_tiso
-    !real(dp), dimension(:,:,:,:), allocatable :: &
-    !  xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz
+    logical, dimension(:), allocatable :: ispec_is_tiso
+    real(dp), dimension(:,:,:,:), allocatable :: &
+      xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz
   end type sem_mesh_data
 
-  ! location within sem mesh data type 
+  ! data type for location results inside sem mesh
   type :: sem_mesh_location
     integer :: stat
     integer :: eid
@@ -44,7 +44,7 @@ module sem_mesh
   ! public operations
   public :: sem_mesh_init
   public :: sem_mesh_read
-  !public :: sem_mesh_get_gll_volume
+  public :: sem_mesh_gll_volume
   !public :: sem_mesh_locate_xyz
   public :: sem_mesh_locate_kdtree2
 
@@ -65,32 +65,32 @@ subroutine sem_mesh_init(mesh_data, nspec, nglob)
 
     deallocate(mesh_data%xyz_glob, &
                mesh_data%ibool, &
-               mesh_data%idoubling) !, &
-               !mesh_data%ispec_is_tiso, &
-               !mesh_data%xix, &
-               !mesh_data%xiy, &
-               !mesh_data%xiz, &
-               !mesh_data%etax, &
-               !mesh_data%etay, &
-               !mesh_data%etaz, &
-               !mesh_data%gammax, &
-               !mesh_data%gammay, &
-               !mesh_data%gammaz)
+               mesh_data%idoubling, &
+               mesh_data%ispec_is_tiso, &
+               mesh_data%xix, &
+               mesh_data%xiy, &
+               mesh_data%xiz, &
+               mesh_data%etax, &
+               mesh_data%etay, &
+               mesh_data%etaz, &
+               mesh_data%gammax, &
+               mesh_data%gammay, &
+               mesh_data%gammaz)
   end if
 
   allocate(mesh_data%xyz_glob(3, nglob), &
            mesh_data%ibool(NGLLX, NGLLY, NGLLZ, nspec), &
-           mesh_data%idoubling(nspec)) !, &
-           !mesh_data%ispec_is_tiso(nspec), &
-           !   mesh_data%xix(NGLLX, NGLLY, NGLLZ, nspec), &
-           !   mesh_data%xiy(NGLLX, NGLLY, NGLLZ, nspec), &
-           !   mesh_data%xiz(NGLLX, NGLLY, NGLLZ, nspec), &
-           !  mesh_data%etax(NGLLX, NGLLY, NGLLZ, nspec), &
-           !  mesh_data%etay(NGLLX, NGLLY, NGLLZ, nspec), &
-           !  mesh_data%etaz(NGLLX, NGLLY, NGLLZ, nspec), &
-           !mesh_data%gammax(NGLLX, NGLLY, NGLLZ, nspec), &
-           !mesh_data%gammay(NGLLX, NGLLY, NGLLZ, nspec), &
-           !mesh_data%gammaz(NGLLX, NGLLY, NGLLZ, nspec))
+           mesh_data%idoubling(nspec), &
+           mesh_data%ispec_is_tiso(nspec), &
+              mesh_data%xix(NGLLX, NGLLY, NGLLZ, nspec), &
+              mesh_data%xiy(NGLLX, NGLLY, NGLLZ, nspec), &
+              mesh_data%xiz(NGLLX, NGLLY, NGLLZ, nspec), &
+             mesh_data%etax(NGLLX, NGLLY, NGLLZ, nspec), &
+             mesh_data%etay(NGLLX, NGLLY, NGLLZ, nspec), &
+             mesh_data%etaz(NGLLX, NGLLY, NGLLZ, nspec), &
+           mesh_data%gammax(NGLLX, NGLLY, NGLLZ, nspec), &
+           mesh_data%gammay(NGLLX, NGLLY, NGLLZ, nspec), &
+           mesh_data%gammaz(NGLLX, NGLLY, NGLLZ, nspec))
 
 end subroutine
 
@@ -116,7 +116,7 @@ subroutine sem_mesh_read(basedir, iproc, iregion, mesh_data)
   integer :: nspec, nglob
   integer :: num, id, ispec, iglob
   real(dp) :: xyz_center(3), depth
-  real(CUSTOM_REAL), allocatable :: dummy(:)
+  real(CUSTOM_REAL), allocatable :: dummy(:), dummy4(:,:,:,:)
 
   call sem_io_open_file_for_read(basedir, iproc, iregion, 'solver_data', IIN)
 
@@ -134,26 +134,35 @@ subroutine sem_mesh_read(basedir, iproc, iregion, mesh_data)
 
   read(IIN) dummy
   mesh_data%xyz_glob(1,:) = real(dummy, kind=dp)
-
   read(IIN) dummy
   mesh_data%xyz_glob(2,:) = real(dummy, kind=dp)
-
   read(IIN) dummy
   mesh_data%xyz_glob(3,:) = real(dummy, kind=dp)
 
   read(IIN) mesh_data%ibool
   read(IIN) mesh_data%idoubling
-  !read(IIN) mesh_data%ispec_is_tiso
+  read(IIN) mesh_data%ispec_is_tiso
 
-  !read(IIN) mesh_data%xix
-  !read(IIN) mesh_data%xiy
-  !read(IIN) mesh_data%xiz
-  !read(IIN) mesh_data%etax
-  !read(IIN) mesh_data%etay
-  !read(IIN) mesh_data%etaz
-  !read(IIN) mesh_data%gammax
-  !read(IIN) mesh_data%gammay
-  !read(IIN) mesh_data%gammaz
+  allocate(dummy4(NGLLX, NGLLY, NGLLZ, nspec))
+
+  read(IIN) dummy4
+  mesh_data%xix = real(dummy4, kind=dp)
+  read(IIN) dummy4 
+  mesh_data%xiy = real(dummy4, kind=dp)
+  read(IIN) dummy4
+  mesh_data%xiz = real(dummy4, kind=dp)
+  read(IIN) dummy4
+  mesh_data%etax = real(dummy4, kind=dp)
+  read(IIN) dummy4
+  mesh_data%etay = real(dummy4, kind=dp)
+  read(IIN) dummy4
+  mesh_data%etaz = real(dummy4, kind=dp)
+  read(IIN) dummy4
+  mesh_data%gammax = real(dummy4, kind=dp)
+  read(IIN) dummy4
+  mesh_data%gammay = real(dummy4, kind=dp)
+  read(IIN) dummy4
+  mesh_data%gammaz = real(dummy4, kind=dp)
 
   close(IIN)
 
@@ -198,54 +207,70 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-!subroutine sem_mesh_get_gll_volume(mesh_data, gll_volume)
+subroutine sem_mesh_gll_volume(mesh_data, gll_volume)
+!-compute volume corresponding to each gll point in each spectral element
+! gll_volume = jacobian * wgll_cube
+! jacobian = det(d(x,y,z)/d(xi,eta,gamma)), 
+! volumetric deformation ratio from cube to actual element 
 !
-!! compute volume corresponding to each gll point in each spectral element
-!! gll_volume = jacobian * wgll_cube
-!! jacobian = det(d(x,y,z)/d(xi,eta,gamma)), volumetric deformation ratio from cube to actual element 
+!-input: 
+! (type sem_mesh_data) mesh_data
 !
-!  type (mesh), intent(in) :: mesh_data
-!  real(kind=CUSTOM_REAL), intent(out) :: gll_volume(NGLLX,NGLLY,NGLLZ,NSPEC)
-!
-!  integer :: i,j,k,ispec
-!  real(kind=CUSTOM_REAL) :: xixl,xiyl,xizl,etaxl,etayl,etazl,gammaxl,gammayl,gammazl
-!  real(kind=CUSTOM_REAL) :: jacobianl
-!
-!  ! calculate gll quad weight in the reference cube
-!  !call compute_wgll_cube()
-!
-!  ! calculate volume integration weight on gll
-!  do ispec = 1, NSPEC
-!    do k = 1, NGLLZ
-!      do j = 1, NGLLY
-!        do i = 1, NGLLX
-!
-!          ! gets derivatives of ux, uy and uz with respect to x, y and z
-!                xixl = mesh_data%xix(i,j,k,ispec)
-!                xiyl = mesh_data%xiy(i,j,k,ispec)
-!                xizl = mesh_data%xiz(i,j,k,ispec)
-!              etaxl = mesh_data%etax(i,j,k,ispec)
-!              etayl = mesh_data%etay(i,j,k,ispec)
-!              etazl = mesh_data%etaz(i,j,k,ispec)
-!          gammaxl = mesh_data%gammax(i,j,k,ispec)
-!          gammayl = mesh_data%gammay(i,j,k,ispec)
-!          gammazl = mesh_data%gammaz(i,j,k,ispec)
-!
-!          ! jacobian: det( d(x,y,z)/d(xi,eta,gamma))
-!          jacobianl = 1.0_CUSTOM_REAL / &
-!            ( xixl*(etayl*gammazl-etazl*gammayl)  &
-!             -xiyl*(etaxl*gammazl-etazl*gammaxl)  &
-!             +xizl*(etaxl*gammayl-etayl*gammaxl))
-!
-!          ! gll volume: jacobian * wgll_cube 
-!          gll_volume(i,j,k,ispec) = jacobianl * wgll_cube(i,j,k)
-!
-!        enddo
-!      enddo
-!    enddo
-!  enddo
-!  
-!end subroutine
+!-output: 
+! (real) gll_volume(NGLLX,NGLLY,NGLLZ,mesh_data%nspec)
+
+  type(sem_mesh_data), intent(in) :: mesh_data
+  real(dp), intent(out) :: gll_volume(NGLLX,NGLLY,NGLLZ,mesh_data%nspec)
+
+  integer :: i, j, k, ispec, nspec
+  real(dp) :: xixl,xiyl,xizl,etaxl,etayl,etazl,gammaxl,gammayl,gammazl
+  real(dp) :: jacobianl
+
+  !-- GLL colocation points and lagrange interpolation weights
+  real(dp), dimension(NGLLX) :: xigll, wxgll
+  real(dp), dimension(NGLLY) :: yigll, wygll
+  real(dp), dimension(NGLLZ) :: zigll, wzgll
+
+  !===== calculate gll quadrature weight in the reference cube
+
+  call zwgljd(xigll, wxgll, NGLLX, GAUSSALPHA, GAUSSBETA)
+  call zwgljd(yigll, wygll, NGLLY, GAUSSALPHA, GAUSSBETA)
+  call zwgljd(zigll, wzgll, NGLLZ, GAUSSALPHA, GAUSSBETA)
+
+  !===== calculate volume integration weight on gll
+  nspec = mesh_data%nspec
+
+  do ispec = 1, nspec
+    do k = 1, NGLLZ
+      do j = 1, NGLLY
+        do i = 1, NGLLX
+
+          ! gets derivatives of ux, uy and uz with respect to x, y and z
+                xixl = mesh_data%xix(i,j,k,ispec)
+                xiyl = mesh_data%xiy(i,j,k,ispec)
+                xizl = mesh_data%xiz(i,j,k,ispec)
+              etaxl = mesh_data%etax(i,j,k,ispec)
+              etayl = mesh_data%etay(i,j,k,ispec)
+              etazl = mesh_data%etaz(i,j,k,ispec)
+          gammaxl = mesh_data%gammax(i,j,k,ispec)
+          gammayl = mesh_data%gammay(i,j,k,ispec)
+          gammazl = mesh_data%gammaz(i,j,k,ispec)
+
+          ! jacobian: det( d(x,y,z)/d(xi,eta,gamma))
+          jacobianl = 1.0_dp / &
+            ( xixl*(etayl*gammazl-etazl*gammayl)  &
+             -xiyl*(etaxl*gammazl-etazl*gammaxl)  &
+             +xizl*(etaxl*gammayl-etayl*gammaxl))
+
+          ! gll volume: jacobian * wgll_cube
+          gll_volume(i,j,k,ispec) = jacobianl * wxgll(i) * wygll(j) * wzgll(k)
+
+        enddo
+      enddo
+    enddo
+  enddo
+  
+end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
@@ -290,8 +315,7 @@ subroutine sem_mesh_locate_kdtree2( &
 ! type(sem_mesh_location) location_result(npoint): location results
 !
 !-notes:
-! 1. max_search_dist and max_misloc are distances used in normalized dimension
-!     by the R_EARTH
+! 1. max_search_dist and max_misloc are normalized by R_EARTH in sem_constants
 
   use kdtree2_module
 

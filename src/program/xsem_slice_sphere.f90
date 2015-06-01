@@ -192,6 +192,7 @@ program xsem_slice_sphere
              lon1 >= -180.d0 .and. lat1 <= 180.d0) ) then
     print *, "[ERROR] wrong ranges of input lat/lon"
     call abort_mpi()
+    stop
   endif
   ! make sure the great circle path follows the Earth's rotation direction
   ! from lon0 to lon1

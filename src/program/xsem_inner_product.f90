@@ -146,7 +146,7 @@ program xsem_vertical_slice
     ! calculate inner product for each model 
     do imodel = 1, nmodel
       inner_product(imodel,iproc) = sum( gll_volume * &
-        gll_model_1(imodel,:,:,:,:) * gll_model_1(imodel,:,:,:,:))
+        gll_model_1(imodel,:,:,:,:) * gll_model_2(imodel,:,:,:,:))
     enddo
 
   enddo ! iproc

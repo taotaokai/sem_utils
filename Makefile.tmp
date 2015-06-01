@@ -32,7 +32,9 @@ LDFLAGS = -L$(netcdf_lib) -lnetcdff
 
 module = sem_constants_mod sem_io_mod sem_mesh_mod \
 		  sem_parallel_mod sem_utils_mod
+
 shared = gll_library geographic_mod kdtree2
+
 program = xsem_slice_gcircle \
           xsem_slice_sphere \
 		  xmap_gcircle \

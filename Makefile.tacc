@@ -32,20 +32,17 @@ LDFLAGS = -L$(netcdf_lib) -lnetcdff
 
 module = sem_constants_mod sem_io_mod sem_mesh_mod \
 		  sem_parallel_mod sem_utils_mod
+
 shared = gll_library geographic_mod kdtree2
-#program = xsem_interp_xyz \
-#		  xsem_slab_model \
-#		  xsem_slice_gcircle \
-#		  xsem_slice_sphere \
-#		  xmap_gcircle \
-#		  xlatlonhkm_to_vtk
-program = xsem_interp_mesh \
-		  xsem_slice_gcircle \
-		  xsem_slice_sphere \
+
+program = xsem_slice_gcircle \
+          xsem_slice_sphere \
 		  xmap_gcircle \
- 		  xlatlonhkm_to_vtk \
-		  xsem_add_model_plume \
+		  xsem_interp_mesh \
+		  xlatlonhkm_to_vtk \
 		  xsem_add_model_slab_mow \
+		  xsem_add_model_plume \
+		  xsem_add_model_horizontal_layer \
 		  xsem_inner_product
 
 #------------------------------------------

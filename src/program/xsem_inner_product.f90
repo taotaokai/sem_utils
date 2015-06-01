@@ -8,7 +8,9 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_inner_product \"
-  print '(a)', "    <mesh_dir> <nproc> <model_dir1> <model_dir2> <model_tags> "
+  print '(a)', "    <mesh_dir> <nproc> "
+  print '(a)', "    <model_dir_1> <model_tags_1> "
+  print '(a)', "    <model_dir_2> <model_tags_2> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -19,14 +21,14 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (int) nproc:  number of mesh slices"
-  print '(a)', "  (string) model_dir1/2:  directory holds proc*_reg1_<model_tag>.bin"
-  print '(a)', "  (string) model_tags:  comma delimited string, e.g. vsv,vsh,rho "
+  print '(a)', "  (string) model_dir_1/2:  directory holds proc*_reg1_<model_tag>.bin"
+  print '(a)', "  (string) model_tags_1/2:  comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
   print '(a)', "  1. the unit of volume is km^3 "
-  print '(a)', "  2. do NOT care about the unit of model files, "
-  print '(a)', "    , only values are used. "
+  print '(a)', "  2. this program does NOT account for the unit of model files, "
+  print '(a)', "    , only the model values are used. "
   print '(a)', ""
 
 end subroutine
@@ -45,18 +47,21 @@ program xsem_vertical_slice
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 5
+  integer, parameter :: nargs = 6
   character(len=MAX_STRING_LEN) :: args(nargs)
-  character(len=MAX_STRING_LEN) :: mesh_dir, model_dir1, model_dir2, model_tags
+  character(len=MAX_STRING_LEN) :: mesh_dir
   integer :: nproc
+  character(len=MAX_STRING_LEN) :: model_dir_1, model_tags_1
+  character(len=MAX_STRING_LEN) :: model_dir_2, model_tags_2
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
   integer :: i, iproc
 
   ! model names
-  integer :: imodel, nmodel
-  character(len=MAX_STRING_LEN), allocatable :: model_names(:)
+  integer :: imodel, nmodel_1, nmodel_2, nmodel
+  character(len=MAX_STRING_LEN), allocatable :: model_names_1(:)
+  character(len=MAX_STRING_LEN), allocatable :: model_names_2(:)
 
   ! mesh
   type(sem_mesh_data) :: mesh_data
@@ -81,20 +86,31 @@ program xsem_vertical_slice
   enddo
   read(args(1), '(a)') mesh_dir
   read(args(2), *) nproc
-  read(args(3), '(a)') model_dir1
-  read(args(4), '(a)') model_dir2
-  read(args(5), '(a)') model_tags
+  read(args(3), '(a)') model_dir_1
+  read(args(4), '(a)') model_tags_1
+  read(args(5), '(a)') model_dir_2
+  read(args(6), '(a)') model_tags_2
 
   !===== parse model tags
 
-  call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
+  call sem_utils_delimit_string(model_tags_1, ',', model_names_1, nmodel_1)
+  call sem_utils_delimit_string(model_tags_2, ',', model_names_2, nmodel_2)
 
-  print *, '# nmodel=', nmodel
-  print *, '# model_names=', (trim(model_names(i))//"  ", i=1,nmodel) 
+  if (nmodel_1 /= nmodel_2) then
+    print *, '[ERROR] nmodel_1 /= nmodel_2', nmodel_1, nmodel_2
+    stop
+  endif
+
+  print *, '# nmodel_1=', nmodel_1
+  print *, '# model_names_1=', (trim(model_names_1(i))//"  ", i=1,nmodel_1)
+
+  print *, '# nmodel_2=', nmodel_2
+  print *, '# model_names_2=', (trim(model_names_2(i))//"  ", i=1,nmodel_2)
 
   !===== loop each mesh/model slice
 
   ! initialize arrays
+  nmodel = nmodel_1
   allocate(inner_product(nmodel,0:(nproc-1)))
 
   do iproc = 0, (nproc - 1)
@@ -121,11 +137,11 @@ program xsem_vertical_slice
     allocate(gll_model_1(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
     allocate(gll_model_2(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
 
-    call sem_io_read_gll_file_n(model_dir1, iproc, iregion, &
-                                model_names, nmodel, gll_model_1)
+    call sem_io_read_gll_file_n(model_dir_1, iproc, iregion, &
+                                model_names_1, nmodel, gll_model_1)
 
-    call sem_io_read_gll_file_n(model_dir2, iproc, iregion, &
-                                model_names, nmodel, gll_model_2)
+    call sem_io_read_gll_file_n(model_dir_2, iproc, iregion, &
+                                model_names_2, nmodel, gll_model_2)
 
     ! calculate inner product for each model 
     do imodel = 1, nmodel
@@ -138,7 +154,9 @@ program xsem_vertical_slice
   !===== print out results
 
   do imodel = 1, nmodel
-    print "(a,' = ',E15.7)", trim(model_names(imodel)), &
+    print "(a,'_1 * ',a,'_2 = ',E15.7)", &
+      trim(model_names_1(imodel)), &
+      trim(model_names_2(imodel)), &
       sum(inner_product(imodel,:)) * R_EARTH_KM**3
   enddo
 

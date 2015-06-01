@@ -12,7 +12,8 @@ subroutine selfdoc()
   print '(a)', "    <plume_lat> <plume_lon> "
   print '(a)', "    <plume_r0> <plume_r1> "
   print '(a)', "    <plume_dlnV0> <plume_sigma> "
-  print '(a)', "    <flag_ellipticity> <out_dir> "
+  print '(a)', "    <flag_ellipticity> <flag_output_dlnV> "
+  print '(a)', "    <out_dir> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -31,7 +32,8 @@ subroutine selfdoc()
   print '(a)', "  (float) plume_r0/r1:  radius range [r0,r1] of plume (km) "
   print '(a)', "  (float) plume_dlnV0:  velocity perturbation at plume axis"
   print '(a)', "  (float) plume_sigma:  guassian width of plume (km)"
-  print '(a)', "  (int) flag_ellipticity: 0: spherical; 1: WGS84 ellipsoid"
+  print '(a)', "  (int) flag_ellipticity: (0/1) 0: spherical; 1: WGS84 ellipsoid"
+  print '(a)', "  (int) flag_output_dlnV: (0/1) 1=output dlnV, 0=don't output dlnV"
   print '(a)', "  (string) out_dir:  output directory of new model"
   print '(a)', ""
 
@@ -52,10 +54,10 @@ program xsem_vertical_slice
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 12
+  integer, parameter :: nargs = 13
   character(len=MAX_STRING_LEN) :: args(nargs)
   character(len=MAX_STRING_LEN) :: mesh_dir, model_dir, model_tags, out_dir
-  integer :: nproc, flag_ellipticity
+  integer :: nproc, flag_ellipticity, flag_output_dlnV
   real(dp) :: plume_lat, plume_lon, plume_r0, plume_r1, &
               plume_dlnV0, plume_sigma 
 
@@ -79,7 +81,8 @@ program xsem_vertical_slice
 
   !-- calculate model perturbation
   real(dp) :: xyz(3), r, r_plume
-  real(dp) :: ratio
+  real(dp) :: dlnV
+  real(dp), allocatable :: dlnV_gll(:,:,:,:)
 
   !===== read command line arguments
 
@@ -103,7 +106,19 @@ program xsem_vertical_slice
   read(args(9), *) plume_dlnV0
   read(args(10), *) plume_sigma
   read(args(11), *) flag_ellipticity
-  read(args(12), '(a)') out_dir
+  read(args(12), *) flag_output_dlnV
+  read(args(13), '(a)') out_dir
+
+  !-- validate input arguments
+  if (flag_ellipticity /= 0 .and. flag_ellipticity /= 1) then
+    print *, "[ERROR] flag_ellipticity must be 0/1"
+    stop
+  endif
+
+  if (flag_output_dlnV /= 0 .and. flag_output_dlnV /= 1) then
+    print *, "[ERROR] flag_output_dlnV must be 0 or 1"
+    stop
+  endif
 
   !===== geometric parameters of plume
 
@@ -121,12 +136,9 @@ program xsem_vertical_slice
     plume_v(1) = cos(plume_lat) * cos(plume_lon)
     plume_v(2) = cos(plume_lat) * sin(plume_lon)
     plume_v(3) = sin(plume_lat)
-  elseif (flag_ellipticity == 1) then
+  else
     call geographic_geodetic2ecef(plume_lat, plume_lon, 0.0_dp, &
       plume_v(1), plume_v(2), plume_v(3)) 
-  else
-    print *, "[ERROR] flag_ellipticity must be 0/1"
-    stop
   endif
 
   plume_v = plume_v / sqrt(sum(plume_v**2))
@@ -159,6 +171,14 @@ program xsem_vertical_slice
     call sem_io_read_gll_file_n(model_dir, iproc, iregion, &
                                 model_names, nmodel, model_gll)
 
+    ! initialize dlnV array
+    if (flag_output_dlnV == 1) then
+      if (allocated(dlnV_gll)) then
+        deallocate(dlnV_gll)
+      endif
+      allocate(dlnV_gll(NGLLX,NGLLY,NGLLZ,nspec))
+    endif
+
     ! add slab model on each gll point
     do ispec = 1, nspec
       do igllz = 1, NGLLZ
@@ -169,20 +189,24 @@ program xsem_vertical_slice
             xyz = mesh_data%xyz_glob(:,iglob)
 
             ! get the model perturbation
-            ratio = 0.0_dp
+            dlnV = 0.0_dp
 
             r = sqrt(sum(xyz**2))
             ! projection on plume axis
             r_plume = sum(xyz*plume_v)
 
             if (r_plume > 0 .and. r >= plume_r0 .and. r <= plume_r1) then
-              ratio = plume_dlnV0 * &
+              dlnV = plume_dlnV0 * &
                 exp(-0.5 * (r**2 - r_plume**2) / plume_sigma**2)
             endif
 
             ! get the new model
             model_gll(:,igllx,iglly,igllz,ispec) = &
-              (1.0_dp + ratio) * model_gll(:, igllx,iglly,igllz,ispec)
+              (1.0_dp + dlnV) * model_gll(:, igllx,iglly,igllz,ispec)
+
+            if (flag_output_dlnV == 1) then
+              dlnV_gll(igllx,iglly,igllz,ispec) = dlnV
+            endif
 
           enddo
         enddo
@@ -192,6 +216,10 @@ program xsem_vertical_slice
     ! write out model
     call sem_io_write_gll_file_n(out_dir, iproc, iregion, &
       model_names, nmodel, model_gll)
+
+    if (flag_output_dlnV == 1) then
+      call sem_io_write_gll_file_1(out_dir, iproc, iregion, "dlnV", dlnV_gll)
+    endif
 
   enddo ! iproc
 

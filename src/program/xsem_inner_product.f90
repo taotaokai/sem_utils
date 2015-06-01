@@ -24,7 +24,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
-  print '(a)', "  1. the unit of volume is m^3 "
+  print '(a)', "  1. the unit of volume is km^3 "
   print '(a)', "  2. do NOT care about the unit of model files, "
   print '(a)', "    , only values are used. "
   print '(a)', ""
@@ -139,9 +139,9 @@ program xsem_vertical_slice
 
   do imodel = 1, nmodel
     print "(a,' = ',E15.7)", trim(model_names(imodel)), &
-      sum(inner_product(imodel,:)) * R_EARTH**3
+      sum(inner_product(imodel,:)) * R_EARTH_KM**3
   enddo
 
-  print "('sum = ',E15.7)", sum(inner_product) * R_EARTH**3
+  print "('sum = ',E15.7)", sum(inner_product) * R_EARTH_KM**3
 
 end program

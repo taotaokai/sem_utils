@@ -41,7 +41,7 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-program xsem_vertical_slice
+program xsem_add_model_plume
   
   use sem_constants
   use sem_io

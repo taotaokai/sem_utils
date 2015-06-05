@@ -44,6 +44,7 @@ program = xsem_slice_gcircle \
 		  xsem_add_model_slab_mow \
 		  xsem_add_model_plume \
 		  xsem_add_model_horizontal_layer \
+		  xsem_add_model_geographic_region \
 		  xsem_inner_product
 
 #------------------------------------------

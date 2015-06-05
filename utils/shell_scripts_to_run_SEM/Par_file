@@ -1,0 +1,64 @@
+#!/bin/bash
+
+#--------------------------#
+# user supplied parameters #
+#--------------------------#
+
+# User bin directory
+USER_BIN=~/bin/SEM
+
+# SEM source directory
+#SEM_dir=/work/03244/ktao/specfem3d_globe
+SEM_dir=/Users/taok/work/research/waveform_tomography/specfem3d_globe
+
+# project base directory
+base_dir=../China_13s/
+
+# iteration number
+iter=0
+
+# number of MPI processors
+num_proc=144
+
+# run time of mesher
+run_time_mesher=00:10:00
+run_time_forward=01:00:00
+run_time_adjoint=02:00:00
+run_time_update=00:10:00
+
+# adjoint source 
+# frequency range (Hz)
+freqmin=0.01
+freqmax=0.06
+# correlation coef. cutoff
+# only retain stations of larger cc value for adjoint simulation
+cc_cutoff=0.7
+
+# update model
+# mask source (km)
+mask_width=150
+# smoothing width (km)
+sigma_h=60
+sigma_v=30
+# maximum model relative perturbation ratio
+step_fac=-0.01 # minus for maximizing the objective function
+
+#--------------------#
+# Do not edit below  #
+#--------------------#
+
+base_dir=$(readlink -e "$base_dir")
+
+bin_dir=$base_dir/SEM_bin
+
+config_dir=$base_dir/SEM_config
+
+init_model_dir=$base_dir/INITIAL_MODEL
+
+event_dir=$base_dir/EVENTS
+
+iter_dir=${base_dir}/SEM_iterations/${iter}
+
+iter_minus_one=$(($iter - 1))
+
+prev_iter_dir=${base_dir}/SEM_iterations/${iter_minus_one}

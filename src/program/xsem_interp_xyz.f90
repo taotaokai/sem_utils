@@ -56,7 +56,6 @@ program xsem_interp_xyz
 
   !-- model names
   integer :: imodel, nmodel
-  character(len=1), parameter :: delimiter = ','
   character(len=MAX_STRING_LEN), allocatable :: model_names(:)
 
   !-- interpolation points
@@ -99,7 +98,7 @@ program xsem_interp_xyz
   if (command_argument_count() /= nargs) then
     if (myrank == 0) then
       call selfdoc()
-      print *, "[ERROR] xsem_slice_sphere: check your input arguments."
+      print *, "[ERROR] xsem_interp_xyz: check your input arguments."
       call abort_mpi()
       stop
     endif

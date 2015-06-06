@@ -6,7 +6,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xlatlonh_to_xyz <latlonh_list> <out_file>"
+  print '(a)', "  xlatlonhkm_to_xyz <latlonh_list> <flag_ellipticity> <out_file>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -17,6 +17,7 @@ subroutine selfdoc()
   print '(a)', "PARAMETERS"
   print '(a)', ""
   print '(a)', "  (string) latlonh_list: list of (lat, lon, height) in degrees/km"
+  print '(a)', "  (int) flag_ellipticity: (0/1) 0: spherical; 1: WGS84 ellipsoid"
   print '(a)', "  (string) out_file: output vtk file name"
   print '(a)', ""
   print '(a)', "NOTES"
@@ -38,9 +39,10 @@ program xlatlonhkm_to_vtk
   !===== declare variables
 
   !-- command line args
-  integer, parameter :: nargs = 2
+  integer, parameter :: nargs = 3
   character(len=MAX_STRING_LEN) :: args(nargs)
   character(len=MAX_STRING_LEN) :: latlonh_list
+  integer :: flag_ellipticity
   character(len=MAX_STRING_LEN) :: out_file
 
   !-- local variables
@@ -52,6 +54,7 @@ program xlatlonhkm_to_vtk
   real(dp), allocatable :: lat(:), lon(:), height(:)
 
   !-- ECEF coordinates 
+  real(dp) :: r, cos_lat_r
   real(dp), allocatable :: x(:), y(:), z(:)
 
   !===== read command line arguments
@@ -60,12 +63,19 @@ program xlatlonhkm_to_vtk
     call get_command_argument(i, args(i), status=ier)
     if (len_trim(args(i)) == 0) then
       call selfdoc()
-      stop "ERROR: check your input arguments!"
+      stop "[ERROR] check your input arguments!"
     endif
   enddo
 
   read(args(1), '(a)') latlonh_list
-  read(args(2), '(a)') out_file
+  read(args(2), *) flag_ellipticity
+  read(args(3), '(a)') out_file
+
+  !-- validate input arguments
+  if (flag_ellipticity /= 0 .and. flag_ellipticity /= 1) then
+    print *, "[ERROR] flag_ellipticity must be 0/1"
+    stop
+  endif
 
   !===== read theta_list
   call sem_utils_read_line(latlonh_list, latlonh_lines, npoint)
@@ -83,10 +93,21 @@ program xlatlonhkm_to_vtk
 
   ! unit direction vector v0 at origin point of the great circle
   allocate(x(npoint), y(npoint), z(npoint))
-  do ipoint = 1, npoint
-    call geographic_geodetic2ecef(lat(ipoint), lon(ipoint), height(ipoint), &
-                                    x(ipoint),   y(ipoint),      z(ipoint))
-  enddo
+
+  if (flag_ellipticity == 1) then
+    do ipoint = 1, npoint
+      call geographic_geodetic2ecef(lat(ipoint), lon(ipoint), height(ipoint), &
+                                      x(ipoint),   y(ipoint),      z(ipoint))
+    enddo
+  elseif (flag_ellipticity == 0) then
+    do ipoint = 1, npoint
+      r = R_EARTH + height(ipoint)
+      cos_lat_r = cos(lat(ipoint)) * r
+      x(ipoint) = cos(lon(ipoint)) * cos_lat_r
+      y(ipoint) = sin(lon(ipoint)) * cos_lat_r
+      z(ipoint) = sin(lat(ipoint)) * r 
+    enddo
+  endif
 
   ! non-dimensinalize ECEF xyz
   x = x / R_EARTH

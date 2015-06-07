@@ -26,11 +26,11 @@ subroutine selfdoc()
   print '(a)', "  (string) model_tags: comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', "  (float) lat0,lon0: origin point on the great circle (degrees)"
   print '(a)', "  (float) azimuth: shooting azimuth of the great circle (degrees)"
-  print '(a)', "  (float) theta0, theta1: begin/end angles along great circle (degrees) "
-  print '(a)', "  (integer) ntheta: number of grids along the great cicle "
-  print '(a)', "  (float) radius0,radius1: begin/end radius (km) "
-  print '(a)', "  (integer) nradius: number of grids along the radius "
-  print '(a)', "  (string) out_file: output file name (GMT netcdf format) "
+  print '(a)', "  (float) theta0, theta1: begin/end angles along great circle (degrees)"
+  print '(a)', "  (integer) ntheta: number of grids along the great cicle"
+  print '(a)', "  (float) radius0,radius1: begin/end radius (km)"
+  print '(a)', "  (integer) nradius: number of grids along the radius"
+  print '(a)', "  (string) out_file: output file name (GMT netcdf format)"
   print '(a)', ""
   print '(a)', "NOTES"
   print '(a)', ""
@@ -118,22 +118,29 @@ program xsem_vertical_slice
 
   !-- netcdf data structure
   integer :: ncid
-  ! define dimensions: theta, radius
+  ! dimensions: theta, radius
   integer, parameter :: NDIMS = 2
   integer :: theta_dimid, radius_dimid, dimids(NDIMS)
-  ! define coordinate variables/units
+  ! coordinates: theta(:), radius(:)
   integer :: theta_varid, radius_varid
   character(len=*), parameter :: UNITS = "units"
   character(len=*), parameter :: theta_name = "theta"
   character(len=*), parameter :: theta_units = "degree"
   character(len=*), parameter :: radius_name = "radius"
   character(len=*), parameter :: radius_units = "km"
-  ! define data variables
-  ! this is defined from model_tags
-  ! data units is not determined
+  ! data: x,y,z(ntheta, nradius)
+  integer :: x_varid, y_varid, z_varid
+  real(sp), dimension(:,:), allocatable :: x_var, y_var, z_var
+  character(len=*), parameter :: x_name = "x"
+  character(len=*), parameter :: x_units = "R_EARTH"
+  character(len=*), parameter :: y_name = "y"
+  character(len=*), parameter :: y_units = "R_EARTH"
+  character(len=*), parameter :: z_name = "z"
+  character(len=*), parameter :: z_units = "R_EARTH"
+  ! data: model values (units is not determined)
   integer, allocatable :: model_varids(:)
   real(sp), allocatable :: model_var(:,:)
-  ! define data: location status, mislocation
+  ! data: location status, mislocation
   integer :: stat_varid, misloc_varid
   integer, allocatable :: stat_var(:,:)
   real(sp), allocatable :: misloc_var(:,:)
@@ -417,22 +424,30 @@ program xsem_vertical_slice
 
   if (myrank == 0) then
 
-    ! create the file
+    !-- create the file
     call check( nf90_create(out_file, NF90_CLOBBER, ncid))
 
-    ! define the dimensions.
+    !-- define dimensions.
     call check( nf90_def_dim(ncid, theta_name, ntheta, theta_dimid) )
     call check( nf90_def_dim(ncid, radius_name, nradius, radius_dimid) )
 
-    ! define the coordinate variables.
+    !-- define coordinate variables.
     call check( nf90_def_var(ncid, theta_name, NF90_DOUBLE, theta_dimid, theta_varid) )
     call check( nf90_def_var(ncid, radius_name, NF90_DOUBLE, radius_dimid, radius_varid) )
     ! coordinate units
     call check( nf90_put_att(ncid, theta_varid, UNITS, theta_units) )
     call check( nf90_put_att(ncid, radius_varid, UNITS, radius_units) )
 
-    ! define data variables: model values
+    !-- define data variables.
     dimids = [theta_dimid, radius_dimid]
+    ! x,y,z(ntheta,nradius)
+    call check( nf90_def_var(ncid, x_name, NF90_REAL, dimids, x_varid) )
+    call check( nf90_put_att(ncid, x_varid, UNITS, x_units) )
+    call check( nf90_def_var(ncid, y_name, NF90_REAL, dimids, y_varid) )
+    call check( nf90_put_att(ncid, y_varid, UNITS, y_units) )
+    call check( nf90_def_var(ncid, z_name, NF90_REAL, dimids, z_varid) )
+    call check( nf90_put_att(ncid, z_varid, UNITS, z_units) )
+    ! model values(ntheta,nradius)
     allocate(model_varids(nmodel))
     do imodel = 1, nmodel
       call check( nf90_def_var(ncid, trim(model_names(imodel)), NF90_REAL & 
@@ -440,16 +455,30 @@ program xsem_vertical_slice
       call check( nf90_put_att(ncid, model_varids(imodel) &
                                , "_FillValue", FILLVALUE_sp) )
     enddo
-    ! define data: location status and mislocation
+    ! location status and mislocation
     call check( nf90_def_var(ncid, stat_name, NF90_INT, dimids, stat_varid) )
-    call check( nf90_def_var(ncid, misloc_name, NF90_FLOAT, dimids, misloc_varid) )
+    call check( nf90_def_var(ncid, misloc_name, NF90_REAL, dimids, misloc_varid) )
 
     ! end define mode.
     call check( nf90_enddef(ncid) )
 
-    ! write the coordinate variable data.
+    ! write coordinate variables
     call check( nf90_put_var(ncid, theta_varid, theta * RADIANS_TO_DEGREES) )
     call check( nf90_put_var(ncid, radius_varid, radius * R_EARTH_KM) )
+
+    ! write data: x,y,z
+    allocate(x_var(ntheta, nradius), y_var(ntheta, nradius), z_var(ntheta, nradius))
+    do itheta = 1, ntheta
+      idx = nradius * (itheta - 1)
+      do iradius = 1, nradius
+        x_var(itheta, iradius) = real(xyz(1, idx + iradius), kind=sp)
+        y_var(itheta, iradius) = real(xyz(2, idx + iradius), kind=sp)
+        z_var(itheta, iradius) = real(xyz(3, idx + iradius), kind=sp)
+      enddo
+    enddo
+    call check( nf90_put_var(ncid, x_varid, x_var) )
+    call check( nf90_put_var(ncid, y_varid, y_var) )
+    call check( nf90_put_var(ncid, z_varid, z_var) )
 
     ! write data: interpolated model values
     allocate(model_var(ntheta, nradius))

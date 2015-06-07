@@ -12,25 +12,25 @@
  !
  ! number of processors =            4
  !
- ! maximum number of points per region =      1506509
+ ! maximum number of points per region =       816981
  !
  ! on NEC SX, make sure "loopcnt=" parameter
- ! in Makefile is greater than max vector length =      4519527
+ ! in Makefile is greater than max vector length =      2450943
  !
- ! total elements per slice =        25075
- ! total points per slice =      1663015
+ ! total elements per slice =        13456
+ ! total points per slice =       898595
  !
- ! the time step of the solver will be DT =   0.152439177    
+ ! the time step of the solver will be DT =   0.190548971    
  !
  ! total for full 1-chunk mesh:
  ! ---------------------------
  !
  ! exact total number of spectral elements in entire mesh = 
- !    100300.00000000000     
+ !    53824.000000000000     
  ! approximate total number of points in entire mesh = 
- !    6652060.0000000000     
+ !    3594380.0000000000     
  ! approximate total number of degrees of freedom in entire mesh = 
- !    18764108.000000000     
+ !    10160284.000000000     
  !
  ! position of the mesh chunk at the surface:
  ! -----------------------------------------
@@ -62,11 +62,11 @@
  ! resolution of the mesh at the surface:
  ! -------------------------------------
  !
- ! spectral elements along a great circle =         1440
- ! GLL points along a great circle =         5760
- ! average distance between points in degrees =    1.09083077E-03
- ! average distance between points in km =    6.94968271    
- ! average size of a spectral element in km =    27.7987309    
+ ! spectral elements along a great circle =         1152
+ ! GLL points along a great circle =         4608
+ ! average distance between points in degrees =    1.36353844E-03
+ ! average distance between points in km =    8.68710327    
+ ! average size of a spectral element in km =    34.7484131    
  !
 
  ! approximate static memory needed by the solver:
@@ -78,10 +78,10 @@
  !  by typing "size -d bin/xspecfem3D"
  !  after compiling the code with the DATA/Par_file you plan to use)
  !
- ! size of static arrays per slice =    723.24887200000001       MB
- !                                 =    689.74387359619141       MiB
- !                                 =   0.72324887199999999       GB
- !                                 =   0.67357800155878067       GiB
+ ! size of static arrays per slice =    418.02575999999999       MB
+ !                                 =    398.66043090820312       MiB
+ !                                 =   0.41802576000000002       GB
+ !                                 =   0.38931682705879211       GiB
  !
  ! (should be below to 80% or 90% of the memory installed per core)
  ! (if significantly more, the job will not run by lack of memory )
@@ -90,36 +90,36 @@
  ! (but that can be perfectly acceptable if you can afford it and
  !  want faster results by using more cores)
  !
- ! size of static arrays for all slices =    2892.9954880000000       MB
- !                                      =    2758.9754943847656       MiB
- !                                      =    2.8929954879999999       GB
- !                                      =    2.6943120062351227       GiB
- !                                      =    2.8929954880000000E-003  TB
- !                                      =    2.6311640685889870E-003  TiB
+ ! size of static arrays for all slices =    1672.1030400000000       MB
+ !                                      =    1594.6417236328125       MiB
+ !                                      =    1.6721030400000001       GB
+ !                                      =    1.5572673082351685       GiB
+ !                                      =    1.6721030399999999E-003  TB
+ !                                      =    1.5207688556984067E-003  TiB
  !
 
- integer, parameter :: NEX_XI_VAL =           80
- integer, parameter :: NEX_ETA_VAL =           80
+ integer, parameter :: NEX_XI_VAL =           64
+ integer, parameter :: NEX_ETA_VAL =           64
 
- integer, parameter :: NSPEC_CRUST_MANTLE =        22800
- integer, parameter :: NSPEC_OUTER_CORE =         2175
- integer, parameter :: NSPEC_INNER_CORE =          100
+ integer, parameter :: NSPEC_CRUST_MANTLE =        12288
+ integer, parameter :: NSPEC_OUTER_CORE =         1120
+ integer, parameter :: NSPEC_INNER_CORE =           48
 
- integer, parameter :: NGLOB_CRUST_MANTLE =      1506509
- integer, parameter :: NGLOB_OUTER_CORE =       149009
- integer, parameter :: NGLOB_INNER_CORE =         7497
+ integer, parameter :: NGLOB_CRUST_MANTLE =       816981
+ integer, parameter :: NGLOB_OUTER_CORE =        77857
+ integer, parameter :: NGLOB_INNER_CORE =         3757
 
  integer, parameter :: NSPECMAX_ANISO_IC =            1
 
- integer, parameter :: NSPECMAX_ISO_MANTLE =        22800
- integer, parameter :: NSPECMAX_TISO_MANTLE =        22800
+ integer, parameter :: NSPECMAX_ISO_MANTLE =        12288
+ integer, parameter :: NSPECMAX_TISO_MANTLE =        12288
  integer, parameter :: NSPECMAX_ANISO_MANTLE =            1
 
- integer, parameter :: NSPEC_CRUST_MANTLE_ATTENUATION =        22800
- integer, parameter :: NSPEC_INNER_CORE_ATTENUATION =          100
+ integer, parameter :: NSPEC_CRUST_MANTLE_ATTENUATION =        12288
+ integer, parameter :: NSPEC_INNER_CORE_ATTENUATION =           48
 
- integer, parameter :: NSPEC_CRUST_MANTLE_STR_OR_ATT =        22800
- integer, parameter :: NSPEC_INNER_CORE_STR_OR_ATT =          100
+ integer, parameter :: NSPEC_CRUST_MANTLE_STR_OR_ATT =        12288
+ integer, parameter :: NSPEC_INNER_CORE_STR_OR_ATT =           48
 
  integer, parameter :: NSPEC_CRUST_MANTLE_STR_AND_ATT =            1
  integer, parameter :: NSPEC_INNER_CORE_STR_AND_ATT =            1
@@ -135,10 +135,10 @@
  integer, parameter :: NGLOB_INNER_CORE_ADJOINT =            1
  integer, parameter :: NSPEC_OUTER_CORE_ROT_ADJOINT =            1
 
- integer, parameter :: NSPEC_CRUST_MANTLE_STACEY =        22800
- integer, parameter :: NSPEC_OUTER_CORE_STACEY =         2175
+ integer, parameter :: NSPEC_CRUST_MANTLE_STACEY =        12288
+ integer, parameter :: NSPEC_OUTER_CORE_STACEY =         1120
 
- integer, parameter :: NGLOB_CRUST_MANTLE_OCEANS =      1506509
+ integer, parameter :: NGLOB_CRUST_MANTLE_OCEANS =       816981
 
  logical, parameter :: TRANSVERSE_ISOTROPY_VAL = .true.
 
@@ -172,21 +172,21 @@
  integer, parameter :: ATT1_VAL =            5
  integer, parameter :: ATT2_VAL =            5
  integer, parameter :: ATT3_VAL =            5
- integer, parameter :: ATT4_VAL =        22800
- integer, parameter :: ATT5_VAL =          100
+ integer, parameter :: ATT4_VAL =        12288
+ integer, parameter :: ATT5_VAL =           48
 
- integer, parameter :: NSPEC2DMAX_XMIN_XMAX_CM =         1040
- integer, parameter :: NSPEC2DMAX_YMIN_YMAX_CM =         1040
- integer, parameter :: NSPEC2D_BOTTOM_CM =          100
- integer, parameter :: NSPEC2D_TOP_CM =         1600
- integer, parameter :: NSPEC2DMAX_XMIN_XMAX_IC =           20
- integer, parameter :: NSPEC2DMAX_YMIN_YMAX_IC =           20
- integer, parameter :: NSPEC2D_BOTTOM_IC =           25
- integer, parameter :: NSPEC2D_TOP_IC =           25
- integer, parameter :: NSPEC2DMAX_XMIN_XMAX_OC =          270
- integer, parameter :: NSPEC2DMAX_YMIN_YMAX_OC =          275
- integer, parameter :: NSPEC2D_BOTTOM_OC =           25
- integer, parameter :: NSPEC2D_TOP_OC =          100
+ integer, parameter :: NSPEC2DMAX_XMIN_XMAX_CM =          672
+ integer, parameter :: NSPEC2DMAX_YMIN_YMAX_CM =          672
+ integer, parameter :: NSPEC2D_BOTTOM_CM =           64
+ integer, parameter :: NSPEC2D_TOP_CM =         1024
+ integer, parameter :: NSPEC2DMAX_XMIN_XMAX_IC =           12
+ integer, parameter :: NSPEC2DMAX_YMIN_YMAX_IC =           12
+ integer, parameter :: NSPEC2D_BOTTOM_IC =           16
+ integer, parameter :: NSPEC2D_TOP_IC =           16
+ integer, parameter :: NSPEC2DMAX_XMIN_XMAX_OC =          168
+ integer, parameter :: NSPEC2DMAX_YMIN_YMAX_OC =          168
+ integer, parameter :: NSPEC2D_BOTTOM_OC =           16
+ integer, parameter :: NSPEC2D_TOP_OC =           64
  integer, parameter :: NSPEC2D_MOHO =            1
  integer, parameter :: NSPEC2D_400 =            1
  integer, parameter :: NSPEC2D_670 =            1
@@ -200,7 +200,7 @@
  integer, parameter :: NSPEC_OUTER_CORE_3DMOVIE = 1
  integer, parameter :: NM_KL_REG_PTS_VAL = 1
 
- integer, parameter :: NGLOB_XY_CM =      1506509
+ integer, parameter :: NGLOB_XY_CM =       816981
  integer, parameter :: NGLOB_XY_IC =            1
 
  logical, parameter :: ATTENUATION_1D_WITH_3D_STORAGE_VAL = .true.

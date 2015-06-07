@@ -125,8 +125,8 @@ program xlatlonhkm_to_vtk
 
   ! vtk file header
   write(IOUT, '(a)') "# vtk DataFile Version 2.0"
-  write(IOUT, '(a,2X,a,2X,a)') "Command: xlatlonh_to_vtk ", &
-    trim(latlonh_list), trim(out_file)
+  write(IOUT, '(a,2X,a,2X,I1,2X,a)') "Command: xlatlonhkm_to_vtk ", &
+    trim(latlonh_list), flag_ellipticity, trim(out_file)
   write(IOUT, '(a)') "ASCII"
   write(IOUT, '(a)') "DATASET UNSTRUCTURED_GRID"
   write(IOUT, '(a,2X,I10,2X,a)') "POINTS", npoint, "float"

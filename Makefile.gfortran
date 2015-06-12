@@ -1,4 +1,3 @@
-#FC = ifort
 #FC = gfortran 
 FC = mpif90
 
@@ -20,15 +19,9 @@ program_dir = ${src_dir}/program
 
 # gfortran
 FCFLAGS = -g -Wall -pedantic -fbounds-check
-#FCFLAGS = -O2
+FCFLAGS += -Os
 FCFLAGS += -I$(inc_dir) -J$(obj_dir) -I$(netcdf_mod)
 LDFLAGS = -L$(netcdf_lib) -lnetcdff
-
-# ifort
-#FCFLAGS = -g
-##FCFLAGS = -O2
-#FCFLAGS += -I $(inc_dir) -module $(obj_dir) -assume byterecl
-#LDFLAGS =
 
 module = sem_constants_mod sem_io_mod sem_mesh_mod \
 		  sem_parallel_mod sem_utils_mod

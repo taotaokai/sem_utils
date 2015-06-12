@@ -287,7 +287,7 @@ program xsem_vertical_slice
     nspec = mesh_data%nspec
 
     ! test if the interpolation points and mesh are separated apart
-    ! only use mesh element centers
+    ! only use element centers
     dist = huge(0.0_dp)
     do ispec = 1, nspec
       iglob = mesh_data%ibool(NGLLX/2, NGLLY/2, NGLLZ/2, ispec)

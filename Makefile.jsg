@@ -1,0 +1,79 @@
+#For JSG linux machines
+#FC = gfortran 
+FC = mpif90
+
+RM = \rm -rf
+MKDIR_P = \mkdir -p
+
+obj_dir = obj
+bin_dir = bin
+inc_dir = include
+src_dir = src
+
+# netcdf include/ and lib/ directories
+netcdf_mod = ~/usr/include
+netcdf_lib = ~/usr/lib
+
+module_dir = ${src_dir}/module
+shared_dir = ${src_dir}/shared
+program_dir = ${src_dir}/program
+
+# gfortran
+FCFLAGS = -g -Wall -pedantic -fbounds-check
+FCFLAGS += -Os
+FCFLAGS += -I$(inc_dir) -J$(obj_dir) -I$(netcdf_mod)
+LDFLAGS = -L$(netcdf_lib) -lnetcdff
+
+module = sem_constants_mod sem_io_mod sem_mesh_mod \
+		  sem_parallel_mod sem_utils_mod
+
+shared = gll_library geographic_mod kdtree2
+
+program = xsem_slice_gcircle \
+          xsem_slice_sphere \
+		  xmap_gcircle \
+		  xsem_interp_mesh \
+		  xsem_interp_xyz \
+		  xlatlonhkm_to_vtk \
+		  xsem_add_model_slab_mow \
+		  xsem_add_model_plume \
+		  xsem_add_model_horizontal_layer \
+		  xsem_add_model_geographic_region \
+		  xsem_inner_product
+
+#------------------------------------------
+module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))
+shared_obj = $(patsubst  %,$(obj_dir)/%.o, $(shared))
+program_obj = $(patsubst %,$(obj_dir)/%.o, $(program))
+
+.PHONY: all clean directories
+
+all : directories $(program)
+
+directories:
+	$(MKDIR_P) $(bin_dir) $(obj_dir)
+
+$(shared_obj) :
+	$(FC) -c $(shared_dir)/$(patsubst %.o,%.f90,$(@F)) -o $@ $(FCFLAGS)
+
+$(module_obj) : $(shared_obj)
+	$(FC) -c $(module_dir)/$(patsubst %.o,%.f90,$(@F)) -o $@ $(FCFLAGS)
+
+$(program_obj) : $(shared_obj) $(module_obj)
+	$(FC) -c $(program_dir)/$(patsubst %.o,%.f90,$(@F)) -o $@ $(FCFLAGS)
+
+#xsem_slice_gcircle : $(program_obj) $(shared_obj) $(module_obj)
+#	$(FC) -o $(bin_dir)/$@ $@ $(shared_obj) $(module_obj) $(FCFLAGS) $(LDFLAGS)
+
+$(program) : $(program_obj) $(shared_obj) $(module_obj)
+	$(FC) -o $(bin_dir)/$(@F) $(patsubst %,$(obj_dir)/%.o, $(@F)) \
+		$(shared_obj) $(module_obj) $(FCFLAGS) $(LDFLAGS)
+
+# explicit specified dependencies
+#$(module): $(shared)
+#$(OBJ): $(SHARED) $(MOD)
+#$(SHARED) : $(ODIR)/constants_module.o
+
+
+clean :
+	$(RM)  $(bin_dir) $(obj_dir)

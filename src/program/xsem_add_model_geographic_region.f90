@@ -65,7 +65,7 @@ program xsem_add_model_horizontal_layer
   type(sem_mesh_data) :: mesh_data
   integer :: iglob, igllx, iglly, igllz, ispec, nspec
   ! model
-! real(dp), allocatable :: model_gll(:,:,:,:,:)
+  real(dp), allocatable :: model_gll(:,:,:,:,:)
 
   !-- calculate model perturbation
   real(dp) :: xyz(3), lat, lon, r
@@ -133,10 +133,10 @@ program xsem_add_model_horizontal_layer
     nspec = mesh_data%nspec
 
     ! read model gll
-!   if (allocated(model_gll)) then
-!     deallocate(model_gll)
-!   endif
-!   allocate(model_gll(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
+    if (allocated(model_gll)) then
+      deallocate(model_gll)
+    endif
+    allocate(model_gll(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
 
     if (flag_output_dlnV == 1) then
       if (allocated(dlnV_gll)) then
@@ -145,8 +145,8 @@ program xsem_add_model_horizontal_layer
       allocate(dlnV_gll(NGLLX,NGLLY,NGLLZ,nspec))
     endif
 
-!   call sem_io_read_gll_file_n(model_dir, iproc, iregion, &
-!                               model_names, nmodel, model_gll)
+    call sem_io_read_gll_file_n(model_dir, iproc, iregion, &
+                                model_names, nmodel, model_gll)
 
     ! add slab model on each gll point
     do ispec = 1, nspec
@@ -172,8 +172,8 @@ program xsem_add_model_horizontal_layer
             endif
 
             ! get the new model
-!           model_gll(:,igllx,iglly,igllz,ispec) = (1.0_dp + dlnV) * &
-!             model_gll(:, igllx,iglly,igllz,ispec)
+            model_gll(:,igllx,iglly,igllz,ispec) = (1.0_dp + dlnV) * &
+              model_gll(:, igllx,iglly,igllz,ispec)
 
             if (flag_output_dlnV == 1) then
               dlnV_gll(igllx,iglly,igllz,ispec) = dlnV
@@ -184,9 +184,9 @@ program xsem_add_model_horizontal_layer
       enddo
     enddo
 
-!   ! write out model
-!   call sem_io_write_gll_file_n(out_dir, iproc, iregion, &
-!     model_names, nmodel, model_gll)
+    ! write out model
+    call sem_io_write_gll_file_n(out_dir, iproc, iregion, &
+      model_names, nmodel, model_gll)
 
     if (flag_output_dlnV == 1) then
       call sem_io_write_gll_file_1(out_dir, iproc, iregion, "dlnV", dlnV_gll)

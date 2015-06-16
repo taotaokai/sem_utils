@@ -284,7 +284,7 @@ program xsem_slice_sphere
     ! only use mesh element centers
     dist = huge(0.0_dp)
     do ispec = 1, nspec
-      iglob = mesh_data%ibool(NGLLX/2, NGLLY/2, NGLLZ/2, ispec)
+      iglob = mesh_data%ibool(MIDX, MIDY, MIDZ, ispec)
       dist = min(dist, sqrt( minval( &
         (xyz(1,:) - mesh_data%xyz_glob(1,iglob))**2 + &
         (xyz(2,:) - mesh_data%xyz_glob(2,iglob))**2 + &

@@ -9,8 +9,8 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  xsem_interp_mesh \ "
   print '(a)', "    <old_mesh_dir> <nproc_old> <old_model_dir> <model_tags> "
-! print '(a)', "    <max_search_dist> <max_misloc> "
   print '(a)', "    <new_mesh_dir> <nproc_new> <new_model_dir> "
+  print '(a)', "    <output_dir> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -23,18 +23,17 @@ subroutine selfdoc()
   print '(a)', "  (int) nproc_old: number of slices of the old mesh"
   print '(a)', "  (string) old_model_dir: directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (string) model_tags: comma delimited string, e.g. vsv,vsh,rho "
-! print '(a)', "  (float) max_search_dist: maximum distance to "
-! print '(a)', "    the n nearest elements from target point "
-! print '(a)', "  (float) max_misloc: maximum location error for points "
-! print '(a)', "    lying outside target mesh/layer volume "
   print '(a)', "  (string) new_mesh_dir: directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (int) nproc_new: number of slices of the new mesh"
-  print '(a)', "  (string) new_model_dir: output directory for new model files"
+  print '(a)', "  (string) new_model_dir: directory holds new model files"
+  print '(a)', "  (string) output_dir: output directory for interpolated model files"
   print '(a)', ""
   print '(a)', "NOTES"
   print '(a)', ""
   print '(a)', "  1) This program must run in parallel, e.g. mpirun -n <nproc> ..."
-  print '(a)', "  2) use values_from_mesh.h for old mesh to compile"
+  print '(a)', "  2) use values_from_mesher.h created for the old mesh to compile"
+  print '(a)', "  3) the new_model is used as the background model for the place "
+  print '(a)', "     old mesh doesn't include"
 ! print '(a)', "  2) max_misloc ~ 0.25 * typical element size of old mesh "
 ! print '(a)', "  3) max_search_dist ~ 5.0 * typical element size of old mesh"
 
@@ -55,7 +54,7 @@ program xsem_interp_mesh
   !===== declare variables
 
   !-- command line args
-  integer, parameter :: nargs = 7
+  integer, parameter :: nargs = 8
   character(len=MAX_STRING_LEN) :: args(nargs)
   character(len=MAX_STRING_LEN) :: old_mesh_dir, old_model_dir
   integer :: nproc_old
@@ -63,6 +62,8 @@ program xsem_interp_mesh
 
   character(len=MAX_STRING_LEN) :: new_mesh_dir, new_model_dir
   integer :: nproc_new
+
+  character(len=MAX_STRING_LEN) :: output_dir
 
   !-- region id
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
@@ -98,9 +99,11 @@ program xsem_interp_mesh
   !-- sem location
   type(sem_mesh_location), allocatable :: location_1slice(:)
   integer, parameter :: nnearest = 10
-  real(dp) :: typical_size, max_search_dist, max_misloc, dist
+  real(dp) :: typical_size, max_search_dist, max_misloc, min_dist
   real(dp), allocatable :: misloc_final(:)
   integer, allocatable :: stat_final(:)
+  !linearly varing from extrapolated value to background model
+  real(dp) :: weight
 
   !===== start MPI
 
@@ -113,7 +116,8 @@ program xsem_interp_mesh
   if (command_argument_count() /= nargs) then
     if (myrank == 0) then
       call selfdoc()
-      stop "[ERROR] xsem_interp_mesh: check your input arguments."
+      print *, "[ERROR] xsem_interp_mesh: check your input arguments."
+      call abort_mpi()
     endif
   endif
   call synchronize_all()
@@ -128,6 +132,7 @@ program xsem_interp_mesh
   read(args(5), '(a)') new_mesh_dir
   read(args(6), *) nproc_new
   read(args(7), '(a)') new_model_dir
+  read(args(8), '(a)') output_dir
 
   !===== parse model tags
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
@@ -145,7 +150,7 @@ program xsem_interp_mesh
                      ANGULAR_WIDTH_ETA_IN_DEGREES_VAL/ NEX_ETA_VAL) &
                  * DEGREES_TO_RADIANS * R_UNIT_SPHERE
 
-  max_search_dist = 5.0 * typical_size
+  max_search_dist = 10.0 * typical_size
 
   max_misloc = typical_size / 4.0
 
@@ -172,7 +177,7 @@ program xsem_interp_mesh
 
     do ispec = 1, nspec_new
 
-      iglob = mesh_new%ibool(NGLLX/2, NGLLY/2, NGLLZ/2, ispec)
+      iglob = mesh_new%ibool(MIDX, MIDY, MIDZ, ispec)
       xyz_center_new(:, ispec) = mesh_new%xyz_glob(:, iglob)
 
       do igllz = 1, NGLLZ
@@ -210,7 +215,12 @@ program xsem_interp_mesh
     allocate(model_interp(nmodel, ngll_new))
     allocate(model_gll_new(nmodel, NGLLX, NGLLY, NGLLZ, nspec_new))
     model_interp = FILLVALUE_dp
- 
+
+    !-- read in the new model as the background model
+!   call sem_io_read_gll_file_n(new_model_dir, iproc_new, iregion, &
+!     model_names, nmodel, model_gll_new)
+    model_gll_new = 0.0_dp
+
     !-- loop each slices of the old mesh
 
     do iproc_old = 0, (nproc_old - 1)
@@ -223,15 +233,15 @@ program xsem_interp_mesh
       nspec_old = mesh_old%nspec
 
       ! test if the new and old mesh slices are separated apart
-      dist = huge(0.0_dp)
+      min_dist = huge(0.0_dp)
       do ispec = 1, nspec_old
-        iglob = mesh_old%ibool(NGLLX/2, NGLLY/2, NGLLZ/2, ispec)
-        dist = min(dist, sqrt( minval( &
+        iglob = mesh_old%ibool(MIDX, MIDY, MIDZ, ispec)
+        min_dist = min(min_dist, sqrt( minval( &
           (xyz_center_new(1,:) - mesh_old%xyz_glob(1,iglob))**2 + &
           (xyz_center_new(2,:) - mesh_old%xyz_glob(2,iglob))**2 + &
           (xyz_center_new(3,:) - mesh_old%xyz_glob(3,iglob))**2)))
       enddo
-      if (dist > max_search_dist) then
+      if (min_dist > max_search_dist) then
         cycle
       endif
 
@@ -268,8 +278,8 @@ program xsem_interp_mesh
         ! for point located inside one element in the first time
         ! or closer to one element than located before
         if ( location_1slice(igll)%stat == 1 .or. &
-             (location_1slice(igll)%stat == 0 .and. &
-              location_1slice(igll)%misloc < misloc_final(igll)) ) &
+            (location_1slice(igll)%stat == 0 .and. &
+             location_1slice(igll)%misloc < misloc_final(igll)) ) &
         then
 
           ! interpolate model
@@ -295,20 +305,35 @@ program xsem_interp_mesh
       do igllz = 1, NGLLZ
         do iglly = 1, NGLLY
           do igllx = 1, NGLLX
+
             igll = igllx + &
                    NGLLX * ( (iglly-1) + & 
                    NGLLY * ( (igllz-1) + & 
                    NGLLZ * ( (ispec-1))))
+
             if (stat_final(igll) /= -1) then
               model_gll_new(:, igllx, iglly, igllz, ispec) = &
                 model_interp(:, igll)
             endif
+
+!           ! linearly varing from extrapolated value to background model
+!           ! based on mis-location
+!           if (stat_final(igll) == 0) then
+!             weight = misloc_final(igll)/max_misloc
+!             if (weight > 1.0) then
+!               print *, "[WARN] misloc_final is larger than max_misloc"
+!             endif
+!             model_gll_new(:, igllx, iglly, igllz, ispec) = &
+!               model_interp(:, igll) * (1.0 - weight) + &
+!               model_gll_new(:, igllx, iglly, igllz, ispec) * weight
+!           endif
+
           enddo
         enddo
       enddo
     enddo
 
-    call sem_io_write_gll_file_n(new_model_dir, iproc_new, iregion, &
+    call sem_io_write_gll_file_n(output_dir, iproc_new, iregion, &
       model_names, nmodel, model_gll_new)
 
   enddo ! iproc_new

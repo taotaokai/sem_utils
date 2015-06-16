@@ -7,6 +7,7 @@ module sem_mesh
   use sem_constants, only: dp, CUSTOM_REAL, MAX_STRING_LEN, IIN, IOUT
   use sem_constants, only: GAUSSALPHA, GAUSSBETA
   use sem_constants, only: NGLLX, NGLLY, NGLLZ, NGNOD
+  use sem_constants, only: MIDX, MIDY, MIDZ
   use sem_constants, only: R_EARTH_KM
   use sem_constants, only: REGIONAL_MOHO_MESH
   use sem_constants, only: IFLAG_CRUST, IFLAG_670_220, IFLAG_DUMMY
@@ -169,7 +170,7 @@ subroutine sem_mesh_read(basedir, iproc, iregion, mesh_data)
   ! separate crustal mesh layers for REGIONAL_MOHO_MESH 
   ! 3-layer crust: 10(third layer), 11, 12(shallowest layer)
   if (REGIONAL_MOHO_MESH) then
-    print *, "# separate crustal mesh into 3 layers for REGIONAL_MOHO_MESH"
+    print *, "# separate crustal mesh into 3 layers for REGIONAL_MOHO_MESH=", REGIONAL_MOHO_MESH
     num = 0
     do ispec = 1, nspec
       if (mesh_data%idoubling(ispec) == IFLAG_CRUST) then
@@ -187,7 +188,7 @@ subroutine sem_mesh_read(basedir, iproc, iregion, mesh_data)
 
     if (mesh_data%idoubling(ispec) == IFLAG_670_220) then
 
-      iglob = mesh_data%ibool(NGLLX/2, NGLLY/2, NGLLZ/2, ispec)
+      iglob = mesh_data%ibool(MIDX, MIDY, MIDZ, ispec)
       ! element center coordinate
       xyz_center = mesh_data%xyz_glob(:,iglob)
       depth = (1.0 - sqrt(sum(mesh_data%xyz_glob(:,iglob)**2))) * R_EARTH_KM
@@ -315,7 +316,7 @@ subroutine sem_mesh_locate_kdtree2( &
 ! type(sem_mesh_location) location_result(npoint): location results
 !
 !-notes:
-! 1. max_search_dist and max_misloc are normalized by R_EARTH in sem_constants
+! 1. max_search_dist and max_misloc should be normalized by R_EARTH in sem_constants
 
   use kdtree2_module
 
@@ -387,7 +388,9 @@ subroutine sem_mesh_locate_kdtree2( &
 
   !===== build kdtree
 
-  tree => kdtree2_create(xyz_elem, sort=.true., rearrange=.true.)
+  tree => kdtree2_create(xyz_elem, sort=.false., rearrange=.true.)
+  ! note: sort=.true. doesn't do anything good, because the "distance" used in
+  ! kdtree2 is different from the L2 norm.
 
   !===== locate each point
 
@@ -407,22 +410,26 @@ subroutine sem_mesh_locate_kdtree2( &
     call kdtree2_n_nearest(tp=tree, qv=xyz1, nn=nnearest, &
       results=search_result)
 
-    !-- test each potential element to see if target point is located inside
-
-    ! skip if the nearest element is a certain distance away
-    dist = sqrt(sum(xyz_elem(:, search_result(1)%idx) - xyz1)**2)
-    if (dist > max_search_dist) then
-      cycle
-    endif
-
-    ! loop each elements
+    !-- test each neighbour elements to see if target point is located inside
     do inn = 1, nnearest
 
       ispec = search_result(inn)%idx
 
-      ! only use element with the same layer_id(i.e. idoubling)
+      ! skip the element a certain distance away
+      dist = sqrt(sum( (xyz_elem(:, ispec) - xyz1)**2 ))
+      if (dist > max_search_dist) then
+        cycle
+      endif
+
+      ! only use element with the same layer ID (i.e. idoubling)
       if (idoubling(ipoint) /= IFLAG_DUMMY .and. &
-          idoubling(ipoint) /= mesh_data%idoubling(ispec)) then
+          mesh_data%idoubling(ispec) /= idoubling(ipoint)) then
+!     if (idoubling(ipoint) /=  41 .or. &
+!         mesh_data%idoubling(ispec) /= 41) then
+!       print *, "==================="
+!       print *, "ipoint=", ipoint
+!       print *, "idoubling(ipoint)=", idoubling(ipoint)
+!       print *, "mesh_data%idoubling(ipoint)=", mesh_data%idoubling(ispec)
         cycle
       endif
 
@@ -430,11 +437,13 @@ subroutine sem_mesh_locate_kdtree2( &
       call xyz2cube_bounded(xyz_anchor(:,:,ispec), xyz1, &
         uvw1, misloc1, flag_inside)
 
-      if (flag_inside) then ! record this element and exit looping the rest elements
+      if (flag_inside .eqv. .true.) then ! record this element and exit looping the rest elements
+
         location_result(ipoint)%stat = 1
         location_result(ipoint)%eid = ispec
         location_result(ipoint)%misloc = misloc1
         location_result(ipoint)%uvw = uvw1
+
         exit
 
       else ! accept this element if misloc smaller than 

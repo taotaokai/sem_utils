@@ -19,7 +19,7 @@ program_dir = ${src_dir}/program
 
 # gfortran
 FCFLAGS = -g -Wall -pedantic -fbounds-check
-FCFLAGS += -Os
+FCFLAGS += -O2
 FCFLAGS += -I$(inc_dir) -J$(obj_dir) -I$(netcdf_mod)
 LDFLAGS = -L$(netcdf_lib) -lnetcdff
 

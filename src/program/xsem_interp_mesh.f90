@@ -9,8 +9,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  xsem_interp_mesh \ "
   print '(a)', "    <old_mesh_dir> <nproc_old> <old_model_dir> <model_tags> "
-  print '(a)', "    <new_mesh_dir> <nproc_new> <new_model_dir> "
-  print '(a)', "    <output_dir> "
+  print '(a)', "    <new_mesh_dir> <nproc_new> <output_dir> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -25,7 +24,6 @@ subroutine selfdoc()
   print '(a)', "  (string) model_tags: comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', "  (string) new_mesh_dir: directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (int) nproc_new: number of slices of the new mesh"
-  print '(a)', "  (string) new_model_dir: directory holds new model files"
   print '(a)', "  (string) output_dir: output directory for interpolated model files"
   print '(a)', ""
   print '(a)', "NOTES"
@@ -54,13 +52,13 @@ program xsem_interp_mesh
   !===== declare variables
 
   !-- command line args
-  integer, parameter :: nargs = 8
+  integer, parameter :: nargs = 7
   character(len=MAX_STRING_LEN) :: args(nargs)
   character(len=MAX_STRING_LEN) :: old_mesh_dir, old_model_dir
   integer :: nproc_old
   character(len=MAX_STRING_LEN) :: model_tags
 
-  character(len=MAX_STRING_LEN) :: new_mesh_dir, new_model_dir
+  character(len=MAX_STRING_LEN) :: new_mesh_dir
   integer :: nproc_new
 
   character(len=MAX_STRING_LEN) :: output_dir
@@ -102,8 +100,6 @@ program xsem_interp_mesh
   real(dp) :: typical_size, max_search_dist, max_misloc, min_dist
   real(dp), allocatable :: misloc_final(:)
   integer, allocatable :: stat_final(:)
-  !linearly varing from extrapolated value to background model
-  real(dp) :: weight
 
   !===== start MPI
 
@@ -131,8 +127,7 @@ program xsem_interp_mesh
   read(args(4), '(a)') model_tags
   read(args(5), '(a)') new_mesh_dir
   read(args(6), *) nproc_new
-  read(args(7), '(a)') new_model_dir
-  read(args(8), '(a)') output_dir
+  read(args(7), '(a)') output_dir
 
   !===== parse model tags
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
@@ -219,7 +214,7 @@ program xsem_interp_mesh
     !-- read in the new model as the background model
 !   call sem_io_read_gll_file_n(new_model_dir, iproc_new, iregion, &
 !     model_names, nmodel, model_gll_new)
-    model_gll_new = 0.0_dp
+    model_gll_new = FILLVALUE_dp
 
     !-- loop each slices of the old mesh
 
@@ -315,18 +310,6 @@ program xsem_interp_mesh
               model_gll_new(:, igllx, iglly, igllz, ispec) = &
                 model_interp(:, igll)
             endif
-
-!           ! linearly varing from extrapolated value to background model
-!           ! based on mis-location
-!           if (stat_final(igll) == 0) then
-!             weight = misloc_final(igll)/max_misloc
-!             if (weight > 1.0) then
-!               print *, "[WARN] misloc_final is larger than max_misloc"
-!             endif
-!             model_gll_new(:, igllx, iglly, igllz, ispec) = &
-!               model_interp(:, igll) * (1.0 - weight) + &
-!               model_gll_new(:, igllx, iglly, igllz, ispec) * weight
-!           endif
 
           enddo
         enddo

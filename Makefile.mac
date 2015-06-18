@@ -32,6 +32,7 @@ program = xsem_slice_gcircle \
           xsem_slice_sphere \
 		  xmap_gcircle \
 		  xsem_interp_mesh \
+		  xsem_interp_mesh2 \
 		  xsem_interp_xyz \
 		  xlatlonhkm_to_vtk \
 		  xsem_add_model_slab_mow \

@@ -214,7 +214,8 @@ program xsem_interp_mesh
     !-- read in the new model as the background model
 !   call sem_io_read_gll_file_n(new_model_dir, iproc_new, iregion, &
 !     model_names, nmodel, model_gll_new)
-    model_gll_new = FILLVALUE_dp
+!   model_gll_new = FILLVALUE_dp
+    model_gll_new = -1000.0_dp
 
     !-- loop each slices of the old mesh
 

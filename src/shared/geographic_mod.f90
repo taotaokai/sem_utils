@@ -9,86 +9,145 @@ module geographic
 
   ! constants 
   real(dp), parameter :: PI = 4.0_dp * atan(1.0_dp)
-  real(dp), parameter :: DEG2RAD = PI / 180.0_dp
-  real(dp), parameter :: RAD2DEG = 180.0_dp / PI
+! real(dp), parameter :: DEG2RAD = PI / 180.0_dp
+! real(dp), parameter :: RAD2DEG = 180.0_dp / PI
 
+  ! Reference Ellipsoid
   ! WGS84 defining parameters (wikipedia:geodetic_datum)
-  real(dp), parameter :: wgs84_a = 6378137.0_dp
-  real(dp), parameter :: wgs84_invf = 298.257223563_dp
+  real(dp), parameter :: wgs84_a = 6378137.0
+  real(dp), parameter :: wgs84_invf = 298.257223563
   ! derived constants 
-  real(dp), parameter :: wgs84_f = 1.0_dp / wgs84_invf
-  real(dp), parameter :: wgs84_ecc2 = wgs84_f * (2.0_dp - wgs84_f)
-  real(dp), parameter :: wgs84_one_minus_ecc2 = 1.0_dp - wgs84_ecc2
-  real(dp), parameter :: wgs84_sq_one_minus_f = wgs84_one_minus_ecc2
+  real(dp), parameter :: wgs84_f = 1.0/wgs84_invf
+  real(dp), parameter :: wgs84_one_minus_f = 1.0 - wgs84_f
+  real(dp), parameter :: wgs84_b = wgs84_a * wgs84_one_minus_f
+  real(dp), parameter :: wgs84_sq_one_minus_f = sqrt(wgs84_one_minus_f)
+  real(dp), parameter :: wgs84_e2 = 1.0 - wgs84_sq_one_minus_f
+  real(dp), parameter :: wgs84_ep2 = 1.0/wgs84_sq_one_minus_f - 1.0
 
   ! exported opertations 
-  public :: geographic_geodetic2ecef
-  public :: geographic_ecef2ned 
-  public :: geographic_ecef2latlon0
+  public :: geographic_lla2ecef
+  public :: geographic_ecef2ned
+  public :: geographic_ecef2lla
+  public :: geographic_ecef2ll_zeroalt
   public :: rotation_matrix
 
 contains
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine geographic_geodetic2ecef(lat, lon, height, x, y, z)
-!-convert from geodetic coordinate(lat,lon,height) to ECEF coordinate(x,y,z)
+subroutine geographic_lla2ecef(lat, lon, alt, x, y, z)
+!-convert geodetic(lat,lon,alt) to ECEF(x,y,z) coordinates
 ! ECEF: earth centered earth fixed
-! reference datum: WGS84
+! Reference ellipsoid: WGS84
+! alt: ellipsoidal heigth
 !
-!-inputs: lat,lon[radians], height[meter]
+!-inputs: lat,lon[rad], alt[meter]
 !-outputs: x,y,z[meter]
   
-  real(dp), intent(in) :: lat, lon, height
+  real(dp), intent(in) :: lat, lon, alt
   real(dp), intent(out) :: x, y, z
 
   real(dp) :: sinlat, coslat, sinlon, coslon
-  real(dp) :: normal
+  real(dp) :: N 
 
   sinlat = sin(lat)
   coslat = cos(lat)
   sinlon = sin(lon)
   coslon = cos(lon)
 
-  normal = wgs84_a / sqrt(1.0_dp - wgs84_ecc2*sinlat**2)
+  N = wgs84_a / sqrt(1.0_dp - wgs84_e2*sinlat**2)
 
-  x = (normal + height) * coslat * coslon
-  y = (normal + height) * coslat * sinlon
-  z = (normal*wgs84_one_minus_ecc2 + height) * sinlat
+  x = (N + alt) * coslat * coslon
+  y = (N + alt) * coslat * sinlon
+  z = (N*wgs84_sq_one_minus_f + alt) * sinlat
     
 end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-subroutine geographic_ecef2ned(x, y, z, olat, olon, oheight, xnorth, yeast, zdown)
-!-convert from ECEF(x,y,z) to locat NED(xnorth,yeast,zdown) relative to the
-! origin(olat,olon,oheight)
-! reference datum: WGS84
+subroutine geographic_ecef2ned(x, y, z, lat0, lon0, alt0, north, east, down)
+!-convert ECEF(x,y,z) to NED(north,east,down) referred to (lat0,lon0,alt0)
+! reference ellipsoid: WGS84
 !
-!-input: x,y,z[meter], olat,olon[radians], oheigth[meter]
+!-input: x,y,z[meter], lat0,lon0[rad],alt0[meter]
 !-output: xnorth,yeast,zdown[meter]
   
-  real(dp), intent(in) :: x, y, z, olat, olon, oheight
-  real(dp), intent(out) :: xnorth, yeast, zdown
+  real(dp), intent(in) :: x, y, z, lat0, lon0, alt0
+  real(dp), intent(out) :: north, east, down
 
-  real(dp) :: ox, oy, oz
+  real(dp) :: x0, y0, z0
   real(dp) :: sinlat, coslat, sinlon, coslon
   real(dp) :: dx, dy, dz
 
-  call geographic_geodetic2ecef(olat, olon, oheight, ox, oy, oz)
+  call geographic_lla2ecef(lat0, lon0, alt0, x0, y0, z0)
 
-  sinlat = sin(olat)
-  coslat = cos(olat)
-  sinlon = sin(olon)
-  coslon = cos(olon)
+  sinlat = sin(lat0)
+  coslat = cos(lat0)
+  sinlon = sin(lon0)
+  coslon = cos(lon0)
 
-  dx = x - ox
-  dy = y - oy
-  dz = z - oz
+  dx = x - x0
+  dy = y - y0
+  dz = z - z0
 
-  xnorth = - sinlat * (coslon * dx + sinlon * dy) + coslat * dz
-  yeast  = - sinlon * dx + coslon * dy 
-  zdown  = - coslat * (coslon * dx + sinlon * dy) - sinlat * dz
-    
+  north = - sinlat * (coslon * dx + sinlon * dy) + coslat * dz
+  east  = - sinlon * dx + coslon * dy 
+  down  = - coslat * (coslon * dx + sinlon * dy) - sinlat * dz
+
+end subroutine
+
+
+!///////////////////////////////////////////////////////////////////////////////
+subroutine geographic_ecef2lla(x, y, z, lat, lon, alt)
+!-convert ECEF(x,y,z) to (lat,lon,alt)
+! reference ellipsoid: WGS84
+!
+!-input: x,y,z[meter]
+!-output: lat,lon[rad], alt[meter]
+  
+  real(dp), intent(in) :: x, y, z
+  real(dp), intent(out) :: lat, lon, alt
+
+  real(dp) :: p, theta, N
+
+  lon = atan2(y,x)
+
+  p = sqrt(x**2+y**2)
+  theta = atan2(z, p*wgs84_one_minus_f)
+
+  lat = atan2(z + wgs84_ep2*wgs84_b*sin(theta)**3, p - wgs84_e2*wgs84_a*cos(theta)**3)
+  N = wgs84_a/sqrt(1.0_dp - wgs84_e2*sin(lat)**2)
+  alt = p/cos(lat) - N
+
+  !correct for numerical instability in altitude near exact poles:
+  !(after this correction, error is about 2 millimeters, which is about
+  !the same as the numerical precision of the overall function)
+  if (p < 1.0) then
+    alt = z - wgs84_b
+  endif
+
+end subroutine
+
+
+!///////////////////////////////////////////////////////////////////////////////
+subroutine geographic_ecef2ll_zeroalt(x, y, z, lat, lon)
+!- get (lat,lon) where the vector ECEF(x,y,z) intercepts the WGS84 ellipsoid
+!
+!-input:
+! x,y,z: vector(x,y,z), the magnitude is always ignored
+!-output:
+! lat,lon[rad]: geodetic coordinates where the vector(x,y,z) will intercept the
+!          ellipsoid
+
+  real(dp), intent(in) :: x, y, z
+  real(dp), intent(out) :: lat, lon
+
+  ! get longitude
+  lon = atan2(y,x)
+
+  ! convert from geocentric to geodetic latitude
+  ! tan(phi_geocentric) = (1-f)^2 * tan(phi_geodetic)
+  lat = atan2(z, sqrt(x**2+y**2)*wgs84_sq_one_minus_f)
+
 end subroutine
 
 
@@ -128,28 +187,6 @@ subroutine rotation_matrix(v_axis, theta, R)
 
   R(2,3) = one_minus_cost*v_axis(2)*v_axis(3) - sint * v_axis(1)
   R(3,2) = one_minus_cost*v_axis(2)*v_axis(3) + sint * v_axis(1)
-
-end subroutine
-
-
-!///////////////////////////////////////////////////////////////////////////////
-subroutine geographic_ecef2latlon0(x, y, z, lat, lon)
-!- get (lat,lon) where the vector (x,y,z) in ECEF intercepts the WGS84 ellipsoid
-!
-!-input:
-! x,y,z: vector(x,y,z), the magnitude is always ignored
-!-output:
-! lat,lon: geodetic coordinates where the vector(x,y,z) will intercept the
-!          ellipsoid
-
-  real(dp), intent(in) :: x, y, z
-  real(dp), intent(out) :: lat, lon
-
-  ! get longitude
-  lon = atan2(y, x)
-
-  ! convert from geocentric to geolatitude latitude (zero elevation)
-  lat = atan2(z, sqrt(x**2 + y**2) * wgs84_sq_one_minus_f)
 
 end subroutine
 

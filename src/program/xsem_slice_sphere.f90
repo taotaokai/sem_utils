@@ -225,7 +225,7 @@ program xsem_slice_sphere
   do ilat = 1, nlat
     do ilon = 1, nlon
       idx = ilon + nlon * (ilat - 1)
-      call geographic_geodetic2ecef(lat(ilat), lon(ilon), 0.0d0, &
+      call geographic_lla2ecef(lat(ilat), lon(ilon), 0.0d0, &
                                     vr(1), vr(2), vr(3)) 
       vr = vr / sqrt(sum(vr**2))
       xyz(:,idx) = vr * radius

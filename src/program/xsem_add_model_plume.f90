@@ -137,7 +137,7 @@ program xsem_add_model_plume
     plume_v(2) = cos(plume_lat) * sin(plume_lon)
     plume_v(3) = sin(plume_lat)
   else
-    call geographic_geodetic2ecef(plume_lat, plume_lon, 0.0_dp, &
+    call geographic_lla2ecef(plume_lat, plume_lon, 0.0_dp, &
       plume_v(1), plume_v(2), plume_v(3)) 
   endif
 

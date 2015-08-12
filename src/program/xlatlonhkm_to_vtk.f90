@@ -96,7 +96,7 @@ program xlatlonhkm_to_vtk
 
   if (flag_ellipticity == 1) then
     do ipoint = 1, npoint
-      call geographic_geodetic2ecef(lat(ipoint), lon(ipoint), height(ipoint), &
+      call geographic_lla2ecef(lat(ipoint), lon(ipoint), height(ipoint), &
                                       x(ipoint),   y(ipoint),      z(ipoint))
     enddo
   elseif (flag_ellipticity == 0) then

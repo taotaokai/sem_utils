@@ -100,7 +100,7 @@ program xmap_gcircle
   theta = theta * DEGREES_TO_RADIANS
 
   ! unit direction vector v0 at origin point of the great circle
-  call geographic_geodetic2ecef(lat0, lon0, 0.d0, v0(1), v0(2), v0(3))
+  call geographic_lla2ecef(lat0, lon0, 0.d0, v0(1), v0(2), v0(3))
   v0 = v0 / sqrt(sum(v0**2))
 
   ! unit direction vector v1 along the shooting azimuth of the great circle
@@ -122,7 +122,7 @@ program xmap_gcircle
   do itheta = 1, ntheta
     call rotation_matrix(v_axis, theta(itheta), rotmat)
     vr = matmul(rotmat, v0)
-    call geographic_ecef2latlon0(vr(1), vr(2), vr(3), lat(itheta), lon(itheta))
+    call geographic_ecef2ll_zeroalt(vr(1), vr(2), vr(3), lat(itheta), lon(itheta))
   enddo
 
   !===== output results

@@ -146,7 +146,7 @@ program xsem_vertical_slice
   print *, "# slab_bottom_radius=", slab_bottom_radius
 
   ! direction vector of slab origin
-  call geographic_geodetic2ecef(slab_origin_lat, slab_origin_lon, 0.0_dp, &
+  call geographic_lla2ecef(slab_origin_lat, slab_origin_lon, 0.0_dp, &
                                 slab_origin(1), slab_origin(2), slab_origin(3))
 
   slab_origin = slab_origin / sqrt(sum(slab_origin**2))

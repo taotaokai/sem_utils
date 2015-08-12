@@ -29,18 +29,19 @@ module = sem_constants_mod sem_io_mod sem_mesh_mod \
 shared = gll_library geographic_mod kdtree2
 
 program = xsem_slice_gcircle \
-          xsem_slice_sphere \
-		  xmap_gcircle \
-		  xsem_interp_mesh \
-		  xsem_interp_mesh2 \
-		  xsem_interp_xyz \
-		  xlatlonhkm_to_vtk \
-		  xsem_add_model_slab_mow \
-		  xsem_add_model_plume \
-		  xsem_add_model_horizontal_layer \
-		  xsem_add_model_geographic_region \
-	      xsem_create_model_homogeneous \
-		  xsem_inner_product
+	xsem_slice_sphere \
+	xmap_gcircle \
+	xsem_interp_mesh \
+	xsem_interp_mesh2 \
+	xsem_interp_xyz \
+	xlatlonhkm_to_vtk \
+	xsem_add_model_slab_mow \
+	xsem_add_model_plume \
+	xsem_add_model_horizontal_layer \
+	xsem_add_model_geographic_region \
+	xsem_create_model_homogeneous \
+	xsem_inner_product \
+	xsem_interp_IRIS_netcdf
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))
@@ -75,6 +76,7 @@ $(program) : $(program_obj) $(shared_obj) $(module_obj)
 #$(OBJ): $(SHARED) $(MOD)
 #$(SHARED) : $(ODIR)/constants_module.o
 
+.PHONY: clean
 
 clean :
 	$(RM)  $(bin_dir) $(obj_dir)

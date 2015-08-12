@@ -4,18 +4,20 @@
 #         output_dir high/low-resolution [region]
 
 syn_dir=${1:-.}
-model_name_array=${2:-vp,vs}
-sem_bin=specfem3d_globe/bin
+mesh_dir=$syn_dir/${2:-DATABASES_MPI}
+model_dir=$syn_dir/${3:-DATABASES_MPI}
+vtk_dir=$syn_dir/${4:-VTK}
+model_name_array=${5:-vp,vs}
 
-vtk_dir=$syn_dir/vtk
+sem_bin=specfem3d_globe/bin
 
 echo "### syn_dir=$syn_dir vtk_dir=$vtk_dir model_name=$model_name_array"
 
 if [ ! -d "$vtk_dir" ]; then
-  mkdir $syn_dir/VTK
+  mkdir $vtk_dir 
 fi
 
-nproc=$(grep NPROCTOT_VAL $syn_dir/OUTPUT_FILES/values_from_mesher.h | awk '{print $NF}')
+nproc=$(grep NPROCTOT_VAL OUTPUT_FILES/values_from_mesher.h | awk '{print $NF}')
 seq 0 $(($nproc - 1)) > $vtk_dir/slice_list
 
 for model_name in $(echo $model_name_array | sed "s/,/ /")
@@ -26,9 +28,9 @@ do
   $sem_bin/xcombine_vol_data_vtk \
     $vtk_dir/slice_list \
     $model_name \
-    $syn_dir/DATABASES_MPI \
-    $syn_dir/DATABASES_MPI \
-    $vtk_dir 0 1
+    $mesh_dir \
+    $model_dir \
+    $vtk_dir 2 1
 done
 
 #bin/xcombine_vol_data_vtk \

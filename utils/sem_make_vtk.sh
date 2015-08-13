@@ -3,11 +3,11 @@
 #Usage: xcombine_vol_data slice_list filename input_topo_dir input_file_dir 
 #         output_dir high/low-resolution [region]
 
-syn_dir=${1:-.}
-mesh_dir=$syn_dir/${2:-DATABASES_MPI}
+model_name_array=${1:-vp,vs}
+syn_dir=${2:-.}
 model_dir=$syn_dir/${3:-DATABASES_MPI}
-vtk_dir=$syn_dir/${4:-VTK}
-model_name_array=${5:-vp,vs}
+mesh_dir=$syn_dir/${4:-DATABASES_MPI}
+vtk_dir=$syn_dir/${5:-VTK}
 
 sem_bin=specfem3d_globe/bin
 
@@ -30,7 +30,7 @@ do
     $model_name \
     $mesh_dir \
     $model_dir \
-    $vtk_dir 2 1
+    $vtk_dir 0 1
 done
 
 #bin/xcombine_vol_data_vtk \

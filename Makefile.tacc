@@ -20,7 +20,7 @@ program_dir = ${src_dir}/program
 # ifort
 FCFLAGS = -g
 FCFLAGS += -O2
-FCFLAGS += -I $(inc_dir) -I$(netcdf_mod) -module $(obj_dir) -assume byterecl
+FCFLAGS += -I $(inc_dir) -I$(netcdf_mod) -module $(obj_dir)
 LDFLAGS = -L$(netcdf_lib) -lnetcdff
 
 module = sem_constants_mod sem_io_mod sem_mesh_mod \

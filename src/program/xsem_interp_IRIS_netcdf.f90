@@ -199,9 +199,9 @@ program xsem_interp_IRIS_netcdf
             depth = depth / 1000.0_dp
 
             ! get model value
-            ilon_west  = maxloc(lon_var, 1, lon>=lon_var)
-            ilat_south = maxloc(lat_var, 1, lat>=lat_var)
-            idepth_top = maxloc(depth_var, 1, depth>=depth_var)
+            ilon_west  = maxloc(lon_var, dim=1, mask=lon_var<=lon)
+            ilat_south = maxloc(lat_var, dim=1, mask=lat_var<=lat)
+            idepth_top = maxloc(depth_var, dim=1, mask=depth_var<=depth)
 
             if (ilon_west>=1 .and. ilon_west<nlon .and. &
                 ilat_south>=1 .and. ilat_south<nlat .and. &

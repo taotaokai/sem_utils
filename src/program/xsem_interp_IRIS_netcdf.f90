@@ -55,7 +55,7 @@ program xsem_interp_IRIS_netcdf
   integer :: i, iproc
 
   ! model names
-  integer :: nmodel
+  integer :: nmodel, imodel
   character(len=1), parameter :: delimiter = ','
   character(len=MAX_STRING_LEN), allocatable :: model_names(:)
 
@@ -85,7 +85,8 @@ program xsem_interp_IRIS_netcdf
   real(dp) :: xyz(3)
   real(dp) :: lat, lon, depth
   ! interpolation
-  integer :: imodel
+  real(dp) :: min_lon_var, max_lon_var, min_lat_var, max_lat_var 
+  real(dp) :: min_depth_var, max_depth_var
   integer :: idepth_top, ilat_south, ilon_west
   real(dp) :: lat0, lat1, lon0, lon1, depth0, depth1
   real(dp) :: wx0, wx1, wy0, wy1, wz0, wz1
@@ -158,6 +159,14 @@ program xsem_interp_IRIS_netcdf
   ! close nc file
   call check( nf90_close(ncid) )
 
+  ! sanity check
+  max_lon_var = maxval(lon_var)
+  min_lon_var = minval(lon_var)
+  max_lat_var = maxval(lat_var)
+  min_lat_var = minval(lat_var)
+  max_depth_var = maxval(depth_var)
+  min_depth_var = minval(depth_var)
+
   !===== loop each mesh slice
   !do iproc = 0, (nproc - 1)
   do iproc = 2, 2
@@ -200,6 +209,14 @@ program xsem_interp_IRIS_netcdf
             lat = lat * RADIANS_TO_DEGREES
             depth = depth / 1000.0_dp
 
+            ! check if out of model region
+            if (lon > max_lon_var .or. lon < min_lon_var .or. &
+                lat > max_lat_var .or. lat < min_lat_var .or. &
+                depth > max_depth_var .or. depth < min_depth_var) then
+              model_gll(:,igllx,iglly,igllz,ispec) = gll_fillvalue
+              cycle
+            endif 
+
             ! get model value
             ilon_west  = maxloc(lon_var, dim=1, mask=lon_var<=lon)
             ilat_south = maxloc(lat_var, dim=1, mask=lat_var<=lat)
@@ -207,47 +224,37 @@ program xsem_interp_IRIS_netcdf
 
             write(*,"(3F6.2,3F8.2,3I4)") xyz, lon, lat, depth, ilon_west, ilat_south, idepth_top
 
-            if (ilon_west>=1 .and. ilon_west<nlon .and. &
-                ilat_south>=1 .and. ilat_south<nlat .and. &
-                idepth_top>=1 .and. idepth_top<ndepth) then
+            lon0 = lon_var(ilon_west)
+            lon1 = lon_var(ilon_west+1)
+            lat0 = lat_var(ilat_south)
+            lat1 = lat_var(ilat_south+1)
+            depth0 = depth_var(idepth_top)
+            depth1 = depth_var(idepth_top+1)
 
-              lon0 = lon_var(ilon_west)
-              lon1 = lon_var(ilon_west+1)
-              lat0 = lat_var(ilat_south)
-              lat1 = lat_var(ilat_south+1)
-              depth0 = depth_var(idepth_top)
-              depth1 = depth_var(idepth_top+1)
+            wx0 = (lon1 - lon)/(lon1 - lon0)
+            wx1 = (lon - lon0)/(lon1 - lon0)
+            wy0 = (lat1 - lat)/(lat1 - lat0)
+            wy1 = (lat - lat0)/(lat1 - lat0)
+            wz0 = (depth1 - depth)/(depth1 - depth0)
+            wz1 = (depth - depth0)/(depth1 - depth0)
 
-              wx0 = (lon1 - lon)/(lon1 - lon0)
-              wx1 = (lon - lon0)/(lon1 - lon0)
-              wy0 = (lat1 - lat)/(lat1 - lat0)
-              wy1 = (lat - lat0)/(lat1 - lat0)
-              wz0 = (depth1 - depth)/(depth1 - depth0)
-              wz1 = (depth - depth0)/(depth1 - depth0)
-
-              do imodel = 1, nmodel
-                if (any(model_vars(ilon_west:ilon_west+1, &
-                        ilat_south:ilat_south+1,idepth_top:idepth_top+1,imodel) &
-                        == model_fillvalues(imodel))) then
-                  model_gll(imodel,igllx,iglly,igllz,ispec) = gll_fillvalue
-                else
-                  model_gll(imodel,igllx,iglly,igllz,ispec) = &
-                    model_vars(ilon_west,  ilat_south,  idepth_top,  imodel)*wx0*wy0*wz0 + &
-                    model_vars(ilon_west,  ilat_south,  idepth_top+1,imodel)*wx0*wy0*wz1 + &
-                    model_vars(ilon_west,  ilat_south+1,idepth_top,  imodel)*wx0*wy1*wz0 + &
-                    model_vars(ilon_west,  ilat_south+1,idepth_top+1,imodel)*wx0*wy1*wz1 + &
-                    model_vars(ilon_west+1,ilat_south,  idepth_top,  imodel)*wx1*wy0*wz0 + &
-                    model_vars(ilon_west+1,ilat_south,  idepth_top+1,imodel)*wx1*wy0*wz1 + &
-                    model_vars(ilon_west+1,ilat_south+1,idepth_top,  imodel)*wx1*wy1*wz0 + &
-                    model_vars(ilon_west+1,ilat_south+1,idepth_top+1,imodel)*wx1*wy1*wz1
-                endif
-              enddo
-
-            else
-
-              model_gll(:,igllx,iglly,igllz,ispec) = gll_fillvalue
-
-            endif
+            do imodel = 1, nmodel
+              if (any(model_vars(ilon_west:ilon_west+1, &
+                      ilat_south:ilat_south+1,idepth_top:idepth_top+1,imodel) &
+                      == model_fillvalues(imodel))) then
+                model_gll(imodel,igllx,iglly,igllz,ispec) = gll_fillvalue
+              else
+                model_gll(imodel,igllx,iglly,igllz,ispec) = &
+                  model_vars(ilon_west,  ilat_south,  idepth_top,  imodel)*wx0*wy0*wz0 + &
+                  model_vars(ilon_west,  ilat_south,  idepth_top+1,imodel)*wx0*wy0*wz1 + &
+                  model_vars(ilon_west,  ilat_south+1,idepth_top,  imodel)*wx0*wy1*wz0 + &
+                  model_vars(ilon_west,  ilat_south+1,idepth_top+1,imodel)*wx0*wy1*wz1 + &
+                  model_vars(ilon_west+1,ilat_south,  idepth_top,  imodel)*wx1*wy0*wz0 + &
+                  model_vars(ilon_west+1,ilat_south,  idepth_top+1,imodel)*wx1*wy0*wz1 + &
+                  model_vars(ilon_west+1,ilat_south+1,idepth_top,  imodel)*wx1*wy1*wz0 + &
+                  model_vars(ilon_west+1,ilat_south+1,idepth_top+1,imodel)*wx1*wy1*wz1
+              endif
+            enddo
 
           enddo
         enddo

@@ -159,7 +159,8 @@ program xsem_interp_IRIS_netcdf
   call check( nf90_close(ncid) )
 
   !===== loop each mesh slice
-  do iproc = 0, (nproc - 1)
+  !do iproc = 0, (nproc - 1)
+  do iproc = 2, 2
 
     print *, '# iproc=', iproc
 
@@ -181,16 +182,17 @@ program xsem_interp_IRIS_netcdf
           do igllx = 1, NGLLX
     
             iglob = mesh_data%ibool(igllx,iglly,igllz,ispec)
-            xyz = mesh_data%xyz_glob(:,iglob) * R_EARTH
+            xyz = mesh_data%xyz_glob(:,iglob)
             
             ! get lat,lon,depth
             if (flag_ellipticity == 1) then
+              xyz = xyz * R_EARTH
               call geographic_ecef2lla(xyz(1), xyz(2), xyz(3), lat, lon, depth)
               depth = -1.0 * depth 
             else
               lon = atan2(xyz(2), xyz(1))
               lat = atan2(xyz(3), sqrt(xyz(1)**2 + xyz(2)**2) )
-              depth = R_EARTH - sqrt(sum(xyz**2))
+              depth = R_EARTH * (1.0 - sqrt(sum(xyz**2)))
             endif
 
             ! change units to degrees, km
@@ -202,6 +204,8 @@ program xsem_interp_IRIS_netcdf
             ilon_west  = maxloc(lon_var, dim=1, mask=lon_var<=lon)
             ilat_south = maxloc(lat_var, dim=1, mask=lat_var<=lat)
             idepth_top = maxloc(depth_var, dim=1, mask=depth_var<=depth)
+
+            print *, xyz, lon, lat, depth, ilon_west, ilat_south, idepth_top
 
             if (ilon_west>=1 .and. ilon_west<nlon .and. &
                 ilat_south>=1 .and. ilat_south<nlat .and. &

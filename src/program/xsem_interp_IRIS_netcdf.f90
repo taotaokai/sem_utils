@@ -205,7 +205,7 @@ program xsem_interp_IRIS_netcdf
             ilat_south = maxloc(lat_var, dim=1, mask=lat_var<=lat)
             idepth_top = maxloc(depth_var, dim=1, mask=depth_var<=depth)
 
-            print *, xyz, lon, lat, depth, ilon_west, ilat_south, idepth_top
+            write(*,"(3F6.2,3F8.2,3I4)") xyz, lon, lat, depth, ilon_west, ilat_south, idepth_top
 
             if (ilon_west>=1 .and. ilon_west<nlon .and. &
                 ilat_south>=1 .and. ilat_south<nlat .and. &

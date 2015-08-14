@@ -41,7 +41,8 @@ program = xsem_slice_gcircle \
 	xsem_add_model_geographic_region \
 	xsem_create_model_homogeneous \
 	xsem_inner_product \
-	xsem_interp_IRIS_netcdf
+	xsem_interp_IRIS_netcdf \
+	xsem_add_model_dlnV
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))

@@ -160,6 +160,10 @@ program xsem_interp_IRIS_netcdf
   call check( nf90_close(ncid) )
 
   ! sanity check
+  if (lon_var(1) > lon_var(nlon)) then
+    print *, "[ERROR] longitude coordinates cross +/-180 deg."
+    stop
+  endif
   max_lon_var = maxval(lon_var)
   min_lon_var = minval(lon_var)
   max_lat_var = maxval(lat_var)
@@ -168,8 +172,8 @@ program xsem_interp_IRIS_netcdf
   min_depth_var = minval(depth_var)
 
   !===== loop each mesh slice
-  !do iproc = 0, (nproc - 1)
-  do iproc = 2, 2
+  do iproc = 0, (nproc - 1)
+  !do iproc = 2, 2
 
     print *, '# iproc=', iproc
 
@@ -222,7 +226,7 @@ program xsem_interp_IRIS_netcdf
             ilat_south = maxloc(lat_var, dim=1, mask=lat_var<=lat)
             idepth_top = maxloc(depth_var, dim=1, mask=depth_var<=depth)
 
-            write(*,"(3F6.2,3F8.2,3I4)") xyz, lon, lat, depth, ilon_west, ilat_south, idepth_top
+            !write(*,"(3F6.2,3F8.2,3I4)") xyz, lon, lat, depth, ilon_west, ilat_south, idepth_top
 
             lon0 = lon_var(ilon_west)
             lon1 = lon_var(ilon_west+1)

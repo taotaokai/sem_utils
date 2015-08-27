@@ -16,5 +16,9 @@ ln -s ${source_dir}/flags.guess ./
 ln -s ${source_dir}/install-sh ./
 ln -s ${source_dir}/Makefile.in ./
 
+mkdir DATA; cd DATA
+ln -s ${source_dir}/DATA/* ./
+cd ../
+
 # copy setup directory
 cp -r ${source_dir}/setup ./ 

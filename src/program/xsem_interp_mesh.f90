@@ -3,13 +3,14 @@ subroutine selfdoc()
   print '(a)', "NAME"
   print '(a)', ""
   print '(a)', "  xsem_interp_mesh "
-  print '(a)', "    - interpolate GLL model from one SEM mesh onto a new mesh"
+  print '(a)', "    - interpolate GLL model from one SEM mesh into a new mesh"
+  print '(a)', "      the new SEM mesh should be within the old SEM mesh "
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_interp_mesh \ "
-  print '(a)', "    <old_mesh_dir> <nproc_old> <old_model_dir> <model_tags> "
-  print '(a)', "    <new_mesh_dir> <nproc_new> <output_dir> "
+  print '(a)', "    <old_mesh_dir> <old_model_dir> <nproc_old> "
+  print '(a)', "    <new_mesh_dir> <nproc_new> <model_tags> <output_dir> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -122,11 +123,11 @@ program xsem_interp_mesh
     call get_command_argument(i, args(i), status=ier)
   enddo
   read(args(1), '(a)') old_mesh_dir
-  read(args(2), *) nproc_old
-  read(args(3), '(a)') old_model_dir
-  read(args(4), '(a)') model_tags
-  read(args(5), '(a)') new_mesh_dir
-  read(args(6), *) nproc_new
+  read(args(2), '(a)') old_model_dir
+  read(args(3), *) nproc_old
+  read(args(4), '(a)') new_mesh_dir
+  read(args(5), *) nproc_new
+  read(args(6), '(a)') model_tags
   read(args(7), '(a)') output_dir
 
   !===== parse model tags

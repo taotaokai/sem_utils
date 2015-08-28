@@ -2,8 +2,11 @@
 
 # create build directory
 
-source_dir=~/research/waveform_tomography/codes/specfem3d_globe_modified
+#source_dir=~/research/waveform_tomography/codes/specfem3d_globe_modified
+source_dir=~/tools/specfem3d_globe_modified
 build_dir=specfem3d_globe
+
+wkdir=$(pwd)
 
 # prepare build_dir
 rm -rf $build_dir
@@ -21,4 +24,4 @@ ln -s ${source_dir}/DATA/* ./
 cd ../
 
 # copy setup directory
-cp -r ${source_dir}/setup ./ 
+cp -r ${source_dir}/setup ./

@@ -30,9 +30,9 @@ subroutine selfdoc()
   print '(a)', "NOTES"
   print '(a)', ""
   print '(a)', "  1) This program must run in parallel, e.g. mpirun -n <nproc> ..."
-  print '(a)', "  2) use values_from_mesher.h created for the old mesh to compile"
+  print '(a)', "  2) use values_from_mesher.h for the old mesh to compile"
   print '(a)', "  3) the new_model is used as the background model for the place "
-  print '(a)', "     old mesh doesn't include"
+  print '(a)', "     old mesh doesn't cover"
 ! print '(a)', "  2) max_misloc ~ 0.25 * typical element size of old mesh "
 ! print '(a)', "  3) max_search_dist ~ 5.0 * typical element size of old mesh"
 

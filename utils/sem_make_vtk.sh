@@ -20,7 +20,7 @@ fi
 nproc=$(grep NPROCTOT_VAL OUTPUT_FILES/values_from_mesher.h | awk '{print $NF}')
 seq 0 $(($nproc - 1)) > $vtk_dir/slice_list
 
-for model_name in $(echo $model_name_array | sed "s/,/ /")
+for model_name in $(echo $model_name_array | sed "s/,/ /g")
 do
   echo "#========================== "
   echo "# process $model_name"

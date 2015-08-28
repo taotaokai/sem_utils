@@ -31,6 +31,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  1) This program must run in parallel, e.g. mpirun -n <nproc> ..."
   print '(a)', "  2) use values_from_mesher.h for the old mesh to compile"
+  print '(a)', "     use two values: ANGULAR_WIDTH_XI_IN_DEGREES_VAL, NEX_XI_VAL "
   print '(a)', "  3) the new_model is used as the background model for the place "
   print '(a)', "     old mesh doesn't cover"
 ! print '(a)', "  2) max_misloc ~ 0.25 * typical element size of old mesh "

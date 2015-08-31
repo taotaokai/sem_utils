@@ -1,38 +1,25 @@
 #!/bin/bash
 
+# configure files: Par_file, CMTSOLUTION, setup/*.h.in
+
 wkdir=$(pwd)
 
-data_dir=DATA
-build_dir=specfem3d_globe
-
-# prepare data_dir
-if [ ! -f $data_dir/Par_file ] || \
-   [ ! -f $data_dir/CMTSOLUTION ] || \
-   [ ! -f $data_dir/STATIONS ]
-then
-  echo "[ERROR] missing one or more control files in $data_dir"
-  exit -1
-fi
-
-if [ ! -d DATABASES_MPI ] || [ ! -d OUTPUT_FILES ]
-then
-  mkdir DATABASES_MPI OUTPUT_FILES
-fi
+config_dir=$wkdir/${1:-DATA}
+build_dir=$wkdir/${2:-specfem3d_globe}
 
 # prepare build_dir
 cd $build_dir/
+mkdir DATABASES_MPI OUTPUT_FILES
 
-rm -rf DATABASES_MPI OUTPUT_FILES
-ln -s $wkdir/DATABASES_MPI .
-ln -s $wkdir/OUTPUT_FILES .
+cd $build_dir/DATA
+ln -sf $config_dir/Par_file .
+ln -sf $config_dir/CMTSOLUTION .
 
-cd DATA
-ln -sf $wkdir/DATA/Par_file .
-ln -sf $wkdir/DATA/CMTSOLUTION .
-ln -sf $wkdir/DATA/STATIONS .
+cd $build_dir/setup
+ln -sf $config_dir/setup/*.h.in .
 
 # build
-cd $wkdir/$build_dir
+cd $build_dir
 
 ./configure FC=mpif90 MPIFC=mpif90 FCFLAGS="-O3"
 make clean

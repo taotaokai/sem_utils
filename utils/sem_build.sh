@@ -4,7 +4,7 @@
 
 wkdir=$(pwd)
 
-config_dir=$wkdir/${1:-DATA}
+config_dir=$wkdir/${1:-sem_config}
 build_dir=$wkdir/${2:-specfem3d_globe}
 
 # prepare build_dir
@@ -12,8 +12,8 @@ cd $build_dir/
 mkdir DATABASES_MPI OUTPUT_FILES
 
 cd $build_dir/DATA
-ln -sf $config_dir/Par_file .
-ln -sf $config_dir/CMTSOLUTION .
+ln -sf $config_dir/DATA/Par_file .
+ln -sf $config_dir/DATA/CMTSOLUTION .
 
 cd $build_dir/setup
 ln -sf $config_dir/setup/*.h.in .

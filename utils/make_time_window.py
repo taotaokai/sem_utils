@@ -41,7 +41,7 @@ evla = float(event[4][1])
 evlo = float(event[5][1])
 evdp = float(event[6][1])
 
-event = {'id':evnm, 'centroid time':evotime, 'latitude':evla,
+event = {'id':evnm, 'centroid_time':evotime, 'latitude':evla,
 'longitude':evlo, 'depth':evdp}
 
 print '#event info: ', event
@@ -114,7 +114,7 @@ for channel in stations:
             print '{:s}|{:s}|{:s}|{:s}|{:.1f}|{:.1f}|{:s}|{:s}'.format( 
                     channel['network'], channel['station'],
                     channel['location'], winspec['channel'], azimuth, dip,
-                    event['centroid time'] + arrivals[0].time + winspec['begin'],
-                    event['centroid time'] + arrivals[0].time + winspec['end'])
+                    event['centroid_time']+arrivals[0].time+winspec['begin'],
+                    event['centroid_time']+arrivals[0].time+winspec['end'])
         else:
             print "[ERROR] phase not found: ", winspec['phase']

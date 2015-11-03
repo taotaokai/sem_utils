@@ -114,25 +114,27 @@ class Misfit(object):
         """cmt_file (str): CMTSOLUTION format file
         """
         with open(cmt_file, 'r') as f:
-            cmt = [x.split() for x in f.readlines() if not(x.startswith('#'))]
-        # PDE
+            cmt = [ x.split() for x in f.readlines() 
+                    if not(x.startswith('#')) ]
         year  = cmt[0][1]
         month  = cmt[0][2]
         day = cmt[0][3]
         hour  = cmt[0][4]
         minute = cmt[0][5]
         second = cmt[0][6]
-        # CMT results
+
         event_id = cmt[1][2]
         time_shift = float(cmt[2][2])
         half_duration = float(cmt[3][2])
         lat = float(cmt[4][1])
         lon = float(cmt[5][1])
         depth = float(cmt[6][1])
+
         # centroid time 
         isotime = '{:s}-{:s}-{:s}T{:s}:{:s}:{:s}Z'.format(
                 year, month, day, hour, minute, second)
         centroid_time = UTCDateTime(isotime) + time_shift
+
         # moment tensor 
         # basis: (r,theta,phi) corresponds to (up,south,east)
         Mrr = float(cmt[7][1])
@@ -145,10 +147,11 @@ class Misfit(object):
 
         # add event
         events = self.data['events']
-        gcmt = {'centroid_time':str(centroid_time), 
+        gcmt = {'code': event_id,
+                'centroid_time':str(centroid_time),
                 'half_duration':half_duration,
                 'latitude':lat, 'longitude':lon, 'depth':depth, 
-                'moment_tensor':M}
+                'moment_tensor':M }
         if event_id not in events:
             events[event_id] = {
                     'gcmt': gcmt,
@@ -761,8 +764,9 @@ class Misfit(object):
     #end def setup_windows(self,
 
 
-    def relocate_1d(self, event_id, window_id_list=['Z.p,P', 'T.s,S'],
-        min_SNR=10.0, min_cc_0=0.75, min_cc_max=0.85 ):
+    def relocate_1d(self, event_id, window_id_list=['Z.p,P'],
+        min_SNR=10.0, min_cc_0=0.7, min_cc_max=0.85, max_time_shift=10.0,
+        new_file=None):
         """relocate event using ray path in reference earth model
         """
         # check inputs
@@ -772,33 +776,30 @@ class Misfit(object):
                     % (event_id)
             sys.exit()
 
+        # select windows
+        sta_win_id_list = []
         event = events[event_id]
         stations = event['stations']
-
-        # select data
-        sta_win_id_list = []
         for station_id in stations:
-            station = stations[station_id]
-            windows = station['windows']
 
-            # skip bad station 
+            station = stations[station_id]
             if station['stat']['code'] < 0:
-                #msg = station['stat']['msg']
-                #print "[WARNING] %s:%s(%s) station not used, SKIP" \
-                #        % (event_id, station_id, msg)
                 continue
 
-                meta = station['meta']
-
+            windows = station['windows']
             for window_id in window_id_list:
                 if window_id not in windows:
                     continue
-                window = windows[window_id]
 
-                if window['stat']['code'] != 1 or \
-                        window['quality']['SNR'] < min_SNR or \
-                        window['misfit']['cc_0'] < min_cc_0 or \
-                        window['misfit']['cc_max'] < min_cc_max:
+                window = windows[window_id]
+                if window['stat']['code'] != 1:
+                    continue 
+
+                misfit = window['misfit']
+                if window['quality']['SNR'] < min_SNR or \
+                        misfit['cc_0'] < min_cc_0 or \
+                        misfit['cc_max'] < min_cc_max or\
+                        abs(misfit['cc_time_shift']) > max_cc_time_shift:
                     continue
 
                 sta_win_id = (station_id, window_id)
@@ -815,7 +816,8 @@ class Misfit(object):
         G = np.zeros((n, 4))
         dt_cc = np.zeros(n)
         R_Earth_km = 6371.0
-        evdp = event['gcmt']['depth']
+        gcmt = event['gcmt']
+        evdp = gcmt['depth']
         for i in range(n):
             sta_win_id = sta_win_id_list[i]
             station_id = sta_win_id[0]
@@ -841,16 +843,11 @@ class Misfit(object):
             dt_cc[i] = misfit['cc_time_shift']
 
         #linearized inversion (can be extended to second order using dynamic ray-tracing)
-        dm, residual, rank, s = np.linalg.lstsq(G, dt_cc)
+        dm, residual, rank, sigval = np.linalg.lstsq(G, dt_cc)
 
-        print "[dNorth(km),dEast,dDepth,dT(sec)]= ", dm
-        print "sum(dt_res**2)= ", residual
-        print "rank(G)=", rank
-        print "singular_value(G)=", s
-        
         # convert dm from NED to ECEF coordinate
-        evla = event['gcmt']['latitude']
-        evlo = event['gcmt']['longitude']
+        evla = gcmt['latitude']
+        evlo = gcmt['longitude']
 
         slat = np.sin(np.deg2rad(evla))
         clat = np.cos(np.deg2rad(evla))
@@ -873,7 +870,6 @@ class Misfit(object):
 
         # old location in ECEF (meters)
         evx, evy, evz = pyproj.transform(lla, ecef, evlo, evla, -1000.0*evdp)
-        print "old_location= ", evla, evlo, evdp
 
         # new location in ECEF (meters)
         evx1 = evx + ev_dx*1000.0
@@ -882,16 +878,48 @@ class Misfit(object):
         # in LLA
         evlo1, evla1, evalt1 = pyproj.transform(ecef, lla, evx1, evy1, evz1)
         evdp1 = -evalt1/1000.0
-        print "new_location= ", evla1, evlo1, evdp1, ev_dt
 
         # residuals 
-        print "mean/std(dt_cc)= ", np.mean(dt_cc), np.std(dt_cc)
         # linearized modelling
         dt_syn = G.dot(dm) 
         dt_res = dt_cc - dt_syn
-        print "mean/std(dt_res)= ", np.mean(dt_res), np.std(dt_res)
 
-        #return evlo1, evla1, evdp1, ev_dt, dm
+        # make results
+        reloc_dict = {
+                'window_id_list': window_id_list,
+                'min_SNR': min_SNR,
+                'min_cc_0': min_cc_0,
+                'min_cc_max': min_cc_max,
+                'max_cc_time_shift': max_cc_time_shift,
+                'singular_value': sigval,
+                'dNorth':dm[0], 'dEast':dm[1], 'dDepth':dm[2], 'dT':dm[3],
+                'old_gcmt': , gcmt,
+                'new_location': {'latitude':evla1, 'longitude':evlo1, 
+                    'depth':evdp1},
+                'data': {'num':n, 'mean':np.mean(dt_cc), 'std':np.std(dt_cc)},
+                'residual': {'mean':np.mean(dt_res), 'std':np.std(dt_res)} }
+
+        # make new CMTSOLUTION file
+        new_centroid_time = UTCDateTime(gcmt[centroid_time]) + ev_dt
+        if new_file:
+            M = gcmt['moment_tensor']
+            with open(new_file, 'w') as fp:
+                fp.write(new_centroid_time.strftime(
+                    'RELOC %Y %m %d %H %M %S.%f ') )
+                fp.write('event name:      %s'     % (event_id))
+                fp.write('time shift:      0.0'                ) 
+                fp.write('half duration:   %.1f'   % (gcmt['half_duration']) ) 
+                fp.write('latitude:        %.4f'   % (evla1)   ) 
+                fp.write('longitude:       %.4f'   % (evlo1)   ) 
+                fp.write('depth:           %.4f'   % (evdp1)   ) 
+                fp.write('Mrr:             %11.4e' % (M[0][0]) ) 
+                fp.write('Mtt:             %11.4e' % (M[1][1]) ) 
+                fp.write('Mpp:             %11.4e' % (M[2][2]) ) 
+                fp.write('Mrt:             %11.4e' % (M[0][1]) ) 
+                fp.write('Mrp:             %11.4e' % (M[0][2]) ) 
+                fp.write('Mtp:             %11.4e' % (M[1][2]) ) 
+
+        return reloc_dict
 
 
     def plot_misfit(self, event_id, window_id, outfig=None):

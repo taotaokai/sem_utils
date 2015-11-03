@@ -922,7 +922,7 @@ class Misfit(object):
         return reloc_dict
 
 
-    def plot_misfit(self, event_id, window_id, outfig=None):
+    def plot_misfit(self, event_id, window_id, out_file=None):
         """Plot misfit for a certain event and window_id  
         """
         # dt_cc       | cc_0/cc_max V.S. dt_cc 
@@ -1119,7 +1119,7 @@ class Misfit(object):
         #ax2.tick_params(labelsize=10)
 
         #------ save figure
-        if not outfig:
-            outfig = '%s.%s.pdf' % (event_id, window_id)
-        fig.savefig(outfig, format='pdf')
+        if not out_file:
+            out_file = '%s.%s.pdf' % (event_id, window_id)
+        fig.savefig(out_file, format='pdf')
         #fig.savefig("misfit.pdf", bbox_inches='tight', format='pdf')

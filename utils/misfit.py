@@ -60,11 +60,6 @@ class Misfit(object):
     |   'events': {
     |   *   <event_id>: {
     |   |   |   'gcmt': {lat,lon,depth, ...}, 
-    |   |   |   'relocate1d': {
-    |   |   |   |   'phase_list': ['p', 'P',...],
-    |   |   |   |   'filter': {SNR, cc_0, cc_max,...}, 
-    |   |   |   |   'latitude': , 'longitude': ...
-    |   |   |   |   'residual_linear': 
     |   |   |   'stations': {
     |   |   |   *   <station_id(net.sta.loc)>: {
     |   |   |   |   |   'meta': {lat,lon,ele,...,channels:{code,az,dip,...} },
@@ -643,7 +638,7 @@ class Misfit(object):
                     proj_matrix[0,0] = 1.0 # E
                     proj_matrix[1,1] = 1.0 # N
                     proj_matrix[2,2] = 0.0 # Z
-                elif win == 'F': # full 3d vector
+                elif comp == 'F': # full 3d vector
                     proj_matrix[0,0] = 1.0
                     proj_matrix[1,1] = 1.0
                     proj_matrix[2,2] = 1.0
@@ -707,7 +702,7 @@ class Misfit(object):
                 #    adj_ENZ =  
 
                 # make measurment results 
-                quality_dict = { 
+                quality_dict = {
                         'A_obs': A_obs, 'A_syn': A_syn, 'A_noise': A_noise,
                         'SNR': snr}
                 misfit_dict = {
@@ -765,8 +760,8 @@ class Misfit(object):
 
 
     def relocate_1d(self, event_id, window_id_list=['Z.p,P'],
-        min_SNR=10.0, min_cc_0=0.7, min_cc_max=0.85, max_time_shift=10.0,
-        new_file=None):
+        min_SNR=10.0, min_cc_0=0.7, min_cc_max=0.85, 
+        max_cc_time_shift=10.0, out_cmt_file=None):
         """relocate event using ray path in reference earth model
         """
         # check inputs
@@ -881,7 +876,7 @@ class Misfit(object):
 
         # residuals 
         # linearized modelling
-        dt_syn = G.dot(dm) 
+        dt_syn = G.dot(dm)
         dt_res = dt_cc - dt_syn
 
         # make results
@@ -891,33 +886,34 @@ class Misfit(object):
                 'min_cc_0': min_cc_0,
                 'min_cc_max': min_cc_max,
                 'max_cc_time_shift': max_cc_time_shift,
-                'singular_value': sigval,
-                'dNorth':dm[0], 'dEast':dm[1], 'dDepth':dm[2], 'dT':dm[3],
-                'old_gcmt': , gcmt,
+                'singular_value': sigval.tolist(),
+                'dm': {'dNorth':dm[0], 'dEast':dm[1], 'dDepth':dm[2], 
+                    'dT':dm[3]},
+                'old_gcmt': gcmt,
                 'new_location': {'latitude':evla1, 'longitude':evlo1, 
                     'depth':evdp1},
                 'data': {'num':n, 'mean':np.mean(dt_cc), 'std':np.std(dt_cc)},
                 'residual': {'mean':np.mean(dt_res), 'std':np.std(dt_res)} }
 
         # make new CMTSOLUTION file
-        new_centroid_time = UTCDateTime(gcmt[centroid_time]) + ev_dt
-        if new_file:
+        new_centroid_time = UTCDateTime(gcmt['centroid_time']) + ev_dt
+        if out_cmt_file:
             M = gcmt['moment_tensor']
-            with open(new_file, 'w') as fp:
+            with open(out_cmt_file, 'w') as fp:
                 fp.write(new_centroid_time.strftime(
-                    'RELOC %Y %m %d %H %M %S.%f ') )
-                fp.write('event name:      %s'     % (event_id))
-                fp.write('time shift:      0.0'                ) 
-                fp.write('half duration:   %.1f'   % (gcmt['half_duration']) ) 
-                fp.write('latitude:        %.4f'   % (evla1)   ) 
-                fp.write('longitude:       %.4f'   % (evlo1)   ) 
-                fp.write('depth:           %.4f'   % (evdp1)   ) 
-                fp.write('Mrr:             %11.4e' % (M[0][0]) ) 
-                fp.write('Mtt:             %11.4e' % (M[1][1]) ) 
-                fp.write('Mpp:             %11.4e' % (M[2][2]) ) 
-                fp.write('Mrt:             %11.4e' % (M[0][1]) ) 
-                fp.write('Mrp:             %11.4e' % (M[0][2]) ) 
-                fp.write('Mtp:             %11.4e' % (M[1][2]) ) 
+                    'RELOC %Y %m %d %H %M %S.%f \n') )
+                fp.write('event name:      %s\n'     % (event_id))
+                fp.write('time shift:      0.0\n'                ) 
+                fp.write('half duration:   %.1f\n'   % (gcmt['half_duration']) ) 
+                fp.write('latitude:        %.4f\n'   % (evla1)   ) 
+                fp.write('longitude:       %.4f\n'   % (evlo1)   ) 
+                fp.write('depth:           %.4f\n'   % (evdp1)   ) 
+                fp.write('Mrr:             %12.4e\n' % (M[0][0]) ) 
+                fp.write('Mtt:             %12.4e\n' % (M[1][1]) ) 
+                fp.write('Mpp:             %12.4e\n' % (M[2][2]) ) 
+                fp.write('Mrt:             %12.4e\n' % (M[0][1]) ) 
+                fp.write('Mrp:             %12.4e\n' % (M[0][2]) ) 
+                fp.write('Mtp:             %12.4e\n' % (M[1][2]) ) 
 
         return reloc_dict
 
@@ -1007,7 +1003,7 @@ class Misfit(object):
 
         #------ cc_time_shift + SNR 
         ax = fig.add_axes([0.05, 0.5, 0.4, 0.35])
-        ax.set_title("cc_time_shift + SNR")
+        ax.set_title("cc_time_shift (symbol_size ~ SNR)")
 
         m = Basemap(projection='merc', resolution='l',
                 llcrnrlat=min_lat, llcrnrlon=min_lon, 
@@ -1022,8 +1018,8 @@ class Misfit(object):
         sx, sy = m(stlo_list, stla_list)
         size_list = [ 0.01 if x<0.01 else x for x in snr_list ]
         im = m.scatter(sx, sy, s=size_list, marker='o',
-                c=cc_dt_list, cmap='seismic', edgecolor='black',
-                linewidth=0.05)
+                c=cc_dt_list, cmap='seismic', 
+                edgecolor='grey', linewidth=0.05)
         mean_amp = np.mean(cc_dt_list)
         std_amp = np.std(cc_dt_list)
         plot_amp = abs(mean_amp)+std_amp
@@ -1039,10 +1035,12 @@ class Misfit(object):
         cbar_ax = fig.add_axes([0.45, 0.6, 0.005, 0.2])
         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
         cbar_ax.tick_params(labelsize=9) 
-        
-        #------ cc_max, SNR
+        cbar_ax.set_xlabel(' cc_dt(s)', fontsize=9)
+        cbar_ax.xaxis.set_label_position('top')
+       
+        #------ color: cc_max, size: SNR
         ax = fig.add_axes([0.05, 0.05, 0.4, 0.35])
-        ax.set_title("cc_max + SNR")
+        ax.set_title("cc_max (symbol_size ~ SNR)")
 
         m = Basemap(projection='merc', resolution='l',
                 llcrnrlat=min_lat, llcrnrlon=min_lon, 
@@ -1058,8 +1056,8 @@ class Misfit(object):
         #size_list = [ 20**x for x in cc_max_list ]
         size_list = [ 0.01 if x<0.01 else x for x in snr_list ]
         im = m.scatter(sx, sy, s=size_list, marker='o',
-                c=cc_max_list, cmap='seismic', edgecolor='black',
-                linewidth=0.05)
+                c=cc_max_list, cmap='seismic', 
+                edgecolor='grey', linewidth=0.05)
         im.set_clim(0.5, 1.0)
         
         # focal mechanism
@@ -1072,19 +1070,34 @@ class Misfit(object):
         cbar_ax = fig.add_axes([0.45, 0.15, 0.005, 0.2])
         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
         cbar_ax.tick_params(labelsize=9) 
+        cbar_ax.set_xlabel(' cc_max', fontsize=9)
+        cbar_ax.xaxis.set_label_position('top')
 
-        #------ SNR v.s. cc_max
-        ax = fig.add_axes([0.6, 0.65, 0.35, 0.2])
-        plt.plot(snr_list, cc_max_list, 'k.')
+        #------ SNR v.s. cc_max, colored by cc_dt
+        ax = fig.add_axes([0.58, 0.65, 0.35, 0.2])
+        im = ax.scatter(snr_list, cc_max_list, marker='o', s=10,
+                c=cc_dt_list, cmap='seismic',
+                edgecolor='grey', linewidth=0.05)
+        mean_amp = np.mean(cc_dt_list)
+        std_amp = np.std(cc_dt_list)
+        plot_amp = abs(mean_amp)+std_amp
+        im.set_clim(-plot_amp, plot_amp)
         ax.set_xlim([min(snr_list), max(snr_list)])
         ax.set_ylim([min(cc_max_list), max(cc_max_list)])
-        ax.set_xlabel("SNR")
+        ax.set_xlabel(" SNR")
         ax.set_ylabel("cc_max")
+        #add colorbar
+        cbar_ax = fig.add_axes([0.95, 0.65, 0.005, 0.2])
+        fig.colorbar(im, cax=cbar_ax, orientation="vertical")
+        cbar_ax.tick_params(labelsize=9)
+        cbar_ax.set_xlabel('cc_dt(s)', fontsize=9)
+        cbar_ax.xaxis.set_label_position('top')
 
-        #------ cc_0 v.s. cc_max
-        ax = fig.add_axes([0.6, 0.375, 0.35, 0.2])
-        im = ax.scatter(cc_0_list, cc_max_list, marker='o',
-                c=cc_dt_list, cmap='seismic', edgecolor='none')
+        #------ cc_0 v.s. cc_max, colored by cc_dt
+        ax = fig.add_axes([0.58, 0.375, 0.35, 0.2])
+        im = ax.scatter(cc_0_list, cc_max_list, marker='o', s=10,
+                c=cc_dt_list, cmap='seismic',
+                edgecolor='grey', linewidth=0.05)
         mean_amp = np.mean(cc_dt_list)
         std_amp = np.std(cc_dt_list)
         plot_amp = abs(mean_amp)+std_amp
@@ -1093,14 +1106,29 @@ class Misfit(object):
         ax.set_ylim([min(cc_max_list), max(cc_max_list)])
         ax.set_xlabel("cc_0")
         ax.set_ylabel("cc_max")
+        #add colorbar
+        cbar_ax = fig.add_axes([0.95, 0.375, 0.005, 0.2])
+        fig.colorbar(im, cax=cbar_ax, orientation="vertical")
+        cbar_ax.tick_params(labelsize=9)
+        cbar_ax.set_xlabel('cc_dt(s)', fontsize=9)
+        cbar_ax.xaxis.set_label_position('top')
 
-        #------ cc_dt v.s. cc_max 
-        ax = fig.add_axes([0.6, 0.1, 0.35, 0.2])
-        plt.plot(cc_dt_list, cc_max_list, 'k.')
+        #------ cc_dt v.s. cc_max, colored by SNR
+        ax = fig.add_axes([0.58, 0.1, 0.35, 0.2])
+        im = ax.scatter(cc_dt_list, cc_max_list, marker='o', s=10, 
+                c=snr_list, cmap='seismic',
+                edgecolor='grey', linewidth=0.05)
+        im.set_clim(min(snr_list), max(snr_list))
         ax.set_xlim([min(cc_dt_list), max(cc_dt_list)])
         ax.set_ylim([min(cc_max_list), max(cc_max_list)])
         ax.set_xlabel("cc_dt")
         ax.set_ylabel("cc_max")
+        #add colorbar
+        cbar_ax = fig.add_axes([0.95, 0.1, 0.005, 0.2])
+        fig.colorbar(im, cax=cbar_ax, orientation="vertical")
+        cbar_ax.tick_params(labelsize=9)
+        cbar_ax.set_xlabel('SNR(dB)', fontsize=9)
+        cbar_ax.xaxis.set_label_position('top')
 
         ##------ histogram of dt_cc and dt_res
         #ax1 = fig.add_axes([0.5,0.28,0.4,0.15])

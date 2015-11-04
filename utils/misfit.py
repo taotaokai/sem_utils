@@ -767,8 +767,8 @@ class Misfit(object):
 
 
     def relocate_1d(self, event_id, window_id_list=['Z.p,P'],
-        min_SNR=10.0, min_cc_0=0.7, min_cc_max=0.85, 
-        max_cc_time_shift=10.0, out_cmt_file=None):
+        min_SNR=10.0, min_cc_0=0.5, min_cc_max=0.7, 
+        max_cc_time_shift=8.0, fix_depth=False, out_cmt_file=None):
         """relocate event using ray path in reference earth model
         """
         # check inputs
@@ -845,6 +845,8 @@ class Misfit(object):
             dt_cc[i] = misfit['cc_time_shift']
 
         #linearized inversion (can be extended to second order using dynamic ray-tracing)
+        if fix_depth: 
+            G[:, 2] = 0.0
         dm, residual, rank, sigval = np.linalg.lstsq(G, dt_cc)
 
         # convert dm from NED to ECEF coordinate

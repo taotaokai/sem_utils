@@ -4,6 +4,7 @@
 """
 import sys
 import os.path
+import re
 #
 import numpy as np
 import scipy.signal
@@ -180,6 +181,12 @@ class Misfit(object):
         stations_all = {}
         for x in lines:
             net_sta_loc = (x[0], x[1], x[2])
+            date1 = [ int(a) for a in re.split("[:\-\.T]", x[15]) ]
+            date2 = [ int(a) for a in re.split("[:\-\.T]", x[16]) ]
+            t1 = UTCDateTime(date1[0], date1[1], date1[2]) \
+                    + 60.0*(60.0*date1[3] + date1[4]) + date1[5]
+            t2 = UTCDateTime(date2[0], date2[1], date2[2]) \
+                    + 60.0*(60.0*date2[3] + date2[4]) + date2[5]
             channel = {'code':        x[3],
                        'latitude':    float(x[4]),
                        'longitude':   float(x[5]),
@@ -187,8 +194,8 @@ class Misfit(object):
                        'depth':       float(x[7]),
                        'azimuth':     float(x[8]),
                        'dip':         float(x[9]),
-                       'starttime':   x[15],
-                       'endtime':     x[16] }
+                       'starttime':   t1.isoformat(),
+                       'endtime':     t2.isoformat() }
             if net_sta_loc not in stations_all:
                 stations_all[net_sta_loc] = []
             stations_all[net_sta_loc].append(channel)
@@ -224,8 +231,8 @@ class Misfit(object):
 
                 # select channels which are active at the specified time 
                 channels = [ x for x in stations_all[net_sta_loc] 
-                        if UTCDateTime(x['starttime']) < active_time and 
-                        UTCDateTime(x['endtime']) > active_time ]
+                        if UTCDateTime(x['starttime']) < active_time 
+                        and UTCDateTime(x['endtime']) > active_time ]
                 # select band code
                 if band_code:
                     n = len(band_code)

@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 
 
-# utilities
+#====== utility functions
 def _taper_(npts, taper_type="cosine", taper_percentage=0.05):
     """taper function of npts points
         taper_percentage: decimal percentage at one end (5%)
@@ -50,7 +50,7 @@ def _taper_(npts, taper_type="cosine", taper_percentage=0.05):
     return taper
 
 
-#
+#======
 class Misfit(object):
     """Class managing all misfit windows
 
@@ -60,7 +60,7 @@ class Misfit(object):
     |   'iteration': {iter, ...}, 
     |   'events': {
     |   *   <event_id>: {
-    |   |   |   'gcmt': {lat,lon,depth, ...}, 
+    |   |   |   'gcmt': {code, lat,lon,depth, ...}, 
     |   |   |   'stations': {
     |   |   |   *   <station_id(net.sta.loc)>: {
     |   |   |   |   |   'meta': {lat,lon,ele,...,channels:{code,az,dip,...} },
@@ -909,20 +909,24 @@ class Misfit(object):
         if out_cmt_file:
             M = gcmt['moment_tensor']
             with open(out_cmt_file, 'w') as fp:
+                # header line: 
+                #PDE 2003 09 25 19 50 08.93  41.78  144.08  18.0 7.9 8.0 Hokkaido, Japan
+                # which is: event_id, date,origin time,latitude,longitude,depth, mb, MS, region
                 fp.write(new_centroid_time.strftime(
-                    'RELOC %Y %m %d %H %M %S.%f \n') )
+                    'RELOC %Y %m %d %H %M %S.%f ') + \
+                    '%.4f %.4f %.1f 0.0 0.0 REGION\n' % (evla1,evlo1,evdp1) )
                 fp.write('event name:      %s\n'     % (event_id))
                 fp.write('time shift:      0.0\n'                ) 
-                fp.write('half duration:   %.1f\n'   % (gcmt['half_duration']) ) 
-                fp.write('latitude:        %.4f\n'   % (evla1)   ) 
-                fp.write('longitude:       %.4f\n'   % (evlo1)   ) 
-                fp.write('depth:           %.4f\n'   % (evdp1)   ) 
-                fp.write('Mrr:             %12.4e\n' % (M[0][0]) ) 
-                fp.write('Mtt:             %12.4e\n' % (M[1][1]) ) 
-                fp.write('Mpp:             %12.4e\n' % (M[2][2]) ) 
-                fp.write('Mrt:             %12.4e\n' % (M[0][1]) ) 
-                fp.write('Mrp:             %12.4e\n' % (M[0][2]) ) 
-                fp.write('Mtp:             %12.4e\n' % (M[1][2]) ) 
+                fp.write('half duration:   %.1f\n'   % (gcmt['half_duration']))
+                fp.write('latitude:        %.4f\n'   % (evla1)   )
+                fp.write('longitude:       %.4f\n'   % (evlo1)   )
+                fp.write('depth:           %.4f\n'   % (evdp1)   )
+                fp.write('Mrr:             %12.4e\n' % (M[0][0]) )
+                fp.write('Mtt:             %12.4e\n' % (M[1][1]) )
+                fp.write('Mpp:             %12.4e\n' % (M[2][2]) )
+                fp.write('Mrt:             %12.4e\n' % (M[0][1]) )
+                fp.write('Mrp:             %12.4e\n' % (M[0][2]) )
+                fp.write('Mtp:             %12.4e\n' % (M[1][2]) )
 
         return reloc_dict
 

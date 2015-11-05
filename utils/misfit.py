@@ -621,7 +621,7 @@ class Misfit(object):
             skip = False
             for i in range(3):
                 tr = obs_st[i]
-                if tr.stats.sampling_rate != obs_sampling_rate: \
+                if tr.stats.sampling_rate != obs_sampling_rate:
                     print "[WARNING] %s:%s: not equal sampling rate " \
                           "in obs, SKIP " % (event_id, station_id)
                     skip = True
@@ -836,7 +836,7 @@ class Misfit(object):
                     tr = syn_st[i]
                     tr.data = adj_ENZ[i,:]
                     out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
-                            adj_dir, station_id, syn_bandcode, 
+                            adj_dir, station_id, syn_band_code, 
                             syn_orientation_codes[i])
                     # sac format 
                     tr.write(out_file + '.adj.sac', 'sac')

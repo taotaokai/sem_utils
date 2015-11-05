@@ -202,8 +202,8 @@ class Misfit(object):
         stations_all = {}
         for x in lines:
             net_sta_loc = (x[0], x[1], x[2])
-            date1 = [ int(a) for a in re.split("[:\-\.T]", x[15]) ]
-            date2 = [ int(a) for a in re.split("[:\-\.T]", x[16]) ]
+            date1 = [ int(a) for a in re.sub("\D", " ", x[15]).split() ]
+            date2 = [ int(a) for a in re.sub("\D", " ", x[16]).split() ]
             t1 = UTCDateTime(date1[0], date1[1], date1[2]) \
                     + 60.0*(60.0*date1[3] + date1[4]) + date1[5]
             t2 = UTCDateTime(date2[0], date2[1], date2[2]) \

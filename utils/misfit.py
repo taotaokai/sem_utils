@@ -488,7 +488,9 @@ class Misfit(object):
     def measure_windows_for_one_event(self, event_id, station_id_list=None,
             obs_dir='obs', syn_dir='syn', syn_band_code='MX', 
             syn_suffix='.sem.sac', use_STF=False,
-            STF_param={'type': 'triangle', 'half_duration':0.0},
+            search_STF=False,
+            STF_param={'type': 'triangle', 'half_duration':0.0, 
+                'hdur_list': np.arange(1,12,0.1)},
             cc_delta=0.01, output_adj=False, adj_dir='adj', 
             adj_window_id_list=['Z.p,P','T.s,S'],
             weight_param={'SNR':[5,10], 'cc_max':[0.6,0.8], 'cc_0':[0.5,0.7]},
@@ -507,6 +509,12 @@ class Misfit(object):
             print "[WARNING] %s does NOT exist. Exit" \
                     % (event_id)
             sys.exit()
+
+        # if in STF search mode, no adjoint source calculation
+        # and no STF used in preprocessing
+        if search_STF:
+            output_adj = False
+            use_STF = False
 
         event = events[event_id]
         stations = event['stations']
@@ -554,6 +562,7 @@ class Misfit(object):
             syn_sampling_rate = tr.stats.sampling_rate
             syn_npts = tr.stats.npts
             syn_times = syn_delta*np.arange(syn_npts)
+            syn_freqs = np.fft.rfftfreq(syn_npts, d=syn_delta)
             skip = False
             for i in range(1,3):
                 tr = syn_st[i]
@@ -572,7 +581,6 @@ class Misfit(object):
 
             # source time function
             if use_STF:
-                syn_freqs = np.fft.rfftfreq(syn_npts, d=syn_delta)
                 # source spectrum: isosceles triangle
                 half_duration = STF_param['half_duration']
                 src_spectrum = np.sinc(syn_freqs*half_duration)**2
@@ -621,7 +629,7 @@ class Misfit(object):
             skip = False
             for i in range(3):
                 tr = obs_st[i]
-                if tr.stats.sampling_rate != obs_sampling_rate: \
+                if tr.stats.sampling_rate != obs_sampling_rate:
                     print "[WARNING] %s:%s: not equal sampling rate " \
                           "in obs, SKIP " % (event_id, station_id)
                     skip = True
@@ -680,7 +688,7 @@ class Misfit(object):
                 if win_ie > syn_npts: win_ie = syn_npts
                 taper[:] = 0.0
                 taper[win_ib:win_ie] = taper_window(win_ie-win_ib, 
-                        taper_type, taper_percentage)
+                        taper_type, taper_ratio)
  
                 # projection matrix
                 proj_matrix[:,:] = 0.0 #reset to zero
@@ -707,12 +715,14 @@ class Misfit(object):
                     continue
 
                 # apply window taper and projection
-                noise_ENZ_win = np.dot(proj_matrix, noise_ENZ)
                 obs_ENZ_win = np.dot(proj_matrix, obs_ENZ) * taper
-                syn_ENZ_win = np.dot(proj_matrix, syn_ENZ) * taper
+                obs_norm2 = np.sum(obs_ENZ_win**2)
+                obs_norm = np.sqrt(obs_norm2)
+                noise_ENZ_win = np.dot(proj_matrix, noise_ENZ)
+                # apply projection on syn_ENZ
+                syn_ENZ_proj = np.dot(proj_matrix, syn_ENZ)
 
                 # measure SNR
-                A_syn = np.sqrt(np.max(np.sum(syn_ENZ_win**2, axis=0)))
                 A_obs = np.sqrt(np.max(np.sum(obs_ENZ_win**2, axis=0)))
                 A_noise =  np.sqrt(np.max(np.sum(noise_ENZ_win**2, axis=0)))
                 if A_obs==0: # data file may not containe the time window
@@ -725,48 +735,69 @@ class Misfit(object):
                     continue
                 snr = 20.0 * np.log10(A_obs/A_noise)
  
-                # measure misfit between observed and synthetic seismograms
-                # cross-correlation
-                obs_norm2 = np.sum(obs_ENZ_win**2)
-                obs_norm = np.sqrt(obs_norm2)
-                syn_norm = np.sqrt(np.sum(syn_ENZ_win**2))
-                cc = np.zeros(2*syn_npts-1)
-                for i in range(3):
-                    # NOTE the order (obs,syn) is important. The positive time on 
-                    #   CC means shifting syn in the positive time direction
-                    cc += signal.fftconvolve(
-                            obs_ENZ_win[i,:], syn_ENZ_win[i,::-1], 'full')
-                cc /= obs_norm * syn_norm
-                # zero-lag normalized correlation
-                cc_0 = cc[syn_npts]
-                ar_0 = cc_0 * syn_norm / obs_norm # amplitude ratio syn/obs 
-                # tshift>0: synthetic is shifted along the positive time direction
-                cc_max_time_shift = window_len/2.0 #TODO: more reasonable choice?
-                ncc = int(cc_max_time_shift / cc_delta)
-                cc_times = np.arange(-ncc,ncc+1) * cc_delta
-                # interpolate cc to finer time samples
-                if syn_delta < cc_delta:
-                    print '[WARNING] syn_delta(%f) < cc_time_step(%f)' \
-                            % (syn_delta, cc_delta)
-                ti = (syn_npts-1)*syn_delta + cc_times # -(npts-1)*dt: begin time in cc
-                cci = lanczos_interp1(cc, syn_delta, ti, na=20)
-                # time shift at the maximum correlation
-                imax = np.argmax(cci)
-                cc_time_shift = cc_times[imax]
-                cc_max = cci[imax]
-                ar_max = cc_max * syn_norm / obs_norm # amplitude ratio: syn/obs
+                # test different STF parameters
+                if search_STF:
+                    hdur_list = STF_param['hdur_list']
+                else:
+                    hdur_list = [ STF_param['half_duration'] ]
 
-                # window weighting based on SNR and misfit
-                weight = cosine_taper(weight_param['SNR'], snr) \
-                        * cosine_taper(weight_param['cc_max'], cc_max) \
-                        * cosine_taper(weight_param['cc_0'], cc_0)
+                for hdur in hdur_list:
+                    if search_STF:
+                        # apply STF on syn_ENZ_proj, then taper
+                        src_spectrum = np.sinc(syn_freqs * hdur)**2
+                        syn_ENZ_win = taper * np.fft.irfft(src_spectrum *
+                                np.fft.rfft(syn_ENZ_proj, axis=1), axis=1)
+                    else:
+                        syn_ENZ_win = taper * syn_ENZ_proj
+                    A_syn = np.sqrt(np.max(np.sum(syn_ENZ_win**2, axis=0)))
+                    # measure misfit between observed and synthetic seismograms
+                    # cross-correlation
+                    syn_norm = np.sqrt(np.sum(syn_ENZ_win**2))
+                    cc = np.zeros(2*syn_npts-1)
+                    for i in range(3):
+                        # NOTE the order (obs,syn) is important. The positive time on 
+                        #   CC means shifting syn in the positive time direction
+                        cc += signal.fftconvolve(
+                                obs_ENZ_win[i,:], syn_ENZ_win[i,::-1], 'full')
+                    cc /= obs_norm * syn_norm
+                    # zero-lag normalized correlation
+                    cc_0 = cc[syn_npts]
+                    ar_0 = cc_0 * syn_norm / obs_norm # amplitude ratio syn/obs 
+                    # tshift>0: synthetic is shifted along the positive time direction
+                    cc_max_time_shift = window_len/2.0 #TODO: more reasonable choice?
+                    ncc = int(cc_max_time_shift / cc_delta)
+                    cc_times = np.arange(-ncc,ncc+1) * cc_delta
+                    # interpolate cc to finer time samples
+                    if syn_delta < cc_delta:
+                        print '[WARNING] syn_delta(%f) < cc_time_step(%f)' \
+                                % (syn_delta, cc_delta)
+                    ti = (syn_npts-1)*syn_delta + cc_times # -(npts-1)*dt: begin time in cc
+                    cci = lanczos_interp1(cc, syn_delta, ti, na=20)
+                    # time shift at the maximum correlation
+                    imax = np.argmax(cci)
+                    cc_time_shift = cc_times[imax]
+                    cc_max = cci[imax]
+                    ar_max = cc_max * syn_norm / obs_norm # amplitude ratio: syn/obs
+                    # window weighting based on quality and misfit
+                    weight = cosine_taper(weight_param['SNR'], snr) \
+                            * cosine_taper(weight_param['cc_max'], cc_max) \
+                            * cosine_taper(weight_param['cc_0'], cc_0)
+                    # misfit result
+                    misfit_dict = {'hdur': hdur, 'weight': weight,
+                            'cc_0': cc_0, 'cc_max': cc_max, 
+                            'ar_0': ar_0, 'ar_max': ar_max, 
+                            'cc_time_shift': cc_time_shift }
+                    # record
+                    if search_STF:
+                        if 'search_hdur' not in window:
+                            window['search_hdur'] = {}
+                        window['search_hdur'][hdur] = misfit_dict
 
                 # make adjoint source
                 # adjoint source type = normalized cc
                 # adj = weight * (obs - A0*syn) / (obs_norm*syn_norm)
-                A0 = cc_0 * obs_norm / syn_norm # amplitude raito: obs/syn
-                adj_weight = 0.0
                 if output_adj and (window_id in adj_window_id_list):
+                    A0 = cc_0 * obs_norm / syn_norm # amplitude raito: obs/syn
                     # adjoint source of the current window
                     adj_win = signal.filtfilt(filter_b, filter_a,
                             taper*(obs_ENZ_win - A0*syn_ENZ_win))/obs_norm/syn_norm
@@ -775,29 +806,23 @@ class Misfit(object):
                             np.fft.rfft(adj_win) * np.conjugate(src_spectrum))
                     adj_ENZ += weight * adj_win
 
-                # form measurment results
-                quality_dict = {
-                        'A_obs': A_obs, 'A_syn': A_syn, 'A_noise': A_noise,
-                        'SNR': snr}
-                misfit_dict = {
-                        'cc_0': cc_0, 'cc_max': cc_max,
-                        'ar_0': ar_0, 'ar_max': ar_max,
-                        'cc_time_shift': cc_time_shift }
-
-                # add/update measure results
-                if 'misfit' not in window \
-                        or not window['misfit']:
+                # record quality 
+                quality_dict = {'A_obs': A_obs, 'A_noise':A_noise, 'SNR':snr}
+                if 'quality' not in window  or not window['quality']:
                     window['quality'] = quality_dict
-                    window['misfit'] = misfit_dict
-                    window['weight'] = weight
-                    window['stat'] = {'code': 1, 'msg': "measured"}
                 elif update:
                     window['quality'].update(quality_dict)
-                    window['misfit'].update(misfit_dict)
-                    window['weight'] = weight
-                    window['stat'] = {'code': 1, 'msg': "updated"}
-                else:
-                    continue
+
+                # record misfit
+                if not search_STF:
+                    if 'misfit' not in window  or not window['misfit']:
+                        window['misfit'] = misfit_dict
+                        window['weight'] = weight
+                        window['stat'] = {'code': 1, 'msg': "measured"}
+                    elif update:
+                        window['misfit'].update(misfit_dict)
+                        window['weight'] = weight
+                        window['stat'] = {'code': 1, 'msg': "updated"}
 
                 # DEBUG
                 #t = syn_times

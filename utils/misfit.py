@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Classes Managing misfits
+"""Managing misfit windows
 """
 import sys
 import os.path
 import re
 #
 import numpy as np
-import scipy.signal
+import scipy.signal as signal
 #
 import json
 #
@@ -25,29 +25,50 @@ from mpl_toolkits.basemap import Basemap
 
 
 #====== utility functions
-def _taper_(npts, taper_type="cosine", taper_percentage=0.05):
-    """taper function of npts points
-        taper_percentage: decimal percentage at one end (5%)
+def taper_window(npts, ttype="cosine", ratio=0.1):
+    """taper window of npts points
+        ratio: decimal percentage at one end (default: 0.1)
     """
-    if not 0.0 < taper_percentage <= 0.5:
-        print "[ERROR] taper_percentage must between 0.0 and 0.5"
+    if not 0.0 < ratio <= 0.5:
+        print "[ERROR] taper ratio must be between 0.0 and 0.5"
         sys.exit()
 
     taper = np.ones(npts)
 
     x = np.linspace(0, 1.0, npts)
-    il = int((npts-1)*taper_percentage)
-    ir = int(npts*(1.0-taper_percentage)+1)
-    if taper_type == "cosine":
+    il = int(ratio*(npts-1))
+    ir = int(npts*(1.0-ratio)+1)
+    if ttype == "cosine":
         taper[0:il+1] = 0.5 * (1.0 - np.cos(
-            np.pi*x[0:il+1]/taper_percentage) )
+            np.pi*x[0:il+1]/ratio) )
         taper[ir:] = 0.5 * (1.0 - np.cos(
-            np.pi*(1.0 - x[ir:])/taper_percentage) )
+            np.pi*(1.0 - x[ir:])/ratio) )
     else:
-        print "[ERROR] %s unrecognized taper type" % (taper_type)
+        print "[ERROR] %s unrecognized taper type" % (ttype)
         sys.exit()
 
     return taper
+
+def cosine_taper(xc, xi):
+    """cosine taper at two ends stop,pass, pass,stop
+        xc: (array-like) 
+            stop,pass[,pass,stop]
+    """
+    n = len(xc)
+    y = 1.0
+
+    if n == 2: # single sided
+        l = xc[1] - xc[0]
+        if xi < xc[0]: 
+            y = 0.0 
+        elif xi < xc[1]:
+            y = 0.5 - 0.5*np.cos(np.pi*(xi - xc[0])/l)
+        else:
+            y = 1.0
+    else:
+        y = 1.0
+
+    return y
 
 
 #======
@@ -72,7 +93,7 @@ class Misfit(object):
     |   |   |   |   |   'windows': {
     |   |   |   |   |   *   <window_id(cmp.pha)>: {
     |   |   |   |   |   |   |   component, azimuth, dip,
-    |   |   |   |   |   |   |   starttime, endtime, weight
+    |   |   |   |   |   |   |   starttime, endtime, weight,
     |   |   |   |   |   |   |   'phase': {name, ttime, takeoff_angle, ray_param},
     |   |   |   |   |   |   |   'quality': {A_obs, A_noise, SNR},
     |   |   |   |   |   |   |   'misfit': {cc_0, cc_max, cc_time_shift,
@@ -313,6 +334,7 @@ class Misfit(object):
             taper_param=('cosine', 0.1),
             event_id_list=None, station_id_list=None, update=False):
         """window_list: [ (component, phases, [begin, end]), ...]
+            filter_param: (type, freqs, order)
         """
         # check event/station_id_list
         events = self.data['events']
@@ -334,10 +356,10 @@ class Misfit(object):
         # make window_param
         window_param = {
             'filter': {'type': filter_param[0],
-                       'freqlim': filter_param[1],
-                       'ncorners': filter_param[2]},
+                       'freqs': filter_param[1],
+                       'order': filter_param[2]},
             'taper': {'type': taper_param[0],
-                      'percentage': taper_param[1]} }
+                      'ratio': taper_param[1]} }
 
         # loop each event
         for event_id in event_id_list:
@@ -465,10 +487,18 @@ class Misfit(object):
 
     def measure_windows_for_one_event(self, event_id, station_id_list=None,
             obs_dir='obs', syn_dir='syn', syn_band_code='MX', 
-            syn_suffix='.sem.sac', adj_dir='adj', cc_delta=0.01, 
-            output_adj=False, update=False):
+            syn_suffix='.sem.sac', use_STF=False,
+            STF_param={'type': 'triangle', 'half_duration':0.0},
+            cc_delta=0.01, output_adj=False, adj_dir='adj', 
+            adj_window_id_list=['Z.p,P','T.s,S'],
+            weight_param={'SNR':[5,10], 'cc_max':[0.6,0.8], 'cc_0':[0.5,0.7]},
+            update=False):
         """measure misfit on time windoes for one event
             cc_delta: sampling interval for cross-correlation between obs and syn.
+            weight_param: one-sided cosine taper [stop, pass]
+            use_STF:
+                flag to convolve source time function to synthetics. STF is 
+                specifed as isosceles triangle with half_duration.
         """
         syn_orientation_codes = ['E', 'N', 'Z']
         # check inputs
@@ -517,22 +547,6 @@ class Misfit(object):
                 station['stat']['msg'] = "error read file"
                 continue
 
-            # filter obs seismograms
-            window_param = station['window_param']
-
-            taper_param = window_param['taper']
-            taper_type = taper_param['type']
-            taper_percentage = taper_param['percentage']
-            #obs_st.taper(type=taper_type, max_percentage=taper_percentage)
-
-            filter_param = window_param['filter']
-            filter_type = filter_param['type']
-            freqlim = filter_param['freqlim']
-            ncorners = filter_param['ncorners']
-            obs_st.detrend('linear')
-            obs_st.filter(type=filter_type, freqmin=freqlim[0],
-                    freqmax=freqlim[1], corners=ncorners, zerophase=True)
-
             # get time samples of syn seismograms
             tr = syn_st[0]
             syn_starttime = tr.stats.starttime
@@ -546,7 +560,7 @@ class Misfit(object):
                 if tr.stats.starttime != syn_starttime \
                         or tr.stats.npts != syn_npts \
                         or tr.stats.delta != syn_delta: 
-                    print '[ERROR] %s:%s: not equal time samples in'\
+                    print '[WARNING] %s:%s: not equal time samples in'\
                           ' synthetic seismograms. Quit' \
                           % (event_id, station_id)
                     skip = True
@@ -556,13 +570,75 @@ class Misfit(object):
                 station['stat']['msg'] = "not equal time samples in syn"
                 continue
 
-            # interpolate obs seismograms onto time samples of syn seismograms 
+            # source time function
+            if use_STF:
+                syn_freqs = np.fft.rfftfreq(syn_npts, d=syn_delta)
+                # source spectrum: isosceles triangle
+                half_duration = STF_param['half_duration']
+                src_spectrum = np.sinc(syn_freqs*half_duration)**2
+
+            # parameters: taper window 
+            window_param = station['window_param']
+            taper_param = window_param['taper']
+            taper_type = taper_param['type']
+            taper_ratio = taper_param['ratio']
+
+            # filter parameters
+            filter_param = window_param['filter']
+            filter_type = filter_param['type']
+            filter_freqs = filter_param['freqs']
+            filter_order = filter_param['order']
+
+            #------ process syn seismograms
+            # Butterworth filter design
+            nyq = syn_sampling_rate / 2.0
+            Wn = np.array(filter_freqs) / nyq #normalized angular frequency
+            filter_b, filter_a = signal.butter(filter_order, Wn, filter_type)
+            syn_ENZ = np.zeros((3, syn_npts))
+            for i in range(3):
+                tr = syn_st[i]
+                syn_ENZ[i,:] = signal.filtfilt(filter_b, filter_a, tr.data)
+                # convolve synthetics with source time function
+                if use_STF:
+                    syn_ENZ[i,:] = np.fft.irfft(
+                            np.fft.rfft(syn_ENZ[i,:]) * src_spectrum)
+
+            #------ process obs seismograms
+            # noise window
+            noise_starttime = UTCDateTime(station['noise_window']['starttime'])
+            noise_endtime = UTCDateTime(station['noise_window']['endtime'])
+            noise_window_len = noise_endtime - noise_starttime
+            noise_npts = int(noise_window_len / syn_delta)
+            noise_times = syn_delta * np.arange(noise_npts)
+            # Butterworth filter design
+            obs_sampling_rate = obs_st[0].stats.sampling_rate
+            nyq = obs_st[0].stats.sampling_rate / 2.0
+            Wn = np.array(filter_freqs) / nyq # normalized angular frequency
+            b, a = signal.butter(filter_order, Wn, filter_type)
+            # cut obs to signal and noise windows
             obs_ENZ = np.zeros((3, syn_npts))
+            noise_ENZ = np.zeros((3, noise_npts))
+            skip = False
             for i in range(3):
                 tr = obs_st[i]
-                obs_ENZ[i,:] = lanczos_interp1(tr.data, tr.stats.delta,
+                if tr.stats.sampling_rate != obs_sampling_rate: \
+                    print "[WARNING] %s:%s: not equal sampling rate " \
+                          "in obs, SKIP " % (event_id, station_id)
+                    skip = True
+                    break 
+                x = signal.detrend(tr.data, type='linear')
+                x = signal.filtfilt(b, a, x)
+                # interpolate obs into the same time samples of syn
+                obs_ENZ[i,:] = lanczos_interp1(x, tr.stats.delta,
                         syn_times+(syn_starttime-tr.stats.starttime), na=20)
-            # roate obs to ENZ 
+                # interpolate obs into noise window
+                noise_ENZ[i,:] = lanczos_interp1(x, tr.stats.delta,
+                        noise_times+(noise_starttime-tr.stats.starttime), na=20)
+            if skip:
+                station['stat']['code'] = -1
+                station['stat']['msg'] = "not equal sampling rate in obs"
+                continue
+            # roate obs to ENZ
             # projection matrix: obs = proj * ENZ => ZNE = inv(proj) * obs
             proj_matrix = np.zeros((3, 3))
             for i in range(3):
@@ -578,37 +654,13 @@ class Misfit(object):
             # inverse projection matrix: ENZ = inv(proj) * obs
             inv_proj = np.linalg.inv(proj_matrix)
             obs_ENZ = np.dot(inv_proj, obs_ENZ)
-
-            # interpolate obs seismograms into noise window
-            noise_starttime = UTCDateTime(station['noise_window']['starttime'])
-            noise_endtime = UTCDateTime(station['noise_window']['endtime'])
-            noise_window_len = noise_endtime - noise_starttime
-            noise_npts = int(noise_window_len / syn_delta)
-            noise_times = syn_delta * np.arange(noise_npts)
-            noise_ENZ = np.zeros((3, noise_npts))
-            for i in range(3):
-                tr = obs_st[i]
-                noise_ENZ[i,:] = lanczos_interp1(tr.data, tr.stats.delta,
-                        noise_times+(noise_starttime-tr.stats.starttime), na=20)
-            # roatate to ENZ
             noise_ENZ = np.dot(inv_proj, noise_ENZ)
-            # apply taper
-            noise_ENZ *= _taper_(noise_npts, taper_type, taper_percentage)
+            # apply taper on noise window
+            noise_ENZ *= taper_window(noise_npts, taper_type, taper_ratio)
 
-            # filter syn seismograms
-            #   pad zeros pre-event in case near epicenter stations
-            syn_st.trim(starttime=syn_starttime-100.0, pad=True, 
-                    fill_value=0.0)
-            syn_st.filter(type=filter_type, freqmin=freqlim[0], 
-                    freqmax=freqlim[1], corners=ncorners, zerophase=True)
-            syn_st.trim(starttime=syn_starttime, pad=False)
-            # get ENZ arrays
-            syn_ENZ = np.zeros((3, syn_npts))
-            for i in range(3):
-                tr = syn_st[i]
-                syn_ENZ[i,:] = tr.data
-
-            # loop each signal window
+            #------ loop each signal window
+            if output_adj:
+                adj_ENZ = np.zeros((3, syn_npts))
             taper = np.zeros(syn_npts)
             for window_id in windows:
                 window = windows[window_id]
@@ -627,7 +679,7 @@ class Misfit(object):
                 if win_ib < 0: win_ib = 0
                 if win_ie > syn_npts: win_ie = syn_npts
                 taper[:] = 0.0
-                taper[win_ib:win_ie] = _taper_(win_ie-win_ib, 
+                taper[win_ib:win_ie] = taper_window(win_ie-win_ib, 
                         taper_type, taper_percentage)
  
                 # projection matrix
@@ -682,16 +734,19 @@ class Misfit(object):
                 for i in range(3):
                     # NOTE the order (obs,syn) is important. The positive time on 
                     #   CC means shifting syn in the positive time direction
-                    cc += scipy.signal.fftconvolve(
+                    cc += signal.fftconvolve(
                             obs_ENZ_win[i,:], syn_ENZ_win[i,::-1], 'full')
                 cc /= obs_norm * syn_norm
+                # zero-lag normalized correlation
+                cc_0 = cc[syn_npts]
+                ar_0 = cc_0 * syn_norm / obs_norm # amplitude ratio syn/obs 
                 # tshift>0: synthetic is shifted along the positive time direction
                 cc_max_time_shift = window_len/2.0 #TODO: more reasonable choice?
                 ncc = int(cc_max_time_shift / cc_delta)
                 cc_times = np.arange(-ncc,ncc+1) * cc_delta
                 # interpolate cc to finer time samples
                 if syn_delta < cc_delta:
-                    print '[WARNING] syn_deltat(%f) < cc_time_step(%f)' \
+                    print '[WARNING] syn_delta(%f) < cc_time_step(%f)' \
                             % (syn_delta, cc_delta)
                 ti = (syn_npts-1)*syn_delta + cc_times # -(npts-1)*dt: begin time in cc
                 cci = lanczos_interp1(cc, syn_delta, ti, na=20)
@@ -699,16 +754,28 @@ class Misfit(object):
                 imax = np.argmax(cci)
                 cc_time_shift = cc_times[imax]
                 cc_max = cci[imax]
-                ar_max = cc_max * syn_norm / obs_norm # amplitude ratio syn/obs
-                # zero-lag normalized correlation
-                cc_0 = cci[ncc]
-                ar_0 = cc_0 * syn_norm / obs_norm # amplitude ratio syn/obs 
+                ar_max = cc_max * syn_norm / obs_norm # amplitude ratio: syn/obs
 
-                ##TODO make adjoint source
-                #if output_adj:
-                #    adj_ENZ =  
+                # window weighting based on SNR and misfit
+                weight = cosine_taper(weight_param['SNR'], snr) \
+                        * cosine_taper(weight_param['cc_max'], cc_max) \
+                        * cosine_taper(weight_param['cc_0'], cc_0)
 
-                # make measurment results 
+                # make adjoint source
+                # adjoint source type = normalized cc
+                # adj = weight * (obs - A0*syn) / (obs_norm*syn_norm)
+                A0 = cc_0 * obs_norm / syn_norm # amplitude raito: obs/syn
+                adj_weight = 0.0
+                if output_adj and (window_id in adj_window_id_list):
+                    # adjoint source of the current window
+                    adj_win = signal.filtfilt(filter_b, filter_a,
+                            taper*(obs_ENZ_win - A0*syn_ENZ_win))/obs_norm/syn_norm
+                    if use_STF:
+                        adj_win = np.fft.irfft(
+                            np.fft.rfft(adj_win) * np.conjugate(src_spectrum))
+                    adj_ENZ += weight * adj_win
+
+                # form measurment results
                 quality_dict = {
                         'A_obs': A_obs, 'A_syn': A_syn, 'A_noise': A_noise,
                         'SNR': snr}
@@ -722,10 +789,12 @@ class Misfit(object):
                         or not window['misfit']:
                     window['quality'] = quality_dict
                     window['misfit'] = misfit_dict
+                    window['weight'] = weight
                     window['stat'] = {'code': 1, 'msg': "measured"}
                 elif update:
                     window['quality'].update(quality_dict)
                     window['misfit'].update(misfit_dict)
+                    window['weight'] = weight
                     window['stat'] = {'code': 1, 'msg': "updated"}
                 else:
                     continue
@@ -760,8 +829,26 @@ class Misfit(object):
           
                 #plt.show()
 
-
             #end for window_id in windows:
+
+            # output adjoint source for the current station
+            if output_adj:
+                for i in range(3):
+                    tr = syn_st[i]
+                    tr.data = adj_ENZ[i,:]
+                    out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
+                            adj_dir, station_id, syn_bandcode, 
+                            syn_orientation_codes[i])
+                    # sac format 
+                    tr.write(out_file + '.adj.sac', 'sac')
+                    # ascii format 
+                    # time is relative to event origin time
+                    shift = tr.stats.sac.b - tr.stats.sac.o
+                    with open(out_file+'.adj','w') as fp:
+                        for j in range(syn_npts):
+                            fp.write("{:16.9e}  {:16.9e}\n".format(
+                                syn_times[j]+shift, adj_ENZ[i,j]))
+
         #end for station_id in station_id_list:
     #end def setup_windows(self,
 

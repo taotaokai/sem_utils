@@ -1083,10 +1083,10 @@ class Misfit(object):
         focmec = [ Mrr, Mtt, Mpp, Mrt, Mrp, Mtp ]
 
         # map range
-        min_lat = min(min(stla_list), evla)
-        max_lat = max(max(stla_list), evla)
-        min_lon = min(min(stlo_list), evlo)
-        max_lon = max(max(stlo_list), evlo)
+        min_lat = min(min(stla_list), evla) - 1.0
+        max_lat = max(max(stla_list), evla) + 1.0
+        min_lon = min(min(stlo_list), evlo) - 1.0
+        max_lon = max(max(stlo_list), evlo) + 1.0
         #lat_true_scale = np.mean(stla_list)
         lat_0 = np.mean(stla_list)
         lon_0 = np.mean(stlo_list)
@@ -1131,9 +1131,9 @@ class Misfit(object):
         ax.add_collection(b)
         
         # colorbar
-        cbar_ax = fig.add_axes([0.45, 0.6, 0.005, 0.2])
+        cbar_ax = fig.add_axes([0.46, 0.575, 0.005, 0.2])
         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
-        cbar_ax.tick_params(labelsize=9) 
+        cbar_ax.tick_params(labelsize=9)
         cbar_ax.set_xlabel(' cc_dt(s)', fontsize=9)
         cbar_ax.xaxis.set_label_position('top')
        
@@ -1166,7 +1166,7 @@ class Misfit(object):
         ax.add_collection(b)
  
         #add colorbar
-        cbar_ax = fig.add_axes([0.45, 0.15, 0.005, 0.2])
+        cbar_ax = fig.add_axes([0.46, 0.125, 0.005, 0.2])
         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
         cbar_ax.tick_params(labelsize=9) 
         cbar_ax.set_xlabel(' cc_max', fontsize=9)

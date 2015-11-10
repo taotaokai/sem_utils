@@ -25,51 +25,71 @@ from mpl_toolkits.basemap import Basemap
 
 
 #====== utility functions
+def is_equal(lst):
+    return not lst or [lst[0]]*len(lst) == lst
+
+
+def cosine_taper(x, xc):
+    """cosine taper at two ends stop,pass, pass,stop
+        xc: (array-like)
+            stop,pass[,pass,stop]
+        x: array-like
+            sample points
+    """
+    nc = len(xc)
+    x = np.array(x)
+    y = np.ones(len(x))
+
+    if nc == 2: # sided taper
+        l = xc[1] - xc[0] # taper width
+        if l == 0:
+            raise ValueError('pass and stop values cannot be the same.')
+        elif l > 0: # tapered at left side
+            idx = x < xc[0]; y[idx] = 0.0
+            idx = (xc[0] <= x) & (x <= xc[1])
+            y[idx] = 0.5 - 0.5*np.cos(np.pi*(x[idx] - xc[0])/l)
+            idx = x > xc[1]; y[idx] = 1.0
+        else: # tapered at right side
+            idx = x > xc[0]; y[idx] = 0.0
+            idx = (xc[1] <= x) & (x <= xc[0])
+            y[idx] = 0.5 + 0.5*np.cos(np.pi*(x[idx] - xc[1])/l)
+            idx = x < xc[1]; y[idx] = 1.0
+    elif nc == 4: # two sided taper
+        if not (xc[0]<xc[1]<xc[2]<xc[3]):
+            raise ValueError('4 cutoff values must be in increasing order.')
+        else:
+            idx = x <= xc[0]; y[idx] = 0.0
+
+            idx = (xc[0] < x) & (x < xc[1])
+            y[idx] = 0.5 - 0.5*np.cos(np.pi*(x[idx] - xc[0])/(xc[1]-xc[0]))
+            
+            idx = (xc[1] <= x) & (x <= xc[2]); y[idx] = 1.0
+
+            idx = (xc[2] < x) & (x < xc[3])
+            y[idx] = 0.5 + 0.5*np.cos(np.pi*(x[idx] - xc[2])/(xc[3]-xc[2]))
+
+            idx = x > xc[3]; y[idx] = 0.0
+    else:
+        raise ValueError('number of cutoff values must be either 2 or 4.')
+
+    return y
+
+
 def taper_window(npts, ttype="cosine", ratio=0.1):
     """taper window of npts points
         ratio: decimal percentage at one end (default: 0.1)
     """
     if not 0.0 < ratio <= 0.5:
-        print "[ERROR] taper ratio must be between 0.0 and 0.5"
-        sys.exit()
+        raise ValueError("taper ratio must be between 0.0 and 0.5")
 
-    taper = np.ones(npts)
-
-    x = np.linspace(0, 1.0, npts)
-    il = int(ratio*(npts-1))
-    ir = int(npts*(1.0-ratio)+1)
+    xc = [0.0, npts*ratio, npts*(1.0-ratio), npts]
+    x = np.arange(npts)
     if ttype == "cosine":
-        taper[0:il+1] = 0.5 * (1.0 - np.cos(
-            np.pi*x[0:il+1]/ratio) )
-        taper[ir:] = 0.5 * (1.0 - np.cos(
-            np.pi*(1.0 - x[ir:])/ratio) )
+        taper = cosine_taper(x, xc)
     else:
-        print "[ERROR] %s unrecognized taper type" % (ttype)
-        sys.exit()
+        raise Exception("unrecognized taper type" % (ttype))
 
     return taper
-
-def cosine_taper(xc, xi):
-    """cosine taper at two ends stop,pass, pass,stop
-        xc: (array-like) 
-            stop,pass[,pass,stop]
-    """
-    n = len(xc)
-    y = 1.0
-
-    if n == 2: # single sided
-        l = xc[1] - xc[0]
-        if xi < xc[0]: 
-            y = 0.0 
-        elif xi < xc[1]:
-            y = 0.5 - 0.5*np.cos(np.pi*(xi - xc[0])/l)
-        else:
-            y = 1.0
-    else:
-        y = 1.0
-
-    return y
-
 
 #======
 class Misfit(object):
@@ -86,7 +106,7 @@ class Misfit(object):
     |   |   |   *   <station_id(net.sta.loc)>: {
     |   |   |   |   |   'meta': {lat,lon,ele,...,channels:{code,az,dip,...} },
     |   |   |   |   |   'window_param': {
-    |   |   |   |   |   |   'filter': {type, freqlim(list), ncorners},
+    |   |   |   |   |   |   'filter': {type, freqlim(list)},
     |   |   |   |   |   |   'taper': {type, percentage} },
     |   |   |   |   |   'noise_window': {starttime, endtime}, # pre-event time window
     |   |   |   |   |   'stat': {code, msg}, # code<0: problematic, code=0: OK 
@@ -330,11 +350,11 @@ class Misfit(object):
     def setup_windows(self,
             window_list=[('Z','p,P',[-30,50]), ('T','s,S',[-40,70])],
             noise_window=('ttp',[-150,-40]),
-            filter_param=('bandpass', [0.015,0.1], 2),
+            filter_param=('cosine', [0.009, 0.011, 0.09, 0.11]),
             taper_param=('cosine', 0.1),
             event_id_list=None, station_id_list=None, update=False):
         """window_list: [ (component, phases, [begin, end]), ...]
-            filter_param: (type, freqs, order)
+           filter_param: (type, freqlims)
         """
         # check event/station_id_list
         events = self.data['events']
@@ -346,7 +366,7 @@ class Misfit(object):
             loop_all_stations = False
 
         # initiate taup
-        taup_model = TauPyModel(model="iasp91")
+        taup_model = TauPyModel(model="ak135")
 
         # noise window param
         noise_phases = noise_window[0].split(',')
@@ -356,8 +376,7 @@ class Misfit(object):
         # make window_param
         window_param = {
             'filter': {'type': filter_param[0],
-                       'freqs': filter_param[1],
-                       'order': filter_param[2]},
+                       'freqlim': filter_param[1] },
             'taper': {'type': taper_param[0],
                       'ratio': taper_param[1]} }
 
@@ -470,7 +489,7 @@ class Misfit(object):
                         'endtime': signal_endtime,
                         'phase': {'name': arr.name, 'ttime': arr.time,
                                   'takeoff_angle': arr.takeoff_angle,
-                                  'ray_param': arr.ray_param}, 
+                                  'ray_param': arr.ray_param},
                         'quality': {},
                         'misfit': {},
                         'stat': {'code': 0, 'msg': ""} }
@@ -483,6 +502,128 @@ class Misfit(object):
                 #end for winpar in winpar_list:
             #end for station_id in station_id_list:
         #end for event_id in event_id_list:
+
+
+    def read_seismograms_for_one_station(self, event_id, station_id, 
+            obs_dir='obs', syn_dir='syn', syn_band_code='MX', 
+            syn_suffix='.sem.sac', filter_padlen=50,
+            use_prefilt=False, prefilt=('cosine', [0.11, 0.09]),
+            use_STF=False, STF=('triangle', 0.0)):
+        """Get 3-component seismograms recorded at one station for one event.
+           filter_padlen:
+                time length of zero-padding at the end before filtering.
+           use_prefilt, prefilt:
+                lowpass filter which is set as the source time function in 
+                forward simulations to suppress high-frequency numerical noise.
+                this is applied to obs data
+        """
+        syn_orientation_codes = ['E', 'N', 'Z']
+        events = self.data['events']
+        event = events[event_id]
+        stations = event['stations']
+        station = stations[station_id]
+ 
+        # get file paths of obs, syn seismograms
+        meta = station['meta']
+        channels = meta['channels']
+        obs_files = [ '{:s}/{:s}.{:s}'.format(
+            obs_dir, station_id, x['code']) for x in channels ]
+        syn_files = [ '{:s}/{:s}.{:2s}{:1s}{:s}'.format(
+            syn_dir, station_id, syn_band_code, x, syn_suffix)
+            for x in syn_orientation_codes ]
+
+        # read in obs, syn seismograms
+        obs_st  = read(obs_files[0])
+        obs_st += read(obs_files[1])
+        obs_st += read(obs_files[2])
+        syn_st  = read(syn_files[0])
+        syn_st += read(syn_files[1])
+        syn_st += read(syn_files[2])
+
+        # get time samples of syn seismograms
+        if not is_equal( [ (tr.stats.starttime, tr.stats.delta, tr.stats.npts) \
+                for tr in syn_st ] ):
+            raise Exception('%s:%s: not equal time samples in'\
+                    ' synthetic seismograms. Quit' % (event_id, station_id))
+        tr = syn_st[0]
+        syn_starttime = tr.stats.starttime
+        syn_delta = tr.stats.delta
+        syn_sampling_rate = tr.stats.sampling_rate
+        syn_npts = tr.stats.npts
+        syn_times = syn_delta*np.arange(syn_npts)
+
+        # window filter parameters
+        window_param = station['window_param']
+        filter_param = window_param['filter']
+        filter_type = filter_param['type']
+        filter_freqlim = filter_param['freqlim']
+
+        #------ filter syn seismograms
+        npad = int(filter_padlen/syn_delta)
+        f = np.fft.rfftfreq(syn_npts + npad, d=syn_delta)
+        H = cosine_taper(f, filter_freqlim)
+        if use_STF:
+            # source spectrum: isosceles triangle
+            half_duration = STF[1]
+            src_spectrum = np.sinc(f * half_duration)**2
+            H *= src_spectrum
+        syn_ENZ = np.zeros((3, syn_npts))
+        for i in range(3):
+            x = np.fft.irfft(H * np.fft.rfft(np.concatenate( 
+                (syn_st[i].data, np.zeros(npad)))) )
+            syn_ENZ[i,:] = x[0:syn_npts]
+
+        #------ process obs seismograms
+        if not is_equal( [ tr.stats.delta for tr in obs_st ] ):
+            raise Exception('%s:%s: not equal sampling interval in'\
+                    ' observed seismograms.' % (event_id, station_id) )
+        obs_delta = obs_st[0].stats.delta
+        # noise window
+        noise_starttime = UTCDateTime(station['noise_window']['starttime'])
+        noise_endtime = UTCDateTime(station['noise_window']['endtime'])
+        noise_window_len = noise_endtime - noise_starttime
+        noise_npts = int(noise_window_len / syn_delta)
+        noise_times = syn_delta * np.arange(noise_npts)
+        # filter obs then cut into signal/noise windows
+        obs_ENZ = np.zeros((3, syn_npts))
+        noise_ENZ = np.zeros((3, noise_npts))
+        for i in range(3):
+            tr = obs_st[i]
+            # fitler
+            x = signal.detrend(tr.data, type='linear')
+            obs_npts = tr.stats.npts
+            #npad = int(filter_padlen/obs_delta)
+            f = np.fft.rfftfreq(obs_npts, d=obs_delta)
+            H = cosine_taper(f, filter_freqlim)
+            if use_prefilt:
+                H *= cosine_taper(f, prefilt[1])
+            x = np.fft.irfft(H * np.fft.rfft(x))
+            # interpolate obs into the same time samples of syn
+            obs_ENZ[i,:] = lanczos_interp1(x, tr.stats.delta,
+                    syn_times+(syn_starttime-tr.stats.starttime), na=20)
+            # interpolate obs into noise window
+            noise_ENZ[i,:] = lanczos_interp1(x, tr.stats.delta,
+                    noise_times+(noise_starttime-tr.stats.starttime), na=20)
+        # roate obs to ENZ
+        #   projection matrix: obs = proj * ENZ => ZNE = inv(proj) * obs
+        proj_matrix = np.zeros((3, 3))
+        for i in range(3):
+            channel = channels[i]
+            sin_az = np.sin(np.deg2rad(channel['azimuth']))
+            cos_az = np.cos(np.deg2rad(channel['azimuth']))
+            sin_dip = np.sin(np.deg2rad(channel['dip']))
+            cos_dip = np.cos(np.deg2rad(channel['dip']))
+            # column vector = obs channel polarization 
+            proj_matrix[i,0] = cos_dip*sin_az # proj to E
+            proj_matrix[i,1] = cos_dip*cos_az # proj to N
+            proj_matrix[i,2] = -sin_dip       # proj to Z
+        # inverse projection matrix: ENZ = inv(proj) * obs
+        inv_proj = np.linalg.inv(proj_matrix)
+        obs_ENZ = np.dot(inv_proj, obs_ENZ)
+        noise_ENZ = np.dot(inv_proj, noise_ENZ)
+
+        return syn_starttime, syn_times, syn_delta, syn_ENZ, obs_ENZ, \
+                noise_starttime, noise_ENZ
 
 
     def measure_windows_for_one_event(self, event_id, station_id_list=None,
@@ -1250,3 +1391,159 @@ class Misfit(object):
             out_file = '%s.%s.pdf' % (event_id, window_id)
         fig.savefig(out_file, format='pdf')
         #fig.savefig("misfit.pdf", bbox_inches='tight', format='pdf')
+
+
+    def plot_seismograms_for_one_event(self, event_id, 
+            azbin=10, win=[0,500], rayp=10,
+            obs_dir='obs', syn_dir='syn', syn_band_code='MX',
+            syn_suffix='.sem.sac', filter_padlen=100,
+            use_prefilt=True, prefilt=('cosine', [0.11, 0.09]),
+            use_STF=False, STF=('triangle', 0.0) ):
+        """ Plot seismograms for one event
+            azbin:
+                azimuthal bin size
+        """
+        event = self.data['events'][event_id]
+        cmt = event['gcmt']
+        centroid_time = UTCDateTime(cmt['centroid_time'])
+
+        #====== calculate traveltime curve
+        model = TauPyModel(model="ak135")
+        dist_ttcurve = np.arange(0.0,40,0.1)
+        ttcurve_p = []
+        ttcurve_P = []
+        ttcurve_s = []
+        ttcurve_S = []
+        for dist in dist_ttcurve:
+            arrivals = model.get_travel_times(source_depth_in_km=cmt['depth'],
+                distance_in_degree=dist, phase_list=['p','P','s','S'])
+            for arr in arrivals:
+                if arr.name == 'p':
+                    ttcurve_p.append((arr.distance, arr.time, arr.ray_param))
+                elif arr.name == 'P':
+                    ttcurve_P.append((arr.distance, arr.time, arr.ray_param))
+                elif arr.name == 's':
+                    ttcurve_s.append((arr.distance, arr.time, arr.ray_param))
+                elif arr.name == 'S':
+                    ttcurve_S.append((arr.distance, arr.time, arr.ray_param))
+        
+        # sort phases
+        ttcurve_p = sorted(ttcurve_p, key=lambda x: x[2])
+        ttcurve_P = sorted(ttcurve_P, key=lambda x: x[2])
+        ttcurve_s = sorted(ttcurve_s, key=lambda x: x[2])
+        ttcurve_S = sorted(ttcurve_S, key=lambda x: x[2])
+        
+        #====== plot seismograms in azimuthal bins
+        stations = self.data['events'][event_id]['stations']
+        for az in np.arange(0, 360, azbin):
+            azmin = az
+            azmax = az + azbin
+        
+            # read available stations
+            data = {}
+            for station_id in stations:
+                station = stations[station_id]
+                meta = station['meta']
+                azimuth = meta['azimuth']
+                if azimuth < azmin or azimuth > azmax:
+                    continue
+                try:
+                    startime, times, detla, syn_ENZ, obs_ENZ, _, _ = \
+                        self.read_seismograms_for_one_station(event_id,
+                                station_id, obs_dir=obs_dir, syn_dir=syn_dir,
+                                syn_band_code=syn_band_code,
+                                syn_suffix=syn_suffix,
+                                filter_padlen=filter_padlen, 
+                                use_prefilt=use_prefilt, prefilt=prefilt, 
+                                use_STF=use_STF, STF=STF)
+                except:
+                    continue
+                # project obs/syn_ENZ to RTZ
+                syn_RTZ = syn_ENZ
+                obs_RTZ = obs_ENZ
+                Raz = (meta['back_azimuth'] + 180.0) % 360.0
+                sin_Raz = np.sin(np.deg2rad(Raz))
+                cos_Raz = np.cos(np.deg2rad(Raz))
+                proj_matrix = [ [ sin_Raz, cos_Raz],
+                                [-cos_Raz, sin_Raz] ]
+                syn_RTZ[0:2,:] = np.dot(proj_matrix, syn_ENZ[0:2,:])
+                obs_RTZ[0:2,:] = np.dot(proj_matrix, obs_ENZ[0:2,:])
+                # record results
+                data[station_id] = {'meta':meta, 'starttime':startime, 
+                        'times':times, 'delta':detla, 
+                        'syn':syn_RTZ, 'obs':obs_RTZ}
+
+            if not data:
+                continue
+
+            # create figure and axes
+            fig = plt.figure(figsize=(11,8.5))
+            str_title = 'azimuth(deg): {:.1f}, {:.1f}'.format(azmin, azmax)
+            fig.text(0.5, 0.95, str_title, size='x-large', horizontalalignment='center')
+            ax_RTZ = []
+            for i in range(3):
+                ax_origin = [0.05+0.3*i, 0.1]
+                ax_size = [0.25, 0.8]
+                ax_RTZ.append(fig.add_axes(ax_origin + ax_size))
+
+            # make figure
+            y = [ x['meta']['dist_in_deg'] for x in data.itervalues() ]
+            ny = len(y)
+            ymax = max(y) + 0.5
+            ymin = min(y) - 0.5
+            dy = 0.5*(ymax-ymin)/ny
+        
+            for sta_id in data:
+                sta = data[sta_id]
+                t = sta['times']
+                dist_degree = sta['meta']['dist_in_deg']
+                reduced_time = dist_degree * rayp
+        
+                t0 =  centroid_time - sta['starttime']
+                plot_t0 = t0 + win[0] + reduced_time
+                plot_t1 = t0 + win[1] + reduced_time
+                idx = (t > plot_t0) & (t < plot_t1)
+                    
+                t_plot = t[idx] - reduced_time
+                obs_RTZ = sta['obs']
+                syn_RTZ = sta['syn']
+                cmp_names = ['R', 'T', 'Z']
+                for i in range(3):
+                    #normalize data
+                    obs = obs_RTZ[i, idx]
+                    obs = dy*obs/max(abs(obs))
+                    syn = syn_RTZ[i, idx]
+                    syn = dy*syn/max(abs(syn))
+
+                    ax = ax_RTZ[i]
+                    ax.plot(t_plot, obs+dist_degree, 'k-', linewidth=0.5)
+                    ax.plot(t_plot, syn+dist_degree, 'r-', linewidth=0.5)
+        
+                    #plot ttcurve
+                    ax.plot([x[1]-rayp*x[0] for x in ttcurve_p], [x[0] for x in ttcurve_p], 'b-', linewidth=0.2)
+                    ax.plot([x[1]-rayp*x[0] for x in ttcurve_P], [x[0] for x in ttcurve_P], 'b-', linewidth=0.2)
+                    ax.plot([x[1]-rayp*x[0] for x in ttcurve_s], [x[0] for x in ttcurve_s], 'c-', linewidth=0.2)
+                    ax.plot([x[1]-rayp*x[0] for x in ttcurve_S], [x[0] for x in ttcurve_S], 'c-', linewidth=0.2)
+        
+                    # config
+                    ax.set_xlim(win[0], win[1])
+                    ax.set_ylim(ymin, ymax)
+                    ax.set_title(cmp_names[i])
+                    ax.set_xlabel('t - {:.1f}*dist (s)'.format(rayp))
+        
+                    # ylabel 
+                    if i == 0:
+                        ax.set_ylabel('dist (deg)')
+                    else:
+                        ax.set_yticklabels([])
+                    #annotate station names 
+                    if i == 2:
+                        ax.text(win[1], dist_degree, ' '+sta_id, \
+                                verticalalignment='center', fontsize=9)
+                #for i in range(3):
+            #for sta_id in data:
+        
+            plt.show()
+            #plt.savefig(fig, )
+        
+        # END

@@ -7,10 +7,10 @@ import numpy as np
 #====== exponential taper
 def exp_taper(x, xc, a=0.01, e=0.0):
     """exponential taper at two ends stop,pass, pass,stop
-        xc: (array-like)
+        xc: array-like
             stop,pass[,pass,stop]
-        x: array-like
-            sample points
+        x: scalar or array-like
+            sample point(s)
         a: taper amplitude at stop frequencies.
         e: constant amplitude in stop band
     """
@@ -54,11 +54,14 @@ def cosine_taper(x, xc):
     """cosine taper at two ends stop,pass, pass,stop
         xc: (array-like)
             stop,pass[,pass,stop]
-        x: array-like
+        x: scalar or array-like
             sample points
     """
     nc = len(xc)
-    x = np.array(x)
+    if np.isscalar(x):
+        x = np.array([x, ])
+    else:
+        x = np.array(x)
     y = np.ones(len(x))
 
     if nc == 2: # sided taper

@@ -22,74 +22,13 @@ from lanczos_interp1 import lanczos_interp1
 #
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
+#
+from taper import *
 
 
 #====== utility functions
 def is_equal(lst):
     return not lst or [lst[0]]*len(lst) == lst
-
-
-def cosine_taper(x, xc):
-    """cosine taper at two ends stop,pass, pass,stop
-        xc: (array-like)
-            stop,pass[,pass,stop]
-        x: array-like
-            sample points
-    """
-    nc = len(xc)
-    x = np.array(x)
-    y = np.ones(len(x))
-
-    if nc == 2: # sided taper
-        l = xc[1] - xc[0] # taper width
-        if l == 0:
-            raise ValueError('pass and stop values cannot be the same.')
-        elif l > 0: # tapered at left side
-            idx = x < xc[0]; y[idx] = 0.0
-            idx = (xc[0] <= x) & (x <= xc[1])
-            y[idx] = 0.5 - 0.5*np.cos(np.pi*(x[idx] - xc[0])/l)
-            idx = x > xc[1]; y[idx] = 1.0
-        else: # tapered at right side
-            idx = x > xc[0]; y[idx] = 0.0
-            idx = (xc[1] <= x) & (x <= xc[0])
-            y[idx] = 0.5 + 0.5*np.cos(np.pi*(x[idx] - xc[1])/l)
-            idx = x < xc[1]; y[idx] = 1.0
-    elif nc == 4: # two sided taper
-        if not (xc[0]<xc[1]<xc[2]<xc[3]):
-            raise ValueError('4 cutoff values must be in increasing order.')
-        else:
-            idx = x <= xc[0]; y[idx] = 0.0
-
-            idx = (xc[0] < x) & (x < xc[1])
-            y[idx] = 0.5 - 0.5*np.cos(np.pi*(x[idx] - xc[0])/(xc[1]-xc[0]))
-            
-            idx = (xc[1] <= x) & (x <= xc[2]); y[idx] = 1.0
-
-            idx = (xc[2] < x) & (x < xc[3])
-            y[idx] = 0.5 + 0.5*np.cos(np.pi*(x[idx] - xc[2])/(xc[3]-xc[2]))
-
-            idx = x > xc[3]; y[idx] = 0.0
-    else:
-        raise ValueError('number of cutoff values must be either 2 or 4.')
-
-    return y
-
-
-def taper_window(npts, ttype="cosine", ratio=0.1):
-    """taper window of npts points
-        ratio: decimal percentage at one end (default: 0.1)
-    """
-    if not 0.0 < ratio <= 0.5:
-        raise ValueError("taper ratio must be between 0.0 and 0.5")
-
-    xc = [0.0, npts*ratio, npts*(1.0-ratio), npts]
-    x = np.arange(npts)
-    if ttype == "cosine":
-        taper = cosine_taper(x, xc)
-    else:
-        raise Exception("unrecognized taper type" % (ttype))
-
-    return taper
 
 #======
 class Misfit(object):
@@ -381,6 +320,8 @@ class Misfit(object):
         # filter/taper parameters
         filter_param = {'type': filter_param[0], 'freqlim': filter_param[1]}
         taper_param = {'type': taper_param[0], 'ratio': taper_param[1]}
+        if not 0.0 < taper_param[1] < 0.5:
+            raise ValueError("taper ratio must lie between 0 and 0.5.")
 
         # loop each event
         for event_id in event_id_list:
@@ -508,7 +449,7 @@ class Misfit(object):
             filter_padlen:
                  length of zero-padding at the end of syn data before filtering.
             use_prefilt, prefilt:
-                lowpass filter which is set as the source time function in 
+                lowpass filter which is set as the source time function in
                 forward simulations to suppress high-frequency numerical noise.
                 if selected, this is applied to obs data.
             use_STF, STF:
@@ -622,7 +563,7 @@ class Misfit(object):
     def measure_windows_for_one_event(self, event_id,
             obs_dir='obs', syn_dir='syn', syn_band_code='MX', 
             syn_suffix='.sem.sac',
-            use_prefilt=False, prefilt=(0.13, 0.07),
+            use_prefilt=False, prefilt=('cosine', [0.13, 0.07]),
             use_STF=False,     STF=('triangle', 0.0),
             cc_delta=0.01, output_adj=False, adj_dir='adj', 
             adj_window_id_list=['F.p,P','F.s,S'],
@@ -631,7 +572,7 @@ class Misfit(object):
         """measure misfit on time windoes for one event
             cc_delta: sampling interval for cross-correlation between obs and syn.
             weight_param: one-sided cosine taper [stop, pass]
-            use_STF:
+            use_STF, STF:
                 flag to convolve source time function to synthetics. STF is 
                 specifed as isosceles triangle with half_duration.
         """
@@ -652,7 +593,8 @@ class Misfit(object):
             taper_ratio = taper_param['ratio']
 
             # read seismograms
-            syn_startime, syn_times, syn_detla, syn_ENZ, obs_ENZ, \
+            try:
+                syn_startime, syn_times, syn_detla, syn_ENZ, obs_ENZ, \
                     noise_starttime, noise_ENZ = \
                 self.read_seismograms_for_one_station(event_id,
                         station_id, obs_dir=obs_dir, syn_dir=syn_dir,
@@ -661,7 +603,24 @@ class Misfit(object):
                         filter_padlen=filter_padlen, 
                         use_prefilt=use_prefilt, prefilt=prefilt, 
                         use_STF=use_STF, STF=STF)
+            except Exception as e:
+                print str(e)
+                continue
             syn_sampling_rate = 1.0/syn_delta
+            syn_npts = len(syn_times)
+
+            #------ filter parameters
+            filter_param = station['filter']
+            filter_type = filter_param['type']
+            filter_freqlim = filter_param['freqlim']
+            f = np.fft.rfftfreq(syn_npts, d=syn_delta)
+            # conjugated spectrum: conj(F1 * S)
+            H_conj = cosine_taper(f, filter_freqlim)
+            if use_STF:
+                # source spectrum: isosceles triangle
+                half_duration = STF[1]
+                src_spectrum = np.sinc(f * half_duration)**2
+                H_conj *= src_spectrum
 
             # process each signal window
             windows = station['windows']
@@ -682,13 +641,9 @@ class Misfit(object):
                 # make taper window
                 win_b = window_starttime - syn_starttime
                 win_e = window_endtime - syn_starttime
-                win_ib = int(win_b * syn_sampling_rate)
-                win_ie = int(win_e * syn_sampling_rate) + 1
-                if win_ib < 0: win_ib = 0
-                if win_ie > syn_npts: win_ie = syn_npts
-                taper[:] = 0.0
-                taper[win_ib:win_ie] = taper_window(win_ie-win_ib, 
-                        taper_type, taper_ratio)
+                taper_width = (win_e - win_b) * min(taper_ratio, 0.5)
+                win_c = [win_b, win_b+taper_width, win_e-taper_width, win_e]
+                taper = cosine_taper(syn_times, win_c)
  
                 # projection matrix
                 proj_matrix[:,:] = 0.0 #reset to zero
@@ -723,11 +678,11 @@ class Misfit(object):
                 A_syn = np.sqrt(np.max(np.sum(syn_ENZ_win**2, axis=0)))
                 A_obs = np.sqrt(np.max(np.sum(obs_ENZ_win**2, axis=0)))
                 A_noise =  np.sqrt(np.max(np.sum(noise_ENZ_win**2, axis=0)))
-                if A_obs==0: # data file may not containe the time window
+                if A_obs == 0: # data file may not containe the time window
                     print '[WARNING] %s:%s:%s empty obs trace, SKIP.' \
                             % (event_id, station_id, window_id)
                     continue
-                if A_noise==0: # could occure when the data begin time is too close to the first arrival
+                if A_noise == 0: # could occure when the data begin time is too close to the first arrival
                     print '[WARNING] %s:%s:%s empty noise trace, SKIP.' \
                             % (event_id, station_id, window_id)
                     continue
@@ -765,9 +720,9 @@ class Misfit(object):
                 ar_max = cc_max * syn_norm / obs_norm # amplitude ratio: syn/obs
 
                 # window weighting based on SNR and misfit
-                weight = cosine_taper(weight_param['SNR'], snr) \
-                        * cosine_taper(weight_param['cc_max'], cc_max) \
-                        * cosine_taper(weight_param['cc_0'], cc_0)
+                weight = cosine_taper(snr, weight_param['SNR']) \
+                        * cosine_taper(cc_max, weight_param['cc_max']) \
+                        * cosine_taper(cc_0, weight_param['cc_0'])
 
                 # make adjoint source
                 # adjoint source type = normalized cc
@@ -775,11 +730,8 @@ class Misfit(object):
                 A0 = cc_0 * obs_norm / syn_norm # amplitude raito: obs/syn
                 if output_adj and (window_id in adj_window_id_list):
                     # adjoint source of the current window
-                    adj_win = signal.filtfilt(filter_b, filter_a,
-                            taper*(obs_ENZ_win - A0*syn_ENZ_win))/obs_norm/syn_norm
-                    if use_STF:
-                        adj_win = np.fft.irfft(
-                            np.fft.rfft(adj_win) * np.conjugate(src_spectrum))
+                    adj_win = np.fft.irfft(H_conj * np.fft.rfft(
+                        taper*(obs_ENZ_win - A0*syn_ENZ_win)), syn_npts) /obs_norm/syn_norm
                     adj_ENZ += weight * adj_win
 
                 # form measurment results
@@ -860,8 +812,8 @@ class Misfit(object):
     #end def setup_windows(self,
 
 
-    def relocate_1d(self, event_id, window_id_list=['Z.p,P'],
-        min_SNR=10.0, min_cc_0=0.5, min_cc_max=0.7, 
+    def relocate_1d(self, event_id, window_id_list=['F.p,P', 'F.s,S'],
+        min_SNR=10.0, min_cc_0=0.5, min_cc_max=0.7,
         max_cc_time_shift=8.0, fix_depth=False, out_cmt_file=None):
         """relocate event using ray path in reference earth model
         """
@@ -1011,7 +963,8 @@ class Misfit(object):
                     '%.4f %.4f %.1f 0.0 0.0 REGION\n' % (evla1,evlo1,evdp1) )
                 fp.write('event name:      %s\n'     % (event_id))
                 fp.write('time shift:      0.0\n'                ) 
-                fp.write('half duration:   %.1f\n'   % (gcmt['half_duration']))
+                #fp.write('half duration:   %.1f\n'   % (gcmt['half_duration']))
+                fp.write('half duration:   0.0\n'    % (gcmt['half_duration']))
                 fp.write('latitude:        %.4f\n'   % (evla1)   )
                 fp.write('longitude:       %.4f\n'   % (evlo1)   )
                 fp.write('depth:           %.4f\n'   % (evdp1)   )

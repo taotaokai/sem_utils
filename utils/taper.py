@@ -96,4 +96,7 @@ def cosine_taper(x, xc):
     else:
         raise ValueError('number of cutoff values must be either 2 or 4.')
 
+    # restore return value to scalar when input x is a scalar
+    if len(y) == 1: y = y[0]
+
     return y

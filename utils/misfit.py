@@ -45,9 +45,9 @@ class Misfit(object):
     |   |   |   *   <station_id(net.sta.loc)>: {
     |   |   |   |   |   'stat': {code, msg}, # code<0: problematic, code=0: OK
     |   |   |   |   |   'meta': {lat,lon,ele,...,channels:[{code,az,dip,...},...]},
-    |   |   |   |   |   'filter': {type, freqlim(list)},
-    |   |   |   |   |   'taper': {type, ratio},
-    |   |   |   |   |   'noise_window': {starttime, endtime}, # pre-event time window
+    |   |   |   |   |   'filter': {type:, freqlim:},
+    |   |   |   |   |   'taper': {type:, ratio:},
+    |   |   |   |   |   'noise_window': {starttime:, endtime:},
     |   |   |   |   |   'windows': {
     |   |   |   |   |   *   <window_id(cmp.pha)>: {
     |   |   |   |   |   |   |   component, azimuth, dip, starttime, endtime, weight,
@@ -109,7 +109,7 @@ class Misfit(object):
                 year, month, day, hour, minute, second)
         centroid_time = UTCDateTime(isotime) + time_shift
 
-        # moment tensor 
+        # moment tensor
         # basis: (r,theta,phi) corresponds to (up,south,east)
         Mrr = float(cmt[7][1])
         Mtt = float(cmt[8][1])
@@ -293,10 +293,10 @@ class Misfit(object):
 
     def setup_windows(self,
             window_list=[('F','p,P',[-30,50]), ('F','s,S',[-40,70])],
-            noise_window=('ttp',[-150,-40]),
+            noise_window=('ttp',[-100,-30]),
             filter_param=('cosine', [0.009, 0.011, 0.06, 0.10]),
             taper_param=('cosine', 0.1),
-            event_id_list=None, station_id_list=None, update=False):
+            event_id_list=None, station_id_list=None):
         """window_list: [ (component, phases, [begin, end]), ...]
            filter_param: (type, freqlims)
         """
@@ -318,8 +318,8 @@ class Misfit(object):
         noise_end = noise_window[1][1]
 
         # filter/taper parameters
-        filter_param = {'type': filter_param[0], 'freqlim': filter_param[1]}
-        taper_param = {'type': taper_param[0], 'ratio': taper_param[1]}
+        filter_dict = {'type': filter_param[0], 'freqlim': filter_param[1]}
+        taper_dict = {'type': taper_param[0], 'ratio': taper_param[1]}
         if not 0.0 < taper_param[1] < 0.5:
             raise ValueError("taper ratio must lie between 0 and 0.5.")
 
@@ -350,11 +350,10 @@ class Misfit(object):
                 dist_degree = meta['dist_degree']
 
                 # setup filter/taper parameters
-                station['filter'] = filter_param
-                station['taper'] = taper_param
+                station['filter'] = filter_dict
+                station['taper'] = taper_dict
 
                 # setup noise window
-                # make noise window
                 arrivals = taup_model.get_travel_times(
                         source_depth_in_km=gcmt['depth'],
                         distance_in_degree=dist_degree,
@@ -378,10 +377,7 @@ class Misfit(object):
                     signal_begin = float(win[2][0])
                     signal_end = float(win[2][1])
                     window_id = "%s.%s" % (comp, phase)
-                    if (window_id in windows) and (not update):
-                        print "[WARNING] %s:%s:%s already exists, skip" \
-                                % (event_id, station_id, window_id)
-                        continue
+
                     if comp == 'Z': # vertcal component
                         cmpaz = 0.0 
                         cmpdip = -90.0
@@ -393,7 +389,7 @@ class Misfit(object):
                         cmpdip = 0.0
                     elif comp == 'H': # horizontal vector
                         cmpaz = float('nan')
-                        cmpdip = float('nan')
+                        cmpdip = 0.0
                     elif comp == 'F': # full vector
                         cmpaz = float('nan')
                         cmpdip = float('nan')
@@ -401,7 +397,6 @@ class Misfit(object):
                         print "[WARNING] %s: unrecognized component, SKIP." \
                                 % (comp)
                         continue
-            
                     # phase arrivals predicted from reference Earth model
                     arrivals = taup_model.get_travel_times(
                             source_depth_in_km=gcmt['depth'],
@@ -411,12 +406,11 @@ class Misfit(object):
                         print "[WARNING] %s:%s:%s phase not found, skip " \
                                 % (event_id, station_id, phase)
                         continue
-
-                    # add/update window
-                    # only use first arrival of smallest traveltime
+                    # use first arrival as the window reference time
                     arr = arrivals[0]
                     signal_starttime = str(centroid_time + arr.time + signal_begin)
                     signal_endtime = str(centroid_time + arr.time + signal_end)
+                    # add window
                     window = {
                         'component': comp,
                         'azimuth': cmpaz,
@@ -429,41 +423,31 @@ class Misfit(object):
                         'quality': {},
                         'misfit': {},
                         'stat': {'code': 0, 'msg': ""} }
-                    if window_id not in windows:
-                        windows[window_id] = window
-                    elif update:
-                        windows[window_id].update(window)
-                        windows[window_id]['stat']['msg'] = "updated"
+                    windows[window_id] = window
 
                 #end for winpar in winpar_list:
             #end for station_id in station_id_list:
         #end for event_id in event_id_list:
 
 
-    def read_seismograms_for_one_station(self, event_id, station_id, 
-            obs_dir='obs', syn_dir='syn', syn_band_code='MX', 
-            syn_suffix='.sem.sac', filter_padlen=50,
-            use_prefilt=False, prefilt=('cosine', [0.13, 0.07]),
-            use_STF=False, STF=('triangle', 0.0)):
+    def read_seismograms(self, event_id, station_id, 
+            obs_dir='obs', syn_dir='syn', 
+            syn_band_code='MX', syn_suffix='.sem.sac'):
         """ Get 3-component seismograms recorded at one station for one event.
-            filter_padlen:
-                 length of zero-padding at the end of syn data before filtering.
-            use_prefilt, prefilt:
-                lowpass filter which is set as the source time function in
-                forward simulations to suppress high-frequency numerical noise.
-                if selected, this is applied to obs data.
-            use_STF, STF:
-                if selected, source time function is applied to syn data.
+            Return:
+                syn_st, obs_st
         """
         syn_orientation_codes = ['E', 'N', 'Z']
         events = self.data['events']
         event = events[event_id]
         stations = event['stations']
         station = stations[station_id]
- 
-        #------ get file paths of obs, syn seismograms
         meta = station['meta']
         channels = meta['channels']
+        noise_window = station['noise_window']
+        noise_starttime = UTCDateTime(noise_window['starttime'])
+ 
+        #------ get file paths of obs, syn seismograms
         obs_files = [ '{:s}/{:s}.{:s}'.format(
             obs_dir, station_id, x['code']) for x in channels ]
         syn_files = [ '{:s}/{:s}.{:2s}{:1s}{:s}'.format(
@@ -485,61 +469,36 @@ class Misfit(object):
                     ' synthetic seismograms.' % (event_id, station_id))
         tr = syn_st[0]
         syn_starttime = tr.stats.starttime
+        syn_endtime = tr.stats.endtime
         syn_delta = tr.stats.delta
-        syn_sampling_rate = tr.stats.sampling_rate
         syn_npts = tr.stats.npts
         syn_times = syn_delta*np.arange(syn_npts)
 
-        #------ filter parameters
-        filter_param = station['filter']
-        filter_type = filter_param['type']
-        filter_freqlim = filter_param['freqlim']
-
-        #------ filter syn seismograms
-        npad = int(filter_padlen/syn_delta)
-        f = np.fft.rfftfreq(syn_npts + npad, d=syn_delta)
-        H = cosine_taper(f, filter_freqlim)
-        if use_STF:
-            # source spectrum: isosceles triangle
-            half_duration = STF[1]
-            src_spectrum = np.sinc(f * half_duration)**2
-            H *= src_spectrum
-        syn_ENZ = np.zeros((3, syn_npts))
-        for i in range(3):
-            x = np.fft.irfft(H * np.fft.rfft(np.concatenate(
-                (syn_st[i].data, np.zeros(npad)))), syn_npts+npad)
-            syn_ENZ[i,:] = x[0:syn_npts]
-
-        #------ process obs seismograms
-        # noise window
-        noise_starttime = UTCDateTime(station['noise_window']['starttime'])
-        noise_endtime = UTCDateTime(station['noise_window']['endtime'])
-        noise_window_len = noise_endtime - noise_starttime
-        noise_npts = int(noise_window_len / syn_delta)
-        noise_times = syn_delta * np.arange(noise_npts)
-        # filter obs, then cut into signal/noise windows
+        #------ interpolate obs into the same time samples of syn
         obs_ENZ = np.zeros((3, syn_npts))
-        noise_ENZ = np.zeros((3, noise_npts))
+        taper_len = 100.0 # FIXME this value is hard wired now
+        syn_nyq = 0.5/syn_delta
         for i in range(3):
             tr = obs_st[i]
-            # fitler
-            x = signal.detrend(tr.data, type='linear')
             obs_npts = tr.stats.npts
             obs_delta = tr.stats.delta
-            #npad = int(filter_padlen/obs_delta)
-            f = np.fft.rfftfreq(obs_npts, d=obs_delta)
-            H = cosine_taper(f, filter_freqlim)
-            if use_prefilt:
-                H *= cosine_taper(f, prefilt[1])
-            x = np.fft.irfft(H * np.fft.rfft(x), obs_npts)
-            # interpolate obs into the same time samples of syn
-            obs_ENZ[i,:] = lanczos_interp1(x, tr.stats.delta,
-                    syn_times+(syn_starttime-tr.stats.starttime), na=20)
-            # interpolate obs into noise window
-            noise_ENZ[i,:] = lanczos_interp1(x, tr.stats.delta,
-                    noise_times+(noise_starttime-tr.stats.starttime), na=20)
-        # roate obs to ENZ
-        #   projection matrix: obs = proj * ENZ => ZNE = inv(proj) * obs
+            obs_starttime = tr.stats.starttime
+            obs_endtime = tr.stats.endtime
+            # check if record is long enough
+            if not ( obs_starttime < noise_starttime ):
+                #obs_endtime >= syn_endtime ):
+                raise Exception('%s:%s: obs does not cover syn time range'
+                        % (event_id, station_id))
+            # lowpass to frequency band in sampling rate of syn
+            tr.detrend(type='linear')
+            tr.taper(max_percentage=0.1, max_length=taper_len)
+            tr.filter('lowpassCheby2', freq=syn_nyq, maxorder=12)
+            # interpolation
+            obs_ENZ[i,:] = lanczos_interp1(tr.data, obs_delta,
+                    syn_times+(syn_starttime-obs_starttime), na=20)
+
+        #------ rotate obs to ENZ
+        # projection matrix: obs = proj * ENZ => ZNE = inv(proj) * obs
         proj_matrix = np.zeros((3, 3))
         for i in range(3):
             channel = channels[i]
@@ -554,21 +513,293 @@ class Misfit(object):
         # inverse projection matrix: ENZ = inv(proj) * obs
         inv_proj = np.linalg.inv(proj_matrix)
         obs_ENZ = np.dot(inv_proj, obs_ENZ)
-        noise_ENZ = np.dot(inv_proj, noise_ENZ)
 
-        return syn_starttime, syn_times, syn_delta, syn_ENZ, obs_ENZ, \
-                noise_starttime, noise_ENZ
+        #------ form obs traces
+        obs_st = syn_st.copy()
+        for i in range(3):
+            obs_st[i].data = obs_ENZ[i,:]
+
+        return syn_st, obs_st
+
+
+    def measure_windows_for_one_station(self, event_id, station_id, 
+            obs_dir='obs', syn_dir='syn',
+            syn_band_code='MX', syn_suffix='.sem.sac',
+            use_prefilt=True, prefilt=[0.13, 0.7],
+            filtpad=50.0, plot=True,
+            use_STF=False, STF=('triangle', 0.0),
+            cc_delta=0.01, output_adj=False, adj_dir='adj', 
+            adj_window_id_list=['F.p,P', 'F.s,S'],
+            weight_param={'SNR':[5,10], 'cc_max':[0.6,0.8], 'cc_0':[0.5,0.7]}):
+        """
+            prefilt:
+                lowpass filter(cosine taper) which is used as the source time function in
+                forward simulations to suppress high-frequency numerical noise.
+                this is applied to obs data before interpolation.
+            filtpad:
+                length of zero padding during filtering
+        """
+        #
+        events = self.data['events']
+        event = events[event_id]
+        cmt = event['gcmt']
+        centroid_time = UTCDateTime(cmt['centroid_time'])
+        stations = event['stations']
+        station = stations[station_id]
+        windows = station['windows']
+        syn_orientation_codes = ['E', 'N', 'Z']
+
+        #------ read obs/syn seismograms
+        # syn: u, obs: d
+        syn_st, obs_st = self.read_seismograms(
+                event_id, station_id,
+                obs_dir=obs_dir, syn_dir=syn_dir,
+                syn_band_code=syn_band_code, syn_suffix=syn_suffix)
+
+        # time samples of syn 
+        tr = syn_st[0]
+        syn_starttime = tr.stats.starttime
+        syn_delta = tr.stats.delta
+        syn_sampling_rate = tr.stats.sampling_rate
+        syn_npts = tr.stats.npts
+        syn_times = syn_delta*np.arange(syn_npts)
+
+        # syn/obs data arrays
+        syn_ENZ = np.zeros((3, syn_npts))
+        obs_ENZ = np.zeros((3, syn_npts))
+        for i in range(3):
+            syn_ENZ[i,:] = syn_st[i].data
+            obs_ENZ[i,:] = obs_st[i].data
+
+        # filter parameters
+        filter_param = station['filter']
+        filter_type = filter_param['type']
+        filter_freqlim = filter_param['freqlim']
+
+        # window taper parameters
+        taper_param = station['taper']
+        taper_type = taper_param['type']
+        taper_ratio = taper_param['ratio']
+
+        #------ filter spectrum
+        npad = int(filtpad / syn_delta)
+        # F1 = filter of data measurment 
+        # F1_S = F1 * Source spectrum
+        f = np.fft.rfftfreq(syn_npts+npad, d=syn_delta)
+        F1 = cosine_taper(f, filter_freqlim)
+        F1_F0 = F1
+        if use_prefilt:
+            F1_F0 *= cosine_taper(f, prefilt)
+        F1_S = F1
+        if use_STF:
+            # source spectrum: isosceles triangle
+            half_duration = STF[1]
+            F_src = np.sinc(f * half_duration)**2
+            F1_S *= F_src
+
+        # filter syn/obs
+        # obs = F1 * F0 * d
+        obs_ENZ[:,:] = np.fft.irfft(F1_F0 * np.fft.rfft(
+            np.concatenate((obs_ENZ, np.zeros((3,npad))), axis=1)))[:,0:syn_npts]
+        # syn = F1 * S * u
+        syn_ENZ[:,:] = np.fft.irfft(F1_S * np.fft.rfft(
+            np.concatenate((syn_ENZ, np.zeros((3,npad))), axis=1)))[:,0:syn_npts]
+
+        # noise: cut signal before centroid time on obs
+        t0 = centroid_time - syn_starttime
+        idx = syn_times < t0
+        t = syn_times[idx]
+        b = t[0]
+        e = t[-1]
+        taper_width = (e-b) * 0.1
+        win_c = [b, b+taper_width, e-taper_width, e]
+        taper = cosine_taper(t, win_c)
+        noise_ENZ = obs_ENZ[:,idx] * taper
+
+        #------ process windows
+        if output_adj:
+            adj_ENZ = np.zeros((3, syn_npts))
+        taper = np.zeros(syn_npts)
+        proj_matrix = np.zeros((3,3))
+        cc = np.zeros(2*syn_npts-1)
+        for window_id in windows:
+            # window parameters
+            window = windows[window_id]
+            comp = window['component']
+            cmpaz = window['azimuth']
+            cmpdip = window['dip']
+            window_starttime = UTCDateTime(window['starttime'])
+            window_endtime = UTCDateTime(window['endtime'])
+            window_len = window_endtime - window_starttime
+            # window taper
+            win_b = window_starttime - syn_starttime
+            win_e = window_endtime - syn_starttime
+            taper_width = window_len * min(taper_ratio, 0.5)
+            win_c = [win_b, win_b+taper_width, win_e-taper_width, win_e]
+            taper = cosine_taper(syn_times, win_c)
+            # projection matrix
+            proj_matrix[:,:] = 0.0 #reset to zero
+            if comp in ['Z', 'R', 'T']:
+                sin_az = np.sin(np.deg2rad(cmpaz))
+                cos_az = np.cos(np.deg2rad(cmpaz))
+                sin_dip = np.sin(np.deg2rad(cmpdip))
+                cos_dip = np.cos(np.deg2rad(cmpdip))
+                n = np.array([ [cos_dip * sin_az], # cos(E, comp)
+                               [cos_dip * cos_az], # N, comp
+                               [-sin_dip] ])       # Z, comp
+                proj_matrix = np.dot(n, n.transpose())
+            elif comp == 'H': # horizontal vector 2d
+                proj_matrix[0,0] = 1.0 # E
+                proj_matrix[1,1] = 1.0 # N
+                proj_matrix[2,2] = 0.0 # Z
+            elif comp == 'F': # full 3d vector
+                proj_matrix[0,0] = 1.0
+                proj_matrix[1,1] = 1.0
+                proj_matrix[2,2] = 1.0
+            else:
+                print '[WARNING] %s:%s:%s unrecognized component code, SKIP' \
+                        % (event_id, station_id, window_id)
+                continue
+
+            # apply window taper and projection
+            # obs = w * F1 * F0 * d
+            obs_ENZ_win = np.dot(proj_matrix, obs_ENZ) * taper
+            # obs = w * F1 * S * u
+            syn_ENZ_win = np.dot(proj_matrix, syn_ENZ) * taper
+            # noise
+            noise_ENZ_win = np.dot(proj_matrix, noise_ENZ)
+
+            # measure SNR
+            A_syn = np.sqrt(np.max(np.sum(syn_ENZ_win**2, axis=0)))
+            A_obs = np.sqrt(np.max(np.sum(obs_ENZ_win**2, axis=0)))
+            A_noise =  np.sqrt(np.max(np.sum(noise_ENZ_win**2, axis=0)))
+            if A_obs == 0: # data file may not containe the time window
+                print '[WARNING] %s:%s:%s empty obs trace, SKIP.' \
+                        % (event_id, station_id, window_id)
+                continue
+            if A_noise == 0: # could occure when the data begin time is too close to the first arrival
+                print '[WARNING] %s:%s:%s empty noise trace, SKIP.' \
+                        % (event_id, station_id, window_id)
+                continue
+            snr = 20.0 * np.log10(A_obs/A_noise)
+ 
+            # normalized cross-correlation
+            obs_norm2 = np.sum(obs_ENZ_win**2)
+            obs_norm = np.sqrt(obs_norm2)
+            syn_norm = np.sqrt(np.sum(syn_ENZ_win**2))
+            cc[:] = 0.0
+            for i in range(3):
+                # NOTE the order (obs,syn) is important. The positive time on 
+                #   CC means shifting syn in the positive time direction
+                cc += signal.fftconvolve(
+                        obs_ENZ_win[i,:], syn_ENZ_win[i,::-1], 'full')
+            cc /= obs_norm * syn_norm
+            # zero-lag cc coeff.
+            cc_0 = cc[syn_npts]
+            ar_0 = cc_0 * syn_norm / obs_norm # amplitude ratio syn/obs 
+
+            # cross-correlation time shift
+            # tshift>0: synthetic is shifted along the positive time direction
+            cc_max_time_shift = window_len/2.0 #TODO: more reasonable choice?
+            ncc = int(cc_max_time_shift / cc_delta)
+            cc_times = np.arange(-ncc,ncc+1) * cc_delta
+            # interpolate cc to finer time samples
+            if syn_delta < cc_delta:
+                print '[WARNING] syn_delta(%f) < cc_time_step(%f)' \
+                        % (syn_delta, cc_delta)
+            ti = cc_times + (syn_npts-1)*syn_delta  # -(npts-1)*dt: begin time in cc
+            cci = lanczos_interp1(cc, syn_delta, ti, na=20)
+            # time shift at the maximum correlation
+            imax = np.argmax(cci)
+            cc_time_shift = cc_times[imax]
+            cc_max = cci[imax]
+            ar_max = cc_max * syn_norm / obs_norm # amplitude ratio: syn/obs
+
+            # window weighting based on SNR and misfit
+            weight = cosine_taper(snr, weight_param['SNR']) \
+                    * cosine_taper(cc_max, weight_param['cc_max']) \
+                    * cosine_taper(cc_0, weight_param['cc_0'])
+
+            # adjoint source (objective functional: zero-lag cc coef.)
+            # adj = conj(F1 * S) * w * [ w * F1 * F0 * d - A * w * F1 * S * u] / N, 
+            #   where A = cc / norm(syn)**2, N = norm(obs)*norm(syn)
+            A0 = cc_0 * obs_norm / syn_norm # amplitude raito: obs/syn
+            adj_ENZ_win = np.fft.irfft(np.conjugate(F1_S) * np.fft.rfft(
+                np.concatenate((taper*(obs_ENZ_win-A0*syn_ENZ_win), 
+                    np.zeros((3,npad))), axis=1)))[:,0:syn_npts]/obs_norm/syn_norm
+
+            if output_adj and (window_id in adj_window_id_list):
+                adj_ENZ += weight * adj_ENZ_win
+
+            # record results
+            quality_dict = {
+                    'A_obs': A_obs, 'A_syn': A_syn, 'A_noise': A_noise,
+                    'SNR': snr}
+            misfit_dict = {
+                    'cc_0': cc_0, 'cc_max': cc_max,
+                    'ar_0': ar_0, 'ar_max': ar_max,
+                    'cc_time_shift': cc_time_shift }
+            window['quality'] = quality_dict
+            window['misfit'] = misfit_dict
+            window['weight'] = weight
+            window['stat'] = {'code': 1, 'msg': "measured"}
+
+            # DEBUG
+            if plot:
+                t = syn_times
+                A_adj = np.sqrt(np.max(np.sum(adj_ENZ_win**2, axis=0)))
+                for i in range(3):
+                    plt.subplot(411+i)
+                    if i == 0:
+                        plt.title('%s dt %.2f ccmax %.3f armax %.3f cc0 %.3f '
+                                'ar0 %.3f \nAobs %g Anoise %g snr %.1f weight %.3f'
+                                % (station_id, cc_time_shift, cc_max, ar_max, 
+                                    cc_0, ar_0, A_obs, A_noise, snr, weight) )
+                    plt.plot(t, obs_ENZ[i,:]/A_obs, 'k', linewidth=0.2)
+                    #plt.plot(noise_times+noise_b, noise_ENZ_win[i,:]/A_plot, 'b', linewidth=0.5)
+                    plt.plot(t, syn_ENZ[i,:]/A_syn, 'r', linewidth=0.2)
+                    idx = (win_b <= syn_times) & (syn_times <= win_e)
+                    plt.plot(t[idx], obs_ENZ_win[i,idx]/A_obs, 'k', linewidth=0.5)
+                    plt.plot(t[idx], syn_ENZ_win[i,idx]/A_obs * A0, 'r', linewidth=0.5)
+                    plt.plot(t[idx], adj_ENZ_win[i,idx]/A_adj, 'c', linewidth=1.0)
+                    plt.ylim((-1.5, 1.5))
+                    plt.xlim((min(t), max(t)))
+                    plt.ylabel(syn_orientation_codes[i])
+                plt.subplot(414)
+                plt.plot(cc_times, cci, 'k-')
+                plt.xlim((min(cc_times), max(cc_times)))
+                plt.ylabel(window_id)
+                plt.show()
+        #end for window_id in windows:
+
+        # output adjoint source for the current station
+        if output_adj:
+            for i in range(3):
+                tr = syn_st[i]
+                tr.data = adj_ENZ[i,:]
+                out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
+                        adj_dir, station_id, syn_band_code, 
+                        syn_orientation_codes[i])
+                # sac format 
+                tr.write(out_file + '.adj.sac', 'sac')
+                # ascii format 
+                # time is relative to event origin time
+                shift = tr.stats.sac.b - tr.stats.sac.o
+                with open(out_file+'.adj','w') as fp:
+                    for j in range(syn_npts):
+                        fp.write("{:16.9e}  {:16.9e}\n".format(
+                            syn_times[j]+shift, adj_ENZ[i,j]))
 
 
     def measure_windows_for_one_event(self, event_id,
-            obs_dir='obs', syn_dir='syn', syn_band_code='MX', 
-            syn_suffix='.sem.sac',
-            use_prefilt=False, prefilt=('cosine', [0.13, 0.07]),
-            use_STF=False,     STF=('triangle', 0.0),
+            obs_dir='obs', syn_dir='syn',
+            syn_band_code='MX', syn_suffix='.sem.sac',
+            use_prefilt=True, prefilt=[0.13, 0.7],
+            filtpad=50, plot=False,
+            use_STF=False, STF=('triangle', 0.0),
             cc_delta=0.01, output_adj=False, adj_dir='adj', 
-            adj_window_id_list=['F.p,P','F.s,S'],
-            weight_param={'SNR':[5,10], 'cc_max':[0.6,0.8], 'cc_0':[0.5,0.7]},
-            update=False):
+            adj_window_id_list=['F.p,P', 'F.s,S'],
+            weight_param={'SNR':[5,10], 'cc_max':[0.6,0.8], 'cc_0':[0.5,0.7]}):
         """measure misfit on time windoes for one event
             cc_delta: sampling interval for cross-correlation between obs and syn.
             weight_param: one-sided cosine taper [stop, pass]
@@ -579,237 +810,32 @@ class Misfit(object):
         # check inputs
         events = self.data['events']
         if event_id not in events:
-            print "[ERROR] %s does NOT exist."  % (event_id)
+            print "[ERROR] %s does not exist."  % (event_id)
             sys.exit()
         event = events[event_id]
-        
+
         # process each station
         stations = event['stations']
         for station_id in stations:
             station = stations[station_id]
-            # window taper parameters
-            taper_param = station['taper']
-            taper_type = taper_param['type']
-            taper_ratio = taper_param['ratio']
-
-            # read seismograms
             try:
-                syn_startime, syn_times, syn_detla, syn_ENZ, obs_ENZ, \
-                    noise_starttime, noise_ENZ = \
-                self.read_seismograms_for_one_station(event_id,
-                        station_id, obs_dir=obs_dir, syn_dir=syn_dir,
-                        syn_band_code=syn_band_code,
-                        syn_suffix=syn_suffix,
-                        filter_padlen=filter_padlen, 
-                        use_prefilt=use_prefilt, prefilt=prefilt, 
-                        use_STF=use_STF, STF=STF)
+                self.measure_windows_for_one_station(event_id, station_id, 
+                    obs_dir=obs_dir, syn_dir=syn_dir, 
+                    syn_band_code=syn_band_code, syn_suffix=syn_suffix, 
+                    use_prefilt=use_prefilt, prefilt=prefilt, 
+                    filtpad=filtpad, plot=plot,
+                    use_STF=use_STF, STF=STF,
+                    cc_delta=cc_delta, output_adj=output_adj, adj_dir=adj_dir,
+                    adj_window_id_list=adj_window_id_list, 
+                    weight_param=weight_param)
             except Exception as e:
                 print str(e)
+                station['stat']['code'] = -1
+                station['stat']['msg'] = str(e)
                 continue
-            syn_sampling_rate = 1.0/syn_delta
-            syn_npts = len(syn_times)
-
-            #------ filter parameters
-            filter_param = station['filter']
-            filter_type = filter_param['type']
-            filter_freqlim = filter_param['freqlim']
-            f = np.fft.rfftfreq(syn_npts, d=syn_delta)
-            # conjugated spectrum: conj(F1 * S)
-            H_conj = cosine_taper(f, filter_freqlim)
-            if use_STF:
-                # source spectrum: isosceles triangle
-                half_duration = STF[1]
-                src_spectrum = np.sinc(f * half_duration)**2
-                H_conj *= src_spectrum
-
-            # process each signal window
-            windows = station['windows']
-            if output_adj:
-                adj_ENZ = np.zeros((3, syn_npts))
-            taper = np.zeros(syn_npts)
-
-            for window_id in windows:
-                window = windows[window_id]
-
-                comp = window['component']
-                cmpaz = window['azimuth']
-                cmpdip = window['dip']
-                window_starttime = UTCDateTime(window['starttime'])
-                window_endtime = UTCDateTime(window['endtime'])
-                window_len = window_endtime - window_starttime
-
-                # make taper window
-                win_b = window_starttime - syn_starttime
-                win_e = window_endtime - syn_starttime
-                taper_width = (win_e - win_b) * min(taper_ratio, 0.5)
-                win_c = [win_b, win_b+taper_width, win_e-taper_width, win_e]
-                taper = cosine_taper(syn_times, win_c)
- 
-                # projection matrix
-                proj_matrix[:,:] = 0.0 #reset to zero
-                if comp in ['Z', 'R', 'T']:
-                    sin_az = np.sin(np.deg2rad(cmpaz))
-                    cos_az = np.cos(np.deg2rad(cmpaz))
-                    sin_dip = np.sin(np.deg2rad(cmpdip))
-                    cos_dip = np.cos(np.deg2rad(cmpdip))
-                    n = np.array([ [cos_dip * sin_az], # cos(E, comp)
-                                   [cos_dip * cos_az], # N, comp
-                                   [-sin_dip] ])       # Z, comp
-                    proj_matrix = np.dot(n, n.transpose())
-                elif comp == 'H': # horizontal vector 2d
-                    proj_matrix[0,0] = 1.0 # E
-                    proj_matrix[1,1] = 1.0 # N
-                    proj_matrix[2,2] = 0.0 # Z
-                elif comp == 'F': # full 3d vector
-                    proj_matrix[0,0] = 1.0
-                    proj_matrix[1,1] = 1.0
-                    proj_matrix[2,2] = 1.0
-                else:
-                    print '[WARNING] %s:%s:%s unrecognized component code, SKIP' \
-                            % (event_id, station_id, window_id)
-                    continue
-
-                # apply window taper and projection
-                noise_ENZ_win = np.dot(proj_matrix, noise_ENZ)
-                obs_ENZ_win = np.dot(proj_matrix, obs_ENZ) * taper
-                syn_ENZ_win = np.dot(proj_matrix, syn_ENZ) * taper
-
-                # measure SNR
-                A_syn = np.sqrt(np.max(np.sum(syn_ENZ_win**2, axis=0)))
-                A_obs = np.sqrt(np.max(np.sum(obs_ENZ_win**2, axis=0)))
-                A_noise =  np.sqrt(np.max(np.sum(noise_ENZ_win**2, axis=0)))
-                if A_obs == 0: # data file may not containe the time window
-                    print '[WARNING] %s:%s:%s empty obs trace, SKIP.' \
-                            % (event_id, station_id, window_id)
-                    continue
-                if A_noise == 0: # could occure when the data begin time is too close to the first arrival
-                    print '[WARNING] %s:%s:%s empty noise trace, SKIP.' \
-                            % (event_id, station_id, window_id)
-                    continue
-                snr = 20.0 * np.log10(A_obs/A_noise)
- 
-                # measure misfit between observed and synthetic seismograms
-                # cross-correlation
-                obs_norm2 = np.sum(obs_ENZ_win**2)
-                obs_norm = np.sqrt(obs_norm2)
-                syn_norm = np.sqrt(np.sum(syn_ENZ_win**2))
-                cc = np.zeros(2*syn_npts-1)
-                for i in range(3):
-                    # NOTE the order (obs,syn) is important. The positive time on 
-                    #   CC means shifting syn in the positive time direction
-                    cc += signal.fftconvolve(
-                            obs_ENZ_win[i,:], syn_ENZ_win[i,::-1], 'full')
-                cc /= obs_norm * syn_norm
-                # zero-lag normalized correlation
-                cc_0 = cc[syn_npts]
-                ar_0 = cc_0 * syn_norm / obs_norm # amplitude ratio syn/obs 
-                # tshift>0: synthetic is shifted along the positive time direction
-                cc_max_time_shift = window_len/2.0 #TODO: more reasonable choice?
-                ncc = int(cc_max_time_shift / cc_delta)
-                cc_times = np.arange(-ncc,ncc+1) * cc_delta
-                # interpolate cc to finer time samples
-                if syn_delta < cc_delta:
-                    print '[WARNING] syn_delta(%f) < cc_time_step(%f)' \
-                            % (syn_delta, cc_delta)
-                ti = (syn_npts-1)*syn_delta + cc_times # -(npts-1)*dt: begin time in cc
-                cci = lanczos_interp1(cc, syn_delta, ti, na=20)
-                # time shift at the maximum correlation
-                imax = np.argmax(cci)
-                cc_time_shift = cc_times[imax]
-                cc_max = cci[imax]
-                ar_max = cc_max * syn_norm / obs_norm # amplitude ratio: syn/obs
-
-                # window weighting based on SNR and misfit
-                weight = cosine_taper(snr, weight_param['SNR']) \
-                        * cosine_taper(cc_max, weight_param['cc_max']) \
-                        * cosine_taper(cc_0, weight_param['cc_0'])
-
-                # make adjoint source
-                # adjoint source type = normalized cc
-                # adj = weight * (obs - A0*syn) / (obs_norm*syn_norm)
-                A0 = cc_0 * obs_norm / syn_norm # amplitude raito: obs/syn
-                if output_adj and (window_id in adj_window_id_list):
-                    # adjoint source of the current window
-                    adj_win = np.fft.irfft(H_conj * np.fft.rfft(
-                        taper*(obs_ENZ_win - A0*syn_ENZ_win)), syn_npts) /obs_norm/syn_norm
-                    adj_ENZ += weight * adj_win
-
-                # form measurment results
-                quality_dict = {
-                        'A_obs': A_obs, 'A_syn': A_syn, 'A_noise': A_noise,
-                        'SNR': snr}
-                misfit_dict = {
-                        'cc_0': cc_0, 'cc_max': cc_max,
-                        'ar_0': ar_0, 'ar_max': ar_max,
-                        'cc_time_shift': cc_time_shift }
-
-                # add/update measure results
-                if 'misfit' not in window \
-                        or not window['misfit']:
-                    window['quality'] = quality_dict
-                    window['misfit'] = misfit_dict
-                    window['weight'] = weight
-                    window['stat'] = {'code': 1, 'msg': "measured"}
-                elif update:
-                    window['quality'].update(quality_dict)
-                    window['misfit'].update(misfit_dict)
-                    window['weight'] = weight
-                    window['stat'] = {'code': 1, 'msg': "updated"}
-                else:
-                    continue
-
-                # DEBUG
-                #t = syn_times
-                #noise_b = noise_starttime - syn_starttime
-                #for i in range(3):
-                #    plt.subplot(411+i)
-                #    if i == 0:
-                #        plt.title('%s dt %.2f ccmax %.3f armax %.3f ' \
-                #                'cc0 %.1f ar0 %.3f \nAobs %g Anoise %g snr %.1f' \
-                #                % (station_id, cc_time_shift, 
-                #                   cc_max, ar_max, cc_0, ar_0, A_obs, A_noise, snr) )
-                #    A_plot = max([A_obs, A_syn])
-
-                #    plt.plot(t, obs_ENZ[i,:]/A_plot, 'k', linewidth=0.2)
-                #    plt.plot(noise_times+noise_b, noise_ENZ_win[i,:]/A_plot, 'b', linewidth=0.5)
-                #    plt.plot(t, syn_ENZ[i,:]/A_plot, 'r', linewidth=0.2)
-                #    plt.plot(t[win_ib:win_ie], obs_ENZ_win[i,win_ib:win_ie]/A_plot,
-                #            'k', linewidth=1.0)
-                #    plt.plot(t[win_ib:win_ie], syn_ENZ_win[i,win_ib:win_ie]/A_plot,
-                #            'r', linewidth=1.0)
-                #    plt.ylim((-1.5, 1.5))
-                #    plt.xlim((noise_b, max(t)))
-                #    plt.ylabel(syn_orientation_codes[i])
-
-                #plt.subplot(414)
-                #plt.plot(cc_times, cci, 'k-')
-                #plt.xlim((min(cc_times), max(cc_times)))
-                #plt.ylabel(window_id)
-            
-                #plt.show()
-
-            #end for window_id in windows:
-
-            # output adjoint source for the current station
-            if output_adj:
-                for i in range(3):
-                    tr = syn_st[i]
-                    tr.data = adj_ENZ[i,:]
-                    out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
-                            adj_dir, station_id, syn_band_code, 
-                            syn_orientation_codes[i])
-                    # sac format 
-                    tr.write(out_file + '.adj.sac', 'sac')
-                    # ascii format 
-                    # time is relative to event origin time
-                    shift = tr.stats.sac.b - tr.stats.sac.o
-                    with open(out_file+'.adj','w') as fp:
-                        for j in range(syn_npts):
-                            fp.write("{:16.9e}  {:16.9e}\n".format(
-                                syn_times[j]+shift, adj_ENZ[i,j]))
-
+            # log status
+            station['stat']['code'] = 1
         #end for station_id in station_id_list:
-    #end def setup_windows(self,
 
 
     def relocate_1d(self, event_id, window_id_list=['F.p,P', 'F.s,S'],
@@ -1213,11 +1239,12 @@ class Misfit(object):
         #fig.savefig("misfit.pdf", bbox_inches='tight', format='pdf')
 
 
-    def plot_seismograms_for_one_event(self, event_id, 
+    def plot_seismograms(self, event_id,
             azbin=10, win=[0,500], rayp=10,
             obs_dir='obs', syn_dir='syn', syn_band_code='MX',
-            syn_suffix='.sem.sac', filter_padlen=100,
-            use_prefilt=True, prefilt=('cosine', [0.11, 0.09]),
+            syn_suffix='.sem.sac', filtpad=50,
+            use_filter=True, freqlim=[0.009, 0.011, 0.06, 0.08],
+            use_prefilt=True, prefilt=[0.13, 0.07],
             use_STF=False, STF=('triangle', 0.0) ):
         """ Plot seismograms for one event
             azbin:
@@ -1259,8 +1286,8 @@ class Misfit(object):
             azmin = az
             azmax = az + azbin
         
-            # read available stations
-            data = {}
+            # read available stations within azbin
+            data_azbin = {}
             for station_id in stations:
                 station = stations[station_id]
                 meta = station['meta']
@@ -1268,33 +1295,49 @@ class Misfit(object):
                 if azimuth < azmin or azimuth > azmax:
                     continue
                 try:
-                    startime, times, detla, syn_ENZ, obs_ENZ, _, _ = \
-                        self.read_seismograms_for_one_station(event_id,
-                                station_id, obs_dir=obs_dir, syn_dir=syn_dir,
-                                syn_band_code=syn_band_code,
-                                syn_suffix=syn_suffix,
-                                filter_padlen=filter_padlen, 
-                                use_prefilt=use_prefilt, prefilt=prefilt, 
-                                use_STF=use_STF, STF=STF)
-                except:
+                    syn_st, obs_st = self.read_seismograms(
+                        event_id, station_id,
+                        obs_dir=obs_dir, syn_dir=syn_dir,
+                        syn_band_code=syn_band_code, syn_suffix=syn_suffix)
+                except Exception as e:
+                    print str(e)
                     continue
-                # project obs/syn_ENZ to RTZ
-                syn_RTZ = syn_ENZ
-                obs_RTZ = obs_ENZ
+                # syn/obs data arrays
+                syn_npts = syn_st[0].stats.npts
+                syn_delta = syn_st[0].stats.delta
+                syn_RTZ = np.zeros((3, syn_npts))
+                obs_RTZ = np.zeros((3, syn_npts))
+                for i in range(3):
+                    syn_RTZ[i,:] = syn_st[i].data
+                    obs_RTZ[i,:] = obs_st[i].data
+                # filter
+                if use_filter:
+                    npad = int(filtpad/syn_delta)
+                    f = np.fft.rfftfreq(syn_npts+npad, d=syn_delta)
+                    H = cosine_taper(f, freqlim)
+                    syn_RTZ = np.fft.irfft(H * np.fft.rfft(np.concatenate(
+                        (syn_RTZ,np.zeros((3,npad))), axis=1)))[:,0:syn_npts]
+                    if use_prefilt:
+                        H *= cosine_taper(f, prefilt)
+                    obs_RTZ = np.fft.irfft(H * np.fft.rfft(np.concatenate(
+                        (obs_RTZ,np.zeros((3,npad))), axis=1)))[:,0:syn_npts]
+                # rotate EN -> RT
                 Raz = (meta['back_azimuth'] + 180.0) % 360.0
                 sin_Raz = np.sin(np.deg2rad(Raz))
                 cos_Raz = np.cos(np.deg2rad(Raz))
                 proj_matrix = [ [ sin_Raz, cos_Raz],
                                 [-cos_Raz, sin_Raz] ]
-                syn_RTZ[0:2,:] = np.dot(proj_matrix, syn_ENZ[0:2,:])
-                obs_RTZ[0:2,:] = np.dot(proj_matrix, obs_ENZ[0:2,:])
+                syn_RTZ[0:2,:] = np.dot(proj_matrix, syn_RTZ[0:2,:])
+                obs_RTZ[0:2,:] = np.dot(proj_matrix, obs_RTZ[0:2,:])
                 # record results
-                data[station_id] = {'meta':meta, 'starttime':startime, 
-                        'times':times, 'delta':detla, 
-                        'syn':syn_RTZ, 'obs':obs_RTZ}
+                starttime = syn_st[0].stats.starttime
+                dt = syn_st[0].stats.delta
+                npts = syn_st[0].stats.npts
+                times = dt * np.arange(npts)
+                data_azbin[station_id] = {'meta':meta, 'starttime':starttime,
+                        'times':times, 'syn':syn_RTZ, 'obs':obs_RTZ}
 
-            if not data:
-                continue
+            if not data_azbin: continue
 
             # create figure and axes
             fig = plt.figure(figsize=(11,8.5))
@@ -1307,14 +1350,14 @@ class Misfit(object):
                 ax_RTZ.append(fig.add_axes(ax_origin + ax_size))
 
             # make figure
-            y = [ x['meta']['dist_degree'] for x in data.itervalues() ]
+            y = [ x['meta']['dist_degree'] for x in data_azbin.itervalues() ]
             ny = len(y)
             ymax = max(y) + 0.5
             ymin = min(y) - 0.5
             dy = 0.5*(ymax-ymin)/ny
         
-            for sta_id in data:
-                sta = data[sta_id]
+            for sta_id in data_azbin:
+                sta = data_azbin[sta_id]
                 t = sta['times']
                 dist_degree = sta['meta']['dist_degree']
                 reduced_time = dist_degree * rayp
@@ -1324,7 +1367,7 @@ class Misfit(object):
                 plot_t1 = t0 + win[1] + reduced_time
                 idx = (t > plot_t0) & (t < plot_t1)
                     
-                t_plot = t[idx] - reduced_time
+                t_plot = t[idx] - reduced_time - t0
                 obs_RTZ = sta['obs']
                 syn_RTZ = sta['syn']
                 cmp_names = ['R', 'T', 'Z']

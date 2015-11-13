@@ -165,7 +165,7 @@ subroutine sem_io_read_gll_file_cijkl(basedir, iproc, iregion, gll_cijkl)
 
   call sem_io_open_file_for_read(basedir, iproc, iregion, 'cijkl_kernel', IIN)
 
-  read(IIN, iostat=ier) dummy 
+  read(IIN, iostat=ier) dummy
 
   close(IIN)
 

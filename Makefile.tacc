@@ -43,7 +43,7 @@ program = xsem_slice_gcircle \
 	xsem_inner_product \
 	xsem_interp_IRIS_netcdf \
 	xsem_add_model_dlnV \
-	xsem_kernel_cijkl_to_lamda_mu.f90
+	xsem_kernel_cijkl_to_lamda_mu
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))

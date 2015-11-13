@@ -108,9 +108,9 @@ program xsem_cijkl_kernel_to_lamda_mu
 
     ! write out lamda,mu kernel
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
-        'lamda_kerenl', lamda_kernel)
+        'lamda_kernel', lamda_kernel)
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
-        'mu_kerenl', mu_kernel)
+        'mu_kernel', mu_kernel)
 
   enddo ! iproc
 

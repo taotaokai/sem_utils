@@ -37,7 +37,8 @@ class Misfit(object):
     data structure:
 
     Misfit: {
-    |   'iteration': {iter, ...}, 
+    |   'iteration':
+    |   'prefilt': {'type':, freqlim:}
     |   'events': {
     |   *   <event_id>: {
     |   |   |   'gcmt': {code, lat,lon,depth, ...}, 
@@ -294,7 +295,7 @@ class Misfit(object):
     def setup_windows(self,
             window_list=[('F','p,P',[-30,50]), ('F','s,S',[-40,70])],
             noise_window=('ttp',[-100,-30]),
-            filter_param=('cosine', [0.009, 0.011, 0.06, 0.10]),
+            filter_param=('butter', 3, [0.012, 0.08]),
             taper_param=('cosine', 0.1),
             event_id_list=None, station_id_list=None):
         """window_list: [ (component, phases, [begin, end]), ...]
@@ -318,7 +319,8 @@ class Misfit(object):
         noise_end = noise_window[1][1]
 
         # filter/taper parameters
-        filter_dict = {'type': filter_param[0], 'freqlim': filter_param[1]}
+        filter_dict = {'type': filter_param[0], 
+                'order': filter_param[1], 'freqlim': filter_param[2]}
         taper_dict = {'type': taper_param[0], 'ratio': taper_param[1]}
         if not 0.0 < taper_param[1] < 0.5:
             raise ValueError("taper ratio must lie between 0 and 0.5.")
@@ -476,7 +478,7 @@ class Misfit(object):
 
         #------ interpolate obs into the same time samples of syn
         obs_ENZ = np.zeros((3, syn_npts))
-        taper_len = 100.0 # FIXME this value is hard wired now
+        taper_len = 50.0 # FIXME this value is hard wired now
         syn_nyq = 0.5/syn_delta
         for i in range(3):
             tr = obs_st[i]
@@ -492,7 +494,7 @@ class Misfit(object):
             # lowpass to frequency band in sampling rate of syn
             tr.detrend(type='linear')
             tr.taper(max_percentage=0.1, max_length=taper_len)
-            tr.filter('lowpassCheby2', freq=syn_nyq, maxorder=12)
+            tr.filter('lowpassCheby2', freq=0.9*syn_nyq, maxorder=12)
             # interpolation
             obs_ENZ[i,:] = lanczos_interp1(tr.data, obs_delta,
                     syn_times+(syn_starttime-obs_starttime), na=20)
@@ -525,24 +527,18 @@ class Misfit(object):
     def measure_windows_for_one_station(self, event_id, station_id, 
             obs_dir='obs', syn_dir='syn',
             syn_band_code='MX', syn_suffix='.sem.sac',
-            use_prefilt=True, prefilt=[0.13, 0.7],
-            filtpad=50.0, plot=True,
-            use_STF=False, STF=('triangle', 0.0),
+            plot=True, use_STF=False,
             cc_delta=0.01, output_adj=False, adj_dir='adj', 
             adj_window_id_list=['F.p,P', 'F.s,S'],
-            weight_param={'SNR':[5,10], 'cc_max':[0.6,0.8], 'cc_0':[0.5,0.7]}):
+            weight_param={'SNR':[10,20],
+                'cc_max':[0.6,0.8], 'cc_0':[0.5,0.7]}):
         """
-            prefilt:
-                lowpass filter(cosine taper) which is used as the source time function in
-                forward simulations to suppress high-frequency numerical noise.
-                this is applied to obs data before interpolation.
-            filtpad:
-                length of zero padding during filtering
         """
         #
         events = self.data['events']
         event = events[event_id]
         cmt = event['gcmt']
+        half_duration = cmt['half_duration']
         centroid_time = UTCDateTime(cmt['centroid_time'])
         stations = event['stations']
         station = stations[station_id]
@@ -563,6 +559,7 @@ class Misfit(object):
         syn_sampling_rate = tr.stats.sampling_rate
         syn_npts = tr.stats.npts
         syn_times = syn_delta*np.arange(syn_npts)
+        syn_nyq = 0.5/syn_delta
 
         # syn/obs data arrays
         syn_ENZ = np.zeros((3, syn_npts))
@@ -574,6 +571,7 @@ class Misfit(object):
         # filter parameters
         filter_param = station['filter']
         filter_type = filter_param['type']
+        filter_order = filter_param['order']
         filter_freqlim = filter_param['freqlim']
 
         # window taper parameters
@@ -582,28 +580,21 @@ class Misfit(object):
         taper_ratio = taper_param['ratio']
 
         #------ filter spectrum
-        npad = int(filtpad / syn_delta)
-        # F1 = filter of data measurment 
-        # F1_S = F1 * Source spectrum
-        f = np.fft.rfftfreq(syn_npts+npad, d=syn_delta)
-        F1 = cosine_taper(f, filter_freqlim)
-        F1_F0 = F1
-        if use_prefilt:
-            F1_F0 *= cosine_taper(f, prefilt)
-        F1_S = F1
+        # F = filter of data measurment
+        filter_b, filter_a = signal.butter(filter_order,
+                np.array(filter_freqlim)/syn_nyq, btype='band')
         if use_STF:
-            # source spectrum: isosceles triangle
-            half_duration = STF[1]
+            # S: source spectrum (isosceles triangle)
+            f = np.fft.rfftfreq(syn_npts, d=syn_delta)
             F_src = np.sinc(f * half_duration)**2
-            F1_S *= F_src
 
         # filter syn/obs
-        # obs = F1 * F0 * d
-        obs_ENZ[:,:] = np.fft.irfft(F1_F0 * np.fft.rfft(
-            np.concatenate((obs_ENZ, np.zeros((3,npad))), axis=1)))[:,0:syn_npts]
-        # syn = F1 * S * u
-        syn_ENZ[:,:] = np.fft.irfft(F1_S * np.fft.rfft(
-            np.concatenate((syn_ENZ, np.zeros((3,npad))), axis=1)))[:,0:syn_npts]
+        # obs = F * d
+        obs_ENZ[:,:] = signal.filtfilt(filter_b, filter_a, obs_ENZ)
+        # syn = F * S * u
+        syn_ENZ[:,:] = signal.filtfilt(filter_b, filter_a, syn_ENZ)
+        if use_STF:
+            syn_ENZ[:,:] = np.fft.irfft(F_src * np.fft.rfft(syn_ENZ), syn_npts)
 
         # noise: cut signal before centroid time on obs
         t0 = centroid_time - syn_starttime
@@ -721,12 +712,14 @@ class Misfit(object):
                     * cosine_taper(cc_0, weight_param['cc_0'])
 
             # adjoint source (objective functional: zero-lag cc coef.)
-            # adj = conj(F1 * S) * w * [ w * F1 * F0 * d - A * w * F1 * S * u] / N, 
+            # adj = conj(F * S) * w * [ w * F * d - A * w * F * S * u] / N, 
             #   where A = cc / norm(syn)**2, N = norm(obs)*norm(syn)
             A0 = cc_0 * obs_norm / syn_norm # amplitude raito: obs/syn
-            adj_ENZ_win = np.fft.irfft(np.conjugate(F1_S) * np.fft.rfft(
-                np.concatenate((taper*(obs_ENZ_win-A0*syn_ENZ_win), 
-                    np.zeros((3,npad))), axis=1)))[:,0:syn_npts]/obs_norm/syn_norm
+            adj =  taper * (obs_ENZ_win - A0*syn_ENZ_win) / obs_norm / syn_norm
+            adj_ENZ_win = signal.filtfilt(filter_b, filter_a, adj)
+            if use_STF:
+                adj_ENZ_win = np.fft.irfft(np.conjugate(F_src) * 
+                        np.fft.rfft(adj_ENZ_win), syn_npts)
 
             if output_adj and (window_id in adj_window_id_list):
                 adj_ENZ += weight * adj_ENZ_win
@@ -759,9 +752,9 @@ class Misfit(object):
                     #plt.plot(noise_times+noise_b, noise_ENZ_win[i,:]/A_plot, 'b', linewidth=0.5)
                     plt.plot(t, syn_ENZ[i,:]/A_syn, 'r', linewidth=0.2)
                     idx = (win_b <= syn_times) & (syn_times <= win_e)
-                    plt.plot(t[idx], obs_ENZ_win[i,idx]/A_obs, 'k', linewidth=0.5)
-                    plt.plot(t[idx], syn_ENZ_win[i,idx]/A_obs * A0, 'r', linewidth=0.5)
-                    plt.plot(t[idx], adj_ENZ_win[i,idx]/A_adj, 'c', linewidth=1.0)
+                    plt.plot(t, obs_ENZ_win[i,:]/A_obs, 'k', linewidth=0.5)
+                    plt.plot(t, syn_ENZ_win[i,:]/A_obs * A0, 'r', linewidth=0.5)
+                    plt.plot(t, adj_ENZ_win[i,:]/A_adj, 'c', linewidth=1.0)
                     plt.ylim((-1.5, 1.5))
                     plt.xlim((min(t), max(t)))
                     plt.ylabel(syn_orientation_codes[i])
@@ -794,9 +787,7 @@ class Misfit(object):
     def measure_windows_for_one_event(self, event_id,
             obs_dir='obs', syn_dir='syn',
             syn_band_code='MX', syn_suffix='.sem.sac',
-            use_prefilt=True, prefilt=[0.13, 0.7],
-            filtpad=50, plot=False,
-            use_STF=False, STF=('triangle', 0.0),
+            plot=False, use_STF=False,
             cc_delta=0.01, output_adj=False, adj_dir='adj', 
             adj_window_id_list=['F.p,P', 'F.s,S'],
             weight_param={'SNR':[5,10], 'cc_max':[0.6,0.8], 'cc_0':[0.5,0.7]}):
@@ -822,9 +813,7 @@ class Misfit(object):
                 self.measure_windows_for_one_station(event_id, station_id, 
                     obs_dir=obs_dir, syn_dir=syn_dir, 
                     syn_band_code=syn_band_code, syn_suffix=syn_suffix, 
-                    use_prefilt=use_prefilt, prefilt=prefilt, 
-                    filtpad=filtpad, plot=plot,
-                    use_STF=use_STF, STF=STF,
+                    plot=plot, use_STF=use_STF,
                     cc_delta=cc_delta, output_adj=output_adj, adj_dir=adj_dir,
                     adj_window_id_list=adj_window_id_list, 
                     weight_param=weight_param)

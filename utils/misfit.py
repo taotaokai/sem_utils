@@ -48,7 +48,7 @@ class Misfit(object):
     |   |   |   |   |   'meta': {lat,lon,ele,...,channels:[{code,az,dip,...},...]},
     |   |   |   |   |   'filter': {type:, freqlim:},
     |   |   |   |   |   'taper': {type:, ratio:},
-    |   |   |   |   |   'noise_window': {starttime:, endtime:},
+    |   |   |   |   |   'first_arrtime': , # used for cut noise window 
     |   |   |   |   |   'windows': {
     |   |   |   |   |   *   <window_id(cmp.pha)>: {
     |   |   |   |   |   |   |   component, azimuth, dip, starttime, endtime, weight,
@@ -294,7 +294,6 @@ class Misfit(object):
 
     def setup_windows(self,
             window_list=[('F','p,P',[-30,50]), ('F','s,S',[-40,70])],
-            noise_window=('ttp',[-100,-30]),
             filter_param=('butter', 3, [0.012, 0.08]),
             taper_param=('cosine', 0.1),
             event_id_list=None, station_id_list=None):
@@ -312,11 +311,6 @@ class Misfit(object):
 
         # initiate taup
         taup_model = TauPyModel(model="ak135")
-
-        # noise window param
-        noise_phases = noise_window[0].split(',')
-        noise_begin = noise_window[1][0]
-        noise_end = noise_window[1][1]
 
         # filter/taper parameters
         filter_dict = {'type': filter_param[0], 
@@ -355,21 +349,19 @@ class Misfit(object):
                 station['filter'] = filter_dict
                 station['taper'] = taper_dict
 
-                # setup noise window
+                # setup first arrival time 
                 arrivals = taup_model.get_travel_times(
                         source_depth_in_km=gcmt['depth'],
                         distance_in_degree=dist_degree,
-                        phase_list=noise_phases)
+                        phase_list=['ttp'])
                 if arrivals:
                     arr = arrivals[0]
-                    noise_starttime = str(centroid_time + arr.time + noise_begin)
-                    noise_endtime = str(centroid_time + arr.time + noise_end)
+                    first_arrtime = str(centroid_time + arr.time)
                 else:
-                    print "[WARNNING] %s:%s:%s phase(s) not found, skip." \
-                            % (event_id, station_id, noise_window[0])
+                    print "[WARNING] %s:%s ttp not found, skip." \
+                            % (event_id, station_id)
                     continue
-                noise_window = {'starttime':noise_starttime, 'endtime':noise_endtime}
-                station['noise_window'] = noise_window
+                station['first_arrtime'] = first_arrtime 
 
                 # setup singal windows
                 windows = station['windows']
@@ -446,8 +438,10 @@ class Misfit(object):
         station = stations[station_id]
         meta = station['meta']
         channels = meta['channels']
-        noise_window = station['noise_window']
-        noise_starttime = UTCDateTime(noise_window['starttime'])
+        first_arrtime = UTCDateTime(station['first_arrtime'])
+        windows = station['windows']
+        window_endtime = [UTCDateTime(windows[x]['endtime']) for x in windows]
+        max_window_endtime = max(window_endtime)
  
         #------ get file paths of obs, syn seismograms
         obs_files = [ '{:s}/{:s}.{:s}'.format(
@@ -478,7 +472,7 @@ class Misfit(object):
 
         #------ interpolate obs into the same time samples of syn
         obs_ENZ = np.zeros((3, syn_npts))
-        taper_len = 50.0 # FIXME this value is hard wired now
+        #taper_len = 50.0 # FIXME this value is hard wired now
         syn_nyq = 0.5/syn_delta
         for i in range(3):
             tr = obs_st[i]
@@ -486,14 +480,15 @@ class Misfit(object):
             obs_delta = tr.stats.delta
             obs_starttime = tr.stats.starttime
             obs_endtime = tr.stats.endtime
-            # check if record is long enough
-            if not ( obs_starttime < noise_starttime ):
-                #obs_endtime >= syn_endtime ):
-                raise Exception('%s:%s: obs does not cover syn time range'
+            # check if obs record is long enough (60.0 sec more)
+            if (first_arrtime - obs_starttime) < 60.0 or \
+               (obs_endtime - max_window_endtime) < 60.0:
+                raise Exception('%s:%s: obs does not start 60s before first arrtime' \
+                        'or end 60s after the last window endtime' \
                         % (event_id, station_id))
             # lowpass to frequency band in sampling rate of syn
             tr.detrend(type='linear')
-            tr.taper(max_percentage=0.1, max_length=taper_len)
+            #tr.taper(max_percentage=0.1, max_length=taper_len)
             tr.filter('lowpassCheby2', freq=0.9*syn_nyq, maxorder=12)
             # interpolation
             obs_ENZ[i,:] = lanczos_interp1(tr.data, obs_delta,
@@ -544,6 +539,7 @@ class Misfit(object):
         station = stations[station_id]
         windows = station['windows']
         syn_orientation_codes = ['E', 'N', 'Z']
+        first_arrtime = UTCDateTime(station['first_arrtime'])
 
         #------ read obs/syn seismograms
         # syn: u, obs: d
@@ -594,18 +590,20 @@ class Misfit(object):
         # syn = F * S * u
         syn_ENZ[:,:] = signal.filtfilt(filter_b, filter_a, syn_ENZ)
         if use_STF:
-            syn_ENZ[:,:] = np.fft.irfft(F_src * np.fft.rfft(syn_ENZ), syn_npts)
+            #npad = int(50.0/syn_delta)
+            #syn_ENZ[:,:] = np.fft.irfft(F_src*np.fft.rfft( np.concatenate((syn_ENZ, np.zeros((3,npad))), axis=1)))[:,0:syn_npts]
+            syn_ENZ[:,:] = np.fft.irfft(F_src*np.fft.rfft(syn_ENZ), syn_npts)
 
-        # noise: cut signal before centroid time on obs
-        t0 = centroid_time - syn_starttime
-        idx = syn_times < t0
-        t = syn_times[idx]
-        b = t[0]
-        e = t[-1]
-        taper_width = (e-b) * 0.1
-        win_c = [b, b+taper_width, e-taper_width, e]
-        taper = cosine_taper(t, win_c)
-        noise_ENZ = obs_ENZ[:,idx] * taper
+        # noise: cut signal before first arrival time on obs
+        t0 = (first_arrtime - syn_starttime) - 40.0
+        noise_idx = syn_times < t0
+        #t = syn_times[noise_idx]
+        #b = t[0]
+        #e = t[-1]
+        #taper_width = (e-b) * 0.1
+        #win_c = [b, b+taper_width, e-taper_width, e]
+        #taper = cosine_taper(t, win_c)
+        noise_ENZ = obs_ENZ[:,noise_idx]
 
         #------ process windows
         if output_adj:
@@ -653,9 +651,9 @@ class Misfit(object):
                 continue
 
             # apply window taper and projection
-            # obs = w * F1 * F0 * d
+            # obs = w * F * d
             obs_ENZ_win = np.dot(proj_matrix, obs_ENZ) * taper
-            # obs = w * F1 * S * u
+            # obs = w * F * S * u
             syn_ENZ_win = np.dot(proj_matrix, syn_ENZ) * taper
             # noise
             noise_ENZ_win = np.dot(proj_matrix, noise_ENZ)
@@ -713,7 +711,7 @@ class Misfit(object):
 
             # adjoint source (objective functional: zero-lag cc coef.)
             # adj = conj(F * S) * w * [ w * F * d - A * w * F * S * u] / N, 
-            #   where A = cc / norm(syn)**2, N = norm(obs)*norm(syn)
+            #   where A = cc_0(un-normalized) / norm(syn)**2, N = norm(obs)*norm(syn)
             A0 = cc_0 * obs_norm / syn_norm # amplitude raito: obs/syn
             adj =  taper * (obs_ENZ_win - A0*syn_ENZ_win) / obs_norm / syn_norm
             adj_ENZ_win = signal.filtfilt(filter_b, filter_a, adj)
@@ -749,11 +747,11 @@ class Misfit(object):
                                 % (station_id, cc_time_shift, cc_max, ar_max, 
                                     cc_0, ar_0, A_obs, A_noise, snr, weight) )
                     plt.plot(t, obs_ENZ[i,:]/A_obs, 'k', linewidth=0.2)
-                    #plt.plot(noise_times+noise_b, noise_ENZ_win[i,:]/A_plot, 'b', linewidth=0.5)
                     plt.plot(t, syn_ENZ[i,:]/A_syn, 'r', linewidth=0.2)
+                    plt.plot(t[noise_idx], noise_ENZ_win[i,:]/A_obs, 'b', linewidth=1.0)
                     idx = (win_b <= syn_times) & (syn_times <= win_e)
-                    plt.plot(t, obs_ENZ_win[i,:]/A_obs, 'k', linewidth=0.5)
-                    plt.plot(t, syn_ENZ_win[i,:]/A_obs * A0, 'r', linewidth=0.5)
+                    plt.plot(t[idx], obs_ENZ_win[i,idx]/A_obs, 'k', linewidth=1.0)
+                    plt.plot(t[idx], syn_ENZ_win[i,idx]/A_obs * A0, 'r', linewidth=1.0)
                     plt.plot(t, adj_ENZ_win[i,:]/A_adj, 'c', linewidth=1.0)
                     plt.ylim((-1.5, 1.5))
                     plt.xlim((min(t), max(t)))
@@ -794,7 +792,7 @@ class Misfit(object):
         """measure misfit on time windoes for one event
             cc_delta: sampling interval for cross-correlation between obs and syn.
             weight_param: one-sided cosine taper [stop, pass]
-            use_STF, STF:
+            use_STF:
                 flag to convolve source time function to synthetics. STF is 
                 specifed as isosceles triangle with half_duration.
         """

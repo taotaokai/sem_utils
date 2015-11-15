@@ -122,9 +122,9 @@ program xsem_kernel_lamda_mu_to_dmodel
     drho = scale_factor * drho
   
     ! write dmodel
-    call sem_io_read_gll_file_1(out_dir, iproc, iregion, 'lamda_dmodel', dlamda)
-    call sem_io_read_gll_file_1(out_dir, iproc, iregion, 'mu_dmodel', dmu)
-    call sem_io_read_gll_file_1(out_dir, iproc, iregion, 'rho_dmodel', drho)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'lamda_dmodel', dlamda)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'mu_dmodel', dmu)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'rho_dmodel', drho)
 
   enddo ! do iproc
 

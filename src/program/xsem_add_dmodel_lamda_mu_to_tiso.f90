@@ -100,8 +100,11 @@ program xsem_add_dmodel_lamda_mu_to_tiso
       stop
   end select
 
+  print *, nproc, max_dlnv_allow, force_max_dlnv_allow
+
   !===== Get step length first
-  allocate(max_dlnv_procs(nproc))
+  allocate(max_dlnv_procs(0:nproc-1))
+  max_dlnv_procs = 0.0
 
   ! get mesh info: nspec
   call sem_mesh_read(mesh_dir, 0, iregion, mesh_data)
@@ -138,7 +141,7 @@ program xsem_add_dmodel_lamda_mu_to_tiso
               dlamda(NGLLX,NGLLY,NGLLZ,NSPEC), &
                 drho(NGLLX,NGLLY,NGLLZ,NSPEC))
       endif
-
+      
       ! read old models
       call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', vpv)
       call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vph', vph)
@@ -147,10 +150,10 @@ program xsem_add_dmodel_lamda_mu_to_tiso
       call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'eta', eta)
       call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'rho', rho)
       ! get A,C,F,L,N from old model
-      A = vph**2 * rho; 
-      C = vpv**2 * rho;
-      L = vsv**2 * rho; 
-      N = vsh**2 * rho;
+      A = vph**2 * rho
+      C = vpv**2 * rho
+      L = vsv**2 * rho
+      N = vsh**2 * rho
       F = eta * (A - 2.0*L)
       ! read dmodel: update direction 
       call sem_io_read_gll_file_1(dmodel_dir, iproc, iregion, 'lamda_dmodel', dlamda)
@@ -164,7 +167,15 @@ program xsem_add_dmodel_lamda_mu_to_tiso
       max_dln_vsh = 0.5 * maxval(abs(dmu/N - drho/rho))
       max_dlnv_procs(iproc) = max(max_dln_vpv,max_dln_vph,max_dln_vsv,max_dln_vsh)
 
+      print *, "max dln[vpv,vph,vsv,vsh,rho]"
+      print *, max_dln_vpv
+      print *, max_dln_vph
+      print *, max_dln_vsv
+      print *, max_dln_vsh
+      print *, maxval(abs(drho/rho))
+
     enddo ! do iproc
+
   endif
 
   ! determine the model update step length
@@ -174,6 +185,11 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   else ! only set positive/negative sign
     scale_factor = SIGN(1.d0, max_dlnv_allow)
   endif
+
+  print *, "max dlnv all proc:"
+  print *, max_dlnv_all
+  print *, "scale factor:"
+  print *, scale_factor
 
   !====== make new model
   do iproc = 0, (nproc-1)

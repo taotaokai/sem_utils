@@ -78,14 +78,14 @@ program xsem_make_kernel_mask
     enddo
     read(args(1), *) nproc
     read(args(2), *) mesh_dir
-    read(args(3), *) source_vtk_file
+    read(args(3), "(a)") source_vtk_file
     read(args(4), *) out_dir
     read(args(5), *) source_mask_radius
     read(args(6), *) stop_depth
     read(args(7), *) pass_depth
-   
+
     !====== read source.vtk
-    open(unit=IIN, file=source_vtk_file)
+    open(unit=IIN, action='read', status='old', file=source_vtk_file)
     ! skip header lines
     read(IIN,*)
     read(IIN,*)

@@ -100,7 +100,6 @@ program xsem_add_dmodel_lamda_mu_to_tiso
       stop
   end select
 
-  print *, nproc, max_dlnv_allow, force_max_dlnv_allow
 
   !===== Get step length first
   allocate(max_dlnv_procs(0:nproc-1))
@@ -111,7 +110,8 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   nspec = mesh_data%nspec
 
   if (force_max_dlnv_allow) then
-
+  
+    print *, "====== get step length ======"
     do iproc = 0, (nproc-1)
 
       print *, '# iproc=', iproc
@@ -192,7 +192,10 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   print *, scale_factor
 
   !====== make new model
+  print *, "====== make new model ======"
   do iproc = 0, (nproc-1)
+
+    print *, '# iproc=', iproc
 
     ! intialize mode/dmodel arrays 
     if (.not. allocated(vpv)) then

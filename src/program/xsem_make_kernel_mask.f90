@@ -145,6 +145,8 @@ program xsem_make_kernel_mask
                             if (stop_depth<depth .and. depth<pass_depth) then
                                 weight = weight * (0.5 - 0.5*cos(PI* &
                                     (depth-stop_depth)/(pass_depth-stop_depth)))
+                            elseif (depth <= stop_depth) then
+                                weight = 0.0_dp
                             endif
                         endif
 

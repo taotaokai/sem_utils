@@ -1229,10 +1229,8 @@ class Misfit(object):
     def plot_seismograms(self, event_id,
             azbin=10, win=[0,500], rayp=10,
             obs_dir='obs', syn_dir='syn', syn_band_code='MX',
-            syn_suffix='.sem.sac', filtpad=50,
-            use_filter=True, freqlim=[0.009, 0.011, 0.06, 0.08],
-            use_prefilt=True, prefilt=[0.13, 0.07],
-            use_STF=False, STF=('triangle', 0.0) ):
+            syn_suffix='.sem.sac',
+            use_STF=False, hdur=None ):
         """ Plot seismograms for one event
             azbin:
                 azimuthal bin size
@@ -1240,6 +1238,12 @@ class Misfit(object):
         event = self.data['events'][event_id]
         cmt = event['gcmt']
         centroid_time = UTCDateTime(cmt['centroid_time'])
+        if use_STF:
+            if not hdur:
+                half_duration = cmt['half_duration']
+            else:
+                half_duration = hdur
+            print "half_duration = ", half_duration
 
         #====== calculate traveltime curve
         model = TauPyModel(model="ak135")
@@ -1292,22 +1296,29 @@ class Misfit(object):
                 # syn/obs data arrays
                 syn_npts = syn_st[0].stats.npts
                 syn_delta = syn_st[0].stats.delta
+                syn_nyq = 0.5 / syn_delta
                 syn_RTZ = np.zeros((3, syn_npts))
                 obs_RTZ = np.zeros((3, syn_npts))
                 for i in range(3):
                     syn_RTZ[i,:] = syn_st[i].data
                     obs_RTZ[i,:] = obs_st[i].data
-                # filter
-                if use_filter:
-                    npad = int(filtpad/syn_delta)
-                    f = np.fft.rfftfreq(syn_npts+npad, d=syn_delta)
-                    H = cosine_taper(f, freqlim)
-                    syn_RTZ = np.fft.irfft(H * np.fft.rfft(np.concatenate(
-                        (syn_RTZ,np.zeros((3,npad))), axis=1)))[:,0:syn_npts]
-                    if use_prefilt:
-                        H *= cosine_taper(f, prefilt)
-                    obs_RTZ = np.fft.irfft(H * np.fft.rfft(np.concatenate(
-                        (obs_RTZ,np.zeros((3,npad))), axis=1)))[:,0:syn_npts]
+
+                # desgin filter
+                filter_param = station['filter']
+                filter_type = filter_param['type']
+                filter_order = filter_param['order']
+                filter_freqlim = filter_param['freqlim']
+                filter_b, filter_a = signal.butter(filter_order,
+                        np.array(filter_freqlim)/syn_nyq, btype='band')
+                # filter obs: F * d
+                obs_ENZ[:,:] = signal.filtfilt(filter_b, filter_a, obs_ENZ)
+                # filter syn: F * S * u
+                syn_ENZ[:,:] = signal.filtfilt(filter_b, filter_a, syn_ENZ)
+                if use_STF:
+                    f = np.fft.rfftfreq(syn_npts, d=syn_delta)
+                    F_src = np.sinc(f * half_duration)**2
+                    syn_ENZ[:,:] = np.fft.irfft(F_src*np.fft.rfft(syn_ENZ), syn_npts)
+
                 # rotate EN -> RT
                 Raz = (meta['back_azimuth'] + 180.0) % 360.0
                 sin_Raz = np.sin(np.deg2rad(Raz))

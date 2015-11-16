@@ -337,8 +337,8 @@ program xsem_interp_xyz
     ! write data points
     do ipoint = 1, npoint
 
-      write(IOUT, '(3E16.7,E16.7)', advance='no') &
-        xyz(:,ipoint), misloc_gather(ipoint)
+      write(IOUT, '(3E16.7,I4,E16.7)', advance='no') &
+        xyz(:,ipoint), stat_gather(ipoint), misloc_gather(ipoint)
 
       do imodel = 1, nmodel
         write(IOUT, '(E16.7)', advance='no')  model_interp_gather(imodel, ipoint)

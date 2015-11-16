@@ -327,16 +327,22 @@ program xsem_interp_xyz
       stop
     endif
 
+    ! write header line
+    write(IOUT, '("# x y z misloc ")', advance='no')
+    do imodel = 1, nmodel
+      write(IOUT, '(a,2x)', advance='no') trim(model_names(imodel))
+    enddo
+    write(IOUT,'(a)') ""
+
+    ! write data points
     do ipoint = 1, npoint
 
-      write(IOUT, '(3E15.7,a,E15.7)', advance='no') &
-        xyz(:,ipoint),' misloc ', misloc_gather(ipoint)
+      write(IOUT, '(3E16.7,E16.7)', advance='no') &
+        xyz(:,ipoint), misloc_gather(ipoint)
 
       do imodel = 1, nmodel
-        write(IOUT, '(2x,a,2x,E15.7)', advance='no') &
-          trim(model_names(imodel)), model_interp_gather(imodel, ipoint)
+        write(IOUT, '(E16.7)', advance='no')  model_interp_gather(imodel, ipoint)
       enddo
-
       write(IOUT,'(a)') ""
 
     enddo

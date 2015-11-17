@@ -54,9 +54,9 @@ class Misfit(object):
     |   |   |   |   |   |   |   component, azimuth, dip, starttime, endtime, weight,
     |   |   |   |   |   |   |   'stat': {code, msg}, #code<0: problematic, code=0: not measured, code=1: measured
     |   |   |   |   |   |   |   'phase': {name, ttime, takeoff_angle, ray_param},
-    |   |   |   |   |   |   |   'quality': {A_obs, A_noise, SNR},
-    |   |   |   |   |   |   |   'misfit': {cc_0, cc_max, cc_time_shift,
-    |   |   |   |   |   |   |              ar_0, ar_max } },
+    |   |   |   |   |   |   |   'quality': {A_obs, A_noise, SNR, A_syn},
+    |   |   |   |   |   |   |   'misfit': {CC0, CCmax, CC_time_shift,
+    |   |   |   |   |   |   |              AR0, ARmax } },
     |   |   |   |   |   *   <window_id>: { },
     |   |   |   |   |   |   ...
     |   |   |   *   <station_id>: { ... },
@@ -525,8 +525,7 @@ class Misfit(object):
             plot=True, use_STF=False,
             cc_delta=0.01, output_adj=False, adj_dir='adj', 
             adj_window_id_list=['F.p,P', 'F.s,S'],
-            weight_param={'SNR':[10,20],
-                'cc_max':[0.6,0.8], 'cc_0':[0.5,0.7]}):
+            weight_param={'SNR':[10,15], 'CCmax':[0.6,0.8], 'CC0':[0.5,0.7]}):
         """
         """
         #
@@ -684,13 +683,13 @@ class Misfit(object):
                         obs_ENZ_win[i,:], syn_ENZ_win[i,::-1], 'full')
             cc /= obs_norm * syn_norm
             # zero-lag cc coeff.
-            cc_0 = cc[syn_npts]
-            ar_0 = cc_0 * syn_norm / obs_norm # amplitude ratio syn/obs 
+            CC0 = cc[syn_npts]
+            AR0 = CC0 * syn_norm / obs_norm # amplitude ratio syn/obs 
 
             # cross-correlation time shift
             # tshift>0: synthetic is shifted along the positive time direction
-            cc_max_time_shift = window_len/2.0 #TODO: more reasonable choice?
-            ncc = int(cc_max_time_shift / cc_delta)
+            CC_shift_range = window_len/2.0 #TODO: more reasonable choice?
+            ncc = int(CC_shift_range / cc_delta)
             cc_times = np.arange(-ncc,ncc+1) * cc_delta
             # interpolate cc to finer time samples
             if syn_delta < cc_delta:
@@ -700,19 +699,19 @@ class Misfit(object):
             cci = lanczos_interp1(cc, syn_delta, ti, na=20)
             # time shift at the maximum correlation
             imax = np.argmax(cci)
-            cc_time_shift = cc_times[imax]
-            cc_max = cci[imax]
-            ar_max = cc_max * syn_norm / obs_norm # amplitude ratio: syn/obs
+            CC_time_shift = cc_times[imax]
+            CCmax = cci[imax]
+            ARmax = CCmax * syn_norm / obs_norm # amplitude ratio: syn/obs
 
             # window weighting based on SNR and misfit
             weight = cosine_taper(snr, weight_param['SNR']) \
-                    * cosine_taper(cc_max, weight_param['cc_max']) \
-                    * cosine_taper(cc_0, weight_param['cc_0'])
+                    * cosine_taper(CCmax, weight_param['CCmax']) \
+                    * cosine_taper(CC0, weight_param['CC0'])
 
             # adjoint source (objective functional: zero-lag cc coef.)
             # adj = conj(F * S) * w * [ w * F * d - A * w * F * S * u] / N, 
-            #   where A = cc_0(un-normalized) / norm(syn)**2, N = norm(obs)*norm(syn)
-            A0 = cc_0 * obs_norm / syn_norm # amplitude raito: obs/syn
+            #   where A = CC0(un-normalized) / norm(syn)**2, N = norm(obs)*norm(syn)
+            A0 = CC0 * obs_norm / syn_norm # amplitude raito: obs/syn
             adj =  taper * (obs_ENZ_win - A0*syn_ENZ_win) / obs_norm / syn_norm
             adj_ENZ_win = signal.filtfilt(filter_b, filter_a, adj)
             if use_STF:
@@ -727,9 +726,9 @@ class Misfit(object):
                     'A_obs': A_obs, 'A_syn': A_syn, 'A_noise': A_noise,
                     'SNR': snr}
             misfit_dict = {
-                    'cc_0': cc_0, 'cc_max': cc_max,
-                    'ar_0': ar_0, 'ar_max': ar_max,
-                    'cc_time_shift': cc_time_shift }
+                    'CC0': CC0, 'CCmax': CCmax,
+                    'AR0': AR0, 'ARmax': ARmax,
+                    'CC_time_shift': CC_time_shift }
             window['quality'] = quality_dict
             window['misfit'] = misfit_dict
             window['weight'] = weight
@@ -742,10 +741,10 @@ class Misfit(object):
                 for i in range(3):
                     plt.subplot(411+i)
                     if i == 0:
-                        plt.title('%s dt %.2f ccmax %.3f armax %.3f cc0 %.3f '
-                                'ar0 %.3f \nAobs %g Anoise %g snr %.1f weight %.3f'
-                                % (station_id, cc_time_shift, cc_max, ar_max, 
-                                    cc_0, ar_0, A_obs, A_noise, snr, weight) )
+                        plt.title('%s dt %.2f CCmax %.3f ARmax %.3f CC0 %.3f '
+                                'AR0 %.3f \nAobs %g Anoise %g SNR %.1f weight %.3f'
+                                % (station_id, CC_time_shift, CCmax, ARmax, 
+                                    CC0, AR0, A_obs, A_noise, snr, weight) )
                     plt.plot(t, obs_ENZ[i,:]/A_obs, 'k', linewidth=0.2)
                     plt.plot(t, syn_ENZ[i,:]/A_syn, 'r', linewidth=0.2)
                     plt.plot(t[noise_idx], noise_ENZ_win[i,:]/A_obs, 'b', linewidth=1.0)
@@ -788,7 +787,7 @@ class Misfit(object):
             plot=False, use_STF=False,
             cc_delta=0.01, output_adj=False, adj_dir='adj', 
             adj_window_id_list=['F.p,P', 'F.s,S'],
-            weight_param={'SNR':[5,10], 'cc_max':[0.6,0.8], 'cc_0':[0.5,0.7]}):
+            weight_param={'SNR':[5,10], 'CCmax':[0.6,0.8], 'CC0':[0.5,0.7]}):
         """measure misfit on time windoes for one event
             cc_delta: sampling interval for cross-correlation between obs and syn.
             weight_param: one-sided cosine taper [stop, pass]
@@ -826,8 +825,8 @@ class Misfit(object):
 
 
     def relocate_1d(self, event_id, window_id_list=['F.p,P', 'F.s,S'],
-        min_SNR=10.0, min_cc_0=0.5, min_cc_max=0.7,
-        max_cc_time_shift=8.0, fix_depth=False, out_cmt_file=None):
+        min_SNR=10.0, min_CC0=0.5, min_CCmax=0.7,
+        max_CC_time_shift=8.0, fix_depth=False, out_cmt_file=None):
         """relocate event using ray path in reference earth model
         """
         # check inputs
@@ -858,9 +857,9 @@ class Misfit(object):
 
                 misfit = window['misfit']
                 if window['quality']['SNR'] < min_SNR or \
-                        misfit['cc_0'] < min_cc_0 or \
-                        misfit['cc_max'] < min_cc_max or\
-                        abs(misfit['cc_time_shift']) > max_cc_time_shift:
+                        misfit['CC0'] < min_CC0 or \
+                        misfit['CCmax'] < min_CCmax or\
+                        abs(misfit['CC_time_shift']) > max_CC_time_shift:
                     continue
 
                 sta_win_id = (station_id, window_id)
@@ -901,7 +900,7 @@ class Misfit(object):
             pe = np.sin(azimuth) * np.sin(takeoff) * slowness
             # create sensitivity matrix 
             G[i,:] = [-pn, -pe, -pd, 1.0] # -p: from receiver to source
-            dt_cc[i] = misfit['cc_time_shift']
+            dt_cc[i] = misfit['CC_time_shift']
 
         #linearized inversion (can be extended to second order using dynamic ray-tracing)
         if fix_depth: 
@@ -951,9 +950,9 @@ class Misfit(object):
         reloc_dict = {
                 'window_id_list': window_id_list,
                 'min_SNR': min_SNR,
-                'min_cc_0': min_cc_0,
-                'min_cc_max': min_cc_max,
-                'max_cc_time_shift': max_cc_time_shift,
+                'min_CC0': min_CC0,
+                'min_CCmax': min_CCmax,
+                'max_CC_time_shift': max_CC_time_shift,
                 'singular_value': sigval.tolist(),
                 'dm': {'dNorth':dm[0], 'dEast':dm[1], 'dDepth':dm[2], 
                     'dT':dm[3]},
@@ -994,9 +993,9 @@ class Misfit(object):
     def plot_misfit(self, event_id, window_id, out_file=None):
         """Plot misfit for a certain event and window_id  
         """
-        # dt_cc       | cc_0/cc_max V.S. dt_cc 
+        # dt_cc       | CC0/CCmax V.S. dt_cc 
         #-------------|-----------------------
-        # hist?       | cc_0/cc_max VS SNR
+        # hist?       | CC0/CCmax VS SNR
 
         # check inputs
         events = self.data['events']
@@ -1012,8 +1011,8 @@ class Misfit(object):
         stla_list = []
         stlo_list = []
         cc_dt_list = []
-        cc_0_list = []
-        cc_max_list = []
+        CC0_list = []
+        CCmax_list = []
         snr_list = []
         for station_id in stations:
             station = stations[station_id]
@@ -1038,9 +1037,9 @@ class Misfit(object):
             #sta_win_id_list.append(sta_win_id)
             stla_list.append(meta['latitude'])
             stlo_list.append(meta['longitude'])
-            cc_dt_list.append(misfit['cc_time_shift'])
-            cc_0_list.append(misfit['cc_0'])
-            cc_max_list.append(misfit['cc_max'])
+            cc_dt_list.append(misfit['CC_time_shift'])
+            CC0_list.append(misfit['CC0'])
+            CCmax_list.append(misfit['CCmax'])
             snr_list.append(quality['SNR'])
 
         # get event data
@@ -1074,9 +1073,9 @@ class Misfit(object):
         fig.text(0.5, 0.95, str_title, size='x-large', 
                 horizontalalignment='center')
 
-        #------ cc_time_shift + SNR 
+        #------ CC_time_shift + SNR 
         ax = fig.add_axes([0.05, 0.5, 0.4, 0.35])
-        ax.set_title("cc_time_shift (symbol_size ~ SNR)")
+        ax.set_title("CC_time_shift (symbol_size ~ SNR)")
 
         m = Basemap(projection='merc', resolution='l',
                 llcrnrlat=min_lat, llcrnrlon=min_lon, 
@@ -1087,7 +1086,7 @@ class Misfit(object):
         m.drawparallels(parallels, linewidth=0.1, labels=[1,0,0,1])
         m.drawmeridians(meridians, linewidth=0.1, labels=[1,0,0,1])
         
-        # cc_time_shift, SNR
+        # CC_time_shift, SNR
         sx, sy = m(stlo_list, stla_list)
         size_list = [ 0.01 if x<0.01 else x for x in snr_list ]
         im = m.scatter(sx, sy, s=size_list, marker='o',
@@ -1111,9 +1110,9 @@ class Misfit(object):
         cbar_ax.set_xlabel(' cc_dt(s)', fontsize=9)
         cbar_ax.xaxis.set_label_position('top')
        
-        #------ color: cc_max, size: SNR
+        #------ color: CCmax, size: SNR
         ax = fig.add_axes([0.05, 0.05, 0.4, 0.35])
-        ax.set_title("cc_max (symbol_size ~ SNR)")
+        ax.set_title("CCmax (symbol_size ~ SNR)")
 
         m = Basemap(projection='merc', resolution='l',
                 llcrnrlat=min_lat, llcrnrlon=min_lon, 
@@ -1124,12 +1123,12 @@ class Misfit(object):
         m.drawparallels(parallels, linewidth=0.1, labels=[1,0,0,1])
         m.drawmeridians(meridians, linewidth=0.1, labels=[1,0,0,1])
         
-        # cc_max, SNR 
+        # CCmax, SNR 
         sx, sy = m(stlo_list, stla_list)
-        #size_list = [ 20**x for x in cc_max_list ]
+        #size_list = [ 20**x for x in CCmax_list ]
         size_list = [ 0.01 if x<0.01 else x for x in snr_list ]
         im = m.scatter(sx, sy, s=size_list, marker='o',
-                c=cc_max_list, cmap='seismic', 
+                c=CCmax_list, cmap='seismic', 
                 edgecolor='grey', linewidth=0.05)
         im.set_clim(0.5, 1.0)
         
@@ -1143,12 +1142,12 @@ class Misfit(object):
         cbar_ax = fig.add_axes([0.46, 0.125, 0.005, 0.2])
         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
         cbar_ax.tick_params(labelsize=9) 
-        cbar_ax.set_xlabel(' cc_max', fontsize=9)
+        cbar_ax.set_xlabel(' CCmax', fontsize=9)
         cbar_ax.xaxis.set_label_position('top')
 
-        #------ SNR v.s. cc_max, colored by cc_dt
+        #------ SNR v.s. CCmax, colored by cc_dt
         ax = fig.add_axes([0.58, 0.65, 0.35, 0.2])
-        im = ax.scatter(snr_list, cc_max_list, marker='o', s=10,
+        im = ax.scatter(snr_list, CCmax_list, marker='o', s=10,
                 c=cc_dt_list, cmap='seismic',
                 edgecolor='grey', linewidth=0.05)
         mean_amp = np.mean(cc_dt_list)
@@ -1156,9 +1155,9 @@ class Misfit(object):
         plot_amp = abs(mean_amp)+std_amp
         im.set_clim(-plot_amp, plot_amp)
         ax.set_xlim([min(snr_list), max(snr_list)])
-        ax.set_ylim([min(cc_max_list), max(cc_max_list)])
+        ax.set_ylim([min(CCmax_list), max(CCmax_list)])
         ax.set_xlabel(" SNR")
-        ax.set_ylabel("cc_max")
+        ax.set_ylabel("CCmax")
         #add colorbar
         cbar_ax = fig.add_axes([0.95, 0.65, 0.005, 0.2])
         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
@@ -1166,19 +1165,19 @@ class Misfit(object):
         cbar_ax.set_xlabel('cc_dt(s)', fontsize=9)
         cbar_ax.xaxis.set_label_position('top')
 
-        #------ cc_0 v.s. cc_max, colored by cc_dt
+        #------ CC0 v.s. CCmax, colored by cc_dt
         ax = fig.add_axes([0.58, 0.375, 0.35, 0.2])
-        im = ax.scatter(cc_0_list, cc_max_list, marker='o', s=10,
+        im = ax.scatter(CC0_list, CCmax_list, marker='o', s=10,
                 c=cc_dt_list, cmap='seismic',
                 edgecolor='grey', linewidth=0.05)
         mean_amp = np.mean(cc_dt_list)
         std_amp = np.std(cc_dt_list)
         plot_amp = abs(mean_amp)+std_amp
         im.set_clim(-plot_amp, plot_amp)
-        ax.set_xlim([min(cc_0_list), max(cc_0_list)])
-        ax.set_ylim([min(cc_max_list), max(cc_max_list)])
-        ax.set_xlabel("cc_0")
-        ax.set_ylabel("cc_max")
+        ax.set_xlim([min(CC0_list), max(CC0_list)])
+        ax.set_ylim([min(CCmax_list), max(CCmax_list)])
+        ax.set_xlabel("CC0")
+        ax.set_ylabel("CCmax")
         #add colorbar
         cbar_ax = fig.add_axes([0.95, 0.375, 0.005, 0.2])
         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
@@ -1186,16 +1185,16 @@ class Misfit(object):
         cbar_ax.set_xlabel('cc_dt(s)', fontsize=9)
         cbar_ax.xaxis.set_label_position('top')
 
-        #------ cc_dt v.s. cc_max, colored by SNR
+        #------ cc_dt v.s. CCmax, colored by SNR
         ax = fig.add_axes([0.58, 0.1, 0.35, 0.2])
-        im = ax.scatter(cc_dt_list, cc_max_list, marker='o', s=10, 
+        im = ax.scatter(cc_dt_list, CCmax_list, marker='o', s=10, 
                 c=snr_list, cmap='seismic',
                 edgecolor='grey', linewidth=0.05)
         im.set_clim(min(snr_list), max(snr_list))
         ax.set_xlim([min(cc_dt_list), max(cc_dt_list)])
-        ax.set_ylim([min(cc_max_list), max(cc_max_list)])
+        ax.set_ylim([min(CCmax_list), max(CCmax_list)])
         ax.set_xlabel("cc_dt")
-        ax.set_ylabel("cc_max")
+        ax.set_ylabel("CCmax")
         #add colorbar
         cbar_ax = fig.add_axes([0.95, 0.1, 0.005, 0.2])
         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
@@ -1227,10 +1226,12 @@ class Misfit(object):
 
 
     def plot_seismograms(self, event_id,
-            azbin=10, win=[0,500], rayp=10,
+            azbin=10, win=[0,100], rayp=10,
             obs_dir='obs', syn_dir='syn', syn_band_code='MX',
-            syn_suffix='.sem.sac',
-            use_STF=False, hdur=None ):
+            syn_suffix='.sem.sac', savefig=False, out_dir='plot',
+            use_STF=False, hdur=None,
+            use_window=False, window_id='F.p,P',
+            min_SNR=None, min_CC0=None, min_CCmax=None):
         """ Plot seismograms for one event
             azbin:
                 azimuthal bin size
@@ -1283,8 +1284,21 @@ class Misfit(object):
                 station = stations[station_id]
                 meta = station['meta']
                 azimuth = meta['azimuth']
-                if azimuth < azmin or azimuth > azmax:
+                windows = station['windows']
+                if station['stat']['code'] < 0:
                     continue
+                if azimuth<azmin or azimuth>azmax:
+                    continue
+                if use_window and (window_id in windows):
+                    window = windows[window_id]
+                    quality = window['quality']
+                    misfit = window['misfit']
+                    if min_SNR and quality['SNR']<min_SNR:
+                        continue
+                    if min_CC0 and misfit['CC0']<min_CC0:
+                        continue
+                    if min_CCmax and misfit['CCmax']<min_CCmax:
+                        continue
                 try:
                     syn_st, obs_st = self.read_seismograms(
                         event_id, station_id,
@@ -1297,11 +1311,11 @@ class Misfit(object):
                 syn_npts = syn_st[0].stats.npts
                 syn_delta = syn_st[0].stats.delta
                 syn_nyq = 0.5 / syn_delta
-                syn_RTZ = np.zeros((3, syn_npts))
-                obs_RTZ = np.zeros((3, syn_npts))
+                syn_ENZ = np.zeros((3, syn_npts))
+                obs_ENZ = np.zeros((3, syn_npts))
                 for i in range(3):
-                    syn_RTZ[i,:] = syn_st[i].data
-                    obs_RTZ[i,:] = obs_st[i].data
+                    syn_ENZ[i,:] = syn_st[i].data
+                    obs_ENZ[i,:] = obs_st[i].data
 
                 # desgin filter
                 filter_param = station['filter']
@@ -1325,8 +1339,10 @@ class Misfit(object):
                 cos_Raz = np.cos(np.deg2rad(Raz))
                 proj_matrix = [ [ sin_Raz, cos_Raz],
                                 [-cos_Raz, sin_Raz] ]
-                syn_RTZ[0:2,:] = np.dot(proj_matrix, syn_RTZ[0:2,:])
-                obs_RTZ[0:2,:] = np.dot(proj_matrix, obs_RTZ[0:2,:])
+                syn_ENZ[0:2,:] = np.dot(proj_matrix, syn_ENZ[0:2,:])
+                obs_ENZ[0:2,:] = np.dot(proj_matrix, obs_ENZ[0:2,:])
+                syn_RTZ = syn_ENZ
+                obs_RTZ = obs_ENZ
                 # record results
                 starttime = syn_st[0].stats.starttime
                 dt = syn_st[0].stats.delta
@@ -1350,12 +1366,13 @@ class Misfit(object):
             # make figure
             y = [ x['meta']['dist_degree'] for x in data_azbin.itervalues() ]
             ny = len(y)
-            ymax = max(y) + 0.5
-            ymin = min(y) - 0.5
-            dy = 0.5*(ymax-ymin)/ny
+            dy = 0.5*(max(y)-min(y)+1)/ny
+            plot_ymax = max(y) + 2*dy
+            plot_ymin = min(y) - 2*dy
         
-            for sta_id in data_azbin:
-                sta = data_azbin[sta_id]
+            cmp_names = ['R', 'T', 'Z']
+            for station_id in data_azbin:
+                sta = data_azbin[station_id]
                 t = sta['times']
                 dist_degree = sta['meta']['dist_degree']
                 reduced_time = dist_degree * rayp
@@ -1368,13 +1385,22 @@ class Misfit(object):
                 t_plot = t[idx] - reduced_time - t0
                 obs_RTZ = sta['obs']
                 syn_RTZ = sta['syn']
-                cmp_names = ['R', 'T', 'Z']
+
+                windows = stations[station_id]['windows']
+                if use_window and (window_id in windows):
+                    quality = windows[window_id]['quality']
+                    A_obs = quality['A_obs']
+                    A_syn = quality['A_syn']
+                else:
+                    A_obs = np.sqrt(np.max(np.sum(obs_RTZ[:,idx]**2, axis=0)))
+                    A_syn = np.sqrt(np.max(np.sum(syn_RTZ[:,idx]**2, axis=0)))
+
                 for i in range(3):
                     #normalize data
                     obs = obs_RTZ[i, idx]
-                    obs = dy*obs/max(abs(obs))
+                    obs = dy*obs/A_obs
                     syn = syn_RTZ[i, idx]
-                    syn = dy*syn/max(abs(syn))
+                    syn = dy*syn/A_syn
 
                     ax = ax_RTZ[i]
                     ax.plot(t_plot, obs+dist_degree, 'k-', linewidth=0.5)
@@ -1388,7 +1414,7 @@ class Misfit(object):
         
                     # config
                     ax.set_xlim(win[0], win[1])
-                    ax.set_ylim(ymin, ymax)
+                    ax.set_ylim(plot_ymin, plot_ymax)
                     ax.set_title(cmp_names[i])
                     ax.set_xlabel('t - {:.1f}*dist (s)'.format(rayp))
         
@@ -1399,12 +1425,15 @@ class Misfit(object):
                         ax.set_yticklabels([])
                     #annotate station names 
                     if i == 2:
-                        ax.text(win[1], dist_degree, ' '+sta_id, \
+                        ax.text(win[1], dist_degree, ' '+station_id, \
                                 verticalalignment='center', fontsize=9)
                 #for i in range(3):
             #for sta_id in data:
         
-            plt.show()
-            #plt.savefig(fig, )
+            if savefig:
+                out_file = '%s/az_%d-%d_p%d.pdf' % (out_dir, azmin, azmax, rayp)
+                plt.savefig(out_file, format='pdf')
+            else:
+                plt.show()
         
         # END

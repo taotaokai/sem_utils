@@ -993,9 +993,9 @@ class Misfit(object):
     def plot_misfit(self, event_id, window_id, out_file=None):
         """Plot misfit for a certain event and window_id  
         """
-        # dt_cc       | CC0/CCmax V.S. dt_cc 
+        # CC_dt       | CC0/CCmax V.S. dt_cc 
         #-------------|-----------------------
-        # hist?       | CC0/CCmax VS SNR
+        # CC0         | CC0/CCmax VS SNR
 
         # check inputs
         events = self.data['events']
@@ -1006,7 +1006,7 @@ class Misfit(object):
         event = events[event_id]
         stations = event['stations']
 
-        # get list of data 
+        # get list of station,window id
         #sta_win_id_list = []
         stla_list = []
         stlo_list = []
@@ -1056,10 +1056,16 @@ class Misfit(object):
         focmec = [ Mrr, Mtt, Mpp, Mrt, Mrp, Mtp ]
 
         # map range
-        min_lat = min(min(stla_list), evla) - 1.0
-        max_lat = max(max(stla_list), evla) + 1.0
-        min_lon = min(min(stlo_list), evlo) - 1.0
-        max_lon = max(max(stlo_list), evlo) + 1.0
+        min_lat = min(min(stla_list), evla)
+        max_lat = max(max(stla_list), evla)
+        lat_range = max_lat - min_lat
+        min_lat -= 0.1*lat_range
+        max_lat += 0.1*lat_range
+        min_lon = min(min(stlo_list), evlo)
+        max_lon = max(max(stlo_list), evlo)
+        lon_range = max_lon - min_lon
+        min_lon -= 0.1*lon_range
+        max_lon += 0.1*lon_range
         #lat_true_scale = np.mean(stla_list)
         lat_0 = np.mean(stla_list)
         lon_0 = np.mean(stlo_list)
@@ -1088,7 +1094,7 @@ class Misfit(object):
         
         # CC_time_shift, SNR
         sx, sy = m(stlo_list, stla_list)
-        size_list = [ 0.01 if x<0.01 else x for x in snr_list ]
+        size_list = [ 0.1 if x<0.1 else x for x in snr_list ]
         im = m.scatter(sx, sy, s=size_list, marker='o',
                 c=cc_dt_list, cmap='seismic', 
                 edgecolor='grey', linewidth=0.05)
@@ -1110,9 +1116,9 @@ class Misfit(object):
         cbar_ax.set_xlabel(' cc_dt(s)', fontsize=9)
         cbar_ax.xaxis.set_label_position('top')
        
-        #------ color: CCmax, size: SNR
+        #------ color: CC0, size: SNR
         ax = fig.add_axes([0.05, 0.05, 0.4, 0.35])
-        ax.set_title("CCmax (symbol_size ~ SNR)")
+        ax.set_title("CC0 (symbol_size ~ SNR)")
 
         m = Basemap(projection='merc', resolution='l',
                 llcrnrlat=min_lat, llcrnrlon=min_lon, 
@@ -1123,12 +1129,12 @@ class Misfit(object):
         m.drawparallels(parallels, linewidth=0.1, labels=[1,0,0,1])
         m.drawmeridians(meridians, linewidth=0.1, labels=[1,0,0,1])
         
-        # CCmax, SNR 
+        # CC0, SNR 
         sx, sy = m(stlo_list, stla_list)
         #size_list = [ 20**x for x in CCmax_list ]
-        size_list = [ 0.01 if x<0.01 else x for x in snr_list ]
+        size_list = [ 0.1 if x<0.1 else x for x in snr_list ]
         im = m.scatter(sx, sy, s=size_list, marker='o',
-                c=CCmax_list, cmap='seismic', 
+                c=CC0_list, cmap='seismic', 
                 edgecolor='grey', linewidth=0.05)
         im.set_clim(0.5, 1.0)
         
@@ -1373,24 +1379,31 @@ class Misfit(object):
             cmp_names = ['R', 'T', 'Z']
             for station_id in data_azbin:
                 sta = data_azbin[station_id]
-                t = sta['times']
-                dist_degree = sta['meta']['dist_degree']
+                meta = sta['meta']
+                dist_degree = meta['dist_degree']
                 reduced_time = dist_degree * rayp
-        
-                t0 =  centroid_time - sta['starttime']
-                plot_t0 = t0 + win[0] + reduced_time
-                plot_t1 = t0 + win[1] + reduced_time
+                # time of first sample referred to centroid time 
+                t0 = sta['starttime'] - centroid_time
+                # time of samples referred to centroid time
+                t = sta['times'] + t0
+                plot_t0 = win[0] + reduced_time
+                plot_t1 = win[1] + reduced_time
                 idx = (t > plot_t0) & (t < plot_t1)
                     
-                t_plot = t[idx] - reduced_time - t0
+                t_plot = t[idx] - reduced_time
                 obs_RTZ = sta['obs']
                 syn_RTZ = sta['syn']
 
                 windows = stations[station_id]['windows']
                 if use_window and (window_id in windows):
-                    quality = windows[window_id]['quality']
+                    window = windows[window_id]
+                    quality = window['quality']
                     A_obs = quality['A_obs']
                     A_syn = quality['A_syn']
+                    win_starttime = UTCDateTime(window['starttime'])
+                    win_endtime = UTCDateTime(window['endtime'])
+                    win_t0 = win_starttime - centroid_time - reduced_time
+                    win_t1 = win_endtime - centroid_time - reduced_time
                 else:
                     A_obs = np.sqrt(np.max(np.sum(obs_RTZ[:,idx]**2, axis=0)))
                     A_syn = np.sqrt(np.max(np.sum(syn_RTZ[:,idx]**2, axis=0)))
@@ -1405,7 +1418,21 @@ class Misfit(object):
                     ax = ax_RTZ[i]
                     ax.plot(t_plot, obs+dist_degree, 'k-', linewidth=0.5)
                     ax.plot(t_plot, syn+dist_degree, 'r-', linewidth=0.5)
-        
+
+                    # mark time window
+                    if use_window:
+                        ax.plot(win_t0, dist_degree, 'k|', markersize=8)
+                        ax.plot(win_t1, dist_degree, 'k|', markersize=8)
+                        misfit = window['misfit']
+                        # CC0
+                        if i == 0:
+                            ax.text(win[1], dist_degree, ' %.3f' % (misfit['CC0']), 
+                                    verticalalignment='center', fontsize=7)
+                        # window weight
+                        if i == 1:
+                            ax.text(win[1], dist_degree, ' %.1f' % (window['weight']), 
+                                    verticalalignment='center', fontsize=7)
+
                     #plot ttcurve
                     ax.plot([x[1]-rayp*x[0] for x in ttcurve_p], [x[0] for x in ttcurve_p], 'b-', linewidth=0.2)
                     ax.plot([x[1]-rayp*x[0] for x in ttcurve_P], [x[0] for x in ttcurve_P], 'b-', linewidth=0.2)
@@ -1417,6 +1444,7 @@ class Misfit(object):
                     ax.set_ylim(plot_ymin, plot_ymax)
                     ax.set_title(cmp_names[i])
                     ax.set_xlabel('t - {:.1f}*dist (s)'.format(rayp))
+                    ax.tick_params(axis='both',labelsize=10)
         
                     # ylabel 
                     if i == 0:
@@ -1426,7 +1454,7 @@ class Misfit(object):
                     #annotate station names 
                     if i == 2:
                         ax.text(win[1], dist_degree, ' '+station_id, \
-                                verticalalignment='center', fontsize=9)
+                                verticalalignment='center', fontsize=7)
                 #for i in range(3):
             #for sta_id in data:
         
@@ -1435,5 +1463,7 @@ class Misfit(object):
                 plt.savefig(out_file, format='pdf')
             else:
                 plt.show()
+
+            plt.close(fig)
         
         # END

@@ -381,8 +381,8 @@ class Misfit(object):
                     elif comp == 'R': # radial component
                         cmpaz = (baz + 180.0)%360.0
                         cmpdip = 0.0
-                    elif comp == 'T': # tangential component
-                        cmpaz = (baz + 90.0)%360.0
+                    elif comp == 'T': # tangential component (TRZ: right-hand convention)
+                        cmpaz = (baz - 90.0)%360.0
                         cmpdip = 0.0
                     elif comp == 'H': # horizontal vector
                         cmpaz = float('nan')
@@ -1339,12 +1339,12 @@ class Misfit(object):
                     F_src = np.sinc(f * half_duration)**2
                     syn_ENZ[:,:] = np.fft.irfft(F_src*np.fft.rfft(syn_ENZ), syn_npts)
 
-                # rotate EN -> RT
+                # rotate EN -> TR (TRZ: right-hand convention)
                 Raz = (meta['back_azimuth'] + 180.0) % 360.0
                 sin_Raz = np.sin(np.deg2rad(Raz))
                 cos_Raz = np.cos(np.deg2rad(Raz))
-                proj_matrix = [ [ sin_Raz, cos_Raz],
-                                [-cos_Raz, sin_Raz] ]
+                proj_matrix = [ [sin_Raz,  cos_Raz],
+                                [cos_Raz, -sin_Raz] ]
                 syn_ENZ[0:2,:] = np.dot(proj_matrix, syn_ENZ[0:2,:])
                 obs_ENZ[0:2,:] = np.dot(proj_matrix, obs_ENZ[0:2,:])
                 syn_RTZ = syn_ENZ

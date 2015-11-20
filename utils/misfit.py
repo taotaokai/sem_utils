@@ -526,10 +526,13 @@ class Misfit(object):
             obs_dir='obs', syn_dir='syn',
             syn_band_code='MX', syn_suffix='.sem.sac',
             plot=True, use_STF=False,
-            cc_delta=0.01, output_adj=False, adj_dir='adj', 
+            cc_delta=0.01, output_adj=False, adj_dir='adj',
+            output_hess=False, hess_dir='hess',
             adj_window_id_list=['F.p,P', 'F.s,S'],
             weight_param={'SNR':[10,15], 'CCmax':[0.6,0.8], 'CC0':[0.5,0.7]}):
         """
+            output_hess, hess_dir: 
+               compute adjoint sources for approximating diagonal hess matrix.
         """
         #
         events = self.data['events']
@@ -609,6 +612,9 @@ class Misfit(object):
         #------ process windows
         if output_adj:
             adj_ENZ = np.zeros((3, syn_npts))
+        if output_hess:
+            hess_ENZ = np.zeros((3, syn_npts))
+        taper = np.zeros(syn_npts)
         taper = np.zeros(syn_npts)
         proj_matrix = np.zeros((3,3))
         cc = np.zeros(2*syn_npts-1)
@@ -713,15 +719,28 @@ class Misfit(object):
             # adjoint source (objective functional: zero-lag cc coef.)
             # adj = conj(F * S) * w * [ w * F * d - A * w * F * S * u] / N, 
             #   where A = CC0(un-normalized) / norm(syn)**2, N = norm(obs)*norm(syn)
-            A0 = CC0 * obs_norm / syn_norm # amplitude raito: obs/syn
-            adj =  taper * (obs_ENZ_win - A0*syn_ENZ_win) / obs_norm / syn_norm
-            adj_ENZ_win = signal.filtfilt(filter_b, filter_a, adj)
-            if use_STF:
-                adj_ENZ_win = np.fft.irfft(np.conjugate(F_src) * 
-                        np.fft.rfft(adj_ENZ_win), syn_npts)
+            if output_adj:
+                A0 = CC0 * obs_norm / syn_norm # amplitude raito: obs/syn
+                adj =  taper * (obs_ENZ_win - A0*syn_ENZ_win) / obs_norm / syn_norm
+                adj_ENZ_win = signal.filtfilt(filter_b, filter_a, adj)
+                A_adj = np.sqrt(np.max(np.sum(adj_ENZ_win**2, axis=0)))
+                if use_STF:
+                    adj_ENZ_win = np.fft.irfft(np.conjugate(F_src) * 
+                            np.fft.rfft(adj_ENZ_win), syn_npts)
+                if window_id in adj_window_id_list: 
+                    adj_ENZ += weight * adj_ENZ_win
 
-            if output_adj and (window_id in adj_window_id_list):
-                adj_ENZ += weight * adj_ENZ_win
+            # adjoint source to approximate hessian diagonal
+            # hess = conj(F * S) * w * [w * F * S * u] / N, 
+            #   where N = norm(syn)**2
+            if output_hess:
+                hess =  taper * syn_ENZ_win / (syn_norm**2)
+                hess_ENZ_win = signal.filtfilt(filter_b, filter_a, hess)
+                if use_STF:
+                    hess_ENZ_win = np.fft.irfft(np.conjugate(F_src) * 
+                            np.fft.rfft(hess_ENZ_win), syn_npts)
+                if window_id in adj_window_id_list: 
+                    hess_ENZ += weight * hess_ENZ_win
 
             # record results
             quality_dict = {
@@ -736,10 +755,9 @@ class Misfit(object):
             window['weight'] = weight
             window['stat'] = {'code': 1, 'msg': "measured"}
 
-            # DEBUG
+            # plot measure window and results 
             if plot:
                 t = syn_times
-                A_adj = np.sqrt(np.max(np.sum(adj_ENZ_win**2, axis=0)))
                 for i in range(3):
                     plt.subplot(411+i)
                     if i == 0:
@@ -753,7 +771,8 @@ class Misfit(object):
                     idx = (win_b <= syn_times) & (syn_times <= win_e)
                     plt.plot(t[idx], obs_ENZ_win[i,idx]/A_obs, 'k', linewidth=1.0)
                     plt.plot(t[idx], syn_ENZ_win[i,idx]/A_obs * A0, 'r', linewidth=1.0)
-                    plt.plot(t, adj_ENZ_win[i,:]/A_adj, 'c', linewidth=1.0)
+                    if output_adj:
+                        plt.plot(t, adj_ENZ_win[i,:]/A_adj, 'c', linewidth=1.0)
                     plt.ylim((-1.5, 1.5))
                     plt.xlim((min(t), max(t)))
                     plt.ylabel(syn_orientation_codes[i])
@@ -781,6 +800,24 @@ class Misfit(object):
                     for j in range(syn_npts):
                         fp.write("{:16.9e}  {:16.9e}\n".format(
                             syn_times[j]+shift, adj_ENZ[i,j]))
+
+        # output hess adjoint source for the current station
+        if output_hess:
+            for i in range(3):
+                tr = syn_st[i]
+                tr.data = hess_ENZ[i,:]
+                out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
+                        hess_dir, station_id, syn_band_code, 
+                        syn_orientation_codes[i])
+                # sac format 
+                tr.write(out_file + '.adj.sac', 'sac')
+                # ascii format 
+                # time is relative to event origin time
+                shift = tr.stats.sac.b - tr.stats.sac.o
+                with open(out_file+'.adj','w') as fp:
+                    for j in range(syn_npts):
+                        fp.write("{:16.9e}  {:16.9e}\n".format(
+                            syn_times[j]+shift, hess_ENZ[i,j]))
 
 
     def measure_windows_for_one_event(self, event_id,

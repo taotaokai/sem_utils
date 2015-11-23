@@ -16,11 +16,15 @@ module sem_io
   !---- public operations
   public :: sem_io_open_file_for_read
   public :: sem_io_open_file_for_write
+
   public :: sem_io_read_gll_file_1
-  public :: sem_io_read_gll_file_n
-  public :: sem_io_read_gll_file_cijkl
   public :: sem_io_write_gll_file_1
+
+  public :: sem_io_read_gll_file_n
   public :: sem_io_write_gll_file_n
+
+  public :: sem_io_read_cijkl_kernel
+  public :: sem_io_write_cijkl_kernel
 
 !----------------------------------
 ! implementation part
@@ -143,8 +147,8 @@ end subroutine
 
 
 !//////////////////////////
-subroutine sem_io_read_gll_file_cijkl(basedir, iproc, iregion, gll_cijkl)
-!-read the special GLL file (c_ijkl) into one array
+subroutine sem_io_read_cijkl_kernel(basedir, iproc, iregion, gll_cijkl)
+!-read cijkl_kernel file into one array
 !
 !-inputs:
 ! (string) basedir,iproc,iregion,model_names(nmodel): specify the GLL file
@@ -232,6 +236,35 @@ subroutine sem_io_write_gll_file_n(basedir, iproc, iregion, &
     call sem_io_write_gll_file_1(basedir, iproc, iregion, model_names(imodel), &
                                  model_gll(imodel,:,:,:,:))
   end do
+
+end subroutine
+
+
+!//////////////////////////
+subroutine sem_io_write_cijkl_kernel(basedir, iproc, iregion, cijkl_gll)
+!-write out GLL array of cijkl to one file
+!
+!-inputs:
+!
+! basedir,iproc,iregion: output file basedir/proc<iproc>_reg<iregion>_cijkl_kernel.bin
+!
+! (real) cijkl_gll(21,:,:,:,:): GLL array
+
+  character(len=*), intent(in) :: basedir
+  integer, intent(in) :: iproc, iregion
+  real(dp), intent(in) :: cijkl_gll(:,:,:,:,:)
+
+  integer :: ier
+
+  call sem_io_open_file_for_write(basedir, iproc, iregion, "cijkl_kernel", IOUT)
+
+  write(IOUT, iostat=ier) real(cijkl_gll, kind=CUSTOM_REAL)
+
+  close(IOUT)
+
+  if (ier /= 0) then
+    stop "[ERROR] sem_io_write_cijkl_kernel: failed to write out gll file"
+  endif
 
 end subroutine
 

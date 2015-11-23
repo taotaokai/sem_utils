@@ -43,10 +43,12 @@ program = xsem_slice_gcircle \
 	xsem_inner_product \
 	xsem_interp_IRIS_netcdf \
 	xsem_add_model_dlnV \
-	xsem_kernel_cijkl_to_lamda_mu \
-	xsem_make_kernel_mask \
-	xsem_add_dmodel_lamda_mu_to_tiso \
-	xsem_kernel_lamda_mu_to_dmodel_sd
+	xsem_sum_event_kernels_1 \
+	xsem_sum_event_kernels_cijkl \
+	xsem_reduce_kernel_cijkl_to_lamda_mu \
+	xsem_make_source_depth_mask # \
+	#xsem_add_dmodel_lamda_mu_to_tiso \
+	#xsem_kernel_lamda_mu_to_dmodel_sd
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))

@@ -2,7 +2,7 @@ subroutine selfdoc()
 
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_cijkl_kernel_to_lamda_mu "
+  print '(a)', "  xsem_reduce_kernel_cijkl_to_lamda_mu "
   print '(a)', "    - reduce cijkl kernel to (lamda,mu) kernel"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
@@ -26,7 +26,7 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-program xsem_cijkl_kernel_to_lamda_mu
+program xsem_reduce_kernel_cijkl_to_lamda_mu
 
   use sem_constants
   use sem_io
@@ -59,7 +59,7 @@ program xsem_cijkl_kernel_to_lamda_mu
   !===== read command line arguments
   if (command_argument_count() /= nargs) then
     call selfdoc()
-    print *, "[ERROR] xsem_cijkl_kernel_to_lamda_mu: check your inputs."
+    print *, "[ERROR] xsem_reduce_kernel_cijkl_to_lamda_mu: check your inputs."
     stop
   endif
 
@@ -72,24 +72,23 @@ program xsem_cijkl_kernel_to_lamda_mu
   read(args(4), *) out_dir 
 
   !====== loop model slices 
+
+  ! get mesh geometry
+  call sem_mesh_read(mesh_dir, 0, iregion, mesh_data)
+  nspec = mesh_data%nspec
+
+  ! initialize gll arrays 
+  allocate(cijkl_kernel(21,NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(lamda_kernel(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(mu_kernel(NGLLX,NGLLY,NGLLZ,nspec))
+
+  ! reduce cijkl kernels
   do iproc = 0, (nproc-1)
 
     print *, '# iproc=', iproc
 
-    ! read mesh data 
-    call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
-    nspec = mesh_data%nspec
-
-    ! read gll model
-    if (allocated(cijkl_kernel)) then
-      deallocate(cijkl_kernel, lamda_kernel, mu_kernel)
-    endif
-    allocate(cijkl_kernel(21,NGLLX,NGLLY,NGLLZ,nspec))
-    allocate(lamda_kernel(NGLLX,NGLLY,NGLLZ,nspec))
-    allocate(mu_kernel(NGLLX,NGLLY,NGLLZ,nspec))
-
-    ! read kernel gll
-    call sem_io_read_gll_file_cijkl(kernel_dir, iproc, iregion, cijkl_kernel)
+    ! read cijkl kernel gll file
+    call sem_io_read_cijkl_kernel(kernel_dir, iproc, iregion, cijkl_kernel)
 
     ! reduce cijkl kernel to lamda,mu kernel 
     lamda_kernel = cijkl_kernel(1,:,:,:,:) + &

@@ -2,14 +2,14 @@ subroutine selfdoc()
 
     print '(a)', "NAME"
     print '(a)', ""
-    print '(a)', "  xsem_make_kernel_mask "
-    print '(a)', "    - make kernel mask gll file (mask source, shallow depth)"
+    print '(a)', "  xsem_make_source_depth_mask "
+    print '(a)', "    - make mask gll file (mask source, shallow depth)"
     print '(a)', ""
     print '(a)', "SYNOPSIS"
     print '(a)', ""
     print '(a)', "  xsem_make_kernel_mask \"
-    print '(a)', "    <nproc> <mesh_dir> <source_vtk_file> <out_dir> \"
-    print '(a)', "    <source_mask_radius> <stop_depth> <pass_depth>"
+    print '(a)', "    <nproc> <mesh_dir> <source_latlondep_list> <source_mask_radius> \"
+    print '(a)', "    <stop_depth> <pass_depth> <out_dir> "
     print '(a)', ""
     print '(a)', "DESCRIPTION"
     print '(a)', ""
@@ -18,11 +18,11 @@ subroutine selfdoc()
     print '(a)', ""
     print '(a)', "  (int) nproc:  number of mesh slices"
     print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
-    print '(a)', "  (string) source_vtk_file:  source.vtk file output from SEM"
-    print '(a)', "  (string) out_dir:  output directory for proc*_reg1_source_mask.bin"
-    print '(a)', "  (float) source_mask_radius: Gaussian width(one sigma) in km"
+    print '(a)', "  (string) source_latlondep_list: list of source locations (lat, lon, depth_km)"
+    print '(a)', "  (float) source_mask_radius: Gaussian width (one sigma) in km"
     print '(a)', "  (float) stop_depth: stop depth (km) where mask = 0"
     print '(a)', "  (float) pass_depth: pass depth (km) where mask = 1"
+    print '(a)', "  (string) out_dir: output directory for proc*_reg1_source_mask.bin"
     print '(a)', ""
 
 end subroutine
@@ -33,6 +33,8 @@ program xsem_make_kernel_mask
     use sem_constants
     use sem_io
     use sem_mesh
+    use sem_utils
+    use geographic
 
     implicit none
 
@@ -42,15 +44,21 @@ program xsem_make_kernel_mask
     character(len=MAX_STRING_LEN) :: args(nargs)
     integer :: nproc
     character(len=MAX_STRING_LEN) :: mesh_dir
-    character(len=MAX_STRING_LEN) :: source_vtk_file
-    character(len=MAX_STRING_LEN) :: out_dir
+    character(len=MAX_STRING_LEN) :: source_lld_list
     real(dp) :: source_mask_radius
     real(dp) :: stop_depth 
     real(dp) :: pass_depth 
+    character(len=MAX_STRING_LEN) :: out_dir
 
     ! local variables
     integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
     integer :: i, iproc, ier
+
+    ! source locations
+    character(len=MAX_STRING_LEN), allocatable :: lines(:)
+    integer :: nsource, isrc
+    real(dp) :: lat, lon, depth_km
+    real(dp), allocatable :: source_xyz(:,:)
 
     ! mesh
     type(sem_mesh_data) :: mesh_data
@@ -60,8 +68,6 @@ program xsem_make_kernel_mask
     real(dp), allocatable :: mask(:,:,:,:)
     real(dp) :: xyz(3), weight
     ! source
-    character(len=MAX_STRING_LEN) :: dummy 
-    real(dp) :: source_xyz(3)
     real(dp) :: dist_sq
     ! depth mask
     real(dp) :: depth
@@ -78,29 +84,30 @@ program xsem_make_kernel_mask
     enddo
     read(args(1), *) nproc
     read(args(2), *) mesh_dir
-    read(args(3), "(a)") source_vtk_file
-    read(args(4), *) out_dir
+    read(args(3), *) source_lld_list
     read(args(5), *) source_mask_radius
     read(args(6), *) stop_depth
     read(args(7), *) pass_depth
+    read(args(4), *) out_dir
 
-    !====== read source.vtk
-    open(unit=IIN, action='read', status='old', file=source_vtk_file)
-    ! skip header lines
-    read(IIN,*)
-    read(IIN,*)
-    read(IIN,*)
-    read(IIN,*)
-    ! nsrc
-    read(IIN,*,iostat=ier) dummy, i, dummy
-    if (ier /= 0) stop '[ERROR] read source vtk file'
-    if (i /= 1) stop '[ERROR] more than one source locations!'
-    ! xyz
-    read(IIN,*,iostat=ier) source_xyz(1), source_xyz(2), source_xyz(3)
-    if (ier /= 0) stop "[ERROR] can't read source location"
-    close(IIN)
+    !====== read source_lld_list
+    call sem_utils_read_line(source_lld_list, lines, nsource)
 
-    print *, "source_xyz: ", source_xyz
+    allocate(source_xyz(3, nsource))
+    do isrc = 1, nsource
+
+      ! read source lat,lon,depth
+      read(lines(isrc), *) lat, lon, depth_km
+
+      ! transform from lat/lon/depth to ecef_xyz (REF: wgs84)
+      call geographic_lla2ecef(lat, lon, -1000.0*depth_km, &
+        source_xyz(1, isrc), source_xyz(2, isrc), source_xyz(3, isrc))
+
+      source_xyz(:, isrc) = source_xyz(:, isrc) / R_EARTH
+
+      print *, "source #", isrc, source_xyz(:, isrc)
+
+    enddo
 
     !===== loop each mesh slice
     !non-dimensionalize
@@ -136,9 +143,11 @@ program xsem_make_kernel_mask
                         weight = 1.0_dp
                         ! source mask: mask source region
                         if (source_mask_radius > 0.0) then
-                            dist_sq = sum((xyz - source_xyz)**2)
+                          do isrc = 1, nsource
+                            dist_sq = sum((xyz - source_xyz(:,isrc))**2)
                             weight = weight * (1.0_dp - &
                                 exp(-0.5*dist_sq/source_mask_radius**2))
+                          enddo
                         endif
                         ! depth mask: mask shallow depth
                         if (pass_depth > stop_depth) then

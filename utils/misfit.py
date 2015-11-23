@@ -486,7 +486,7 @@ class Misfit(object):
             # check if obs record is long enough (60.0 sec more)
             if (first_arrtime - obs_starttime) < 60.0 or \
                (obs_endtime - max_window_endtime) < 60.0:
-                raise Exception('%s:%s: obs does not start 60s before first arrtime' \
+                raise Exception('%s:%s: obs does not start 60s before first arrtime ' \
                         'or end 60s after the last window endtime' \
                         % (event_id, station_id))
             # lowpass to frequency band in sampling rate of syn
@@ -825,8 +825,9 @@ class Misfit(object):
             syn_band_code='MX', syn_suffix='.sem.sac',
             plot=False, use_STF=False,
             cc_delta=0.01, output_adj=False, adj_dir='adj', 
+            output_hess=False, hess_dir='adj',
             adj_window_id_list=['F.p,P', 'F.s,S'],
-            weight_param={'SNR':[5,10], 'CCmax':[0.6,0.8], 'CC0':[0.5,0.7]}):
+            weight_param={'SNR':[10,15], 'CCmax':[0.6,0.8], 'CC0':[0.5,0.7]}):
         """measure misfit on time windoes for one event
             cc_delta: sampling interval for cross-correlation between obs and syn.
             weight_param: one-sided cosine taper [stop, pass]
@@ -851,10 +852,11 @@ class Misfit(object):
                     syn_band_code=syn_band_code, syn_suffix=syn_suffix, 
                     plot=plot, use_STF=use_STF,
                     cc_delta=cc_delta, output_adj=output_adj, adj_dir=adj_dir,
+                    output_hess=output_hess, hess_dir=hess_dir,
                     adj_window_id_list=adj_window_id_list, 
                     weight_param=weight_param)
             except Exception as e:
-                print str(e)
+                print "[WARNING] %s" % (str(e))
                 station['stat']['code'] = -1
                 station['stat']['msg'] = str(e)
                 continue

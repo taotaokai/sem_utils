@@ -87,7 +87,7 @@ program xsem_add_model_dlnV
   read(args(5), '(a)') dlnV_dir
   read(args(6), '(a)') dlnV_tags
   read(args(7), *) scale_factor
-  read(args(8), *) out_dir 
+  read(args(8), '(a)') out_dir 
 
   !===== parse model tags
 

@@ -63,7 +63,7 @@ program xsem_sum_event_kernels_cijkl
   !===== read command line arguments
   if (command_argument_count() /= nargs) then
     call selfdoc()
-    print *, "[ERROR] xsem_combine_CijklRho_kernels_to_LamdaMuRho: check your inputs."
+    print *, "[ERROR] xsem_sum_event_kernels_cijkl: check your inputs."
     stop
   endif
 
@@ -71,9 +71,9 @@ program xsem_sum_event_kernels_cijkl
     call get_command_argument(i, args(i))
   enddo
   read(args(1), *) nproc
-  read(args(2), *) mesh_dir
-  read(args(3), *) kernel_dir_list
-  read(args(4), *) out_dir 
+  read(args(2), '(a)') mesh_dir
+  read(args(3), '(a)') kernel_dir_list
+  read(args(4), '(a)') out_dir 
 
   !====== read kernel_dir_list
   call sem_utils_read_line(kernel_dir_list, kernel_dirs, nkernel)
@@ -92,7 +92,7 @@ program xsem_sum_event_kernels_cijkl
   cijkl_kernel_sum = 0.0_dp
   do iproc = 0, (nproc-1)
 
-    print *, '# iproc=', iproc
+    print *, '#-- iproc=', iproc
 
     do iker = 1, nkernel
 
@@ -101,7 +101,15 @@ program xsem_sum_event_kernels_cijkl
 
       cijkl_kernel_sum = cijkl_kernel_sum + cijkl_kernel
 
+      print *, "event#: min/max = ", iker, minval(cijkl_kernel), maxval(cijkl_kernel)
+      !DEBUG
+      !print *, "event#: (1,1,1,1,1) = ", iker, cijkl_kernel(1,1,1,1,1)
+
     enddo ! iker
+
+    print *, "sum: min/max = ", minval(cijkl_kernel_sum), maxval(cijkl_kernel_sum)
+    !DEBUG
+    !print *, "sum: (1,1,1,1,1) = ", cijkl_kernel_sum(1,1,1,1,1)
 
     ! write out lamda,mu kernel
     call sem_io_write_cijkl_kernel(out_dir, iproc, iregion, cijkl_kernel_sum)

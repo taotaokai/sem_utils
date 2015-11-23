@@ -73,10 +73,10 @@ program xsem_sum_event_kernels_cijkl
     call get_command_argument(i, args(i))
   enddo
   read(args(1), *) nproc
-  read(args(2), *) mesh_dir
-  read(args(3), *) kernel_dir_list
-  read(args(4), *) kernel_name
-  read(args(5), *) out_dir 
+  read(args(2), '(a)') mesh_dir
+  read(args(3), '(a)') kernel_dir_list
+  read(args(4), '(a)') kernel_name
+  read(args(5), '(a)') out_dir 
 
   !====== read kernel_dir_list
   call sem_utils_read_line(kernel_dir_list, kernel_dirs, nkernel)

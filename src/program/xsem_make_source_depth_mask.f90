@@ -52,7 +52,7 @@ program xsem_make_kernel_mask
 
     ! local variables
     integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
-    integer :: i, iproc, ier
+    integer :: i, iproc
 
     ! source locations
     character(len=MAX_STRING_LEN), allocatable :: lines(:)
@@ -83,12 +83,12 @@ program xsem_make_kernel_mask
         call get_command_argument(i, args(i))
     enddo
     read(args(1), *) nproc
-    read(args(2), *) mesh_dir
-    read(args(3), *) source_lld_list
+    read(args(2), '(a)') mesh_dir
+    read(args(3), '(a)') source_lld_list
     read(args(5), *) source_mask_radius
     read(args(6), *) stop_depth
     read(args(7), *) pass_depth
-    read(args(4), *) out_dir
+    read(args(4), '(a)') out_dir
 
     !====== read source_lld_list
     call sem_utils_read_line(source_lld_list, lines, nsource)

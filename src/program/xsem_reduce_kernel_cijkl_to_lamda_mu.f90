@@ -67,9 +67,9 @@ program xsem_reduce_kernel_cijkl_to_lamda_mu
     call get_command_argument(i, args(i))
   enddo
   read(args(1), *) nproc
-  read(args(2), *) mesh_dir
-  read(args(3), *) kernel_dir
-  read(args(4), *) out_dir 
+  read(args(2), '(a)') mesh_dir
+  read(args(3), '(a)') kernel_dir
+  read(args(4), '(a)') out_dir 
 
   !====== loop model slices 
 

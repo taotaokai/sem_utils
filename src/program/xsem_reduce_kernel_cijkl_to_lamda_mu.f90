@@ -105,6 +105,10 @@ program xsem_reduce_kernel_cijkl_to_lamda_mu
                 cijkl_kernel(19,:,:,:,:) + &
                 cijkl_kernel(21,:,:,:,:)
 
+    print *, "cijkl: min/max=", minval(cijkl_kernel), maxval(cijkl_kernel)
+    print *, "lamda: min/max=", minval(lamda_kernel), maxval(lamda_kernel)
+    print *, "mu: min/max=", minval(mu_kernel), maxval(mu_kernel)
+
     ! write out lamda,mu kernel
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
         'lamda_kernel', lamda_kernel)

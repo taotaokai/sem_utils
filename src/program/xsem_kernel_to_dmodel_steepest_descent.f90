@@ -7,9 +7,9 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xsem_kernel_to_diretion_steepest_descent \"
+  print '(a)', "  xsem_kernel_to_dmodel_steepest_descent \"
   print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <out_dir>"
-  print '(a)', "    <kernel_tags> <scale_factor> <use_mask> "
+  print '(a)', "    <model_tags> <scale_factor> <use_mask> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -21,10 +21,14 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) kernel_dir:  directory holds proc***_reg1_***_kernel.bin"
   print '(a)', "  (string) out_dir:  output directory"
-  print '(a)', "  (string) kernel_tags: comma delimited string, e.g. mu_kernel,lamda_kernel"
+  print '(a)', "  (string) model_tags: comma delimited string, e.g. mu,lamda"
   print '(a)', "  (float) scale_factor:  factor to scale kernel values"
   print '(a)', "  (logical) use_mask:  flag if kernel masking is used (mask files should locate in kernel_dir)"
   print '(a)', ""
+  print '(a)', "NOTE"
+  print '(a)', ""
+  print '(a)', "  1. _kernel will be appended to model_tags to get kernel files"
+  print '(a)', "  2. _dmodel will be appended to model_tags for output files"
 end subroutine
 
 
@@ -46,13 +50,13 @@ program xsem_kernel_to_dmodel_steepest_descent
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: kernel_dir
   character(len=MAX_STRING_LEN) :: out_dir
-  character(len=MAX_STRING_LEN) :: kernel_tags
+  character(len=MAX_STRING_LEN) :: model_tags
   real(dp) :: scale_factor
   logical :: use_mask
 
-  ! kernel names
-  integer :: nkernel
-  character(len=MAX_STRING_LEN), allocatable :: kernel_names(:)
+  ! model names
+  integer :: nmodel
+  character(len=MAX_STRING_LEN), allocatable :: model_names(:)
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
@@ -77,7 +81,7 @@ program xsem_kernel_to_dmodel_steepest_descent
   read(args(2),'(a)') mesh_dir 
   read(args(3),'(a)') kernel_dir 
   read(args(4),'(a)') out_dir
-  read(args(5),'(a)') kernel_tags
+  read(args(5),'(a)') model_tags
   read(args(6),*) scale_factor 
   select case (args(7))
     case ('0')
@@ -91,10 +95,10 @@ program xsem_kernel_to_dmodel_steepest_descent
 
   !===== parse model tags
 
-  call sem_utils_delimit_string(kernel_tags, ',', kernel_names, nkernel)
+  call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
 
-  print *, '# nkernel=', nkernel
-  print *, '# kernel_names=', (trim(kernel_names(i))//"  ", i=1,nkernel)
+  print *, '# nmodel=', nmodel
+  print *, '# model_names=', (trim(model_names(i))//"  ", i=1,nmodel)
 
   !===== calculate model update diretion from kernel (steepest descent)
 
@@ -113,10 +117,10 @@ program xsem_kernel_to_dmodel_steepest_descent
     print *, '# iproc=', iproc
 
     ! read kernels
-    do i = 1, nkernel
+    do i = 1, nmodel
 
       call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, &
-        kernel_names(i), dmodel)
+        trim(model_names(i))//"_kernel", dmodel)
 
       ! apply kernel mask
       if (use_mask) then
@@ -129,9 +133,9 @@ program xsem_kernel_to_dmodel_steepest_descent
   
       ! write
       call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
-        kernel_names(i), dmodel)
+        trim(model_names(i))//"_dmodel", dmodel)
 
-      enddo ! do i (kernel)
+      enddo ! do i
 
   enddo ! do iproc
 

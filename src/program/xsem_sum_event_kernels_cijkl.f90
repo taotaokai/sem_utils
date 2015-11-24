@@ -89,11 +89,11 @@ program xsem_sum_event_kernels_cijkl
   allocate(cijkl_kernel_sum(21,NGLLX,NGLLY,NGLLZ,nspec))
 
   ! combine event kernels
-  cijkl_kernel_sum = 0.0_dp
   do iproc = 0, (nproc-1)
 
     print *, '#-- iproc=', iproc
 
+    cijkl_kernel_sum = 0.0_dp
     do iker = 1, nkernel
 
       ! read kernel gll

@@ -92,11 +92,11 @@ program xsem_sum_event_kernels_cijkl
   allocate(gll_sum(NGLLX,NGLLY,NGLLZ,nspec))
 
   ! combine event kernels
-  gll_sum = 0.0_dp
   do iproc = 0, (nproc-1)
 
     print *, '#-- iproc=', iproc
 
+    gll_sum = 0.0_dp
     do iker = 1, nkernel
 
       ! read kernel gll
@@ -110,7 +110,7 @@ program xsem_sum_event_kernels_cijkl
 
     print *, "sum: min/max = ", minval(gll_sum), maxval(gll_sum)
 
-    ! write out lamda,mu kernel
+    ! write out gll file
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, kernel_name, gll_sum)
 
   enddo ! iproc

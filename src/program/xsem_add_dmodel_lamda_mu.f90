@@ -3,7 +3,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  xsem_add_dmodel_lamda_mu"
   print '(a)', "    - add isotropic model perturbation direction(dlamda, dmu, drho)"
-  print '(a)', "      into TI model files (vpv,vph,vsv,vsh,eta,rho)"
+  print '(a)', "      into VTI model files (vpv,vph,vsv,vsh,eta,rho)"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""

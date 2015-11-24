@@ -54,7 +54,7 @@ end subroutine
 
 !//////////////////////////
 ! sum cijkl_kernels
-subroutine sem_sum_kernels_cijkl(kernel_cijkl_sum, nker, kernel_dirs, iproc, iregion, flag_mask, mask_name)
+subroutine sem_tomography_sum_kernels_cijkl(kernel_cijkl_sum, nker, kernel_dirs, iproc, iregion, flag_mask, mask_name)
 
   real(kind=CUSTOM_REAL), dimension(21,NGLLX,NGLLY,NGLLZ,NSPEC), intent(out) :: kernel_cijkl_sum
   integer, intent(in) :: nker, iproc, iregion
@@ -87,7 +87,7 @@ end subroutine
 
 !//////////////////////////
 ! reduce cijkl_kernel to lamda_2mu, mu kernels
-subroutine sem_reduce_kernel_cijkl_to_iso(kernel_lamda_2mu, kernel_mu, kernel_cijkl)
+subroutine sem_tomography_reduce_kernel_cijkl_to_iso(kernel_lamda_2mu, kernel_mu, kernel_cijkl)
 
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC), intent(out) :: kernel_lamda_2mu
   real(kind=CUSTOM_REAL), dimension(NGLLX,NGLLY,NGLLZ,NSPEC), intent(out) :: kernel_mu

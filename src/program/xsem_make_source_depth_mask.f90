@@ -8,7 +8,7 @@ subroutine selfdoc()
     print '(a)', "SYNOPSIS"
     print '(a)', ""
     print '(a)', "  xsem_make_kernel_mask \"
-    print '(a)', "    <nproc> <mesh_dir> <source_latlondep_list> <source_mask_radius> \"
+    print '(a)', "    <nproc> <mesh_dir> <source_xyz_list> <source_mask_radius> \"
     print '(a)', "    <stop_depth> <pass_depth> <out_dir> "
     print '(a)', ""
     print '(a)', "DESCRIPTION"
@@ -18,7 +18,7 @@ subroutine selfdoc()
     print '(a)', ""
     print '(a)', "  (int) nproc:  number of mesh slices"
     print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
-    print '(a)', "  (string) source_latlondep_list: list of source locations (lat, lon, depth_km)"
+    print '(a)', "  (string) source_xyz_list: list of source locations(x,y,z) in SEM (normalized)"
     print '(a)', "  (float) source_mask_radius: Gaussian width (one sigma) in km"
     print '(a)', "  (float) stop_depth: stop depth (km) where mask = 0"
     print '(a)', "  (float) pass_depth: pass depth (km) where mask = 1"
@@ -44,7 +44,7 @@ program xsem_make_kernel_mask
     character(len=MAX_STRING_LEN) :: args(nargs)
     integer :: nproc
     character(len=MAX_STRING_LEN) :: mesh_dir
-    character(len=MAX_STRING_LEN) :: source_lld_list
+    character(len=MAX_STRING_LEN) :: source_xyz_list
     real(dp) :: source_mask_radius
     real(dp) :: stop_depth 
     real(dp) :: pass_depth 
@@ -57,7 +57,6 @@ program xsem_make_kernel_mask
     ! source locations
     character(len=MAX_STRING_LEN), allocatable :: lines(:)
     integer :: nsource, isrc
-    real(dp) :: lat, lon, depth_km
     real(dp), allocatable :: source_xyz(:,:)
 
     ! mesh
@@ -84,29 +83,30 @@ program xsem_make_kernel_mask
     enddo
     read(args(1), *) nproc
     read(args(2), '(a)') mesh_dir
-    read(args(3), '(a)') source_lld_list
+    read(args(3), '(a)') source_xyz_list
     read(args(4), *) source_mask_radius
     read(args(5), *) stop_depth
     read(args(6), *) pass_depth
     read(args(7), '(a)') out_dir
 
     !====== read source_lld_list
-    call sem_utils_read_line(source_lld_list, lines, nsource)
+    call sem_utils_read_line(source_xyz_list, lines, nsource)
 
     allocate(source_xyz(3, nsource))
     do isrc = 1, nsource
 
       ! read source lat,lon,depth
-      read(lines(isrc), *) lat, lon, depth_km
+      read(lines(isrc), *) source_xyz(1, isrc), source_xyz(2, isrc), &
+                           source_xyz(3, isrc)
 
-      ! transform from lat/lon/depth to ecef_xyz (REF: wgs84)
-      call geographic_lla2ecef( &
-        lat*DEGREES_TO_RADIANS, lon*DEGREES_TO_RADIANS, -1000.0*depth_km, &
-        source_xyz(1, isrc), source_xyz(2, isrc), source_xyz(3, isrc))
+      !! transform from lat/lon/depth to ecef_xyz (REF: wgs84)
+      !call geographic_lla2ecef( &
+      !  lat*DEGREES_TO_RADIANS, lon*DEGREES_TO_RADIANS, -1000.0*depth_km, &
+      !  source_xyz(1, isrc), source_xyz(2, isrc), source_xyz(3, isrc))
 
-      source_xyz(:, isrc) = source_xyz(:, isrc) / R_EARTH
+      !source_xyz(:, isrc) = source_xyz(:, isrc) / R_EARTH
 
-      print *, "source #", isrc, source_xyz(:, isrc)
+      !print *, "source #", isrc, source_xyz(:, isrc)
 
     enddo
 

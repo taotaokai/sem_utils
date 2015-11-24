@@ -85,10 +85,10 @@ program xsem_make_kernel_mask
     read(args(1), *) nproc
     read(args(2), '(a)') mesh_dir
     read(args(3), '(a)') source_lld_list
-    read(args(5), *) source_mask_radius
-    read(args(6), *) stop_depth
-    read(args(7), *) pass_depth
-    read(args(4), '(a)') out_dir
+    read(args(4), *) source_mask_radius
+    read(args(5), *) stop_depth
+    read(args(6), *) pass_depth
+    read(args(7), '(a)') out_dir
 
     !====== read source_lld_list
     call sem_utils_read_line(source_lld_list, lines, nsource)

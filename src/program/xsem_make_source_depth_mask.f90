@@ -100,7 +100,8 @@ program xsem_make_kernel_mask
       read(lines(isrc), *) lat, lon, depth_km
 
       ! transform from lat/lon/depth to ecef_xyz (REF: wgs84)
-      call geographic_lla2ecef(lat, lon, -1000.0*depth_km, &
+      call geographic_lla2ecef( &
+        lat*DEGREES_TO_RADIANS, lon*DEGREES_TO_RADIANS, -1000.0*depth_km, &
         source_xyz(1, isrc), source_xyz(2, isrc), source_xyz(3, isrc))
 
       source_xyz(:, isrc) = source_xyz(:, isrc) / R_EARTH

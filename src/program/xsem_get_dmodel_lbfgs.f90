@@ -55,11 +55,11 @@ program get_dmodel_lbfgs
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
-  integer :: i, iproc
+  integer :: i, ier
   ! mpi
   integer :: nrank, myrank
   ! model names
-  integer :: nmodel
+  integer :: imodel, nmodel
   character(len=MAX_STRING_LEN), allocatable :: model_names(:)
   ! mesh
   type(sem_mesh_data) :: mesh_data

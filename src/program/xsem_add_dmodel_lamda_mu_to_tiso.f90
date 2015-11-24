@@ -1,13 +1,13 @@
 subroutine selfdoc()
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_add_dmodel_lamda_mu"
+  print '(a)', "  xsem_add_dmodel_lamda_mu_to_tiso"
   print '(a)', "    - add isotropic model perturbation direction(dlamda, dmu, drho)"
   print '(a)', "      into VTI model files (vpv,vph,vsv,vsh,eta,rho)"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xsem_add_dmodel_lamda-mu_to_tiso \"
+  print '(a)', "  xsem_add_dmodel_lamda_mu_to_tiso \"
   print '(a)', "    <nproc> <mesh_dir> <model_dir> <dmodel_dir> <out_dir>"
   print '(a)', "    <max_dlnv_allowed> <force_max_dlnv_allow> <fix_rho>"
   print '(a)', ""
@@ -78,7 +78,7 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   !===== read command line arguments
   if (command_argument_count() /= nargs) then
     call selfdoc()
-    print *, "[ERROR] xsem_add_dmodel_lamda_mu: check your input arguments."
+    print *, "[ERROR] xsem_add_dmodel_lamda_mu_to_tiso: check your input arguments."
     stop
   endif
 

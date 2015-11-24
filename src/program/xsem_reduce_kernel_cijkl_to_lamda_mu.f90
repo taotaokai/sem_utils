@@ -21,6 +21,9 @@ subroutine selfdoc()
   print '(a)', "  (string) kernel_dir:  directory holds proc*_reg1_cijkl_kernel.bin"
   print '(a)', "  (string) out_dir:  output directory for lamda,mu_kerenl"
   print '(a)', ""
+  print '(a)', "NOTE"
+  print '(a)', ""
+  print '(a)', "  1. can be run in parallel"
 
 end subroutine
 
@@ -32,6 +35,7 @@ program xsem_reduce_kernel_cijkl_to_lamda_mu
   use sem_io
   use sem_mesh
   use sem_utils
+  use sem_parallel
 
   implicit none
 
@@ -48,6 +52,9 @@ program xsem_reduce_kernel_cijkl_to_lamda_mu
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
   integer :: i, iproc
 
+  ! mpi
+  integer :: myrank, nrank
+
   ! mesh
   type(sem_mesh_data) :: mesh_data
   integer :: nspec
@@ -56,12 +63,21 @@ program xsem_reduce_kernel_cijkl_to_lamda_mu
   real(dp), allocatable :: cijkl_kernel(:,:,:,:,:)
   real(dp), allocatable :: lamda_kernel(:,:,:,:), mu_kernel(:,:,:,:)
 
+  !===== start MPI
+
+  call init_mpi()
+  call world_size(nrank)
+  call world_rank(myrank)
+
   !===== read command line arguments
   if (command_argument_count() /= nargs) then
-    call selfdoc()
-    print *, "[ERROR] xsem_reduce_kernel_cijkl_to_lamda_mu: check your inputs."
-    stop
+    if (myrank == 0) then
+      call selfdoc()
+      print *, "[ERROR] xsem_reduce_kernel_cijkl_to_lamda_mu: check your inputs."
+      call abort_mpi()
+    endif 
   endif
+  call synchronize_all()
 
   do i = 1, nargs
     call get_command_argument(i, args(i))
@@ -74,8 +90,13 @@ program xsem_reduce_kernel_cijkl_to_lamda_mu
   !====== loop model slices 
 
   ! get mesh geometry
-  call sem_mesh_read(mesh_dir, 0, iregion, mesh_data)
-  nspec = mesh_data%nspec
+  if (myrank == 0) then
+    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+    nspec = mesh_data%nspec
+  endif
+  call bcast_all_singlei(nspec)
+
+  call synchronize_all()
 
   ! initialize gll arrays 
   allocate(cijkl_kernel(21,NGLLX,NGLLY,NGLLZ,nspec))
@@ -83,7 +104,7 @@ program xsem_reduce_kernel_cijkl_to_lamda_mu
   allocate(mu_kernel(NGLLX,NGLLY,NGLLZ,nspec))
 
   ! reduce cijkl kernels
-  do iproc = 0, (nproc-1)
+  do iproc = myrank, (nproc-1), nrank
 
     print *, '# iproc=', iproc
 
@@ -116,5 +137,9 @@ program xsem_reduce_kernel_cijkl_to_lamda_mu
         'mu_kernel', mu_kernel)
 
   enddo ! iproc
+
+  !====== exit MPI
+  call synchronize_all()
+  call finalize_mpi()
 
 end program

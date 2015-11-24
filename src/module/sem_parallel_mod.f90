@@ -39,8 +39,6 @@ subroutine finalize_mpi()
 !///////////////////////////////////
 subroutine abort_mpi()
 
-  use mpi
-  
   implicit none
   
   integer :: ier
@@ -49,7 +47,7 @@ subroutine abort_mpi()
   !          program with an error code of 30
   call MPI_ABORT(MPI_COMM_WORLD,30,ier)
   
-  end subroutine abort_mpi
+end subroutine abort_mpi
 
 !///////////////////////////////////
 subroutine synchronize_all()
@@ -124,8 +122,6 @@ end subroutine sum_all_cr
 !///////////////////////////////////
 subroutine max_all_dp(sendbuf, recvbuf)
 
-  use mpi
-  
   implicit none
 
   double precision :: sendbuf, recvbuf
@@ -136,9 +132,20 @@ subroutine max_all_dp(sendbuf, recvbuf)
 end subroutine max_all_dp
 
 !///////////////////////////////////
-subroutine bcast_all_singledp(buffer)
+subroutine bcast_all_singlei(buffer)
 
-  use mpi
+  implicit none
+
+  integer :: buffer
+  
+  integer :: ier
+  
+  call MPI_BCAST(buffer,1,MPI_INTEGER,0,MPI_COMM_WORLD,ier)
+
+end subroutine bcast_all_singlei
+
+!///////////////////////////////////
+subroutine bcast_all_singledp(buffer)
 
   implicit none
 
@@ -164,7 +171,6 @@ subroutine bcast_all_singlecr(buffer)
   call MPI_BCAST(buffer,1,CUSTOM_MPI_TYPE,0,MPI_COMM_WORLD,ier)
 
 end subroutine bcast_all_singlecr
-
 
 !///////////////////////////////////
 subroutine send_i(sendbuf, sendcount, dest, sendtag)

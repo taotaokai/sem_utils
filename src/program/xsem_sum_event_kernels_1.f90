@@ -22,6 +22,9 @@ subroutine selfdoc()
   print '(a)', "  (string) kernel_name:  kernel name to be summed (e.g. rho_kernel)"
   print '(a)', "  (string) out_dir:  output directory of summed kernel files"
   print '(a)', ""
+  print '(a)', "NOTE"
+  print '(a)', ""
+  print '(a)', "  1. can be run in parallel"
 
 end subroutine
 
@@ -33,10 +36,12 @@ program xsem_sum_event_kernels_cijkl
   use sem_io
   use sem_mesh
   use sem_utils
+  use sem_parallel
 
   implicit none
 
   !===== declare variables
+
   ! command line args
   integer, parameter :: nargs = 5
   character(len=MAX_STRING_LEN) :: args(nargs)
@@ -50,6 +55,9 @@ program xsem_sum_event_kernels_cijkl
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
   integer :: i, iproc
 
+  ! mpi
+  integer :: myrank, nrank
+
   ! list of kernel directories
   character(len=MAX_STRING_LEN), allocatable :: kernel_dirs(:)
   integer :: iker, nkernel
@@ -62,12 +70,21 @@ program xsem_sum_event_kernels_cijkl
   real(dp), allocatable :: gll(:,:,:,:)
   real(dp), allocatable :: gll_sum(:,:,:,:)
 
+  !===== start MPI
+
+  call init_mpi()
+  call world_size(nrank)
+  call world_rank(myrank)
+
   !===== read command line arguments
   if (command_argument_count() /= nargs) then
-    call selfdoc()
-    print *, "[ERROR] xsem_sum_event_kernels_1: check your inputs."
-    stop
+    if (myrank == 0) then
+      call selfdoc()
+      print *, "[ERROR] xsem_sum_event_kernels_1: check your inputs."
+      call abort_mpi()
+    endif 
   endif
+  call synchronize_all()
 
   do i = 1, nargs
     call get_command_argument(i, args(i))
@@ -84,15 +101,20 @@ program xsem_sum_event_kernels_cijkl
   !====== loop model slices 
 
   ! get mesh geometry
-  call sem_mesh_read(mesh_dir, 0, iregion, mesh_data)
-  nspec = mesh_data%nspec
+  if (myrank == 0) then
+    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+    nspec = mesh_data%nspec
+  endif
+  call bcast_all_singlei(nspec)
 
-  ! initialize gll arrays 
+  call synchronize_all()
+
+  ! initialize gll arrays
   allocate(gll(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(gll_sum(NGLLX,NGLLY,NGLLZ,nspec))
 
   ! combine event kernels
-  do iproc = 0, (nproc-1)
+  do iproc = myrank, (nproc-1), nrank
 
     print *, '#-- iproc=', iproc
 
@@ -114,5 +136,9 @@ program xsem_sum_event_kernels_cijkl
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, kernel_name, gll_sum)
 
   enddo ! iproc
+
+  !====== exit MPI
+  call synchronize_all()
+  call finalize_mpi()
 
 end program

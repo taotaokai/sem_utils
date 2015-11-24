@@ -21,7 +21,7 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) kernel_dir:  directory holds proc***_reg1_***_kernel.bin"
   print '(a)', "  (string) out_dir:  output directory"
-  print '(a)', "  (string) model_tags: comma delimited string, e.g. mu,lamda"
+  print '(a)', "  (string) model_tags: comma delimited string, e.g. mu,lamda,rho"
   print '(a)', "  (float) scale_factor:  factor to scale kernel values"
   print '(a)', "  (logical) use_mask:  flag if kernel masking is used (mask files should locate in kernel_dir)"
   print '(a)', ""

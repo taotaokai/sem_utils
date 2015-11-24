@@ -64,6 +64,9 @@ program get_dmodel_lbfgs
   ! mesh
   type(sem_mesh_data) :: mesh_data
   integer :: nspec
+  ! kernel, also output model update direction
+  real(dp), dimension(:,:,:,:,:), allocatable :: q
+  character(len=MAX_STRING_LEN), allocatable :: kernel_names(:)
   ! lbfgs: dm, dg
   character(len=MAX_STRING_LEN), allocatable :: lines(:)
   integer :: nstep_lbfgs
@@ -119,8 +122,9 @@ program get_dmodel_lbfgs
     print *, '# model_names=', (trim(model_names(i))//"  ", i=1,nmodel)
   endif
 
-  allocate(dm_names(nmodel), dg_names(nmodel))
+  allocate(dm_names(nmodel), dg_names(nmodel), kernel_names(nmodel))
   do i = 1, nmodel
+    kernel_names(i) = trim(model_names(i))//"_kernel"
     dm_names(i) = trim(model_names(i))//"_dmodel"
     dg_names(i) = trim(model_names(i))//"_dkernel"
   enddo
@@ -160,7 +164,7 @@ program get_dmodel_lbfgs
   call sem_mesh_gll_volume(mesh_data, gll_volume)
 
   ! read current kernel -> q
-  call sem_io_read_gll_file_n(kernel_dir, myrank, iregion, model_names, nmodel, q)
+  call sem_io_read_gll_file_n(kernel_dir, myrank, iregion, kernel_names, nmodel, q)
 
   !-- l-bfgs: first loop
   if (myrank == 0) print *, '#====== L-FBGS: first loop' 
@@ -208,8 +212,9 @@ program get_dmodel_lbfgs
 
   enddo
 
-  !-- initial Hessian: q = H0 * q
+  !-- L-BFGS: apply initial Hessian q <- H0 * q
   ! H0 ~ (dm(1), dg(1)) / (dg(1), dg(1)) * IdentityMatrix
+  ! 1: most recent iteration
   gamma = 0.0_dp  
   do imodel = 1, nmodel
     gamma = gamma + sum(dg(imodel,:,:,:,:,1)*dg(imodel,:,:,:,:,1)*gll_volume)
@@ -242,17 +247,16 @@ program get_dmodel_lbfgs
     call bcast_all_singledp(beta_sum)
     beta = rho(i) * beta_sum
 
-    if (myrank == 0) print *, ' beta=rho(i)*(dg(i),q)=', beta
+    if (myrank == 0) print *, 'beta=rho(i)*(dg(i),q)=', beta
 
     ! q = q + (alpha(i) - beta)*dm(i)
-    q = q + (alpha(i) - beta) * dm(:,:,:,:,:,i)
+    q = q + (alpha(i)-beta)*dm(:,:,:,:,:,i)
 
   enddo
 
   !---- write out new dmodel
   call synchronize_all()
-  call sem_io_write_gll_file_n(out_dir, myrank, iregion, &
-    dmodel_names, nmodel, q)
+  call sem_io_write_gll_file_n(out_dir, myrank, iregion, dm_names, nmodel, q)
 
   call synchronize_all()
   call finalize_mpi()

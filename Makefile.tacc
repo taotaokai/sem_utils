@@ -46,7 +46,8 @@ program = xsem_slice_gcircle \
 	xsem_sum_event_kernels_1 \
 	xsem_sum_event_kernels_cijkl \
 	xsem_reduce_kernel_cijkl_to_lamda_mu \
-	xsem_make_source_depth_mask
+	xsem_make_source_depth_mask \
+	xsem_kernel_to_dmodel_steepest_descent
 
 
 #------------------------------------------

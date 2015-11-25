@@ -59,7 +59,7 @@ program get_dmodel_lbfgs
   ! mpi
   integer :: nrank, myrank
   ! model names
-  integer :: imodel, nmodel
+  integer :: nmodel
   character(len=MAX_STRING_LEN), allocatable :: model_names(:)
   ! mesh
   type(sem_mesh_data) :: mesh_data
@@ -184,10 +184,7 @@ program get_dmodel_lbfgs
     dm(:,:,:,:,:,i) = step_length(i) * dm(:,:,:,:,:,i)
 
     ! rho(i) = 1 / (dm(i), dg(i))
-    rho(i) = 0.0_dp
-    do imodel = 1, nmodel
-      rho(i) = rho(i) + sum(dm(imodel,:,:,:,:,i)*dg(imodel,:,:,:,:,i)*gll_volume)
-    enddo
+    rho(i) = sum(dm(:,:,:,:,:,i) * dg(:,:,:,:,:,i) * spread(gll_volume,1,nmodel))
     call synchronize_all()
     call sum_all_dp(rho(i), rho_sum)
     call bcast_all_singledp(rho_sum)
@@ -196,10 +193,7 @@ program get_dmodel_lbfgs
     if (myrank == 0) print *, ' rho(i)=1/(dm(i),dg(i))=', rho(i)
 
     ! alpha(i) = rho(i) * (dm(i), q)
-    alpha(i) = 0.0_dp
-    do imodel = 1, nmodel
-      alpha(i) = alpha(i) + sum(dm(imodel,:,:,:,:,i)*q(imodel,:,:,:,:)*gll_volume)
-    enddo
+    alpha(i) = sum(dm(:,:,:,:,:,i) * q(:,:,:,:,:) * spread(gll_volume,1,nmodel))
     call synchronize_all()
     call sum_all_dp(alpha(i), alpha_sum)
     call bcast_all_singledp(alpha_sum)
@@ -215,10 +209,7 @@ program get_dmodel_lbfgs
   !-- L-BFGS: apply initial Hessian q <- H0 * q
   ! H0 ~ (dm(1), dg(1)) / (dg(1), dg(1)) * IdentityMatrix
   ! 1: most recent iteration
-  gamma = 0.0_dp  
-  do imodel = 1, nmodel
-    gamma = gamma + sum(dg(imodel,:,:,:,:,1)*dg(imodel,:,:,:,:,1)*gll_volume)
-  enddo
+  gamma = sum(dg(:,:,:,:,:,1)**2 * spread(gll_volume,1,nmodel))
   call synchronize_all()
   call sum_all_dp(gamma, gamma_sum)
   call bcast_all_singledp(gamma_sum)
@@ -238,10 +229,7 @@ program get_dmodel_lbfgs
     if (myrank==0) print *, '#-- step ', i
 
     ! beta = rho(i) * (dg(i), q)
-    beta = 0.0_dp  
-    do imodel = 1, nmodel
-      beta = beta + sum(dg(imodel,:,:,:,:,i)*q(imodel,:,:,:,:)*gll_volume)
-    enddo
+    beta = sum(dg(:,:,:,:,:,i) * q(:,:,:,:,:) * spread(gll_volume,1,nmodel))
     call synchronize_all()
     call sum_all_dp(beta, beta_sum)
     call bcast_all_singledp(beta_sum)

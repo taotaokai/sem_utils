@@ -8,7 +8,7 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_sum_event_kernels_cijkl \"
-  print '(a)', "    <nproc> <mesh_dir> <kernel_dir_list> <out_dir>"
+  print '(a)', "    <nproc> <mesh_dir> <kernel_dir_list> <use_mask> <out_dir>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -19,6 +19,7 @@ subroutine selfdoc()
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (string) kernel_dir_list:  list of event kernel directories (proc*_reg1_cijkl_kernel.bin)"
+  print '(a)', "  (int) use_mask:  flag whether apply kernel mask (mask file is read from each kernel_dir)"
   print '(a)', "  (string) out_dir:  output directory of summed cijkl kernel"
   print '(a)', ""
   print '(a)', "NOTE"
@@ -41,28 +42,27 @@ program xsem_sum_event_kernels_cijkl
 
   !===== declare variables
   ! command line args
-  integer, parameter :: nargs = 4
+  integer, parameter :: nargs = 5
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: kernel_dir_list
+  logical :: use_mask
   character(len=MAX_STRING_LEN) :: out_dir
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
   integer :: i, iproc
-
   ! mpi
   integer :: myrank, nrank
-
   ! list of kernel directories
   character(len=MAX_STRING_LEN), allocatable :: kernel_dirs(:)
   integer :: iker, nkernel
-
   ! mesh
   type(sem_mesh_data) :: mesh_data
   integer :: nspec
-
+  ! mask
+  real(dp), allocatable :: mask(:,:,:,:)
   ! kernel gll 
   real(dp), allocatable :: cijkl_kernel(:,:,:,:,:)
   real(dp), allocatable :: cijkl_kernel_sum(:,:,:,:,:)
@@ -89,7 +89,20 @@ program xsem_sum_event_kernels_cijkl
   read(args(1), *) nproc
   read(args(2), '(a)') mesh_dir
   read(args(3), '(a)') kernel_dir_list
-  read(args(4), '(a)') out_dir 
+  select case (args(4))
+    case ('0')
+      use_mask = .false.
+    case ('1')
+      use_mask = .true.
+    case default
+      if (myrank==0) then
+        print *, '[ERROR]: use_mask must be 0 or 1'
+        call abort_mpi()
+      endif
+  end select
+  read(args(5), '(a)') out_dir 
+
+  call synchronize_all()
 
   !====== read kernel_dir_list
   call sem_utils_read_line(kernel_dir_list, kernel_dirs, nkernel)
@@ -108,6 +121,9 @@ program xsem_sum_event_kernels_cijkl
   ! initialize gll arrays 
   allocate(cijkl_kernel(21,NGLLX,NGLLY,NGLLZ,nspec))
   allocate(cijkl_kernel_sum(21,NGLLX,NGLLY,NGLLZ,nspec))
+  if (use_mask) then
+    allocate(mask(NGLLX,NGLLY,NGLLZ,nspec))
+  endif
 
   ! combine event kernels
   do iproc = myrank, (nproc-1), nrank
@@ -119,6 +135,12 @@ program xsem_sum_event_kernels_cijkl
 
       ! read kernel gll
       call sem_io_read_cijkl_kernel(kernel_dirs(iker), iproc, iregion, cijkl_kernel)
+
+      ! read mask
+      if (use_mask) then
+        call sem_io_read_gll_file_1(kernel_dirs(iker), iproc, iregion, "mask", mask)
+        cijkl_kernel = cijkl_kernel * spread(mask, 1, 21)
+      endif
 
       cijkl_kernel_sum = cijkl_kernel_sum + cijkl_kernel
 

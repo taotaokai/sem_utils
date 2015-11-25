@@ -2,19 +2,19 @@ subroutine selfdoc()
 
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_slice_sphere - create spherical slice of SEM model at a constant radius"
+  print '(a)', "  xsem_slice_sphere - create spherical slice of SEM model at a constant depth"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_slice_shpere \ " 
-  print '(a)', "    <mesh_dir> <nproc> <model_dir> <model_tags> "
+  print '(a)', "    <nproc> <mesh_dir> <model_dir> <model_tags> "
   print '(a)', "    <lat0> <lat1> <nlat> "
   print '(a)', "    <lon0> <lon1> <nlon> "
-  print '(a)', "    <radius> <out_file> "
+  print '(a)', "    <depth> <out_file> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
-  print '(a)', "  create a spherical slice of SEM model at a constant radius" 
+  print '(a)', "  create a spherical slice of SEM model at a constant depth" 
   print '(a)', "    the GLL interpolation is used, which is the SEM basis function."
   print '(a)', ""
   print '(a)', "PARAMETERS"
@@ -29,7 +29,7 @@ subroutine selfdoc()
   print '(a)', "  (float) lon0, lon1:  begin/end longitudes (degrees)"
   print '(a)', "    valid range: [-180, 180] "
   print '(a)', "  (integer) nlon:  number of longitudinal grids"
-  print '(a)', "  (float) raidus:  radius of the spherical slice (km)"
+  print '(a)', "  (float) depth:  depth(0: r=6371) of the spherical slice (km)"
   print '(a)', "  (string) out_file:  output file name (netcdf format)"
   print '(a)', ""
   print '(a)', "NOTES"
@@ -72,7 +72,7 @@ program xsem_slice_sphere
   integer, parameter :: nargs = 12
   character(len=MAX_STRING_LEN) :: args(nargs)
   character(len=MAX_STRING_LEN) :: mesh_dir, model_dir, model_tags, out_file
-  real(dp) :: lat0, lat1, lon0, lon1, radius
+  real(dp) :: lat0, lat1, lon0, lon1, depth 
   integer :: nlat, nlon, nproc
 
   !-- local variables
@@ -85,7 +85,7 @@ program xsem_slice_sphere
 
   !-- interpolation points 
   integer :: ipoint, npoint
-  real(dp) :: dlon, dlat
+  real(dp) :: dlon, dlat, radius
   real(dp) :: vr(3)
   real(dp), allocatable :: lon(:), lat(:)
   integer :: ilon, ilat, idx
@@ -117,7 +117,7 @@ program xsem_slice_sphere
 
   !-- netcdf data structure
   integer :: ncid
-  ! define dimensions: theta, radius
+  ! define dimensions: lon, lat
   integer, parameter :: NDIMS = 2
   integer :: lon_dimid, lat_dimid, dimids(NDIMS)
   ! define coordinate variables/units
@@ -161,8 +161,8 @@ program xsem_slice_sphere
   do i = 1, nargs
     call get_command_argument(i, args(i), status=ier)
   enddo
-  read(args(1), '(a)') mesh_dir
-  read(args(2), *) nproc
+  read(args(1), *) nproc
+  read(args(2), '(a)') mesh_dir
   read(args(3), '(a)') model_dir
   read(args(4), '(a)') model_tags
   read(args(5), *) lat0
@@ -171,7 +171,7 @@ program xsem_slice_sphere
   read(args(8), *) lon0
   read(args(9), *) lon1
   read(args(10), *) nlon
-  read(args(11), *) radius 
+  read(args(11), *) depth 
   read(args(12), '(a)') out_file
 
   call synchronize_all()
@@ -208,7 +208,7 @@ program xsem_slice_sphere
   lat1 = lat1 * DEGREES_TO_RADIANS
   lon0 = lon0 * DEGREES_TO_RADIANS
   lon1 = lon1 * DEGREES_TO_RADIANS
-  radius = radius / R_EARTH_KM
+  radius = (6371.0 - depth) / R_EARTH_KM
 
   ! get grid intervals
   dlon = (lon1 - lon0) / (nlon - 1)

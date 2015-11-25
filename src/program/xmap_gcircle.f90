@@ -11,7 +11,7 @@ subroutine selfdoc()
   print '(a)', "DESCRIPTION"
   print '(a)', ""
   print '(a)', "  The great circle is originated at (lat0, lon0) shooting at "
-  print '(a)', "    angle <aziumuth>, latitudes and longitudes of the point  "
+  print '(a)', "    angle <aziumuth>, theta, latitudes and longitudes of the point  "
   print '(a)', "    specified by theta_list is output to stdout"
   print '(a)', ""
   print '(a)', "PARAMETERS"

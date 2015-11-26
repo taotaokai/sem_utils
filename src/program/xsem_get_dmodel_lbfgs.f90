@@ -80,18 +80,9 @@ program get_dmodel_lbfgs
   real(dp), dimension(:,:,:,:), allocatable :: gll_volume 
 
   !===== start MPI
-
   call init_mpi()
   call world_size(nrank)
   call world_rank(myrank)
-
-  if (nrank /= nproc) then
-    if (myrank == 0) then
-      print *, "[ERROR] must run in processes of number ", nproc
-      call abort_mpi()
-    endif
-  endif
-  call synchronize_all()
 
   !===== read command line arguments
   if (command_argument_count() /= nargs) then
@@ -113,8 +104,16 @@ program get_dmodel_lbfgs
   read(args(5),'(a)') out_dir
   read(args(6),'(a)') model_tags
 
-  !===== parse model tags
+  !====== validate inputs 
+  if (nrank /= nproc) then
+    if (myrank == 0) then
+      print *, "[ERROR] must run in processes of number ", nproc
+      call abort_mpi()
+    endif
+  endif
+  call synchronize_all()
 
+  !===== parse model tags
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
 
   if (myrank == 0) then
@@ -130,7 +129,6 @@ program get_dmodel_lbfgs
   enddo
 
   !===== read dm_dg_dir_list
-
   call sem_utils_read_line(dm_dg_dir_list, lines, nstep_lbfgs)
 
   allocate(dm_dir(nstep_lbfgs), dg_dir(nstep_lbfgs))

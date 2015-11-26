@@ -29,6 +29,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
+  print '(a)', "  1. can be run in parallel"
 
 end subroutine
 
@@ -40,6 +41,7 @@ program xsem_vertical_slice
   use sem_io
   use sem_mesh
   use sem_utils
+  use sem_parallel
 
   implicit none
 
@@ -58,6 +60,8 @@ program xsem_vertical_slice
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
   integer :: i, iproc
+  ! mpi
+  integer :: myrank, nrank
 
   ! model names
   integer :: nmodel_1, nmodel_2, nmodel
@@ -71,13 +75,22 @@ program xsem_vertical_slice
   ! model
   real(dp), allocatable :: gll_model_1(:,:,:,:,:), gll_model_2(:,:,:,:,:)
 
+  !===== start MPI
+
+  call init_mpi()
+  call world_size(nrank)
+  call world_rank(myrank)
+
   !===== read command line arguments
 
   if (command_argument_count() /= nargs) then
-    call selfdoc()
-    print *, "[ERROR] xsem_math: check your input arguments."
-    stop
+    if (myrank == 0) then
+      call selfdoc()
+      print *, "[ERROR] xsem_math: check your input arguments."
+      call abort_mpi()
+    endif
   endif
+  call synchronize_all()
 
   do i = 1, nargs
     call get_command_argument(i, args(i))
@@ -99,26 +112,35 @@ program xsem_vertical_slice
   call sem_utils_delimit_string(out_model_tags, ',', out_model_names, nmodel)
 
   if (nmodel /= nmodel_1 .or. nmodel /= nmodel_2) then
-    print *, '[ERROR] nmodel should be all the same!'
-    stop
+    if (myrank == 0) then
+      print *, '[ERROR] nmodel should be all the same!'
+      call abort_mpi() 
+    endif
   endif
+  call synchronize_all()
 
-  print *, '# nmodel=', nmodel
-  print *, '# model_names_1=', (trim(model_names_1(i))//"  ", i=1,nmodel)
-  print *, '# model_names_2=', (trim(model_names_2(i))//"  ", i=1,nmodel)
-  print *, '# out_model_names=', (trim(out_model_names(i))//"  ", i=1,nmodel)
+  if (myrank == 0) then
+    print *, '# nmodel=', nmodel
+    print *, '# model_names_1=', (trim(model_names_1(i))//"  ", i=1,nmodel)
+    print *, '# model_names_2=', (trim(model_names_2(i))//"  ", i=1,nmodel)
+    print *, '# out_model_names=', (trim(out_model_names(i))//"  ", i=1,nmodel)
+  endif
 
   !===== loop each mesh/model slice
 
   ! get mesh geometry
-  call sem_mesh_read(mesh_dir, 0, iregion, mesh_data)
-  nspec = mesh_data%nspec
+  if (myrank == 0) then
+    call sem_mesh_read(mesh_dir, 0, iregion, mesh_data)
+    nspec = mesh_data%nspec
+  endif
+  call bcast_all_singlei(nspec)
+  call synchronize_all()
 
   ! initialize arrays
   allocate(gll_model_1(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
   allocate(gll_model_2(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
 
-  do iproc = 0, (nproc - 1)
+  do iproc = myrank, (nproc-1), nrank
 
     print *, '# iproc=', iproc
 
@@ -149,5 +171,9 @@ program xsem_vertical_slice
                                 out_model_names, nmodel, gll_model_1)
 
   enddo ! iproc
+
+  !====== exit MPI
+  call synchronize_all()
+  call finalize_mpi()
 
 end program

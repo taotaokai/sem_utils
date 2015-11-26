@@ -1,13 +1,13 @@
 subroutine selfdoc()
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_kernel_to_dmodel_steepest_descent"
+  print '(a)', "  xsem_get_dmodel_steepest_descent"
   print '(a)', "    - calculate model udpate direction by steepest descent"
   print '(a)', "      with preconditioning (e.g. mask)"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xsem_kernel_to_dmodel_steepest_descent \"
+  print '(a)', "  xsem_get_dmodel_steepest_descent \"
   print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <out_dir>"
   print '(a)', "    <model_tags> <scale_factor> <use_mask> "
   print '(a)', ""
@@ -32,7 +32,7 @@ subroutine selfdoc()
 end subroutine
 
 
-program xsem_kernel_to_dmodel_steepest_descent
+program xsem_get_dmodel_steepest_descent
 
   use sem_constants
   use sem_io
@@ -70,7 +70,7 @@ program xsem_kernel_to_dmodel_steepest_descent
   !===== read command line arguments
   if (command_argument_count() /= nargs) then
     call selfdoc()
-    print *, "[ERROR] xsem_kernel_to_dmodel_steepest_descent: check your input arguments."
+    print *, "[ERROR] xsem_get_dmodel_steepest_descent: check your input arguments."
     stop
   endif
 

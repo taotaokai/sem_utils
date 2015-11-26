@@ -49,7 +49,8 @@ program = xsem_slice_gcircle \
 	xsem_make_source_depth_mask \
 	xsem_get_dmodel_steepest_descent \
 	xsem_get_dmodel_lbfgs \
-	xsem_add_dmodel_lamda_mu_to_tiso
+	xsem_add_dmodel_lamda_mu_to_tiso \
+	xsem_math
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))

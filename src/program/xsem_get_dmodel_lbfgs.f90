@@ -63,10 +63,11 @@ program get_dmodel_lbfgs
   ! mesh
   type(sem_mesh_data) :: mesh_data
   integer :: nspec
-  ! kernel, also output model update direction
-  real(dp), dimension(:,:,:,:,:), allocatable :: q
+  ! kernel, current gradient
+  real(dp), dimension(:,:,:,:,:), allocatable :: kernel
   character(len=MAX_STRING_LEN), allocatable :: kernel_names(:)
   ! lbfgs: dm, dg
+  real(dp), dimension(:,:,:,:,:), allocatable :: q
   character(len=MAX_STRING_LEN), allocatable :: lines(:)
   integer :: nstep_lbfgs
   character(len=MAX_STRING_LEN), allocatable :: dm_dir(:), dg_dir(:)
@@ -164,10 +165,12 @@ program get_dmodel_lbfgs
   call sem_mesh_gll_volume(mesh_data, gll_volume)
 
   ! read current kernel -> q
-  call sem_io_read_gll_file_n(kernel_dir, myrank, iregion, kernel_names, nmodel, q)
+  call sem_io_read_gll_file_n(kernel_dir, myrank, iregion, &
+    kernel_names, nmodel, kernel)
 
   !-- l-bfgs: first loop
-  if (myrank == 0) print *, '#====== L-FBGS: first loop' 
+  q = kernel
+  if (myrank == 0) print *, '#====== L-BFGS: first loop' 
   do i = 1, nstep_lbfgs
 
     if (myrank == 0) print *, '#-- step ', i
@@ -223,7 +226,7 @@ program get_dmodel_lbfgs
   endif
 
   !-- L-BFGS: second loop
-  if (myrank==0) print *, '#====== L-FBGS: second loop'
+  if (myrank==0) print *, '#====== L-BFGS: second loop'
   do i = nstep_lbfgs, 1, -1
 
     if (myrank==0) print *, '#-- step ', i
@@ -241,6 +244,13 @@ program get_dmodel_lbfgs
     q = q + (alpha(i)-beta)*dm(:,:,:,:,:,i)
 
   enddo
+
+  !-- compute inner product between model update direction and kernel 
+  gamma = sum(q * kernel * spread(gll_volume,1,nmodel))
+  call synchronize_all()
+  call sum_all_dp(gamma, gamma_sum)
+  if (myrank == 0) print *, '#====== L-BFGS: end'
+  if (myrank == 0) print *, 'final (q, g)=', gamma_sum
 
   !---- write out new dmodel
   call synchronize_all()

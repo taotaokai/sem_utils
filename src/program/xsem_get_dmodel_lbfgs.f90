@@ -7,8 +7,7 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_get_dmodel_lbfgs \"
-  print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <dm_dg_dir_list> <out_dir>"
-  print '(a)', "    <model_tags>"
+  print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <dm_dg_dir_list> <model_tags> <out_dir>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -19,8 +18,8 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir: directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) kernel_dir: directory holds proc***_reg1_***_kernel.bin"
   print '(a)', "  (string) dm_dg_dir_list: list of dmodel_dir,dkernel_dir,step_length"
-  print '(a)', "  (string) out_dir: output directory"
   print '(a)', "  (string) model_tags: comma delimited string, e.g. mu,lamda,rho"
+  print '(a)', "  (string) out_dir: output directory"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
@@ -50,8 +49,8 @@ program get_dmodel_lbfgs
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: kernel_dir
   character(len=MAX_STRING_LEN) :: dm_dg_dir_list
-  character(len=MAX_STRING_LEN) :: out_dir
   character(len=MAX_STRING_LEN) :: model_tags
+  character(len=MAX_STRING_LEN) :: out_dir
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
@@ -101,8 +100,8 @@ program get_dmodel_lbfgs
   read(args(2),'(a)') mesh_dir 
   read(args(3),'(a)') kernel_dir 
   read(args(4),'(a)') dm_dg_dir_list
-  read(args(5),'(a)') out_dir
-  read(args(6),'(a)') model_tags
+  read(args(5),'(a)') model_tags
+  read(args(6),'(a)') out_dir
 
   !====== validate inputs 
   if (nrank /= nproc) then

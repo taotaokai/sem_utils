@@ -153,14 +153,9 @@ program get_dmodel_lbfgs
   !====== calculate model update diretion
 
   ! get mesh geometry
-  if (myrank == 0) then
-    print *, '#====== get mesh geometry' 
-    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
-    nspec = mesh_data%nspec
-  endif
-  call synchronize_all()
-  call bcast_all_singlei(nspec)
-  call synchronize_all()
+  if (myrank == 0) print *, '#====== get mesh geometry' 
+  call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+  nspec = mesh_data%nspec
 
   ! initialize data 
   allocate(dm(nmodel,NGLLX,NGLLY,NGLLZ,nspec,nstep_lbfgs), &
@@ -178,6 +173,7 @@ program get_dmodel_lbfgs
 
   !-- l-bfgs: first loop
   if (myrank == 0) print *, '#====== L-BFGS: start' 
+
   if (myrank == 0) print *, ' q = -g (g: kernel)'
   q = -1.0 * kernel
 
@@ -201,6 +197,7 @@ program get_dmodel_lbfgs
     rho(i) = sum(dm(:,:,:,:,:,i) * dg(:,:,:,:,:,i) * spread(gll_volume,1,nmodel))
     call synchronize_all()
     call sum_all_dp(rho(i), rho_sum)
+    call synchronize_all()
     call bcast_all_singledp(rho_sum)
     rho(i) = 1.0_dp / rho_sum
 
@@ -210,6 +207,7 @@ program get_dmodel_lbfgs
     alpha(i) = sum(dm(:,:,:,:,:,i) * q(:,:,:,:,:) * spread(gll_volume,1,nmodel))
     call synchronize_all()
     call sum_all_dp(alpha(i), alpha_sum)
+    call synchronize_all()
     call bcast_all_singledp(alpha_sum)
     alpha(i) = rho(i) * alpha_sum
 
@@ -273,11 +271,13 @@ program get_dmodel_lbfgs
   call sum_all_dp(gamma, gamma_sum)
 
   call synchronize_all()
-  if (myrank == 0) print *, '#====== L-BFGS: end'
-  if (myrank == 0) print *, ' q <- H * (-g)'
-  if (myrank == 0) print *, ' ||q||=', q_norm_sum
-  if (myrank == 0) print *, ' ||g||=', beta_sum
-  if (myrank == 0) print *, ' (q, g)/(|q|*|g|)=', gamma_sum/sqrt(q_norm_sum)/sqrt(beta_sum)
+  if (myrank == 0) then
+    print *, '#====== L-BFGS: end'
+    print *, ' q <- H * (-g)'
+    print *, ' ||q||=', sqrt(q_norm_sum)
+    print *, ' ||g||=', sqrt(beta_sum)
+    print *, ' (q, g)/(|q|*|g|)=', gamma_sum/sqrt(q_norm_sum)/sqrt(beta_sum)
+  endif
 
   !---- write out new dmodel
   call synchronize_all()

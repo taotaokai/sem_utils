@@ -143,7 +143,7 @@ program get_dmodel_lbfgs
       endif
     endif
     if (myrank == 0) then
-      print *, i, dm_dir(i), dg_dir(i), step_length(i)
+      print *, i, trim(dm_dir(i)), trim(dg_dir(i)), step_length(i)
     endif
   enddo
   call synchronize_all()

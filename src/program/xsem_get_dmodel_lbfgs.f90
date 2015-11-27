@@ -7,8 +7,8 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_get_dmodel_lbfgs \"
-  print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <dm_dg_dir_list> <model_tags> <out_dir>"
-  print '(a)', ""
+  print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <dm_dg_dir_list> <model_tags> "
+  print '(a)', "    <out_dir> <use_mask>"
   print '(a)', "DESCRIPTION"
   print '(a)', ""
   print '(a)', ""
@@ -20,13 +20,15 @@ subroutine selfdoc()
   print '(a)', "  (string) dm_dg_dir_list: list of dmodel_dir,dkernel_dir,step_length"
   print '(a)', "  (string) model_tags: comma delimited string, e.g. mu,lamda,rho"
   print '(a)', "  (string) out_dir: output directory"
+  print '(a)', "  (logical) use_mask:  flag if masking is used (mask files should locate in kernel_dir)"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
   print '(a)', "  1. _kernel will be appended to model_tags to get kernel files"
   print '(a)', "  2. _dmodel will be appended to model_tags for output files"
   print '(a)', "  3. _dkernel will be appended to model_tags for output files"
-  print '(a)', "  4. must run in parallel with nproc processes"
+  print '(a)', "  4. the mask is applied on initial Hessian(H0)."
+  print '(a)', "  5. must run in parallel with nproc processes"
 end subroutine
 
 
@@ -43,7 +45,7 @@ program get_dmodel_lbfgs
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 6
+  integer, parameter :: nargs = 7
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
@@ -51,6 +53,7 @@ program get_dmodel_lbfgs
   character(len=MAX_STRING_LEN) :: dm_dg_dir_list
   character(len=MAX_STRING_LEN) :: model_tags
   character(len=MAX_STRING_LEN) :: out_dir
+  logical :: use_mask
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
@@ -63,7 +66,9 @@ program get_dmodel_lbfgs
   ! mesh
   type(sem_mesh_data) :: mesh_data
   integer :: nspec
-  ! kernel, current gradient
+  ! mask
+  real(dp), dimension(:,:,:,:), allocatable :: mask
+  ! kernel
   real(dp), dimension(:,:,:,:,:), allocatable :: kernel
   character(len=MAX_STRING_LEN), allocatable :: kernel_names(:)
   ! lbfgs: dm, dg
@@ -104,6 +109,18 @@ program get_dmodel_lbfgs
   read(args(4),'(a)') dm_dg_dir_list
   read(args(5),'(a)') model_tags
   read(args(6),'(a)') out_dir
+  select case (args(7))
+    case ('0')
+      use_mask = .false.
+    case ('1')
+      use_mask = .true.
+    case default
+      if (myrank == 0) then
+        print *, '[ERROR]: use_mask must be 0 or 1'
+        call abort_mpi() 
+      endif
+  end select
+  call synchronize_all()
 
   !====== validate inputs 
   if (nrank /= nproc) then
@@ -163,6 +180,9 @@ program get_dmodel_lbfgs
   allocate(kernel(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
   allocate(q(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
   allocate(gll_volume(NGLLX,NGLLY,NGLLZ,nspec))
+  if (use_mask) then
+    allocate(mask(NGLLX,NGLLY,NGLLZ,nspec))
+  endif
 
   ! get gll volume
   call sem_mesh_gll_volume(mesh_data, gll_volume)
@@ -232,6 +252,12 @@ program get_dmodel_lbfgs
     print *, '#====== L-BFGS: apply initial Hessian'
     print *, 'H0 ~ gamma * I ~ (dm(1), dg(1)) / (dg(1), dg(1)) * I'
     print *, 'gamma=', gamma
+  endif
+
+  if (use_mask) then
+    if (myrank==0) print *, 'mask is applied.'
+    call sem_io_read_gll_file_1(kernel_dir, myrank, iregion, 'mask', mask)
+    q = q * spread(mask,1,nmodel)
   endif
 
   !-- L-BFGS: second loop

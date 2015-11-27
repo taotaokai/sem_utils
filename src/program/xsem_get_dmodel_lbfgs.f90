@@ -158,13 +158,14 @@ program get_dmodel_lbfgs
   ! initialize data 
   allocate(dm(nmodel,NGLLX,NGLLY,NGLLZ,nspec,nstep_lbfgs), &
            dg(nmodel,NGLLX,NGLLY,NGLLZ,nspec,nstep_lbfgs))
+  allocate(kernel(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
   allocate(q(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
   allocate(gll_volume(NGLLX,NGLLY,NGLLZ,nspec))
 
   ! get gll volume
   call sem_mesh_gll_volume(mesh_data, gll_volume)
 
-  ! read current kernel -> q
+  ! read current kernel
   call sem_io_read_gll_file_n(kernel_dir, myrank, iregion, &
     kernel_names, nmodel, kernel)
 

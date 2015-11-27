@@ -77,6 +77,7 @@ program get_dmodel_lbfgs
   ! lbfgs: rho,alpha,beta
   real(dp), dimension(:), allocatable :: rho, alpha
   real(dp) :: beta, rho_sum, alpha_sum, beta_sum, gamma, gamma_sum
+  real(dp) :: q_norm, q_norm_sum
   real(dp), dimension(:,:,:,:), allocatable :: gll_volume 
 
   !===== start MPI
@@ -250,13 +251,28 @@ program get_dmodel_lbfgs
 
   enddo
 
-  !-- compute inner product between model update direction and kernel 
+  !-- compute normalized correlation coef. between model update direction and kernel 
+  call synchronize_all()
+  q_norm = sum(q**2 * spread(gll_volume,1,nmodel))
+  call synchronize_all()
+  call sum_all_dp(q_norm, q_norm_sum)
+
+  call synchronize_all()
+  beta = sum(kernel**2 * spread(gll_volume,1,nmodel))
+  call synchronize_all()
+  call sum_all_dp(beta, beta_sum)
+
+  call synchronize_all()
   gamma = sum(q * kernel * spread(gll_volume,1,nmodel))
   call synchronize_all()
   call sum_all_dp(gamma, gamma_sum)
+
+  call synchronize_all()
   if (myrank == 0) print *, '#====== L-BFGS: end'
   if (myrank == 0) print *, ' q <- H * (-g)'
-  if (myrank == 0) print *, ' (q, g)=', gamma_sum
+  if (myrank == 0) print *, ' ||q||=', q_norm_sum
+  if (myrank == 0) print *, ' ||g||=', beta_sum
+  if (myrank == 0) print *, ' (q, g)/(|q|*|g|)=', gamma_sum/sqrt(q_norm_sum)/sqrt(beta_sum)
 
   !---- write out new dmodel
   call synchronize_all()

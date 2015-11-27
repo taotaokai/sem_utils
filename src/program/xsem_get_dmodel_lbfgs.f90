@@ -152,6 +152,7 @@ program get_dmodel_lbfgs
   !====== calculate model update diretion
 
   ! get mesh data
+  if (myrank == 0) print *, '#====== get mesh geometry' 
   call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
   nspec = mesh_data%nspec
 
@@ -170,7 +171,10 @@ program get_dmodel_lbfgs
     kernel_names, nmodel, kernel)
 
   !-- l-bfgs: first loop
-  q = kernel
+  if (myrank == 0) print *, '#====== L-BFGS: start' 
+  if (myrank == 0) print *, ' q = -g (g: kernel)'
+  q = -1.0 * kernel
+
   if (myrank == 0) print *, '#====== L-BFGS: first loop' 
   do i = 1, nstep_lbfgs
 
@@ -251,7 +255,8 @@ program get_dmodel_lbfgs
   call synchronize_all()
   call sum_all_dp(gamma, gamma_sum)
   if (myrank == 0) print *, '#====== L-BFGS: end'
-  if (myrank == 0) print *, 'final (q, g)=', gamma_sum
+  if (myrank == 0) print *, ' q <- H * (-g)'
+  if (myrank == 0) print *, ' (q, g)=', gamma_sum
 
   !---- write out new dmodel
   call synchronize_all()

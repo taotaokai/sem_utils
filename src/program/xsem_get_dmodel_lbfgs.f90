@@ -158,6 +158,7 @@ program get_dmodel_lbfgs
     call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
     nspec = mesh_data%nspec
   endif
+  call synchronize_all()
   call bcast_all_singlei(nspec)
   call synchronize_all()
 

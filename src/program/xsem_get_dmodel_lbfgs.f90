@@ -152,10 +152,14 @@ program get_dmodel_lbfgs
 
   !====== calculate model update diretion
 
-  ! get mesh data
-  if (myrank == 0) print *, '#====== get mesh geometry' 
-  call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
-  nspec = mesh_data%nspec
+  ! get mesh geometry
+  if (myrank == 0) then
+    print *, '#====== get mesh geometry' 
+    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+    nspec = mesh_data%nspec
+  endif
+  call bcast_all_singlei(nspec)
+  call synchronize_all()
 
   ! initialize data 
   allocate(dm(nmodel,NGLLX,NGLLY,NGLLZ,nspec,nstep_lbfgs), &

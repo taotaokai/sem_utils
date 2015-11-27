@@ -18,7 +18,7 @@ subroutine selfdoc()
   print '(a)', "  (int) nproc: number of mesh slices"
   print '(a)', "  (string) mesh_dir: directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) kernel_dir: directory holds proc***_reg1_***_kernel.bin"
-  print '(a)', "  (string) dm_dg_dir_list: list of dmodel,dkernel directories"
+  print '(a)', "  (string) dm_dg_dir_list: list of dmodel_dir,dkernel_dir,step_length"
   print '(a)', "  (string) out_dir: output directory"
   print '(a)', "  (string) model_tags: comma delimited string, e.g. mu,lamda,rho"
   print '(a)', ""
@@ -142,6 +142,9 @@ program get_dmodel_lbfgs
         print *, "[ERROR] failed to read dm_dg_dir_list at line ", i
         call abort_mpi()
       endif
+    endif
+    if (myrank == 0) then
+      print *, i, dm_dir(i), dg_dir(i), step_length(i)
     endif
   enddo
   call synchronize_all()

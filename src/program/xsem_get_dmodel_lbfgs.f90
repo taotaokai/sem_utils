@@ -8,7 +8,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  xsem_get_dmodel_lbfgs \"
   print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <dm_dg_dir_list> <model_tags> "
-  print '(a)', "    <out_dir> <use_mask>"
+  print '(a)', "    <use_mask> <out_dir>"
   print '(a)', "DESCRIPTION"
   print '(a)', ""
   print '(a)', ""
@@ -19,8 +19,8 @@ subroutine selfdoc()
   print '(a)', "  (string) kernel_dir: directory holds proc***_reg1_***_kernel.bin"
   print '(a)', "  (string) dm_dg_dir_list: list of dmodel_dir,dkernel_dir,step_length"
   print '(a)', "  (string) model_tags: comma delimited string, e.g. mu,lamda,rho"
-  print '(a)', "  (string) out_dir: output directory"
   print '(a)', "  (logical) use_mask:  flag if masking is used (mask files should locate in kernel_dir)"
+  print '(a)', "  (string) out_dir: output directory"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
@@ -28,7 +28,7 @@ subroutine selfdoc()
   print '(a)', "  2. _dmodel will be appended to model_tags for output files"
   print '(a)', "  3. _dkernel will be appended to model_tags for output files"
   print '(a)', "  4. the mask is applied on initial Hessian(H0)."
-  print '(a)', "  5. must run in parallel with nproc processes"
+  print '(a)', "  5. must run in parallel with <nproc> processes"
 end subroutine
 
 
@@ -52,8 +52,8 @@ program get_dmodel_lbfgs
   character(len=MAX_STRING_LEN) :: kernel_dir
   character(len=MAX_STRING_LEN) :: dm_dg_dir_list
   character(len=MAX_STRING_LEN) :: model_tags
-  character(len=MAX_STRING_LEN) :: out_dir
   logical :: use_mask
+  character(len=MAX_STRING_LEN) :: out_dir
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
@@ -108,8 +108,7 @@ program get_dmodel_lbfgs
   read(args(3),'(a)') kernel_dir 
   read(args(4),'(a)') dm_dg_dir_list
   read(args(5),'(a)') model_tags
-  read(args(6),'(a)') out_dir
-  select case (args(7))
+  select case (args(6))
     case ('0')
       use_mask = .false.
     case ('1')
@@ -120,6 +119,7 @@ program get_dmodel_lbfgs
         call abort_mpi() 
       endif
   end select
+  read(args(7),'(a)') out_dir
 
   call synchronize_all()
 

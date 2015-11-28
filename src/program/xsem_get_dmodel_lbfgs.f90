@@ -120,6 +120,7 @@ program get_dmodel_lbfgs
         call abort_mpi() 
       endif
   end select
+
   call synchronize_all()
 
   !====== validate inputs 

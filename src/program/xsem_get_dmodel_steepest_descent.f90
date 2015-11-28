@@ -8,8 +8,8 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_get_dmodel_steepest_descent \"
-  print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <out_dir>"
-  print '(a)', "    <model_tags> <scale_factor> <use_mask> "
+  print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <model_tags> "
+  print '(a)', "    <scale_factor> <use_mask> <out_dir>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -29,6 +29,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  1. _kernel will be appended to model_tags to get kernel files"
   print '(a)', "  2. _dmodel will be appended to model_tags for output files"
+  print '(a)', "  3. can be run in parallel"
 end subroutine
 
 
@@ -38,6 +39,7 @@ program xsem_get_dmodel_steepest_descent
   use sem_io
   use sem_mesh
   use sem_utils
+  use sem_parallel
 
   implicit none
 
@@ -49,29 +51,37 @@ program xsem_get_dmodel_steepest_descent
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: kernel_dir
-  character(len=MAX_STRING_LEN) :: out_dir
   character(len=MAX_STRING_LEN) :: model_tags
   real(dp) :: scale_factor
   logical :: use_mask
-
-  ! model names
-  integer :: nmodel
-  character(len=MAX_STRING_LEN), allocatable :: model_names(:)
+  character(len=MAX_STRING_LEN) :: out_dir
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
   integer :: i, iproc
+  ! mpi
+  integer :: nrank, myrank
+  ! model names
+  integer :: nmodel
+  character(len=MAX_STRING_LEN), allocatable :: model_names(:)
   ! mesh
   type(sem_mesh_data) :: mesh_data
   integer :: nspec
   ! mask/dmodel
   real(dp), dimension(:,:,:,:), allocatable :: mask, dmodel
 
+  !===== start MPI
+  call init_mpi()
+  call world_size(nrank)
+  call world_rank(myrank)
+
   !===== read command line arguments
   if (command_argument_count() /= nargs) then
-    call selfdoc()
-    print *, "[ERROR] xsem_get_dmodel_steepest_descent: check your input arguments."
-    stop
+    if (myrank == 0) then
+      call selfdoc()
+      print *, "[ERROR] xsem_get_dmodel_steepest_descent: check your input arguments."
+      call abort_mpi()
+    endif
   endif
 
   do i = 1, nargs
@@ -80,31 +90,42 @@ program xsem_get_dmodel_steepest_descent
   read(args(1),*) nproc
   read(args(2),'(a)') mesh_dir 
   read(args(3),'(a)') kernel_dir 
-  read(args(4),'(a)') out_dir
-  read(args(5),'(a)') model_tags
-  read(args(6),*) scale_factor 
-  select case (args(7))
+  read(args(4),'(a)') model_tags
+  read(args(5),*) scale_factor 
+  select case (args(6))
     case ('0')
       use_mask = .false.
     case ('1')
       use_mask = .true.
     case default
-      print *, '[ERROR]: use_mask must be 0 or 1'
-      stop
+      if (myrank == 0) then
+        print *, '[ERROR]: use_mask must be 0 or 1'
+        call abort_mpi() 
+      endif
   end select
+  read(args(7),'(a)') out_dir
+
+  call synchronize_all()
 
   !===== parse model tags
 
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
 
-  print *, '# nmodel=', nmodel
-  print *, '# model_names=', (trim(model_names(i))//"  ", i=1,nmodel)
+  if (myrank == 0) then
+    print *, '# nmodel=', nmodel
+    print *, '# model_names=', (trim(model_names(i))//"  ", i=1,nmodel)
+  endif
 
   !===== calculate model update diretion from kernel (steepest descent)
 
   ! get mesh info: nspec
-  call sem_mesh_read(mesh_dir, 0, iregion, mesh_data)
-  nspec = mesh_data%nspec
+  if (myrank == 0) then
+    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+    nspec = mesh_data%nspec
+  endif
+  call bcast_all_singlei(nspec)
+
+  call synchronize_all()
 
   ! intialize arrays 
   allocate(dmodel(NGLLX,NGLLY,NGLLZ,NSPEC))
@@ -112,7 +133,7 @@ program xsem_get_dmodel_steepest_descent
     allocate(mask(NGLLX,NGLLY,NGLLZ,NSPEC))
   endif
 
-  do iproc = 0, (nproc-1)
+  do iproc = myrank, (nproc-1), nrank
 
     print *, '# iproc=', iproc
 
@@ -138,5 +159,9 @@ program xsem_get_dmodel_steepest_descent
       enddo ! do i
 
   enddo ! do iproc
+
+  !====== exit MPI
+  call synchronize_all()
+  call finalize_mpi()
 
 end program

@@ -50,7 +50,8 @@ program = xsem_slice_gcircle \
 	xsem_get_dmodel_steepest_descent \
 	xsem_get_dmodel_lbfgs \
 	xsem_add_dmodel_lamda_mu_to_tiso \
-	xsem_math
+	xsem_math \
+	xsem_statis
 
 
 #------------------------------------------

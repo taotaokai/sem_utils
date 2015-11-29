@@ -164,7 +164,12 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   max_dln_vsv = 0.0_dp
   max_dln_vsh = 0.0_dp
 
+  if (myrank == 0) print '(a)', "#====== get step_length"
+
   do iproc = myrank, (nproc-1), nrank
+
+    print '(a,2X,I4)', "# iproc=", iproc
+
     ! read old models
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', vpv)
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vph', vph)
@@ -227,7 +232,11 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   call bcast_all_singledp(step_length)
 
   !====== create new model
+  if (myrank == 0) print '(a)', "#====== create new model"
+
   do iproc = myrank, (nproc-1), nrank
+
+    print '(a,2X,I4)', "# iproc=", iproc
 
     ! read old models
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', vpv)

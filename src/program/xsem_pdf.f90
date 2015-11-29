@@ -20,7 +20,7 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) model_dir:  directory holds proc*_reg1_<model_name>.bin"
   print '(a)', "  (string) model_name:  model name, e.g. mu_kernel "
-  print '(a)', "  (int) nbin:  number of bins (from min to max value)"
+  print '(a)', "  (int) nbin:  number of bins (-max|z|, max|z|)"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
@@ -132,11 +132,13 @@ program xsem_pdf
 
   call synchronize_all()
 
-  if (myrank == 0) print *, '# min/max=', zmin_all, zmax_all
+  if (myrank == 0) print *, '# zmin/zmax=', zmin_all, zmax_all
 
   ! compute PDF
-  bin_size = (zmax_all - zmin_all) / nbin
-  z = (/(zmin_all + i*bin_size, i=0,nbin)/)
+  ! use bins symmetric about 0, which facilitats creation of amplitude PDF. 
+  zmax = max(abs(zmax_all), abs(zmin_all))
+  bin_size = 2.0 * zmax / nbin
+  z = (/(-zmax + i*bin_size, i=0,nbin)/)
   pdf = 0.0_dp
 
   do iproc = myrank, (nproc-1), nrank
@@ -160,7 +162,7 @@ program xsem_pdf
 
   ! normalize PDF
   if (myrank == 0) then
-    print *, "# Integral(model,dV)=", sum(pdf_all)
+    print *, "# Integral(abs(model),dV)=", sum(pdf_all)
     pdf_all = pdf_all / sum(pdf_all)
   endif
 

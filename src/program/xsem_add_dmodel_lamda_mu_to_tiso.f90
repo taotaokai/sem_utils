@@ -1,15 +1,16 @@
 subroutine selfdoc()
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_add_dmodel_lamda_mu_to_tiso"
+  print '(a)', "  xsem_add_dmodel_lamda_mu_rho_to_tiso"
   print '(a)', "    - add isotropic model perturbation direction(dlamda, dmu, drho)"
   print '(a)', "      into VTI model files (vpv,vph,vsv,vsh,eta,rho)"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_add_dmodel_lamda_mu_to_tiso \"
-  print '(a)', "    <nproc> <mesh_dir> <model_dir> <dmodel_dir> <out_dir>"
+  print '(a)', "    <nproc> <mesh_dir> <model_dir> <dmodel_dir> "
   print '(a)', "    <max_dlnv_allowed> <force_max_dlnv_allow> <fix_rho>"
+  print '(a)', "    <out_dir>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -28,13 +29,12 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
-  print '(a)', "  max_dlnv_allowed > 0: model + dmodel * step_length"
-  print '(a)', "  max_dlnv_allowed < 0: model - dmodel * step_length"
-  print '(a)', "  the step_length is determined when, "
-  print '(a)', "  flag_force_max_dlnv = 1: force max velocity perturbation = max_dlnv_allowed"
-  print '(a)', "  flag_force_max_dlnv = 0: only reduce max velocity perturbation to max_dlnv_allowed"
-  print '(a)', "    if already smaller than max_dlnv_allowed, then do nothing"
-  print '(a)', "  write(append) to log_file: step_length: "
+  print '(a)', "  1. max_dlnv_allowed > 0: model + dmodel * step_length"
+  print '(a)', "     max_dlnv_allowed < 0: model - dmodel * step_length"
+  print '(a)', "  2. the step_length is determined when, "
+  print '(a)', "    flag_force_max_dlnv = 1: scale to have max velocity perturbation = max_dlnv_allowed"
+  print '(a)', "    flag_force_max_dlnv = 0: only effective when max velocity perturbation is larger than max_dlnv_allowed"
+  print '(a)', "  3. can be run in parallel"
 
 end subroutine
 
@@ -45,6 +45,7 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   use sem_io
   use sem_mesh
   use sem_utils
+  use sem_parallel
 
   implicit none
 
@@ -55,14 +56,18 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
-  character(len=MAX_STRING_LEN) :: model_dir, dmodel_dir
-  character(len=MAX_STRING_LEN) :: out_dir
+  character(len=MAX_STRING_LEN) :: model_dir
+  character(len=MAX_STRING_LEN) :: dmodel_dir
   real(dp) :: max_dlnv_allow
-  logical :: force_max_dlnv_allow, fix_rho
+  logical :: force_max_dlnv_allow
+  logical :: fix_rho
+  character(len=MAX_STRING_LEN) :: out_dir
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
   integer :: i, iproc
+  ! mpi
+  integer :: myrank, nrank
   ! mesh
   type(sem_mesh_data) :: mesh_data
   integer :: nspec
@@ -72,16 +77,27 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   ! dmodel 
   real(dp), dimension(:,:,:,:), allocatable :: dmu, dlamda, drho
   ! model perturbations
-  real(dp) :: max_dln_vpv, max_dln_vph, max_dln_vsv, max_dln_vsh, max_dlnv_all
-  real(dp), allocatable :: max_dlnv_procs(:)
+  real(dp) :: max_dln_vpv, max_dln_vph, max_dln_vsv, max_dln_vsh
+  real(dp) :: max_dln_vpv_all, max_dln_vph_all, max_dln_vsv_all, max_dln_vsh_all
+  real(dp) :: max_dlnv_all
   real(dp) :: step_length
+
+  !===== start MPI
+
+  call init_mpi()
+  call world_size(nrank)
+  call world_rank(myrank)
 
   !===== read command line arguments
   if (command_argument_count() /= nargs) then
-    call selfdoc()
-    print *, "[ERROR] xsem_add_dmodel_lamda_mu_to_tiso: check your input arguments."
-    stop
+    if (myrank == 0) then
+      call selfdoc()
+      print *, "[ERROR] xsem_add_dmodel_lamda_mu_rho_to_tiso: check your inputs."
+      call abort_mpi()
+    endif
   endif
+
+  call synchronize_all()
 
   do i = 1, nargs
     call get_command_argument(i, args(i))
@@ -90,57 +106,65 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   read(args(2),'(a)') mesh_dir 
   read(args(3),'(a)') model_dir 
   read(args(4),'(a)') dmodel_dir 
-  read(args(5),'(a)') out_dir
-  read(args(6),*) max_dlnv_allow
-  select case (args(7))
+  read(args(5),*) max_dlnv_allow
+  select case (args(6))
     case ('0')
       force_max_dlnv_allow = .false.
     case ('1')
       force_max_dlnv_allow = .true.
     case default
-      print *, '[ERROR]: force_max_dlnv_allow must be 0 or 1'
-      stop
+      if (myrank==0) then
+        print *, '[ERROR]: force_max_dlnv_allow must be 0 or 1'
+        call abort_mpi()
+      endif
   end select
-  select case (args(8))
+  select case (args(7))
     case ('0')
       fix_rho = .false.
     case ('1')
       fix_rho = .true.
     case default
-      print *, '[ERROR]: fix_rho must be 0 or 1'
-      stop
+      if (myrank==0) then
+        print *, '[ERROR]: fix_rho must be 0 or 1'
+        call abort_mpi()
+      endif
   end select
+  read(args(8),'(a)') out_dir
+
+  call synchronize_all()
 
   !===== Get step length first
-  allocate(max_dlnv_procs(0:nproc-1))
-  max_dlnv_procs = 0.0
 
-  ! get mesh info: nspec
-  call sem_mesh_read(mesh_dir, 0, iregion, mesh_data)
-  nspec = mesh_data%nspec
+  ! get mesh geometry
+  if (myrank == 0) then
+    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+    nspec = mesh_data%nspec
+  endif
+  call bcast_all_singlei(nspec)
 
-  ! intialize  arrays 
-  allocate(vpv(NGLLX,NGLLY,NGLLZ,NSPEC), &
-           vph(NGLLX,NGLLY,NGLLZ,NSPEC), &
-           vsv(NGLLX,NGLLY,NGLLZ,NSPEC), &
-           vsh(NGLLX,NGLLY,NGLLZ,NSPEC), &
-           eta(NGLLX,NGLLY,NGLLZ,NSPEC), &
-           rho(NGLLX,NGLLY,NGLLZ,NSPEC), &
-          A(NGLLX,NGLLY,NGLLZ,NSPEC), &
-          C(NGLLX,NGLLY,NGLLZ,NSPEC), &
-          F(NGLLX,NGLLY,NGLLZ,NSPEC), &
-          L(NGLLX,NGLLY,NGLLZ,NSPEC), &
-          N(NGLLX,NGLLY,NGLLZ,NSPEC), &
-           dmu(NGLLX,NGLLY,NGLLZ,NSPEC), &
-        dlamda(NGLLX,NGLLY,NGLLZ,NSPEC), &
-          drho(NGLLX,NGLLY,NGLLZ,NSPEC))
+  ! intialize arrays 
+  allocate(vpv(NGLLX,NGLLY,NGLLZ,nspec), &
+           vph(NGLLX,NGLLY,NGLLZ,nspec), &
+           vsv(NGLLX,NGLLY,NGLLZ,nspec), &
+           vsh(NGLLX,NGLLY,NGLLZ,nspec), &
+           eta(NGLLX,NGLLY,NGLLZ,nspec), &
+           rho(NGLLX,NGLLY,NGLLZ,nspec), &
+             A(NGLLX,NGLLY,NGLLZ,nspec), &
+             C(NGLLX,NGLLY,NGLLZ,nspec), &
+             F(NGLLX,NGLLY,NGLLZ,nspec), &
+             L(NGLLX,NGLLY,NGLLZ,nspec), &
+             N(NGLLX,NGLLY,NGLLZ,nspec), &
+           dmu(NGLLX,NGLLY,NGLLZ,nspec), &
+        dlamda(NGLLX,NGLLY,NGLLZ,nspec), &
+          drho(NGLLX,NGLLY,NGLLZ,nspec))
  
-  ! get step length
-  print *, '#====== get step length'
-  do iproc = 0, (nproc-1)
+  ! get maximum velocity perturbation from dmodel
+  max_dln_vpv = 0.0_dp
+  max_dln_vph = 0.0_dp
+  max_dln_vsv = 0.0_dp
+  max_dln_vsh = 0.0_dp
 
-    print *, '#-- iproc=', iproc
-
+  do iproc = myrank, (nproc-1), nrank
     ! read old models
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', vpv)
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vph', vph)
@@ -162,58 +186,48 @@ program xsem_add_dmodel_lamda_mu_to_tiso
     else
       call sem_io_read_gll_file_1(dmodel_dir, iproc, iregion, 'rho_dmodel', drho)
     endif
-
     ! calculate maximum absolute relative perturbation of velocities
-    max_dln_vpv = 0.5 * maxval(abs((dlamda+2.0*dmu)/C - drho/rho))
-    max_dln_vph = 0.5 * maxval(abs((dlamda+2.0*dmu)/A - drho/rho))
-    max_dln_vsv = 0.5 * maxval(abs(dmu/L - drho/rho))
-    max_dln_vsh = 0.5 * maxval(abs(dmu/N - drho/rho))
-    max_dlnv_procs(iproc) = max(max_dln_vpv,max_dln_vph,max_dln_vsv,max_dln_vsh)
-
-    print *, "#max_dln[vpv,vph,vsv,vsh,rho]"
-    print *, max_dln_vpv
-    print *, max_dln_vph
-    print *, max_dln_vsv
-    print *, max_dln_vsh
-    print *, maxval(abs(drho/rho))
-
+    max_dln_vpv = max(max_dln_vpv, 0.5*maxval(abs((dlamda+2.0*dmu)/C - drho/rho)))
+    max_dln_vph = max(max_dln_vph, 0.5*maxval(abs((dlamda+2.0*dmu)/A - drho/rho)))
+    max_dln_vsv = max(max_dln_vsv, 0.5*maxval(abs(dmu/L - drho/rho)))
+    max_dln_vsh = max(max_dln_vsh, 0.5*maxval(abs(dmu/N - drho/rho)))
   enddo ! do iproc
 
-  ! determine the model update step length
-  max_dlnv_all = maxval(max_dlnv_procs)
-  if ( (max_dlnv_all>abs(max_dlnv_allow)) .or. force_max_dlnv_allow ) then
-    step_length = max_dlnv_allow / max_dlnv_all
-  else ! only set positive/negative sign
-    step_length = SIGN(1.d0, max_dlnv_allow)
+  call synchronize_all()
+
+  call max_all_dp(max_dln_vpv, max_dln_vpv_all)
+  call max_all_dp(max_dln_vph, max_dln_vph_all)
+  call max_all_dp(max_dln_vsv, max_dln_vsv_all)
+  call max_all_dp(max_dln_vsh, max_dln_vsh_all)
+
+  ! determine step_length
+  if (myrank == 0) then
+
+    max_dlnv_all = max(max_dln_vpv_all,max_dln_vph_all, &
+                       max_dln_vsv_all,max_dln_vsh_all)
+
+    if (max_dlnv_all>abs(max_dlnv_allow) .or. force_max_dlnv_allow) then
+      step_length = max_dlnv_allow / max_dlnv_all
+    else 
+      ! only set positive/negative sign
+      step_length = SIGN(1.d0, max_dlnv_allow)
+    endif
+
+    print '(a,2X,E12.4)', "max_dln_vpv_all=", max_dln_vpv_all
+    print '(a,2X,E12.4)', "max_dln_vph_all=", max_dln_vph_all
+    print '(a,2X,E12.4)', "max_dln_vsv_all=", max_dln_vsv_all
+    print '(a,2X,E12.4)', "max_dln_vsh_all=", max_dln_vsh_all
+    print '(a,2X,E12.4)', "max_dlnv_all=", max_dlnv_all
+    print '(a,2X,E12.4)', "step_length=", step_length
+
   endif
 
-  print *, "max_dlnv_all_proc: ", max_dlnv_all
-  print *, "step_length: ", step_length
+  call synchronize_all()
 
-  !====== make new model
-  print *, "#====== make new model "
-  do iproc = 0, (nproc-1)
+  call bcast_all_singledp(step_length)
 
-    print *, '#-- iproc=', iproc
-
-    ! intialize mode/dmodel arrays 
-    if (.not. allocated(vpv)) then
-      !deallocate(vpv,vph,vsv,vsh,eta,rho,A,C,F,L,N,dlamda,dmu,drho)
-      allocate(vpv(NGLLX,NGLLY,NGLLZ,nspec), &
-               vph(NGLLX,NGLLY,NGLLZ,nspec), &
-               vsv(NGLLX,NGLLY,NGLLZ,nspec), &
-               vsh(NGLLX,NGLLY,NGLLZ,nspec), &
-               eta(NGLLX,NGLLY,NGLLZ,nspec), &
-               rho(NGLLX,NGLLY,NGLLZ,nspec), &
-              A(NGLLX,NGLLY,NGLLZ,nspec), &
-              C(NGLLX,NGLLY,NGLLZ,nspec), &
-              F(NGLLX,NGLLY,NGLLZ,nspec), &
-              L(NGLLX,NGLLY,NGLLZ,nspec), &
-              N(NGLLX,NGLLY,NGLLZ,nspec), &
-               dmu(NGLLX,NGLLY,NGLLZ,nspec), &
-            dlamda(NGLLX,NGLLY,NGLLZ,nspec), &
-              drho(NGLLX,NGLLY,NGLLZ,nspec))
-    endif
+  !====== create new model
+  do iproc = myrank, (nproc-1), nrank
 
     ! read old models
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', vpv)
@@ -236,19 +250,17 @@ program xsem_add_dmodel_lamda_mu_to_tiso
     else
       call sem_io_read_gll_file_1(dmodel_dir, iproc, iregion, 'rho_dmodel', drho)
     endif
-
-    ! calculate new models
+    ! scale dmodel by step_length
     dlamda = dlamda * step_length 
     dmu = dmu * step_length
     drho = drho * step_length
-
+    ! add dmodel
     rho = rho + drho
     vpv = sqrt((C+dlamda+2.0*dmu)/rho)
     vph = sqrt((A+dlamda+2.0*dmu)/rho)
     vsv = sqrt((L+dmu)/rho)
     vsh = sqrt((N+dmu)/rho)
     eta = (F+dlamda)/(A-2.0*L+dlamda)
-
     ! write new models
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vpv', vpv)
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vph', vph)
@@ -258,5 +270,9 @@ program xsem_add_dmodel_lamda_mu_to_tiso
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'rho', rho)
 
   enddo
+
+  !====== exit MPI
+  call synchronize_all()
+  call finalize_mpi()
 
 end program

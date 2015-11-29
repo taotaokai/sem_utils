@@ -8,7 +8,8 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_statis \"
-  print '(a)', "    <nproc> <mesh_dir> <model_dir> <model_name> <nbin> <out_file>"
+  print '(a)', "    <nproc> <mesh_dir> <model_dir> <model_name> <nbin> "
+  print '(a)', "    <bin_amplitude> <out_file>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -19,7 +20,8 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) model_dir:  directory holds proc*_reg1_<model_name>.bin"
   print '(a)', "  (string) model_name:  model name, e.g. mu_kernel "
-  print '(a)', "  (int) nbin:  number of bins (-max|z|, max|z|)"
+  print '(a)', "  (int) nbin:  number of bins"
+  print '(a)', "  (int) use_abs:  flag to bin absolute value |z|, must be 0 or 1"
   print '(a)', "  (string) out_file:  output file name "
   print '(a)', ""
   print '(a)', "NOTE"
@@ -44,12 +46,13 @@ program xsem_pdf
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 6
+  integer, parameter :: nargs = 7
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: model_dir, model_name
   integer :: nbin
+  logical :: use_abs
   character(len=MAX_STRING_LEN) :: out_file
 
   ! local variables
@@ -95,7 +98,18 @@ program xsem_pdf
   read(args(3), '(a)') model_dir
   read(args(4), '(a)') model_name
   read(args(5), *) nbin
-  read(args(6), '(a)') out_file
+  select case (args(6))
+    case ('0')
+      use_abs = .false.
+    case ('1')
+      use_abs = .true.
+    case default
+      if (myrank==0) then
+        print *, '[ERROR]: use_abs must be 0 or 1'
+        call abort_mpi()
+      endif
+  end select
+  read(args(7), '(a)') out_file
 
   !===== loop each mesh/model slice
 
@@ -138,10 +152,16 @@ program xsem_pdf
   if (myrank == 0) print *, '# zmin/zmax=', zmin_all, zmax_all
 
   ! compute PDF
-  ! use bins symmetric about 0, which facilitats creation of amplitude PDF. 
   zmax = max(abs(zmax_all), abs(zmin_all))
-  bin_size = 2.0 * zmax / nbin
-  z = (/(-zmax + i*bin_size, i=0,nbin)/)
+  if (use_abs) then
+    ! bin model amplitude: (0, max|z|)
+    bin_size = zmax / nbin
+    z = (/(i*bin_size, i=0,nbin)/)
+  else
+    ! symmetric about 0: (-max|z|, max|z|)
+    bin_size = 2.0 * zmax / nbin
+    z = (/(-zmax + i*bin_size, i=0,nbin)/)
+  endif
   pdf = 0.0_dp
   volume = 0.0_dp
   do iproc = myrank, (nproc-1), nrank
@@ -151,6 +171,7 @@ program xsem_pdf
     call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
     call sem_mesh_gll_volume(mesh_data, gll_volume)
     ! get volumetric integral of model amplitudes within each bin 
+    if (use_abs) model = abs(model)
     do i = 1, nbin
       pdf(i) = pdf(i) + sum(gll_volume*abs(model), &
         mask=(model>=z(i-1) .and. model<z(i)) )
@@ -188,6 +209,7 @@ program xsem_pdf
     write(IOUT, '(a,2X,a)') "# model_dir= ", trim(model_dir)
     write(IOUT, '(a,2X,a)') "# model_name= ", trim(model_name)
     write(IOUT, '(a,2X,I4)') "# nbin= ", nbin
+    write(IOUT, '(a,2X,L2)') "# use_abs= ", use_abs
     write(IOUT, '(a,2X,E12.4)') "# min(z)= ", zmin_all 
     write(IOUT, '(a,2X,E12.4)') "# max(z)= ", zmax_all 
     write(IOUT, '(a,2X,E12.4)') "# volume= ", volume 

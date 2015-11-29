@@ -19,16 +19,16 @@ subroutine selfdoc()
   print '(a)', "  (string) kernel_dir: directory holds proc***_reg1_***_kernel.bin"
   print '(a)', "  (string) dm_dg_dir_list: list of dmodel_dir,dkernel_dir,step_length"
   print '(a)', "  (string) model_tags: comma delimited string, e.g. mu,lamda,rho"
+  print '(a)', "  (string) kernel_suffix: suffix to append on model names, e.g. _kernel_precond"
   print '(a)', "  (logical) use_mask:  flag if masking is used (mask files should locate in kernel_dir)"
   print '(a)', "  (string) out_dir: output directory"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
-  print '(a)', "  1. _kernel will be appended to model_tags to get kernel files"
-  print '(a)', "  2. _dmodel will be appended to model_tags for output files"
-  print '(a)', "  3. _dkernel will be appended to model_tags for output files"
-  print '(a)', "  4. the mask is applied on initial Hessian(H0)."
-  print '(a)', "  5. must run in parallel with <nproc> processes"
+  print '(a)', "  1. _dmodel will be appended to model_tags for output files"
+  print '(a)', "  2. _dkernel will be appended to model_tags for output files"
+  print '(a)', "  3. the mask is applied on initial Hessian(H0)."
+  print '(a)', "  4. must run in parallel with <nproc> processes"
 end subroutine
 
 
@@ -45,13 +45,14 @@ program get_dmodel_lbfgs
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 7
+  integer, parameter :: nargs = 8
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: kernel_dir
   character(len=MAX_STRING_LEN) :: dm_dg_dir_list
   character(len=MAX_STRING_LEN) :: model_tags
+  character(len=MAX_STRING_LEN) :: kernel_suffix
   logical :: use_mask
   character(len=MAX_STRING_LEN) :: out_dir
 
@@ -108,7 +109,8 @@ program get_dmodel_lbfgs
   read(args(3),'(a)') kernel_dir 
   read(args(4),'(a)') dm_dg_dir_list
   read(args(5),'(a)') model_tags
-  select case (args(6))
+  read(args(6),'(a)') kernel_suffix
+  select case (args(7))
     case ('0')
       use_mask = .false.
     case ('1')
@@ -119,7 +121,7 @@ program get_dmodel_lbfgs
         call abort_mpi() 
       endif
   end select
-  read(args(7),'(a)') out_dir
+  read(args(8),'(a)') out_dir
 
   call synchronize_all()
 
@@ -142,7 +144,7 @@ program get_dmodel_lbfgs
 
   allocate(dm_names(nmodel), dg_names(nmodel), kernel_names(nmodel))
   do i = 1, nmodel
-    kernel_names(i) = trim(model_names(i))//"_kernel"
+    kernel_names(i) = trim(model_names(i))//trim(kernel_suffix)
     dm_names(i) = trim(model_names(i))//"_dmodel"
     dg_names(i) = trim(model_names(i))//"_dkernel"
   enddo

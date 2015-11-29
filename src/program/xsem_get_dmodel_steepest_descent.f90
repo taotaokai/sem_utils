@@ -9,7 +9,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  xsem_get_dmodel_steepest_descent \"
   print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <model_tags> "
-  print '(a)', "    <scale_factor> <use_mask> <out_dir>"
+  print '(a)', "    <kernel_suffix> <scale_factor> <use_mask> <out_dir>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -21,15 +21,15 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) kernel_dir:  directory holds proc***_reg1_***_kernel.bin"
   print '(a)', "  (string) model_tags: comma delimited string, e.g. mu,lamda,rho"
+  print '(a)', "  (string) kernel_suffix: suffix to append on model names, e.g. _kernel_precond"
   print '(a)', "  (float) scale_factor:  factor to scale kernel values"
   print '(a)', "  (logical) use_mask:  flag if kernel masking is used (mask files should locate in kernel_dir)"
   print '(a)', "  (string) out_dir:  output directory"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
-  print '(a)', "  1. _kernel will be appended to model_tags to get kernel files"
-  print '(a)', "  2. _dmodel will be appended to model_tags for output files"
-  print '(a)', "  3. can be run in parallel"
+  print '(a)', "  1. _dmodel will be appended to model_tags for output files"
+  print '(a)', "  2. can be run in parallel"
 end subroutine
 
 
@@ -46,12 +46,13 @@ program xsem_get_dmodel_steepest_descent
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 7
+  integer, parameter :: nargs = 8
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: kernel_dir
   character(len=MAX_STRING_LEN) :: model_tags
+  character(len=MAX_STRING_LEN) :: kernel_suffix
   real(dp) :: scale_factor
   logical :: use_mask
   character(len=MAX_STRING_LEN) :: out_dir
@@ -91,8 +92,9 @@ program xsem_get_dmodel_steepest_descent
   read(args(2),'(a)') mesh_dir 
   read(args(3),'(a)') kernel_dir 
   read(args(4),'(a)') model_tags
-  read(args(5),*) scale_factor 
-  select case (args(6))
+  read(args(5),'(a)') kernel_suffix
+  read(args(6),*) scale_factor 
+  select case (args(7))
     case ('0')
       use_mask = .false.
     case ('1')
@@ -103,7 +105,7 @@ program xsem_get_dmodel_steepest_descent
         call abort_mpi() 
       endif
   end select
-  read(args(7),'(a)') out_dir
+  read(args(8),'(a)') out_dir
 
   call synchronize_all()
 
@@ -140,8 +142,9 @@ program xsem_get_dmodel_steepest_descent
     ! read kernels
     do i = 1, nmodel
 
+      ! steepest descent: dmodel is propotional to kernel
       call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, &
-        trim(model_names(i))//"_kernel", dmodel)
+        trim(model_names(i))//trim(kernel_suffix), dmodel)
 
       ! apply kernel mask
       if (use_mask) then

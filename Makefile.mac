@@ -51,7 +51,8 @@ program = xsem_slice_gcircle \
 	xsem_get_dmodel_lbfgs \
 	xsem_add_dmodel_lamda_mu_to_tiso \
 	xsem_math \
-	xsem_pdf
+	xsem_pdf \
+	xsem_thresholding
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))

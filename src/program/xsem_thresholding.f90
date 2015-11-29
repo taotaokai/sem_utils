@@ -27,7 +27,8 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
-  print '(a)', "    1. model amplitude (z) is weighted by (1+rmax)*zc/(z+ rmax*zc)"
+  print '(a)', "  1. model amplitude (z) is weighted by (1+rmax)*zc/(z+ rmax*zc)"
+  print '(a)', "  2. can be run in parallel"
 
 end subroutine
 
@@ -39,6 +40,7 @@ program xsem_thresholding
   use sem_io
   use sem_mesh
   use sem_utils
+  use sem_parallel
 
   implicit none
 
@@ -56,6 +58,8 @@ program xsem_thresholding
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
   integer :: i, iproc
+  ! mpi
+  integer :: myrank, nrank
   ! mesh
   type(sem_mesh_data) :: mesh_data
   integer :: nspec
@@ -63,13 +67,23 @@ program xsem_thresholding
   real(dp), allocatable :: model(:,:,:,:)
   ! thresholding 
 
+  !===== start MPI
+
+  call init_mpi()
+  call world_size(nrank)
+  call world_rank(myrank)
+
   !===== read command line arguments
 
   if (command_argument_count() /= nargs) then
-    call selfdoc()
-    print *, "[ERROR] xsem_thresholding: check your input arguments."
-    stop
+    if (myrank == 0) then
+      call selfdoc()
+      print *, "[ERROR] xsem_thresholding: check your input arguments."
+      call abort_mpi()
+    endif 
   endif
+
+  call synchronize_all()
 
   do i = 1, nargs
     call get_command_argument(i, args(i))
@@ -86,14 +100,19 @@ program xsem_thresholding
   !===== loop each mesh/model slice
 
   ! get mesh geometry
-  call sem_mesh_read(mesh_dir, 0, iregion, mesh_data)
-  nspec = mesh_data%nspec
+  if (myrank == 0) then
+    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+    nspec = mesh_data%nspec
+  endif
+  call bcast_all_singlei(nspec)
+
+  call synchronize_all()
 
   ! initialize arrays
   allocate(model(NGLLX,NGLLY,NGLLZ,nspec))
 
   ! thresholding 
-  do iproc = 0, (nproc-1)
+  do iproc = myrank, (nproc-1), nrank
 
     print *, '#--', iproc
 
@@ -107,5 +126,9 @@ program xsem_thresholding
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, out_name, model)
 
   enddo
+
+  !====== exit MPI
+  call synchronize_all()
+  call finalize_mpi()
 
 end program

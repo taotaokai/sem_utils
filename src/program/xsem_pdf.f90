@@ -130,7 +130,7 @@ program xsem_pdf
 
   call synchronize_all()
 
-  print *, '# min/max=', zmin_all, zmax_all
+  if (myrank == 0) print *, '# min/max=', zmin_all, zmax_all
 
   ! get bin size
   if (myrank == 0) bin_size = (zmax_all - zmin_all) / nbin
@@ -162,8 +162,8 @@ program xsem_pdf
 
   ! normalize PDF
   if (myrank == 0) then
+    print *, "# Integral(model,dV)=", sum(pdf_all)
     pdf_all = pdf_all / sum(pdf_all)
-    print *, "# Integral(|g|,dV)=", sum(pdf_all)
   endif
 
   ! print out results

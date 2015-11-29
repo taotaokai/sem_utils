@@ -127,18 +127,16 @@ program xsem_pdf
    
   call max_all_dp(zmax, zmax_all)
   call min_all_dp(zmin, zmin_all)
+  call bcast_all_singledp(zmax_all)
+  call bcast_all_singledp(zmin_all)
 
   call synchronize_all()
 
   if (myrank == 0) print *, '# min/max=', zmin_all, zmax_all
 
-  ! get bin size
-  if (myrank == 0) bin_size = (zmax_all - zmin_all) / nbin
-  call bcast_all_singledp(bin_size)
-  call synchronize_all()
-
   ! compute PDF
-  z = (/(i*bin_size, i=0,nbin)/)
+  bin_size = (zmax_all - zmin_all) / nbin
+  z = (/(zmin_all + i*bin_size, i=0,nbin)/)
   pdf = 0.0_dp
 
   do iproc = myrank, (nproc-1), nrank

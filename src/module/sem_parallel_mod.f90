@@ -10,7 +10,7 @@ module sem_parallel
 !======== implementation part =========
 contains
 
-!///////////////////////////////////
+
 subroutine init_mpi()
 
   implicit none
@@ -23,7 +23,7 @@ subroutine init_mpi()
 
 end subroutine init_mpi
 
-!///////////////////////////////////
+
 subroutine finalize_mpi()
 
   implicit none
@@ -34,9 +34,9 @@ subroutine finalize_mpi()
   call MPI_FINALIZE(ier)
   if (ier /= 0 ) stop 'Error finalizing MPI'
 
-  end subroutine finalize_mpi
+end subroutine finalize_mpi
 
-!///////////////////////////////////
+
 subroutine abort_mpi()
 
   implicit none
@@ -49,7 +49,7 @@ subroutine abort_mpi()
   
 end subroutine abort_mpi
 
-!///////////////////////////////////
+
 subroutine synchronize_all()
 
   implicit none
@@ -62,7 +62,7 @@ subroutine synchronize_all()
 
 end subroutine synchronize_all
 
-!///////////////////////////////////
+
 subroutine world_size(sizeval)
 
   implicit none
@@ -77,7 +77,7 @@ subroutine world_size(sizeval)
 
 end subroutine world_size
 
-!///////////////////////////////////
+
 subroutine world_rank(rank)
 
   implicit none
@@ -92,8 +92,10 @@ subroutine world_rank(rank)
 
 end subroutine world_rank
 
-!///////////////////////////////////
+
 subroutine sum_all_dp(sendbuf, recvbuf)
+  ! sum a double precision scalar over all process 
+  ! into result scalar of process 0
 
   implicit none
 
@@ -105,7 +107,21 @@ subroutine sum_all_dp(sendbuf, recvbuf)
 end subroutine sum_all_dp
 
 
-!///////////////////////////////////
+subroutine sum_all_dp_n(sendbuf, recvbuf, n)
+  ! sum a double precision array over all process element-wise 
+  ! into result array of process 0
+
+  implicit none
+
+  integer :: n, ier
+  double precision :: sendbuf(n), recvbuf(n)
+
+  call MPI_REDUCE(sendbuf,recvbuf,n,&
+    MPI_DOUBLE_PRECISION,MPI_SUM,0,MPI_COMM_WORLD,ier)
+
+end subroutine sum_all_dp_n
+
+
 subroutine sum_all_cr(sendbuf, recvbuf)
 
   implicit none
@@ -119,7 +135,7 @@ subroutine sum_all_cr(sendbuf, recvbuf)
 
 end subroutine sum_all_cr
 
-!///////////////////////////////////
+
 subroutine max_all_dp(sendbuf, recvbuf)
 
   implicit none
@@ -130,6 +146,18 @@ subroutine max_all_dp(sendbuf, recvbuf)
   call MPI_REDUCE(sendbuf,recvbuf,1,MPI_DOUBLE_PRECISION,MPI_MAX,0,MPI_COMM_WORLD,ier)
 
 end subroutine max_all_dp
+
+
+subroutine min_all_dp(sendbuf, recvbuf)
+
+  implicit none
+
+  double precision :: sendbuf, recvbuf
+  integer :: ier
+  
+  call MPI_REDUCE(sendbuf,recvbuf,1,MPI_DOUBLE_PRECISION,MPI_MIN,0,MPI_COMM_WORLD,ier)
+
+end subroutine min_all_dp
 
 !///////////////////////////////////
 subroutine bcast_all_singlei(buffer)
@@ -205,7 +233,6 @@ subroutine recv_i(recvbuf, recvcount, dest, recvtag)
 end subroutine recv_i
 
 
-!///////////////////////////////////
 subroutine send_dp(sendbuf, sendcount, dest, sendtag)
 
   implicit none

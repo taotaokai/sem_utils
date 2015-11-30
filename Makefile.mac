@@ -52,6 +52,7 @@ program = xsem_slice_gcircle \
 	xsem_add_dmodel_lamda_mu_to_tiso \
 	xsem_math \
 	xsem_pdf \
+	xsem_depth_pdf \
 	xsem_thresholding
 
 #------------------------------------------

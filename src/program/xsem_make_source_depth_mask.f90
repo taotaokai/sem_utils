@@ -2,13 +2,13 @@ subroutine selfdoc()
   print '(a)', "NAME"
   print '(a)', ""
   print '(a)', "  xsem_make_source_depth_mask "
-  print '(a)', "    - make mask gll file (mask source, shallow depth)"
+  print '(a)', "    - make mask gll file (down-weighting source region and shallow depths)"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xsem_make_kernel_mask \"
-  print '(a)', "    <nproc> <mesh_dir> <source_xyz_list> <source_mask_radius> \"
-  print '(a)', "    <stop_depth> <pass_depth> <out_dir> "
+  print '(a)', "  xsem_make_source_depth_mask \"
+  print '(a)', "    <nproc> <mesh_dir> <source_xyz_list> <source_gaussa> \"
+  print '(a)', "    <depth_pass> <depth_gaussa> <out_dir> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -18,9 +18,9 @@ subroutine selfdoc()
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (string) source_xyz_list: list of source locations(x,y,z) in SEM (normalized)"
-  print '(a)', "  (float) source_mask_radius: Gaussian width (one sigma) in km"
-  print '(a)', "  (float) stop_depth: stop depth (km) where mask = 0"
-  print '(a)', "  (float) pass_depth: pass depth (km) where mask = 1"
+  print '(a)', "  (float) source_gaussa: Gaussian width (one sigma) in km"
+  print '(a)', "  (float) depth_pass: middle of Gaussian, no mask deeper than this depth"
+  print '(a)', "  (float) depth_gaussa: Gaussian width in km (one side Gaussian function) "
   print '(a)', "  (string) out_dir: output directory for proc*_reg1_source_mask.bin"
   print '(a)', ""
   print '(a)', "NOTE"
@@ -48,9 +48,9 @@ program xsem_make_kernel_mask
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: source_xyz_list
-  real(dp) :: source_mask_radius
-  real(dp) :: stop_depth 
-  real(dp) :: pass_depth 
+  real(dp) :: source_gaussa
+  real(dp) :: depth_pass 
+  real(dp) :: depth_gaussa 
   character(len=MAX_STRING_LEN) :: out_dir
 
   ! local variables
@@ -99,9 +99,9 @@ program xsem_make_kernel_mask
   read(args(1), *) nproc
   read(args(2), '(a)') mesh_dir
   read(args(3), '(a)') source_xyz_list
-  read(args(4), *) source_mask_radius
-  read(args(5), *) stop_depth
-  read(args(6), *) pass_depth
+  read(args(4), *) source_gaussa
+  read(args(5), *) depth_pass 
+  read(args(6), *) depth_gaussa
   read(args(7), '(a)') out_dir
 
   !====== read source_xyz_list
@@ -116,10 +116,10 @@ program xsem_make_kernel_mask
 
   !===== loop each mesh slice
 
-  !non-dimensionalize
-  source_mask_radius = source_mask_radius / R_EARTH_KM
-  stop_depth = stop_depth / R_EARTH_KM
-  pass_depth = pass_depth / R_EARTH_KM
+  ! non-dimensionalization
+  source_gaussa = source_gaussa / R_EARTH_KM
+  depth_pass = depth_pass / R_EARTH_KM
+  depth_gaussa = depth_gaussa / R_EARTH_KM
 
   do iproc = myrank, (nproc-1), nrank
 
@@ -146,22 +146,19 @@ program xsem_make_kernel_mask
             depth = 1.0 - sqrt(sum(xyz**2))
             
             weight = 1.0_dp
+            
             ! source mask: mask source region
-            if (source_mask_radius > 0.0) then
+            if (source_gaussa > 0.0) then
               do isrc = 1, nsource
                 dist_sq = sum((xyz - source_xyz(:,isrc))**2)
                 weight = weight * (1.0_dp - &
-                    exp(-0.5*dist_sq/source_mask_radius**2))
+                    exp(-0.5*dist_sq/source_gaussa**2))
               enddo
             endif
+
             ! depth mask: mask shallow depth
-            if (pass_depth > stop_depth) then
-              if (stop_depth<depth .and. depth<pass_depth) then
-                weight = weight * (0.5 - 0.5*cos(PI* & 
-                  (depth-stop_depth)/(pass_depth-stop_depth)))
-              elseif (depth <= stop_depth) then
-                weight = 0.0_dp
-              endif
+            if (depth_pass>0.0 .and. depth_gaussa>0.0 .and. depth<depth_pass) then
+                weight = weight * exp(-0.5*((depth-depth_pass)/depth_gaussa)**2)
             endif
 
             mask(igllx,iglly,igllz,ispec) = weight

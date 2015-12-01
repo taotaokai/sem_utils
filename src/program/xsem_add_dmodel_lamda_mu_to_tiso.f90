@@ -10,7 +10,7 @@ subroutine selfdoc()
   print '(a)', "  xsem_add_dmodel_lamda_mu_to_tiso \"
   print '(a)', "    <nproc> <mesh_dir> <model_dir> <dmodel_dir> "
   print '(a)', "    <max_dlnv_allowed> <force_max_dlnv_allow> <fix_rho>"
-  print '(a)', "    <out_dir>"
+  print '(a)', "    <out_dir> <log_file>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -26,6 +26,7 @@ subroutine selfdoc()
   print '(a)', "  (int) force_max_dlnv_allow:  flag whether max velocity perturbation should be enforced"
   print '(a)', "  (int) fix_rho:  flag whether rho is fixed"
   print '(a)', "  (string) out_dir:  output directory for new model"
+  print '(a)', "  (string) log_file:  file to log runing info"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
@@ -52,7 +53,7 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 8
+  integer, parameter :: nargs = 9
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
@@ -62,10 +63,11 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   logical :: force_max_dlnv_allow
   logical :: fix_rho
   character(len=MAX_STRING_LEN) :: out_dir
+  character(len=MAX_STRING_LEN) :: log_file
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
-  integer :: i, iproc
+  integer :: i, iproc, ier
   ! mpi
   integer :: myrank, nrank
   ! mesh
@@ -130,6 +132,7 @@ program xsem_add_dmodel_lamda_mu_to_tiso
       endif
   end select
   read(args(8),'(a)') out_dir
+  read(args(9),'(a)') log_file
 
   call synchronize_all()
 
@@ -164,11 +167,26 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   max_dln_vsv = 0.0_dp
   max_dln_vsh = 0.0_dp
 
-  if (myrank == 0) print '(a)', "#====== get step_length"
+  ! open log file for write
+  if (myrank == 0) then
+
+    open(IOUT, file=trim(log_file), status='unknown', &
+      form='formatted', action='write', iostat=ier)
+
+    if (ier /= 0) then
+      write(*,*) '[ERROR] xsem_add_dmodel_lamda_mu_to_tiso: failed to open file ', trim(log_file)
+      call abort_mpi()
+    endif
+
+  endif
+
+  call synchronize_all()
+
+  if (myrank ==0) print '(a)', "#====== get step_length"
 
   do iproc = myrank, (nproc-1), nrank
 
-    print '(a,2X,I4)', "# iproc=", iproc
+    !if (myrank ==0) write(IOUT,'(a,2X,I4)') "# iproc=", iproc
 
     ! read old models
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', vpv)
@@ -218,12 +236,15 @@ program xsem_add_dmodel_lamda_mu_to_tiso
       step_length = SIGN(1.d0, max_dlnv_allow)
     endif
 
-    print '(a,2X,E12.4)', "max_dln_vpv_all=", max_dln_vpv_all
-    print '(a,2X,E12.4)', "max_dln_vph_all=", max_dln_vph_all
-    print '(a,2X,E12.4)', "max_dln_vsv_all=", max_dln_vsv_all
-    print '(a,2X,E12.4)', "max_dln_vsh_all=", max_dln_vsh_all
-    print '(a,2X,E12.4)', "max_dlnv_all=", max_dlnv_all
-    print '(a,2X,E12.4)', "step_length=", step_length
+    write(IOUT,'(a)') "#[LOG] xsem_add_dmodel_lamda_mu_to_tiso"
+    write(IOUT,'(a,2X,E12.4)') "max_dln_vpv_all=", max_dln_vpv_all
+    write(IOUT,'(a,2X,E12.4)') "max_dln_vph_all=", max_dln_vph_all
+    write(IOUT,'(a,2X,E12.4)') "max_dln_vsv_all=", max_dln_vsv_all
+    write(IOUT,'(a,2X,E12.4)') "max_dln_vsh_all=", max_dln_vsh_all
+    write(IOUT,'(a,2X,E12.4)') "max_dlnv_all=", max_dlnv_all
+    write(IOUT,'(a,2X,E12.4)') "step_length=", step_length
+
+    close(IOUT)
 
   endif
 

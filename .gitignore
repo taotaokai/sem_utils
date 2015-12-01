@@ -2,6 +2,7 @@
 others/
 bak/
 old/
+test/
 
 # Build time
 bin/

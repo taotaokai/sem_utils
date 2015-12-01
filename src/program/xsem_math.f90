@@ -23,7 +23,7 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) model_dir_1/2:  directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (string) model_tags_1/2:  comma delimited string, e.g. vsv,vsh,rho "
-  print '(a)', "  (string) math_op:  math operations, e.g. add, mul, div"
+  print '(a)', "  (string) math_op:  math operations, e.g. add, sub, mul, div"
   print '(a)', "  (string) out_dir:  output directory"
   print '(a)', "  (string) model_tags:  comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', ""

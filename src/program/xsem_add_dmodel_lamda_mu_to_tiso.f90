@@ -180,13 +180,12 @@ program xsem_add_dmodel_lamda_mu_to_tiso
 
   endif
 
-  call synchronize_all()
-
   if (myrank ==0) print '(a)', "#====== get step_length"
+  call synchronize_all()
 
   do iproc = myrank, (nproc-1), nrank
 
-    !if (myrank ==0) write(IOUT,'(a,2X,I4)') "# iproc=", iproc
+    print '(a,2X,I4)', "# iproc=", iproc
 
     ! read old models
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', vpv)
@@ -254,6 +253,7 @@ program xsem_add_dmodel_lamda_mu_to_tiso
 
   !====== create new model
   if (myrank == 0) print '(a)', "#====== create new model"
+  call synchronize_all()
 
   do iproc = myrank, (nproc-1), nrank
 

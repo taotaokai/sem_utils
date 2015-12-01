@@ -8,7 +8,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  xsem_get_dmodel_lbfgs \"
   print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <dm_dg_dir_list> <model_tags> "
-  print '(a)', "    <use_mask> <out_dir>"
+  print '(a)', "    <use_mask> <out_dir> <log_file>"
   print '(a)', "DESCRIPTION"
   print '(a)', ""
   print '(a)', ""
@@ -22,6 +22,7 @@ subroutine selfdoc()
   print '(a)', "  (string) kernel_suffix: suffix to append on model names, e.g. _kernel_precond"
   print '(a)', "  (logical) use_mask:  flag if masking is used (mask files should locate in kernel_dir)"
   print '(a)', "  (string) out_dir: output directory"
+  print '(a)', "  (string) log_file:  file to log runing info"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
@@ -45,7 +46,7 @@ program get_dmodel_lbfgs
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 8
+  integer, parameter :: nargs = 9
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
@@ -55,6 +56,7 @@ program get_dmodel_lbfgs
   character(len=MAX_STRING_LEN) :: kernel_suffix
   logical :: use_mask
   character(len=MAX_STRING_LEN) :: out_dir
+  character(len=MAX_STRING_LEN) :: log_file
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
@@ -122,6 +124,7 @@ program get_dmodel_lbfgs
       endif
   end select
   read(args(8),'(a)') out_dir
+  read(args(9),'(a)') log_file 
 
   call synchronize_all()
 
@@ -134,12 +137,27 @@ program get_dmodel_lbfgs
   endif
   call synchronize_all()
 
+  !====== open log file for write
+  if (myrank == 0) then
+
+    open(IOUT, file=trim(log_file), status='unknown', &
+      form='formatted', action='write', iostat=ier)
+
+    if (ier /= 0) then
+      write(*,*) '[ERROR] xsem_get_dmodel_lbfgs: failed to open file ', trim(log_file)
+      call abort_mpi()
+    endif
+
+    write(IOUT, '(a)') '#[LOG] xsem_get_dmodel_lbfgs'
+
+  endif
+
   !===== parse model tags
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
 
   if (myrank == 0) then
-    print *, '# nmodel=', nmodel
-    print *, '# model_names=', (trim(model_names(i))//"  ", i=1,nmodel)
+    write(IOUT, *) '# nmodel=', nmodel
+    write(IOUT, *) '# model_names=', (trim(model_names(i))//"  ", i=1,nmodel)
   endif
 
   allocate(dm_names(nmodel), dg_names(nmodel), kernel_names(nmodel))
@@ -195,15 +213,15 @@ program get_dmodel_lbfgs
     kernel_names, nmodel, kernel)
 
   !-- l-bfgs: first loop
-  if (myrank == 0) print *, '#====== L-BFGS: start' 
+  if (myrank == 0) write(IOUT,'(a)') '#====== L-BFGS: start' 
 
-  if (myrank == 0) print *, ' q = -g (g: kernel)'
+  if (myrank == 0) write(IOUT,'(a)') '# q = -g (g: kernel)'
   q = -1.0 * kernel
 
-  if (myrank == 0) print *, '#====== L-BFGS: first loop' 
+  if (myrank == 0) write(IOUT,'(a)') '#====== L-BFGS: first loop' 
   do i = 1, nstep_lbfgs
 
-    if (myrank == 0) print *, '#-- step ', i
+    if (myrank == 0) write(IOUT,'(a,2X,I4)') '#---- step ', i
 
     ! read dm(i)
     call sem_io_read_gll_file_n(dm_dir(i), myrank, iregion, &
@@ -224,7 +242,7 @@ program get_dmodel_lbfgs
     call bcast_all_singledp(rho_sum)
     rho(i) = 1.0_dp / rho_sum
 
-    if (myrank == 0) print *, ' rho(i)=1/(dm(i),dg(i))=', rho(i)
+    if (myrank == 0) write(IOUT,'(a,2X,E17.8)') 'rho(i)=1/(dm(i),dg(i))=', rho(i)
 
     ! alpha(i) = rho(i) * (dm(i), q)
     alpha(i) = sum(dm(:,:,:,:,:,i) * q(:,:,:,:,:) * spread(gll_volume,1,nmodel))
@@ -234,7 +252,7 @@ program get_dmodel_lbfgs
     call bcast_all_singledp(alpha_sum)
     alpha(i) = rho(i) * alpha_sum
 
-    if (myrank == 0) print *, ' alpha(i)=rho(i)*(dm(i),q)=', alpha(i)
+    if (myrank == 0) write(IOUT,'(a,2X,E17.8)') 'alpha(i)=rho(i)*(dm(i),q)=', alpha(i)
 
     ! q = q - alpha(i)*dg(i)
     q = q - alpha(i)*dg(:,:,:,:,:,i)
@@ -252,22 +270,22 @@ program get_dmodel_lbfgs
   q = gamma * q
 
   if (myrank == 0) then
-    print *, '#====== L-BFGS: apply initial Hessian'
-    print *, 'H0 ~ gamma * I ~ (dm(1), dg(1)) / (dg(1), dg(1)) * I'
-    print *, 'gamma=', gamma
+    write(IOUT,'(a)') '#====== L-BFGS: apply initial Hessian'
+    write(IOUT,'(a)') '# H0 ~ gamma * I ~ (dm(1), dg(1)) / (dg(1), dg(1)) * I'
+    write(IOUT,'(a,2X,E17.8)') 'gamma=', gamma
   endif
 
   if (use_mask) then
-    if (myrank==0) print *, 'mask is applied.'
+    if (myrank==0) write(IOUT,'(a)') '# mask is applied.'
     call sem_io_read_gll_file_1(kernel_dir, myrank, iregion, 'mask', mask)
     q = q * spread(mask,1,nmodel)
   endif
 
   !-- L-BFGS: second loop
-  if (myrank==0) print *, '#====== L-BFGS: second loop'
+  if (myrank==0) write(IOUT,'(a)') '#====== L-BFGS: second loop'
   do i = nstep_lbfgs, 1, -1
 
-    if (myrank==0) print *, '#-- step ', i
+    if (myrank==0) write(IOUT,'(a,2X,I4)') '#---- step ', i
 
     ! beta = rho(i) * (dg(i), q)
     beta = sum(dg(:,:,:,:,:,i) * q(:,:,:,:,:) * spread(gll_volume,1,nmodel))
@@ -276,7 +294,7 @@ program get_dmodel_lbfgs
     call bcast_all_singledp(beta_sum)
     beta = rho(i) * beta_sum
 
-    if (myrank == 0) print *, 'beta=rho(i)*(dg(i),q)=', beta
+    if (myrank == 0) write(IOUT,'(a,2X,E17.8)') 'beta=rho(i)*(dg(i),q)=', beta
 
     ! q = q + (alpha(i) - beta)*dm(i)
     q = q + (alpha(i)-beta)*dm(:,:,:,:,:,i)
@@ -301,16 +319,19 @@ program get_dmodel_lbfgs
 
   call synchronize_all()
   if (myrank == 0) then
-    print *, '#====== L-BFGS: end'
-    print *, ' q <- H * (-g)'
-    print *, ' ||q||=', sqrt(q_norm_sum)
-    print *, ' ||g||=', sqrt(beta_sum)
-    print *, ' (q, g)/(|q|*|g|)=', gamma_sum/sqrt(q_norm_sum)/sqrt(beta_sum)
+    write(IOUT,'(a,2X,E17.8)') '#====== L-BFGS: end'
+    write(IOUT,'(a,2X,E17.8)') '# q <- H * (-g)'
+    write(IOUT,'(a,2X,E17.8)') '||q||=', sqrt(q_norm_sum)
+    write(IOUT,'(a,2X,E17.8)') '||g||=', sqrt(beta_sum)
+    write(IOUT,'(a,2X,E17.8)') '(q, g)/(|q|*|g|)=', gamma_sum/sqrt(q_norm_sum)/sqrt(beta_sum)
   endif
 
   !---- write out new dmodel
   call synchronize_all()
   call sem_io_write_gll_file_n(out_dir, myrank, iregion, dm_names, nmodel, q)
+
+  !====== Finalize
+  if (myrank == 0) close(IOUT)
 
   call synchronize_all()
   call finalize_mpi()

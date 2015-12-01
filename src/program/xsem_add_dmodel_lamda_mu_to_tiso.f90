@@ -136,6 +136,21 @@ program xsem_add_dmodel_lamda_mu_to_tiso
 
   call synchronize_all()
 
+  !====== open log file for write
+  if (myrank == 0) then
+
+    open(IOUT, file=trim(log_file), status='unknown', &
+      form='formatted', action='write', iostat=ier)
+
+    if (ier /= 0) then
+      write(*,*) '[ERROR] xsem_add_dmodel_lamda_mu_to_tiso: failed to open file ', trim(log_file)
+      call abort_mpi()
+    endif
+
+    write(IOUT, '(a)') '#[LOG] xsem_add_dmodel_lamda_mu_to_tiso'
+
+  endif
+
   !===== Get step length first
 
   ! get mesh geometry
@@ -167,25 +182,12 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   max_dln_vsv = 0.0_dp
   max_dln_vsh = 0.0_dp
 
-  ! open log file for write
-  if (myrank == 0) then
-
-    open(IOUT, file=trim(log_file), status='unknown', &
-      form='formatted', action='write', iostat=ier)
-
-    if (ier /= 0) then
-      write(*,*) '[ERROR] xsem_add_dmodel_lamda_mu_to_tiso: failed to open file ', trim(log_file)
-      call abort_mpi()
-    endif
-
-  endif
-
-  if (myrank ==0) print '(a)', "#====== get step_length"
+  if (myrank ==0) write(IOUT,'(a)') "#====== get step_length"
   call synchronize_all()
 
   do iproc = myrank, (nproc-1), nrank
 
-    print '(a,2X,I4)', "# iproc=", iproc
+    !print '(a,2X,I4)', "# iproc=", iproc
 
     ! read old models
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', vpv)
@@ -234,17 +236,16 @@ program xsem_add_dmodel_lamda_mu_to_tiso
       ! only set positive/negative sign
       step_length = SIGN(1.d0, max_dlnv_allow)
     endif
+  endif
 
-    write(IOUT,'(a)') "#[LOG] xsem_add_dmodel_lamda_mu_to_tiso"
+  ! log 
+  if (myrank == 0) then
     write(IOUT,'(a,2X,E12.4)') "max_dln_vpv_all=", max_dln_vpv_all
     write(IOUT,'(a,2X,E12.4)') "max_dln_vph_all=", max_dln_vph_all
     write(IOUT,'(a,2X,E12.4)') "max_dln_vsv_all=", max_dln_vsv_all
     write(IOUT,'(a,2X,E12.4)') "max_dln_vsh_all=", max_dln_vsh_all
     write(IOUT,'(a,2X,E12.4)') "max_dlnv_all=", max_dlnv_all
     write(IOUT,'(a,2X,E12.4)') "step_length=", step_length
-
-    close(IOUT)
-
   endif
 
   call synchronize_all()
@@ -252,12 +253,12 @@ program xsem_add_dmodel_lamda_mu_to_tiso
   call bcast_all_singledp(step_length)
 
   !====== create new model
-  if (myrank == 0) print '(a)', "#====== create new model"
+  if (myrank == 0) write(IOUT,'(a)') "#====== create new model"
   call synchronize_all()
 
   do iproc = myrank, (nproc-1), nrank
 
-    print '(a,2X,I4)', "# iproc=", iproc
+    !print '(a,2X,I4)', "# iproc=", iproc
 
     ! read old models
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', vpv)
@@ -301,7 +302,9 @@ program xsem_add_dmodel_lamda_mu_to_tiso
 
   enddo
 
-  !====== exit MPI
+  !====== Finalize
+  if (myrank == 0) close(IOUT)
+
   call synchronize_all()
   call finalize_mpi()
 

@@ -32,7 +32,7 @@ cd $event_dir
 rm syn obs
 ln -sf OUTPUT_forward syn
 ln -sf $data_dir/$event_id/disp obs
-cd DATA
+cd $event_dir/DATA
 rm station.txt
 ln -sf $data_dir/$event_id/data/station.txt ./
 

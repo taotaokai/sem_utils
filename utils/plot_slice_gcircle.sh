@@ -3,17 +3,17 @@
 # plot profiles created from xsem_slice_...
 
 #====== command line args
-control_file=${1:?must provide control_file}
-evid=${2:?must provide evid}
-xsection_list=${3:?must provide xsection_list}
+control_file=${1:?[arg] need control_file}
+event_id=${2:?[arg] need event_id}
+slice_list=${3:?[arg] need slice_list}
 model_names=${4:-vsv,vsh,vpv,vph}
-REF_dir=${5:-1D_REF} # reference model
 
-#====== set parameters
-# source parameters in control_file
+# load parameters in control_file
 source ${control_file}
+
 # get full path
-xsection_list=$(readlink -f $xsection_list)
+slice_list=$(readlink -f $slice_list)
+
 # etopo1
 etopo1_grd=/Users/taok/research/GeoData/topo/ETOPO1_Bed_c_gmt4.grd
 
@@ -32,18 +32,17 @@ xsection_height=$(echo "scale=4; ${xsection_yshift} * 0.8" | bc -l)
 cbar_length=$(echo "scale=4; ${xsection_height} * 0.7" | bc -l)
 cbar_ypos=$(echo "scale=4; ${xsection_height} * 0.45" | bc -l)
 
-grep -v "^#" $xsection_list |\
+grep -v "^#" $slice_list |\
 while read lat0 lon0 azimuth theta0 theta1 ntheta r0 r1 nr fname
 do
     echo
-    echo "#====== xsection: $fname ($lat0 $lon0 $azimuth $theta0 $theta1 $ntheta $r0 $r1 $nr)"
+    echo "#====== $fname: $lat0 $lon0 $azimuth $theta0 $theta1 $ntheta $r0 $r1 $nr"
     echo
 
     # input data files
-    nc_file=$iter_dir/$evid/xsection/${fname}.nc
-    ref_nc_file=$base_dir/${REF_dir}/xsection/${fname}.nc
+    nc_file=$iter_dir/$event_id/xsection/${fname}.nc
     # output figure
-    ps=$iter_dir/$evid/xsection/${fname}.ps
+    ps=$iter_dir/$event_id/xsection/${fname}.ps
 
     gmt set \
         FONT_ANNOT_PRIMARY +14p,Times-Roman \
@@ -90,6 +89,7 @@ do
 
     R=$theta0/$theta1/$r0/$r1
     J=Pa${xsection_height}c/${angle}zh
+    #J=Pa15c/${angle}z
 
     # lines for 410/660-km
     gmt grdmath -R$R -I1/1 Y = rr.nc
@@ -106,27 +106,21 @@ do
     for model_tag in ${model_names//,/ }
     do
         echo "# $model_tag"
-        # calculate relative perturbation referred to 1D_REF
-        gmt grdreformat $nc_file?$model_tag grd
-        gmt grdreformat $ref_nc_file?$model_tag ref_grd
-        gmt grdmath grd ref_grd SUB ref_grd DIV 100.0 MUL = dgrd
         # plot cross-section
-        gmt makecpt -Cjet -D -T-6/6/0.1 -Z -I > cpt
+        gmt grdreformat ${nc_file}?${model_tag} grd
+        #gmt makecpt -Cjet -D -T-6/6/0.1 -Z -I > cpt
         #gmt makecpt -Cseis -D -T-5/5/0.1 -Z > cpt
-        #gmt grd2cpt dgrd -Cjet -R$R -Z -D -I -L-6/6> cpt
+        gmt grd2cpt grd -Cjet -R$R -Z -D -I > cpt
         #gmt grd2cpt dgrd -Cseis -R$R -Z -T= -D > cpt
-        gmt grdimage dgrd -Yf${Y}c -Xc -R$R -J$J -Ccpt -nb \
+        gmt grdimage grd -Yf${Y}c -Xc -R$R -J$J -Ccpt -nb \
             -BWSne -Bxa10f5 -Bya200f100 -O -K >> $ps
         # xsection marker 
         gmt psxy xsection_marker.xy -Sp -N -R -J -O -K >> $ps
         # plot 410/660-km
         gmt grdcontour rr.nc -J$J -Cc.txt -O -K >> $ps
         # plot colorbar
-        gmt psscale -D14c/${cbar_ypos}c/${cbar_length}c/0.15c -Ccpt \
-            -Bxaf -By+l"d${model_tag}(%)" -E -O -K >> $ps
-        #echo "d${model_tag}" | gmt pstext \
-        #    -Xf1c -Yf${Y}c -R-2/2/-2/2 -JX4 \
-        #    -F+cCM+f17,Times-Bold,+jCM -P -O -K >> $ps
+        gmt psscale -D15c/${cbar_ypos}c/${cbar_length}c/0.15c -Ccpt \
+            -Bxaf -By+l"${model_tag}" -E -O -K >> $ps
 
         # Y-shift
         Y=$(echo "scale=4; $Y + ${xsection_yshift}" | bc -l)
@@ -135,9 +129,9 @@ do
 
     #------ covert .ps to .pdf file
     echo "#-- convert ps to pdf"
-    ps2pdf $ps $iter_dir/$evid/xsection/${fname}.pdf
+    ps2pdf $ps $iter_dir/$event_id/xsection/${fname}.pdf
 
-done # xsection_list
+done # slice_list
 
 #====== clean
 rm -rf $GMT_TMPDIR

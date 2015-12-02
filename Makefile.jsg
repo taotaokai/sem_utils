@@ -1,4 +1,3 @@
-#FC = ifort
 FC = mpif90
 
 RM = \rm -rf
@@ -18,7 +17,7 @@ shared_dir = ${src_dir}/shared
 program_dir = ${src_dir}/program
 
 # ifort
-FCFLAGS = -g
+FCFLAGS = -g -fc=ifort
 FCFLAGS += -O2
 FCFLAGS += -I $(inc_dir) -I$(netcdf_mod) -module $(obj_dir)
 LDFLAGS = -L$(netcdf_lib) -lnetcdff

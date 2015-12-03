@@ -1032,9 +1032,9 @@ class Misfit(object):
     def plot_misfit(self, event_id, window_id, out_file=None):
         """Plot misfit for a certain event and window_id  
         """
-        # CC_dt       | CC0/CCmax V.S. dt_cc 
-        #-------------|-----------------------
-        # CC0         | CC0/CCmax VS SNR
+        # CC0 map    | CC0 v.s. SNR (size ~ weight)
+        #------------|-----------------
+        # DTcc map   | avg. CC0            
 
         # check inputs
         events = self.data['events']
@@ -1053,6 +1053,7 @@ class Misfit(object):
         CC0_list = []
         CCmax_list = []
         snr_list = []
+        weight_list = []
         for station_id in stations:
             station = stations[station_id]
             windows = station['windows']
@@ -1080,6 +1081,7 @@ class Misfit(object):
             CC0_list.append(misfit['CC0'])
             CCmax_list.append(misfit['CCmax'])
             snr_list.append(quality['SNR'])
+            weight_list.append(window['weight'])
 
         # get event data
         gcmt = event['gcmt']
@@ -1118,9 +1120,9 @@ class Misfit(object):
         fig.text(0.5, 0.95, str_title, size='x-large', 
                 horizontalalignment='center')
 
-        #------ CC_time_shift + SNR 
+        #------ color map CC_time_shift, symbol size ~ SNR 
         ax = fig.add_axes([0.05, 0.5, 0.4, 0.35])
-        ax.set_title("CC_time_shift (symbol_size ~ SNR)")
+        ax.set_title("DT_cc (symbol_size ~ SNR)")
 
         m = Basemap(projection='merc', resolution='l',
                 llcrnrlat=min_lat, llcrnrlon=min_lon, 
@@ -1139,7 +1141,8 @@ class Misfit(object):
                 edgecolor='grey', linewidth=0.05)
         mean_amp = np.mean(cc_dt_list)
         std_amp = np.std(cc_dt_list)
-        plot_amp = abs(mean_amp)+std_amp
+        #plot_amp = abs(mean_amp)+std_amp
+        plot_amp = 5.0 
         im.set_clim(-plot_amp, plot_amp)
         
         # focal mechanism
@@ -1152,10 +1155,10 @@ class Misfit(object):
         cbar_ax = fig.add_axes([0.46, 0.575, 0.005, 0.2])
         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
         cbar_ax.tick_params(labelsize=9)
-        cbar_ax.set_xlabel(' cc_dt(s)', fontsize=9)
+        cbar_ax.set_xlabel('DT_cc(s)', fontsize=9)
         cbar_ax.xaxis.set_label_position('top')
        
-        #------ color: CC0, size: SNR
+        #------ color map CC0, symbol size ~ SNR
         ax = fig.add_axes([0.05, 0.05, 0.4, 0.35])
         ax.set_title("CC0 (symbol_size ~ SNR)")
 
@@ -1173,7 +1176,7 @@ class Misfit(object):
         #size_list = [ 20**x for x in CCmax_list ]
         size_list = [ 0.1 if x<0.1 else x for x in snr_list ]
         im = m.scatter(sx, sy, s=size_list, marker='o',
-                c=CC0_list, cmap='seismic', 
+                c=CC0_list, cmap='jet', 
                 edgecolor='grey', linewidth=0.05)
         im.set_clim(0.5, 1.0)
         
@@ -1187,65 +1190,69 @@ class Misfit(object):
         cbar_ax = fig.add_axes([0.46, 0.125, 0.005, 0.2])
         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
         cbar_ax.tick_params(labelsize=9) 
-        cbar_ax.set_xlabel(' CCmax', fontsize=9)
+        cbar_ax.set_xlabel('CC0', fontsize=9)
         cbar_ax.xaxis.set_label_position('top')
 
-        #------ SNR v.s. CCmax, colored by cc_dt
+        #------ SNR v.s. CC0, colored by cc_dt, size ~ weight
         ax = fig.add_axes([0.58, 0.65, 0.35, 0.2])
-        im = ax.scatter(snr_list, CCmax_list, marker='o', s=10,
+        im = ax.scatter(snr_list, CC0_list, marker='o', 
+                s=10.*np.array(weight_list), 
                 c=cc_dt_list, cmap='seismic',
                 edgecolor='grey', linewidth=0.05)
         mean_amp = np.mean(cc_dt_list)
         std_amp = np.std(cc_dt_list)
-        plot_amp = abs(mean_amp)+std_amp
+        #plot_amp = abs(mean_amp)+std_amp
+        plot_amp = 5.0
         im.set_clim(-plot_amp, plot_amp)
-        ax.set_xlim([min(snr_list), max(snr_list)])
-        ax.set_ylim([min(CCmax_list), max(CCmax_list)])
-        ax.set_xlabel(" SNR")
-        ax.set_ylabel("CCmax")
+        #ax.set_xlim([min(snr_list), max(snr_list)])
+        #ax.set_ylim([min(CCmax_list), max(CCmax_list)])
+        ax.set_xlim([0, max(snr_list)])
+        ax.set_ylim([0.3, 1.0])
+        ax.set_xlabel("SNR")
+        ax.set_ylabel("CC0")
         #add colorbar
         cbar_ax = fig.add_axes([0.95, 0.65, 0.005, 0.2])
         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
         cbar_ax.tick_params(labelsize=9)
-        cbar_ax.set_xlabel('cc_dt(s)', fontsize=9)
+        cbar_ax.set_xlabel('DT_cc(s)', fontsize=9)
         cbar_ax.xaxis.set_label_position('top')
 
-        #------ CC0 v.s. CCmax, colored by cc_dt
-        ax = fig.add_axes([0.58, 0.375, 0.35, 0.2])
-        im = ax.scatter(CC0_list, CCmax_list, marker='o', s=10,
-                c=cc_dt_list, cmap='seismic',
-                edgecolor='grey', linewidth=0.05)
-        mean_amp = np.mean(cc_dt_list)
-        std_amp = np.std(cc_dt_list)
-        plot_amp = abs(mean_amp)+std_amp
-        im.set_clim(-plot_amp, plot_amp)
-        ax.set_xlim([min(CC0_list), max(CC0_list)])
-        ax.set_ylim([min(CCmax_list), max(CCmax_list)])
-        ax.set_xlabel("CC0")
-        ax.set_ylabel("CCmax")
-        #add colorbar
-        cbar_ax = fig.add_axes([0.95, 0.375, 0.005, 0.2])
-        fig.colorbar(im, cax=cbar_ax, orientation="vertical")
-        cbar_ax.tick_params(labelsize=9)
-        cbar_ax.set_xlabel('cc_dt(s)', fontsize=9)
-        cbar_ax.xaxis.set_label_position('top')
+        ##------ CC0 v.s. CCmax, colored by cc_dt
+        #ax = fig.add_axes([0.58, 0.375, 0.35, 0.2])
+        #im = ax.scatter(CC0_list, CCmax_list, marker='o', s=10,
+        #        c=cc_dt_list, cmap='seismic',
+        #        edgecolor='grey', linewidth=0.05)
+        #mean_amp = np.mean(cc_dt_list)
+        #std_amp = np.std(cc_dt_list)
+        #plot_amp = abs(mean_amp)+std_amp
+        #im.set_clim(-plot_amp, plot_amp)
+        #ax.set_xlim([min(CC0_list), max(CC0_list)])
+        #ax.set_ylim([min(CCmax_list), max(CCmax_list)])
+        #ax.set_xlabel("CC0")
+        #ax.set_ylabel("CCmax")
+        ##add colorbar
+        #cbar_ax = fig.add_axes([0.95, 0.375, 0.005, 0.2])
+        #fig.colorbar(im, cax=cbar_ax, orientation="vertical")
+        #cbar_ax.tick_params(labelsize=9)
+        #cbar_ax.set_xlabel('cc_dt(s)', fontsize=9)
+        #cbar_ax.xaxis.set_label_position('top')
 
-        #------ cc_dt v.s. CCmax, colored by SNR
-        ax = fig.add_axes([0.58, 0.1, 0.35, 0.2])
-        im = ax.scatter(cc_dt_list, CCmax_list, marker='o', s=10, 
-                c=snr_list, cmap='seismic',
-                edgecolor='grey', linewidth=0.05)
-        im.set_clim(min(snr_list), max(snr_list))
-        ax.set_xlim([min(cc_dt_list), max(cc_dt_list)])
-        ax.set_ylim([min(CCmax_list), max(CCmax_list)])
-        ax.set_xlabel("cc_dt")
-        ax.set_ylabel("CCmax")
-        #add colorbar
-        cbar_ax = fig.add_axes([0.95, 0.1, 0.005, 0.2])
-        fig.colorbar(im, cax=cbar_ax, orientation="vertical")
-        cbar_ax.tick_params(labelsize=9)
-        cbar_ax.set_xlabel('SNR(dB)', fontsize=9)
-        cbar_ax.xaxis.set_label_position('top')
+        ##------ cc_dt v.s. CCmax, colored by SNR
+        #ax = fig.add_axes([0.58, 0.1, 0.35, 0.2])
+        #im = ax.scatter(cc_dt_list, CCmax_list, marker='o', s=10, 
+        #        c=snr_list, cmap='seismic',
+        #        edgecolor='grey', linewidth=0.05)
+        #im.set_clim(min(snr_list), max(snr_list))
+        #ax.set_xlim([min(cc_dt_list), max(cc_dt_list)])
+        #ax.set_ylim([min(CCmax_list), max(CCmax_list)])
+        #ax.set_xlabel("cc_dt")
+        #ax.set_ylabel("CCmax")
+        ##add colorbar
+        #cbar_ax = fig.add_axes([0.95, 0.1, 0.005, 0.2])
+        #fig.colorbar(im, cax=cbar_ax, orientation="vertical")
+        #cbar_ax.tick_params(labelsize=9)
+        #cbar_ax.set_xlabel('SNR(dB)', fontsize=9)
+        #cbar_ax.xaxis.set_label_position('top')
 
         ##------ histogram of dt_cc and dt_res
         #ax1 = fig.add_axes([0.5,0.28,0.4,0.15])
@@ -1282,14 +1289,44 @@ class Misfit(object):
                 azimuthal bin size
         """
         event = self.data['events'][event_id]
-        cmt = event['gcmt']
-        centroid_time = UTCDateTime(cmt['centroid_time'])
+
+        #====== get event data
+        gcmt = event['gcmt']
+        centroid_time = UTCDateTime(gcmt['centroid_time'])
+        evla = gcmt['latitude']
+        evlo = gcmt['longitude']
+        M = gcmt['moment_tensor']
+        Mrr = M[0][0]
+        Mtt = M[1][1]
+        Mpp = M[2][2]
+        Mrt = M[0][1]
+        Mrp = M[0][2]
+        Mtp = M[1][2]
+        focmec = [ Mrr, Mtt, Mpp, Mrt, Mrp, Mtp ]
+
         if use_STF:
             if not hdur:
-                half_duration = cmt['half_duration']
+                half_duration = gcmt['half_duration']
             else:
                 half_duration = hdur
             print "half_duration = ", half_duration
+
+        #====== get list of station,window id
+        stations = event['stations']
+        stla_all = []
+        stlo_all = []
+        for station_id in stations:
+            station = stations[station_id]
+            windows = station['windows']
+            meta = station['meta']
+            # select data 
+            if station['stat']['code'] < 0:
+                continue
+            if use_window and (window_id not in windows):
+                continue
+            #
+            stla_all.append(meta['latitude'])
+            stlo_all.append(meta['longitude'])
 
         #====== calculate traveltime curve
         model = TauPyModel(model="ak135")
@@ -1299,7 +1336,7 @@ class Misfit(object):
         ttcurve_s = []
         ttcurve_S = []
         for dist in dist_ttcurve:
-            arrivals = model.get_travel_times(source_depth_in_km=cmt['depth'],
+            arrivals = model.get_travel_times(source_depth_in_km=gcmt['depth'],
                 distance_in_degree=dist, phase_list=['p','P','s','S'])
             for arr in arrivals:
                 if arr.name == 'p':
@@ -1317,12 +1354,30 @@ class Misfit(object):
         ttcurve_s = sorted(ttcurve_s, key=lambda x: x[2])
         ttcurve_S = sorted(ttcurve_S, key=lambda x: x[2])
         
-        #====== plot seismograms in azimuthal bins
-        stations = self.data['events'][event_id]['stations']
+        #====== plot map/seismograms in azimuthal bins
+
+        #------ map configuration 
+        min_lat = min(min(stla_all), evla)
+        max_lat = max(max(stla_all), evla)
+        lat_range = max_lat - min_lat
+        min_lat -= 0.1*lat_range
+        max_lat += 0.1*lat_range
+        min_lon = min(min(stlo_all), evlo)
+        max_lon = max(max(stlo_all), evlo)
+        lon_range = max_lon - min_lon
+        min_lon -= 0.1*lon_range
+        max_lon += 0.1*lon_range
+        #lat_true_scale = np.mean(stla_list)
+        lat_0 = np.mean(stla_all)
+        lon_0 = np.mean(stlo_all)
+        # 
+        parallels = np.arange(0.,81,10.)
+        meridians = np.arange(0.,351,10.)
+
+        #------ plot each azimuthal bin
         for az in np.arange(0, 360, azbin):
             azmin = az
             azmax = az + azbin
-        
             # read available stations within azbin
             data_azbin = {}
             for station_id in stations:
@@ -1334,10 +1389,14 @@ class Misfit(object):
                     continue
                 if azimuth<azmin or azimuth>azmax:
                     continue
-                if use_window and (window_id in windows):
+                if use_window: 
+                    if (window_id not in windows):
+                        continue
                     window = windows[window_id]
                     quality = window['quality']
                     misfit = window['misfit']
+                    if window['stat']['code'] != 1:
+                        continue
                     if min_SNR and quality['SNR']<min_SNR:
                         continue
                     if min_CC0 and misfit['CC0']<min_CC0:
@@ -1398,17 +1457,46 @@ class Misfit(object):
 
             if not data_azbin: continue
 
-            # create figure and axes
-            fig = plt.figure(figsize=(11,8.5))
-            str_title = 'azimuth(deg): {:.1f}, {:.1f}'.format(azmin, azmax)
+            #====== create figure and axes
+            fig = plt.figure(figsize=(8.5, 11)) # US letter
+            str_title = '{:s} (win: {:s}, az: {:04.1f}~{:04.1f})'.format(
+                    event_id, window_id, azmin, azmax)
             fig.text(0.5, 0.95, str_title, size='x-large', horizontalalignment='center')
+
+            #------ station map
+            ax_origin = [0.2, 0.67]
+            ax_size = [0.6, 0.25]
+            ax_map = fig.add_axes(ax_origin + ax_size)
+            m = Basemap(projection='merc', resolution='l',
+                    llcrnrlat=min_lat, llcrnrlon=min_lon, 
+                    urcrnrlat=max_lat, urcrnrlon=max_lon,
+                    lat_0=lat_0, lon_0=lon_0 )
+            m.drawcoastlines(linewidth=0.1)
+            m.drawcountries(linewidth=0.1)
+            m.drawparallels(parallels, linewidth=0.1, labels=[1,0,0,1], 
+                    fontsize=10, fmt='%3.0f')
+            m.drawmeridians(meridians, linewidth=0.1, labels=[1,0,0,1], 
+                    fontsize=10, fmt='%3.0f')
+            sx, sy = m(stlo_all, stla_all)
+            m.scatter(sx, sy, s=5, marker='^', facecolor='black', edgecolor='')
+            # plot stations inside the bin
+            stla = [data_azbin[x]['meta']['latitude'] for x in data_azbin]
+            stlo = [data_azbin[x]['meta']['longitude'] for x in data_azbin]
+            sx, sy = m(stlo, stla)
+            m.scatter(sx, sy, s=15, marker='^', facecolor='red', edgecolor='')
+
+            # focal mechanism
+            sx, sy = m(evlo, evla)
+            b = Beach(focmec, xy=(sx, sy), width=400000, linewidth=0.2, facecolor='r')
+            ax_map.add_collection(b)
+ 
+            #------ plot waveforms 
             ax_RTZ = []
             for i in range(3):
-                ax_origin = [0.05+0.3*i, 0.1]
-                ax_size = [0.25, 0.8]
+                ax_origin = [0.07+0.3*i, 0.1]
+                ax_size = [0.25, 0.5]
                 ax_RTZ.append(fig.add_axes(ax_origin + ax_size))
 
-            # make figure
             y = [ x['meta']['dist_degree'] for x in data_azbin.itervalues() ]
             ny = len(y)
             dy = 0.5*(max(y)-min(y)+1)/ny
@@ -1492,6 +1580,8 @@ class Misfit(object):
                         ax.set_yticklabels([])
                     #annotate station names 
                     if i == 2:
+                        #str_annot = '%.3f,%.1f,%s' % (
+                        #        misfit['CC0'], window['weight'], station_id)
                         ax.text(win[1], dist_degree, ' '+station_id, \
                                 verticalalignment='center', fontsize=7)
                 #for i in range(3):

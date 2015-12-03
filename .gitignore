@@ -18,3 +18,5 @@ include/*.h
 .*swo
 *~
 *.o
+*.so
+*.pyc

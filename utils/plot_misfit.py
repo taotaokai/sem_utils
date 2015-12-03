@@ -26,13 +26,13 @@ event_id = [ key for key in misfit.data['events'] ][0]
 print "\nplot misfit\n"
 
 window_id = 'F.s,S'
-out_file = "%s/%s.%s.pdf" % (misfit_dir, event_id, window_id)
+out_file = "%s/%s_%s.pdf" % (misfit_dir, event_id, window_id)
 misfit.plot_misfit(event_id, 
         window_id=window_id,
         out_file=out_file)
 
 window_id = 'F.p,P'
-out_file = "%s/%s.%s.pdf" % (misfit_dir, event_id, window_id)
+out_file = "%s/%s_%s.pdf" % (misfit_dir, event_id, window_id)
 misfit.plot_misfit(event_id, 
         window_id=window_id,
         out_file=out_file)

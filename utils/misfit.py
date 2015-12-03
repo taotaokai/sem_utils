@@ -1272,7 +1272,7 @@ class Misfit(object):
 
         #------ save figure
         if not out_file:
-            out_file = '%s.%s.pdf' % (event_id, window_id)
+            out_file = '%s_%s.pdf' % (event_id, window_id)
         fig.savefig(out_file, format='pdf')
         #fig.savefig("misfit.pdf", bbox_inches='tight', format='pdf')
 
@@ -1588,7 +1588,12 @@ class Misfit(object):
             #for sta_id in data:
         
             if savefig:
-                out_file = '%s/az_%d-%d_p%d.pdf' % (out_dir, azmin, azmax, rayp)
+                if use_window:
+                    out_file = '%s/%s_az_%03d_%03d_%s.pdf' % (
+                            out_dir, event_id, azmin, azmax, window_id)
+                else:
+                    out_file = '%s/%s_az_%03d_%03d.pdf' % (
+                            out_dir, event_id, azmin, azmax)
                 plt.savefig(out_file, format='pdf')
             else:
                 plt.show()

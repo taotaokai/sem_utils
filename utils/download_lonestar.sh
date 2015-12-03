@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Download simulation results and model from remote work computers (e.g. Lonestar)
 
@@ -10,7 +10,7 @@ job=${2:?[args] need jobs (comma separated string, e.g. model,kernel,event,all)}
 declare -A job_arr
 for tag in ${job//,/ }
 do
-    job_arr[$tag]=1
+    job_arr["$tag"]=1
 done
 
 #------ check inputs

@@ -88,13 +88,15 @@ project/
 
 2. run scripts sem_utils/utils/qsub_iteration to submit jobs for the whole iteration
 
-    * update_model.sh  -> model/
+    > one job
+    * update_model.sh -> model/ # check model update direction, step_length
+    * setup_mesh.sh -> mesh/
     
-    * setup_mesh.sh  -> mesh/
+    > jobs of number of events 
+    * setup_event.sh, setup_adjoint -> <event_id>/  (for all events)
     
-    * setup_event.sh -> <event_id>/  (for all events)
-    
-    * update_kernel.sh ->  kernel/
+    > one job
+    * update_kernel.sh -> kernel/
 
 3. post-process:
 

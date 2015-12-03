@@ -23,19 +23,19 @@ misfit.load(filename='%s/misfit.json' % (misfit_dir))
 event_id = [ key for key in misfit.data['events'] ][0]
 
 #------
-#print "\nplot misfit\n"
-#
-#window_id = 'F.s,S'
-#out_file = "%s/%s.%s.pdf" % (misfit_dir, event_id, window_id)
-#misfit.plot_misfit(event_id, 
-#        window_id=window_id,
-#        out_file=out_file)
-#
-#window_id = 'F.p,P'
-#out_file = "%s/%s.%s.pdf" % (misfit_dir, event_id, window_id)
-#misfit.plot_misfit(event_id, 
-#        window_id=window_id,
-#        out_file=out_file)
+print "\nplot misfit\n"
+
+window_id = 'F.s,S'
+out_file = "%s/%s.%s.pdf" % (misfit_dir, event_id, window_id)
+misfit.plot_misfit(event_id, 
+        window_id=window_id,
+        out_file=out_file)
+
+window_id = 'F.p,P'
+out_file = "%s/%s.%s.pdf" % (misfit_dir, event_id, window_id)
+misfit.plot_misfit(event_id, 
+        window_id=window_id,
+        out_file=out_file)
 
 #------
 print "\nplot seismograms\n"
@@ -49,11 +49,11 @@ misfit.plot_seismograms(event_id,
     use_window=True, window_id=window_id,
     min_SNR=10, min_CCmax=0.5)
  
-#window_id = 'F.s,S'
-#misfit.plot_seismograms(event_id,
-#    azbin=20, win=[30, 200], rayp=16,
-#    obs_dir=obs_dir, syn_dir=syn_dir, syn_band_code='MX',
-#    syn_suffix='.sem.sac', out_dir=misfit_dir, savefig=True,
-#    use_STF=True, 
-#    use_window=True, window_id=window_id,
-#    min_SNR=10, min_CCmax=0.5)
+window_id = 'F.s,S'
+misfit.plot_seismograms(event_id,
+    azbin=20, win=[30, 200], rayp=16,
+    obs_dir=obs_dir, syn_dir=syn_dir, syn_band_code='MX',
+    syn_suffix='.sem.sac', out_dir=misfit_dir, savefig=True,
+    use_STF=True, 
+    use_window=True, window_id=window_id,
+    min_SNR=10, min_CCmax=0.5)

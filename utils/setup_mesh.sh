@@ -8,7 +8,7 @@ control_file=${1:?must provide control_file}
 # check inputs
 if [ ! -f "$control_file" ]
 then
-    echo "[ERROR] invalid control_file: ", $control_file
+    echo "[ERROR] invalid control_file: " $control_file
     exit -1
 fi
 control_file=$(readlink -f $control_file)

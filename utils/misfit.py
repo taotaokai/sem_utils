@@ -1478,12 +1478,12 @@ class Misfit(object):
             m.drawmeridians(meridians, linewidth=0.1, labels=[1,0,0,1], 
                     fontsize=10, fmt='%3.0f')
             sx, sy = m(stlo_all, stla_all)
-            m.scatter(sx, sy, s=5, marker='^', facecolor='black', edgecolor='')
+            m.scatter(sx, sy, s=10, marker='^', facecolor='blue', edgecolor='')
             # plot stations inside the bin
             stla = [data_azbin[x]['meta']['latitude'] for x in data_azbin]
             stlo = [data_azbin[x]['meta']['longitude'] for x in data_azbin]
             sx, sy = m(stlo, stla)
-            m.scatter(sx, sy, s=15, marker='^', facecolor='red', edgecolor='')
+            m.scatter(sx, sy, s=10, marker='^', facecolor='red', edgecolor='')
 
             # focal mechanism
             sx, sy = m(evlo, evla)

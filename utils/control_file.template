@@ -1,0 +1,100 @@
+#!/bin/bash
+
+# User defined control parameters
+
+#------ iteration number
+# current iteration number
+iter=4
+
+# starting iteration number for kernel calculation
+iter0=1
+
+#------ Data directories
+# project root directory
+base_dir=$(readlink -f ~/NEChina)
+
+# sem_utils
+sem_utils=$(readlink -f $base_dir/sem_utils)
+
+# sem_config/: DATA/, setup/, initial_model/
+sem_config_dir=$(readlink -f ${base_dir}/sem_config)
+init_model_dir=$(readlink -f ${sem_config_dir}/initial_model)
+
+# SEM: bin/xmeshfem3D,xspecfem3D
+sem_build_dir=$(readlink -f ${base_dir}/specfem3d_globe)
+
+# scratch dir to store large files from iterations (SEM DATABASES_MPI)
+scratch_dir=$(readlink -f $base_dir/scratch)
+
+# data directory (station metadata, waveforms)
+data_dir=$(readlink -f $base_dir/events)
+
+#------ SEM
+## number of MPI processors
+nproc_request=264 # multples of 12
+nproc=256
+#nproc=2
+## running time
+run_time_mesher=00:10:00 #mesh
+run_time_event=03:00:00 #forward+adjoint for one event
+run_time_update=00:30:00 #update_kernel.sh (12 proc)
+
+#----- update model
+## xsem_get_dmodel
+use_lbfgs=1
+nstep_lbfgs=5
+sd_scale_factor=1.0 # kernel scaling factor in steepest-descent
+## xem_add_dmodel_***_to_tiso
+#used model tags for model update
+#used_kernel_names=mu_kernel
+#maximum model relative perturbation ratio
+max_dlnv_allowed=0.05
+force_max_dlnv_allowed=0
+#fix density model
+fix_rho=1
+
+#------ setup mesh
+# no control parameter for now.
+
+#------ setup event
+## forward 
+save_forward=yes
+## misfit
+# frequency range (Hz)
+freqmin=0.012
+freqmax=0.06
+## correlation coef. cutoff
+## only retain stations of larger cc value for adjoint simulation
+#cc_cutoff=0.7
+
+#------ update kernel
+## preconditioning of each event kernel
+## xsem_mask_source_depth_mask (km; no masking if gaussa = 0)
+source_gaussa=330
+depth_pass=400
+depth_gaussa=70
+## xsem_sum_event_kernel
+use_mask=1
+nroot_stack=1 # plain summation is smooth, 2,4-th stacking give more roughness
+## xsem_thresholding
+#threshold_corner=0.99 #corner ratio to threshold kernel amplitudes
+#threshold_rmax=0.1 # maximum ratio exceeding corner amplitude
+
+
+#-----------------------------------------------------------------------#
+# Do not edit below                                                     #
+#-----------------------------------------------------------------------#
+# current iteration directory: root, mesh, model, kernel
+iter_dir=$(printf "%s/iteration.%02d" $scratch_dir $iter)
+mesh_dir=${iter_dir}/mesh
+model_dir=${iter_dir}/model
+kernel_dir=${iter_dir}/kernel
+
+# previous iteration directory
+iter_minus_one=$(echo "$iter" | awk '{printf "%02d", $1-1}')
+prev_iter_dir=${scratch_dir}/iteration.${iter_minus_one}
+prev_mesh_dir=${prev_iter_dir}/mesh
+prev_model_dir=${prev_iter_dir}/model
+prev_kernel_dir=${prev_iter_dir}/kernel
+
+#END

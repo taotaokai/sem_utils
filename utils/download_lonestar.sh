@@ -16,7 +16,7 @@ done
 #------ check inputs
 if [ ! -f "$control_file" ]
 then
-    echo "[ERROR] invalid control_file: ", $control_file
+    echo "[ERROR] invalid control_file: " $control_file
     exit -1
 fi
 control_file=$(readlink -f $control_file)
@@ -25,6 +25,11 @@ control_file=$(readlink -f $control_file)
 if [[ ${job_arr["event"]} ]] || [[ ${job_arr["all"]} ]]
 then
     event_list=${3:?[args] need event_id list}
+    if [ ! -f "$event_list" ]
+    then
+        echo "[ERROR] invalid event_list: " $event_list
+        exit -1
+    fi
     event_list=$(readlink -f $event_list)
 fi
 

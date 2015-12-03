@@ -18,7 +18,7 @@ source ${control_file}
 slice_list=$(readlink -f $slice_list)
 
 # etopo1
-etopo1_grd=/Users/taok/research/GeoData/topo/ETOPO1_Bed_c_gmt4.grd
+etopo1_grd=$base_dir/topo/ETOPO1_Bed_c_gmt4.grd
 
 #====== plot each xsection
 

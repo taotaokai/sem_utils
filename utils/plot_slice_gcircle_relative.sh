@@ -49,18 +49,17 @@ do
     ps=$iter_dir/$event_id/xsection/${fname}_STW105.ps
 
     gmt set \
-        FONT_ANNOT_PRIMARY +14p,Times-Roman \
+        FONT_ANNOT_PRIMARY +12p,Times-Roman \
         FONT_TITLE 14p,Times-Bold \
         PS_PAGE_ORIENTATION portrait \
+        MAP_FRAME_TYPE plain \
         PS_MEDIA A4
 
     #------ plot Map and surface traction of the cross_section
     echo "#-- plot Map"
 
-    R=90/150/20/55
-    #J=L120/38/30/45/10c+
-    J=T120/40/6ch
-    #J=M120/38/8c
+    R=90/150/15/60
+    J=L120.0000/37.5000/26.2500/48.7500/6.0ch
     
     # xsection lat,lon
     gmt convert ${nc_file}?theta > theta.list
@@ -76,7 +75,7 @@ do
          NR>2 {printf "%s %s\n", $3, $2}' > xsection_marker.xy
 
     # make basemap 
-    gmt psbasemap -Yf22.5c -Xc -R$R -J$J -BWSNE -Bag -K > $ps
+    gmt psbasemap -Yf22.5c -Xc -R$R -J$J -BWSne -Bag -K > $ps
     gmt makecpt -Cglobe > cpt
     gmt grdimage $etopo1_grd -R -J -Ccpt -O -K >> $ps
     gmt pscoast -R -J -Dl -A250 -N1/thinnest -O -K >> $ps

@@ -82,6 +82,7 @@ then
         fi
         cd $event_dir
         rsync -auvL "$remote_iter_dir/$event_id/OUTPUT_forward.tar" ./
+        tar xf OUTPUT_forward.tar
         rm -rf misfit DATA
         rsync -auvL "$remote_iter_dir/$event_id/misfit" ./
         rsync -auvL "$remote_iter_dir/$event_id/DATA" ./

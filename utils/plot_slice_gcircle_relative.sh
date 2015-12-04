@@ -76,7 +76,7 @@ do
          NR>2 {printf "%s %s\n", $3, $2}' > xsection_marker.xy
 
     # make basemap 
-    gmt psbasemap -Yf22.5c -Xc -R$R -J$J -BWSne -Bag+t"iteration: $iter" -K > $ps
+    gmt psbasemap -Yf22.5c -Xc -R$R -J$J -BWSne+t"iteration: $iter" -Bag -K > $ps
     gmt makecpt -Cglobe > cpt
     gmt grdimage $etopo1_grd -R -J -Ccpt -O -K >> $ps
     gmt pscoast -R -J -Dl -A250 -N1/thinnest -O -K >> $ps

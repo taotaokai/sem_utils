@@ -8,7 +8,11 @@
 1. include/, src/: Fortran codes for SEM data processing
 
 2. utils/: scripts used to manage the inversion work flow 
-
+    * sem_create.sh, sem_build.sh
+    * setup_mesh.sh, setup_event.sh, setup_adjoint.sh, measure_misfit.py
+    * update_model.sh, update_kernel.sh
+    * make_vtk.sh, make_slice_gcircle.sh, make_slice_sphere.sh
+    * plot_slice_*.sh, plot_misfit.sh
 
 #====== Folder Structure for an inversion project
 
@@ -45,7 +49,7 @@ project/
 |   
 *   iterations/ # iteration database
 |   *   iteration.00/
-|   |   *   control_file.00 # control parameters
+|   |   *   control_file.00 # a shell script contains control parameters
 |   |   |
 |   |   *   model/
 |   |   |   *   DATABASES_MPI/
@@ -116,7 +120,7 @@ project/
 
 1. setup control parameters for the current iteration.
 
-    * copy and modify utils/control_file
+    * copy and modify utils/control_file into project/iterations/contro_file.<iter>
 
 2. run scripts utils/qsub_iteration to submit jobs for the whole iteration
 

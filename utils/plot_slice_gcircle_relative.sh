@@ -10,7 +10,7 @@ control_file=${1:?[arg] need control_file}
 event_id=${2:?[arg] need event_id}
 slice_list=${3:?[arg] need slice_list}
 model_names=${4:-vsv,vsh,vpv,vph}
-ref_dir=${5:-1D_REF} # reference model
+ref_dir=${5:-sem_config/1D_REF} # reference model
 
 # load parameters in control_file
 source ${control_file}
@@ -76,7 +76,7 @@ do
          NR>2 {printf "%s %s\n", $3, $2}' > xsection_marker.xy
 
     # make basemap 
-    gmt psbasemap -Yf22.5c -Xc -R$R -J$J -BWSne -Bag -K > $ps
+    gmt psbasemap -Yf22.5c -Xc -R$R -J$J -BWSne -Bag+t"iteration: $iter" -K > $ps
     gmt makecpt -Cglobe > cpt
     gmt grdimage $etopo1_grd -R -J -Ccpt -O -K >> $ps
     gmt pscoast -R -J -Dl -A250 -N1/thinnest -O -K >> $ps

@@ -9,7 +9,7 @@ control_file=${1:?[arg] need control_file}
 event_id=${2:?[arg] need event_id}
 slice_list=${3:?[arg] need slice_list}
 model_names=${4:-vsv,vsh,vpv,vph}
-ref_dir=${5:-1D_REF} # reference model
+ref_dir=${5:-sem_config/1D_REF} # reference model
 
 # load parameters in control_file
 source ${control_file}

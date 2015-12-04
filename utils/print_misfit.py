@@ -28,7 +28,7 @@ for event_id, event in events.iteritems():
     stations = event['stations']
     reloc = event['relocate']
     dm = reloc['dm']
-    print "#RELOC %-16s dNorth %g dEast %g dDepth %g dT %g" % (
+    print "#RELOC %-16s dNorth %12.5e dEast %12.5e dDepth %12.5e dT %12.5e" % (
             event_id, dm['dNorth'], dm['dEast'], dm['dDepth'], dm['dT'])
     for station_id, station in stations.iteritems():
         if station['stat']['code'] < 0: 
@@ -42,7 +42,7 @@ for event_id, event in events.iteritems():
             cc = window['misfit']
             snr = window['quality']['SNR']
             ttime = window['phase']['ttime']
-            print "%-16s %-12s %-8s %6.3f %6.3f %8.3f %10.3e %6.3f %6.3f %5.1f %5.3f" % (
+            print "%-16s %-12s %-8s %6.4f %6.4f %8.4f %10.3e %6.3f %6.3f %5.1f %5.3f" % (
                     event_id, station_id, window_id,
                     cc['CC0'],cc['CCmax'],cc['CC_time_shift'],
                     cc['CC_time_shift']/ttime,

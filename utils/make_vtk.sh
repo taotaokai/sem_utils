@@ -3,9 +3,9 @@
 # make vtk file of SEM GLL model
 
 #====== command line args
-control_file=${1:?must provide control_file}
-event_id=${2:?must provide event_id}
-model_names=${3:-mu_kernel,lamda_kernel,rho_kernel}
+control_file=${1:?[arg] need control_file}
+event_id=${2:?[arg] need event_id}
+model_names=${3:-[arg] need model_name (e.g. mu_kernel,lamda_kernel,rho_kernel)}
 
 # source parameters in control_file
 source ${control_file}

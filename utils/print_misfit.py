@@ -42,7 +42,7 @@ for event_id, event in events.iteritems():
             cc = window['misfit']
             snr = window['quality']['SNR']
             ttime = window['phase']['ttime']
-            print "%-16s %-12s %-8s %6.4f %6.4f %8.4f %10.3e %6.3f %6.3f %5.1f %5.3f" % (
+            print "%-16s %-12s %-8s %7.4f %7.4f %8.4f %10.3e %7.3f %7.3f %5.1f %5.3f" % (
                     event_id, station_id, window_id,
                     cc['CC0'],cc['CCmax'],cc['CC_time_shift'],
                     cc['CC_time_shift']/ttime,

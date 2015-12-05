@@ -85,6 +85,10 @@ then
         rm -rf misfit DATA
         rsync -auvL "$remote_iter_dir/$event_id/misfit" ./
         rsync -auvL "$remote_iter_dir/$event_id/DATA" ./
+        rsync -auvz --include="*_reg1_cijkl_kernel.bin" \
+            --include="*_reg1_rho_kernel.bin" \
+            --include="*/" --exclude="*" \
+            "$remote_iter_dir/$event_id/DATABASES_MPI" ./
     done
 fi
 

@@ -21,7 +21,7 @@ ln -sf $config_dir/setup/*.h.in .
 # build
 cd $build_dir
 
-./configure FC=mpif90 MPIFC=mpif90 FCFLAGS="-O3"
+./configure FC=mpif90 MPIFC=mpif90 FCFLAGS="-fc=ifort -O3"
 make clean
 make xcreate_header_file xmeshfem3D xspecfem3D xcombine_vol_data_vtk |\
   tee make.log

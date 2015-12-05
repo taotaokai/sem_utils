@@ -1464,8 +1464,8 @@ class Misfit(object):
             fig.text(0.5, 0.95, str_title, size='x-large', horizontalalignment='center')
 
             #------ station map
-            ax_origin = [0.2, 0.67]
-            ax_size = [0.6, 0.25]
+            ax_origin = [0.25, 0.70]
+            ax_size = [0.5, 0.25]
             ax_map = fig.add_axes(ax_origin + ax_size)
             m = Basemap(projection='merc', resolution='l',
                     llcrnrlat=min_lat, llcrnrlon=min_lon, 
@@ -1493,8 +1493,8 @@ class Misfit(object):
             #------ plot waveforms 
             ax_RTZ = []
             for i in range(3):
-                ax_origin = [0.07+0.3*i, 0.1]
-                ax_size = [0.25, 0.5]
+                ax_origin = [0.07+0.3*i, 0.05]
+                ax_size = [0.25, 0.65]
                 ax_RTZ.append(fig.add_axes(ax_origin + ax_size))
 
             y = [ x['meta']['dist_degree'] for x in data_azbin.itervalues() ]

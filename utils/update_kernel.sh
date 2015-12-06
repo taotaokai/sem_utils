@@ -32,32 +32,35 @@ echo "Start updating gradient [$(date)]."
 echo
 
 #====== source mask (prevent error leakage from misfit in source parameters)
-echo
-echo "#====== make source mask [$(date)]"
-echo
-
-for event_id in $(grep -v ^# $event_list)
-do
-    echo "#-- $event_id"
-    event_dir=$iter_dir/$event_id
-
-    # create source_xyz.list
-    src_vtk=$event_dir/OUTPUT_forward/source.vtk
-    sed -n '/^POINTS/{n;p;}' $src_vtk > $event_dir/source_xyz.list
-    echo "# source_xyz: "
-    cat $event_dir/source_xyz.list
-
-    # create mask gll
-    cd ${event_dir}
-    ${mpi_exec} \
-        $sem_utils/bin/xsem_make_source_mask \
-        ${nproc}\
-        ${mesh_dir}/DATABASES_MPI \
-        ${event_dir}/source_xyz.list \
-        ${source_gaussa} \
-        "mask" \
-        ${event_dir}/DATABASES_MPI
-done
+if [ "$use_source_mask" -eq 1 ]
+then
+    echo
+    echo "#====== make source mask [$(date)]"
+    echo
+    
+    for event_id in $(grep -v ^# $event_list)
+    do
+        echo "#-- $event_id"
+        event_dir=$iter_dir/$event_id
+    
+        # create source_xyz.list
+        src_vtk=$event_dir/OUTPUT_forward/source.vtk
+        sed -n '/^POINTS/{n;p;}' $src_vtk > $event_dir/source_xyz.list
+        echo "# source_xyz: "
+        cat $event_dir/source_xyz.list
+    
+        # create mask gll
+        cd ${event_dir}
+        ${mpi_exec} \
+            $sem_utils/bin/xsem_make_source_mask \
+            ${nproc}\
+            ${mesh_dir}/DATABASES_MPI \
+            ${event_dir}/source_xyz.list \
+            ${source_gaussa} \
+            "mask" \
+            ${event_dir}/DATABASES_MPI
+    done
+fi
 
 #====== get model gradient
 echo
@@ -80,7 +83,7 @@ ${mpi_exec} $sem_utils/bin/xsem_sum_event_kernels_cijkl \
     ${nproc} \
     ${mesh_dir}/DATABASES_MPI \
     ${kernel_dir}/event_kernel.list \
-    ${use_mask} \
+    ${use_source_mask} \
     ${nroot_stack} \
     ${kernel_dir}/DATABASES_MPI
 
@@ -92,7 +95,7 @@ ${mpi_exec} $sem_utils/bin/xsem_sum_event_kernels_1 \
     ${mesh_dir}/DATABASES_MPI \
     ${kernel_dir}/event_kernel.list \
     "rho_kernel" \
-    ${use_mask} \
+    ${use_source_mask} \
     ${nroot_stack} \
     ${kernel_dir}/DATABASES_MPI
 

@@ -112,8 +112,8 @@ program xsem_make_kernel_mask
     print *, "#[LOG] mesh_dir=", trim(mesh_dir)
     print *, "#[LOG] source_xyz_list=", trim(source_xyz_list)
     print *, "#[LOG] source_gaussa=", source_gaussa
-    print *, "#[LOG] out_tag=", out_tag
-    print *, "#[LOG] out_dir=", out_dir
+    print *, "#[LOG] out_tag=", trim(out_tag)
+    print *, "#[LOG] out_dir=", trim(out_dir)
   endif
 
   !====== read source_xyz_list

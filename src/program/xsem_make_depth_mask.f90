@@ -125,8 +125,8 @@ program xsem_make_kernel_mask
     print *, "#[LOG] depth_stop=", depth_stop
     print *, "#[LOG] depth_pass=", depth_pass
     print *, "#[LOG] taper_type=", trim(taper_type)
-    print *, "#[LOG] out_tag=", out_tag
-    print *, "#[LOG] out_dir=", out_dir
+    print *, "#[LOG] out_tag=", trim(out_tag)
+    print *, "#[LOG] out_dir=", trim(out_dir)
   endif
 
   !===== loop each mesh slice

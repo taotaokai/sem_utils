@@ -33,7 +33,7 @@ echo
 
 #====== event kernel preconditioner
 echo
-echo "#====== make event kernel mask [$(date)]"
+echo "#====== make source mask [$(date)]"
 echo
 
 for event_id in $(grep -v ^# $event_list)
@@ -50,13 +50,12 @@ do
     # create mask gll
     cd ${event_dir}
     ${mpi_exec} \
-        $sem_utils/bin/xsem_make_source_depth_mask \
+        $sem_utils/bin/xsem_make_source_mask \
         ${nproc}\
         ${mesh_dir}/DATABASES_MPI \
         ${event_dir}/source_xyz.list \
         ${source_gaussa} \
-        ${depth_pass} \
-        ${depth_gaussa} \
+        "mask" \
         ${event_dir}/DATABASES_MPI
 done
 
@@ -126,8 +125,12 @@ fi
 echo "#-- kernel depth weighting [$(date)]"
 # get depth PDF of volum integral of kernel amplitude
 ${mpi_exec} $sem_utils/bin/xsem_depth_pdf \
-    $nproc $mesh_dir/DATABASES_MPI DATABASES_MPI mu_kernel \
-    100 mu_kernel_depth_bin.txt
+    ${nproc} \
+    ${mesh_dir}/DATABASES_MPI \
+    ${kernel_dir}/DATABASES_MPI \
+    mu_kernel \
+    100 \
+    ${kernel_dir}/mu_kernel_depth_bin.txt
 
 ##-- kernel thresholding (lamda,mu,rho)_kernel
 #echo "#-- kernel thresholding [$(date)]"

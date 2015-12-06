@@ -121,33 +121,44 @@ then
     echo "#====== amplitude thresholding [$(date)]"
     echo
 
-    for tag in mu_dmodel lamda_dmodel rho_dmodel
+    echo "#-- create PDF of kernel amplitudes"
+    for tag in mu lamda rho
     do
-        # create PDF of kernel amplitudes
         ${mpi_exec} $sem_utils/bin/xsem_pdf \
             ${nproc} \
             ${prev_mesh_dir}/DATABASES_MPI \
             ${model_dir}/DATABASES_MPI \
-            ${tag} \
+            ${tag}_dmodel \
             1000 \
             1 \
-            ${model_dir}/${tag}_amp_bin.txt
-        # get corner amplitude
-        zc=$(grep -v ^# ${model_dir}/${tag}_amp_bin.txt | awk \
+            ${model_dir}/${tag}_dmodel_amp_bin.txt
+    done
+
+    # get corner amplitude
+    echo "#-- get corner amplitudes"
+    for tag in mu lamda rho
+    do
+        zc=$(grep -v ^# ${model_dir}/${tag}_dmodel_amp_bin.txt | awk \
             '{a+=$3; if(a>thred){print ($1+$2)/2; exit}}' thred=$threshold_corner)
-        # thresholding
+        echo "# ${tag}_dmodel: corner amplitude at $threshold_corner is $zc"
+    done
+
+    # thresholding
+    echo "#-- amplitude thresholding"
+    for tag in mu lamda rho
+    do
         cd ${model_dir}/DATABASES_MPI
-        ls *_dmodel.bin | awk '{sub(/\.bin/,"",$1); \
+        ls *${tag}_dmodel.bin | awk '{sub(/\.bin/,"",$1); \
             printf "mv %s.bin %s_no_threshold.bin\n",$1,$1}' > rename.sh
         bash rename.sh
         ${mpi_exec} $sem_utils/bin/xsem_thresholding \
             ${nproc} \
             ${prev_mesh_dir}/DATABASES_MPI \
             ${model_dir}/DATABASES_MPI \
-            ${tag}_no_threshold \
+            ${tag}_dmodel_no_threshold \
             $zc $threshold_rmax \
             ${model_dir}/DATABASES_MPI \
-            ${tag}
+            ${tag}_dmodel
     done
 
 fi
@@ -179,7 +190,8 @@ then
         ${max_dlnv_allowed} \
         ${force_max_dlnv_allowed} \
         ${fix_rho} \
-        ${model_dir}/DATABASES_MPI > ${model_dir}/xsem_add_dmodel.log
+        ${model_dir}/DATABASES_MPI \
+        ${model_dir}/xsem_add_dmodel.log
 else
     echo "[ERROR] $prev_model_dir/DATABASES_MPI/proc000000_reg1_vpv.bin does NOT exist!"
     exit -1

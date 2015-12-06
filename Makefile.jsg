@@ -16,10 +16,10 @@ module_dir = ${src_dir}/module
 shared_dir = ${src_dir}/shared
 program_dir = ${src_dir}/program
 
-# gfortran 
-FCFLAGS = -fc=gfortran -g -Wall -pedantic -fbounds-check
+# ifort
+FCFLAGS = -g -fc=ifort
 FCFLAGS += -O2
-FCFLAGS += -I$(inc_dir) -J$(obj_dir) -I$(netcdf_mod)
+FCFLAGS += -I $(inc_dir) -I$(netcdf_mod) -module $(obj_dir)
 LDFLAGS = -L$(netcdf_lib) -lnetcdff
 
 module = sem_constants_mod sem_io_mod sem_mesh_mod \

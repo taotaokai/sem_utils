@@ -56,6 +56,10 @@ program xsem_make_kernel_mask
   integer :: i, iproc
   ! mpi
   integer :: myrank, nrank
+  ! source locations
+  character(len=MAX_STRING_LEN), allocatable :: lines(:)
+  integer :: nsource, isrc
+  real(dp), allocatable :: source_xyz(:,:)
   ! mesh
   type(sem_mesh_data) :: mesh_data
   integer :: nspec, iglob, igllx, iglly, igllz, ispec
@@ -149,11 +153,10 @@ program xsem_make_kernel_mask
             ! gll point xyz
             iglob = mesh_data%ibool(igllx,iglly,igllz,ispec)
             xyz = mesh_data%xyz_glob(:,iglob)
-            depth = 1.0 - sqrt(sum(xyz**2))
-            
-            weight = 1.0_dp
             
             ! source mask: mask source region
+            weight = 1.0_dp
+
             do isrc = 1, nsource
               dist_sq = sum((xyz - source_xyz(:,isrc))**2)
               weight = weight * (1.0_dp - &

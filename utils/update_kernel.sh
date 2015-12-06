@@ -7,9 +7,9 @@
 #   - get dkernel
 
 #====== command line args
-control_file=${1:?must provide control_file}
-event_list=${2:?must provide event_id list}
-mpi_exec=${3:-}
+control_file=${1:?[arg] need control_file}
+event_list=${2:?[arg] need event_list}
+mpi_exec=${3:?[arg] need mpi_exec}
 
 # check inputs
 if [ ! -f "$control_file" ]
@@ -121,6 +121,13 @@ then
             ${kernel_dir}/DATABASES_MPI ${tag}_dkernel
     done
 fi
+
+#-- kernel preconditioning: depth weighting 
+echo "#-- kernel depth weighting [$(date)]"
+# get depth PDF of volum integral of kernel amplitude
+${mpi_exec} $sem_utils/bin/xsem_depth_pdf \
+    $nproc $mesh_dir/DATABASES_MPI DATABASES_MPI mu_kernel \
+    100 mu_kernel_depth_bin.txt
 
 ##-- kernel thresholding (lamda,mu,rho)_kernel
 #echo "#-- kernel thresholding [$(date)]"

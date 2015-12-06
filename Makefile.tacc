@@ -19,7 +19,7 @@ program_dir = ${src_dir}/program
 
 # ifort
 FCFLAGS = -g
-FCFLAGS += -O2
+FCFLAGS += -O3
 FCFLAGS += -I $(inc_dir) -I$(netcdf_mod) -module $(obj_dir)
 LDFLAGS = -L$(netcdf_lib) -lnetcdff
 

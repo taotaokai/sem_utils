@@ -1,15 +1,15 @@
 #!/bin/bash
 
 # create model gradient from all event kernels
-#   - make kernel preconditioner (e.g. mask)
-#   - sum event kernels (cijkl, rho)
+#   - source mask
+#   - sum up event kernels (cijkl, rho)
 #   - reduce cijkl_kernel to (lamda,mu)_kernel
 #   - get dkernel
 
 #====== command line args
-control_file=${1:?must provide control_file}
-event_list=${2:?must provide event_id list}
-mpi_exec=${3:-}
+control_file=${1:?[arg] need control_file}
+event_list=${2:?[arg] need event_list}
+mpi_exec=${3:?[arg] need mpi_exec}
 
 # check inputs
 if [ ! -f "$control_file" ]
@@ -31,36 +31,38 @@ echo
 echo "Start updating gradient [$(date)]."
 echo
 
-#====== event kernel preconditioner
-echo
-echo "#====== make event kernel mask [$(date)]"
-echo
+#====== source mask (prevent error leakage from misfit in source parameters)
+if [ "$use_source_mask" -eq 1 ]
+then
+    echo
+    echo "#====== make source mask [$(date)]"
+    echo
+    
+    for event_id in $(grep -v ^# $event_list)
+    do
+        echo "#-- $event_id"
+        event_dir=$iter_dir/$event_id
+    
+        # create source_xyz.list
+        src_vtk=$event_dir/OUTPUT_forward/source.vtk
+        sed -n '/^POINTS/{n;p;}' $src_vtk > $event_dir/source_xyz.list
+        echo "# source_xyz: "
+        cat $event_dir/source_xyz.list
+    
+        # create mask gll
+        cd ${event_dir}
+        ${mpi_exec} \
+            $sem_utils/bin/xsem_make_source_mask \
+            ${nproc}\
+            ${mesh_dir}/DATABASES_MPI \
+            ${event_dir}/source_xyz.list \
+            ${source_gaussa} \
+            "mask" \
+            ${event_dir}/DATABASES_MPI
+    done
+fi
 
-for event_id in $(grep -v ^# $event_list)
-do
-    echo "#-- $event_id"
-    event_dir=$iter_dir/$event_id
-
-    # create source_xyz.list
-    src_vtk=$event_dir/OUTPUT_forward/source.vtk
-    sed -n '/^POINTS/{n;p;}' $src_vtk > $event_dir/source_xyz.list
-    echo "# source_xyz: "
-    cat $event_dir/source_xyz.list
-
-    # create mask gll
-    cd ${event_dir}
-    ${mpi_exec} \
-        $sem_utils/bin/xsem_make_source_depth_mask \
-        ${nproc}\
-        ${mesh_dir}/DATABASES_MPI \
-        ${event_dir}/source_xyz.list \
-        ${source_gaussa} \
-        ${depth_pass} \
-        ${depth_gaussa} \
-        ${event_dir}/DATABASES_MPI
-done
-
-#====== model gradient
+#====== get model gradient
 echo
 echo "#====== get model gradient [$(date)]"
 echo
@@ -81,7 +83,7 @@ ${mpi_exec} $sem_utils/bin/xsem_sum_event_kernels_cijkl \
     ${nproc} \
     ${mesh_dir}/DATABASES_MPI \
     ${kernel_dir}/event_kernel.list \
-    ${use_mask} \
+    ${use_source_mask} \
     ${nroot_stack} \
     ${kernel_dir}/DATABASES_MPI
 
@@ -93,7 +95,7 @@ ${mpi_exec} $sem_utils/bin/xsem_sum_event_kernels_1 \
     ${mesh_dir}/DATABASES_MPI \
     ${kernel_dir}/event_kernel.list \
     "rho_kernel" \
-    ${use_mask} \
+    ${use_source_mask} \
     ${nroot_stack} \
     ${kernel_dir}/DATABASES_MPI
 
@@ -122,24 +124,19 @@ then
     done
 fi
 
-##-- kernel thresholding (lamda,mu,rho)_kernel
-#echo "#-- kernel thresholding [$(date)]"
-#cd ${iter_dir}/model_update
-#for ker_name in lamda_kernel mu_kernel rho_kernel
-#do
-#    ${mpi_exec} $sem_utils/bin/xsem_pdf \
-#        $nproc $mesh_dir/DATABASES_MPI DATABASES_MPI $ker_name  \
-#        1000 1 ${ker_name}_abs_pdf.txt
-#
-#    zc=$(awk '$1!~/#/{a+=$3; if(a>cutoff){print $2; exit}}' \
-#        cutoff=$threshold_corner ${ker_name}_abs_pdf.txt)
-#
-#    echo "### ${ker_name}: corner amplitude is $zc"
-#
-#    ${mpi_exec} $sem_utils/bin/xsem_thresholding \
-#        $nproc $mesh_dir/DATABASES_MPI DATABASES_MPI $ker_name  \
-#        $zc $threshold_rmax DATABASES_MPI ${ker_name}_precond
-#done
+#-- kernel statistics: depth binning of volumetric amplitudes 
+echo "#-- kernel depth weighting [$(date)]"
+# get depth PDF of volum integral of kernel amplitude
+for tag in lamda mu rho
+do
+    ${mpi_exec} $sem_utils/bin/xsem_depth_pdf \
+        ${nproc} \
+        ${mesh_dir}/DATABASES_MPI \
+        ${kernel_dir}/DATABASES_MPI \
+        ${tag}_kernel \
+        100 \
+        ${kernel_dir}/${tag}_kernel_depth_bin.txt
+done
 
 echo
 echo "The kernel update is finished [$(date)]."

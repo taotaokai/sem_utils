@@ -8,8 +8,8 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_get_dmodel_steepest_descent \"
-  print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <model_tags> "
-  print '(a)', "    <kernel_suffix> <scale_factor> <use_mask> <out_dir>"
+  print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <model_names> "
+  print '(a)', "    <scale_factor> <use_mask> <mask_dir> <out_dir> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -18,18 +18,20 @@ subroutine selfdoc()
   print '(a)', "PARAMETERS"
   print '(a)', ""
   print '(a)', "  (int) nproc:  number of mesh slices"
-  print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
-  print '(a)', "  (string) kernel_dir:  directory holds proc***_reg1_***_kernel.bin"
-  print '(a)', "  (string) model_tags: comma delimited string, e.g. mu,lamda,rho"
-  print '(a)', "  (string) kernel_suffix: suffix to append on model names, e.g. _kernel_precond"
-  print '(a)', "  (float) scale_factor:  factor to scale kernel values"
-  print '(a)', "  (logical) use_mask:  flag if kernel masking is used (mask files should locate in kernel_dir)"
+  print '(a)', "  (string) mesh_dir:  directory of proc000***_reg1_solver_data.bin"
+  print '(a)', "  (string) kernel_dir:  directory of kernel files "
+  print '(a)', "  (string) model_names: comma delimited string, e.g. mu,lamda,rho"
+  print '(a)', "  (float) scale_factor:  value to scale kernel values"
+  print '(a)', "  (logical) use_mask:  flag if kernel masking is used "
+  print '(a)', "  (string) mask_dir:  directory of mask files "
   print '(a)', "  (string) out_dir:  output directory"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
-  print '(a)', "  1. _dmodel will be appended to model_tags for output files"
-  print '(a)', "  2. can be run in parallel"
+  print '(a)', "  1. can be run in parallel "
+  print '(a)', "  2. kernel files are <kernel_dir>/proc*_reg1_<model_names>_kernel.bin"
+  print '(a)', "  3. mask files are <mask_dir>/proc*_reg1_mask.bin"
+  print '(a)', "  4. output files are <out_dir>/proc*_reg1_<model_names>_dmodel.bin"
 end subroutine
 
 
@@ -51,10 +53,10 @@ program xsem_get_dmodel_steepest_descent
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: kernel_dir
-  character(len=MAX_STRING_LEN) :: model_tags
-  character(len=MAX_STRING_LEN) :: kernel_suffix
+  character(len=MAX_STRING_LEN) :: model_names_csv
   real(dp) :: scale_factor
   logical :: use_mask
+  character(len=MAX_STRING_LEN) :: mask_dir
   character(len=MAX_STRING_LEN) :: out_dir
 
   ! local variables
@@ -62,7 +64,7 @@ program xsem_get_dmodel_steepest_descent
   integer :: i, iproc
   ! mpi
   integer :: nrank, myrank
-  ! model names
+  ! model names 
   integer :: nmodel
   character(len=MAX_STRING_LEN), allocatable :: model_names(:)
   ! mesh
@@ -91,10 +93,9 @@ program xsem_get_dmodel_steepest_descent
   read(args(1),*) nproc
   read(args(2),'(a)') mesh_dir 
   read(args(3),'(a)') kernel_dir 
-  read(args(4),'(a)') model_tags
-  read(args(5),'(a)') kernel_suffix
-  read(args(6),*) scale_factor 
-  select case (args(7))
+  read(args(4),'(a)') model_names_csv
+  read(args(5),*) scale_factor
+  select case (args(6))
     case ('0')
       use_mask = .false.
     case ('1')
@@ -105,13 +106,14 @@ program xsem_get_dmodel_steepest_descent
         call abort_mpi() 
       endif
   end select
+  read(args(7),'(a)') mask_dir
   read(args(8),'(a)') out_dir
 
   call synchronize_all()
 
-  !===== parse model tags
+  !===== parse model_names
 
-  call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
+  call sem_utils_delimit_string(model_names_csv, ',', model_names, nmodel)
 
   if (myrank == 0) then
     print *, '# nmodel=', nmodel
@@ -144,11 +146,11 @@ program xsem_get_dmodel_steepest_descent
 
       ! steepest descent: dmodel is propotional to kernel
       call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, &
-        trim(model_names(i))//trim(kernel_suffix), dmodel)
+        trim(model_names(i))//"_kernel", dmodel)
 
       ! apply kernel mask
       if (use_mask) then
-        call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'mask', mask)
+        call sem_io_read_gll_file_1(mask_dir, iproc, iregion, 'mask', mask)
         dmodel = mask * dmodel
       endif
 

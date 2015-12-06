@@ -21,7 +21,7 @@ subroutine selfdoc()
   print '(a)', "  (string) model_dir:  directory holds proc*_reg1_<model_name>.bin"
   print '(a)', "  (string) model_name:  model name, e.g. mu_kernel "
   print '(a)', "  (int) nbin:  number of bins"
-  print '(a)', "  (int) use_abs:  flag to bin absolute value |z|, must be 0 or 1"
+  print '(a)', "  (int) bin_amplitude:  flag to bin absolute value |z|, must be 0 or 1"
   print '(a)', "  (string) out_file:  output file name "
   print '(a)', ""
   print '(a)', "NOTE"
@@ -52,7 +52,7 @@ program xsem_pdf
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: model_dir, model_name
   integer :: nbin
-  logical :: use_abs
+  logical :: bin_amplitude
   character(len=MAX_STRING_LEN) :: out_file
 
   ! local variables
@@ -100,12 +100,12 @@ program xsem_pdf
   read(args(5), *) nbin
   select case (args(6))
     case ('0')
-      use_abs = .false.
+      bin_amplitude = .false.
     case ('1')
-      use_abs = .true.
+      bin_amplitude = .true.
     case default
       if (myrank==0) then
-        print *, '[ERROR]: use_abs must be 0 or 1'
+        print *, '[ERROR]: bin_amplitude must be 0 or 1'
         call abort_mpi()
       endif
   end select
@@ -153,7 +153,7 @@ program xsem_pdf
 
   ! compute PDF
   zmax = max(abs(zmax_all), abs(zmin_all))
-  if (use_abs) then
+  if (bin_amplitude) then
     ! bin model amplitude: (0, max|z|)
     bin_size = zmax / nbin
     z = (/(i*bin_size, i=0,nbin)/)
@@ -171,7 +171,7 @@ program xsem_pdf
     call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
     call sem_mesh_gll_volume(mesh_data, gll_volume)
     ! get volumetric integral of model amplitudes within each bin 
-    if (use_abs) model = abs(model)
+    if (bin_amplitude) model = abs(model)
     do i = 1, nbin
       pdf(i) = pdf(i) + sum(gll_volume*abs(model), &
         mask=(model>=z(i-1) .and. model<z(i)) )
@@ -209,7 +209,7 @@ program xsem_pdf
     write(IOUT, '(a,2X,a)') "# model_dir= ", trim(model_dir)
     write(IOUT, '(a,2X,a)') "# model_name= ", trim(model_name)
     write(IOUT, '(a,2X,I4)') "# nbin= ", nbin
-    write(IOUT, '(a,2X,L2)') "# use_abs= ", use_abs
+    write(IOUT, '(a,2X,L2)') "# bin_amplitude= ", bin_amplitude
     write(IOUT, '(a,2X,E12.4)') "# min(z)= ", zmin_all 
     write(IOUT, '(a,2X,E12.4)') "# max(z)= ", zmax_all 
     write(IOUT, '(a,2X,E12.4)') "# volume= ", volume 

@@ -1,12 +1,13 @@
 #!/bin/bash
 
 # create new model from previous iterations
-#   - model udpate direction: xsem_get_dmodel
+#   - create preconditioner (depth weighting mask)
+#   - get model udpate direction: xsem_get_dmodel
 #   - new model: xsem_add_dmodel
 
 #====== command line args
-control_file=${1:?must provide control_file}
-mpi_exec=${2:-}
+control_file=${1:?[arg] need control_file}
+mpi_exec=${2:?[arg] need mpi_exec}
 
 # check inputs
 if [ ! -f "$control_file" ]
@@ -22,6 +23,26 @@ echo
 echo "Start updating model [$(date)]."
 echo
 
+#====== kernel preconditioner
+if [ "${use_depth_mask}" -eq 1 ]
+then
+
+    echo
+    echo "#====== make depth mask [$(date)]"
+    echo
+
+    mkdir -p ${model_dir}/DATABASES_MPI
+
+    ${mpi_exec} $sem_utils/bin/xsem_make_depth_mask \
+        ${nproc} \
+        ${prev_mesh_dir}/DATABASES_MPI \
+        ${depth_stop} \
+        ${depth_pass} \
+        ${depth_mask_type} \
+        "mask" \
+        ${model_dir}/DATABASES_MPI
+fi
+
 #====== model update direction 
 echo
 echo "#====== get dmodel [$(date)]"
@@ -34,25 +55,24 @@ then
 
 elif [ "${iter_minus_one}" -eq "${iter0}" ] || [ "${use_lbfgs}" -eq 0 ]
 then
-
     echo "use steepest descent [iter# $iter]"
 
     mkdir -p $model_dir/DATABASES_MPI
-    cd $model_dir
+    mask_dir=$model_dir/DATABASES_MPI
 
     ${mpi_exec} \
         $sem_utils/bin/xsem_get_dmodel_steepest_descent \
         ${nproc} \
         ${prev_mesh_dir}/DATABASES_MPI \
         ${prev_kernel_dir}/DATABASES_MPI \
-        "mu,lamda,rho" "_kernel" ${sd_scale_factor} 0 \
+        "mu,lamda,rho" \
+        ${sd_scale_factor} \
+        ${use_depth_mask} ${mask_dir} \
         ${model_dir}/DATABASES_MPI
 else
-
     echo "use L-BFGS [iter# $iter]"
 
     mkdir -p $model_dir/DATABASES_MPI
-    cd $model_dir
 
     # get dmodel,dkernel info from previous iteration steps
     n0=$(echo ${iter0} ${iter} ${nstep_lbfgs} |\
@@ -82,17 +102,55 @@ else
     echo
     cat ${model_dir}/dm_dg_alpha.list
 
-    ${mpi_exec} \
-       $sem_utils/bin/xsem_get_dmodel_lbfgs \
+    mask_dir=${model_dir}/DATABASES_MPI
+    ${mpi_exec} $sem_utils/bin/xsem_get_dmodel_lbfgs \
        ${nproc} \
        ${prev_mesh_dir}/DATABASES_MPI \
        ${prev_kernel_dir}/DATABASES_MPI \
+       "mu,lamda,rho" \
        ${model_dir}/dm_dg_alpha.list \
-       "mu,lamda,rho" "_kernel" 0 \
-       ${model_dir}/DATABASES_MPI
-
+       ${use_depth_mask} ${mask_dir} \
+       ${model_dir}/DATABASES_MPI \
+       ${model_dir}/xsem_get_dmodel_lbfgs.log
 fi
 
+#------ amplitude thresholding
+if [ "${use_threshold}" -eq 1 ]
+then
+    echo
+    echo "#====== amplitude thresholding [$(date)]"
+    echo
+
+    for tag in mu_dmodel lamda_dmodel rho_dmodel
+    do
+        # create PDF of kernel amplitudes
+        ${mpi_exec} $sem_utils/bin/xsem_pdf \
+            ${nproc} \
+            ${prev_mesh_dir}/DATABASES_MPI \
+            ${model_dir}/DATABASES_MPI \
+            ${tag} \
+            1000 \
+            1 \
+            ${model_dir}/${tag}_amp_bin.txt
+        # get corner amplitude
+        zc=$(grep -v ^# ${model_dir}/${tag}_amp_bin.txt | awk \
+            '{a+=$3; if(a>thred){print ($1+$2)/2; exit}}' thred=$threshold_corner)
+        # thresholding
+        cd ${model_dir}/DATABASES_MPI
+        ls *_dmodel.bin | awk '{sub(/\.bin/,"",$1); \
+            printf "mv %s.bin %s_no_threshold.bin\n",$1,$1}' > rename.sh
+        bash rename.sh
+        ${mpi_exec} $sem_utils/bin/xsem_thresholding \
+            ${nproc} \
+            ${prev_mesh_dir}/DATABASES_MPI \
+            ${model_dir}/DATABASES_MPI \
+            ${tag}_no_threshold \
+            $zc $threshold_rmax \
+            ${model_dir}/DATABASES_MPI \
+            ${tag}
+    done
+
+fi
 
 #====== create new model
 echo

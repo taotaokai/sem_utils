@@ -1,14 +1,14 @@
 subroutine selfdoc()
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_make_source_depth_mask "
-  print '(a)', "    - make mask gll file (down-weighting source region and shallow depths)"
+  print '(a)', "  xsem_make_source_mask "
+  print '(a)', "    - make mask gll file (down-weighting around source region)"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xsem_make_source_depth_mask \"
+  print '(a)', "  xsem_make_source_mask \"
   print '(a)', "    <nproc> <mesh_dir> <source_xyz_list> <source_gaussa> \"
-  print '(a)', "    <depth_pass> <depth_gaussa> <out_dir> "
+  print '(a)', "    <out_tag> <out_dir> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -19,9 +19,8 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (string) source_xyz_list: list of source locations(x,y,z) in SEM (normalized)"
   print '(a)', "  (float) source_gaussa: Gaussian width (one sigma) in km"
-  print '(a)', "  (float) depth_pass: middle of Gaussian, no mask deeper than this depth"
-  print '(a)', "  (float) depth_gaussa: Gaussian width in km (one side Gaussian function) "
-  print '(a)', "  (string) out_dir: output directory for proc*_reg1_source_mask.bin"
+  print '(a)', "  (string) out_tag: tag in file name proc*_reg1_<out_tag>.bin"
+  print '(a)', "  (string) out_dir: out_dir/proc*_reg1_<out_tag>.bin"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
@@ -43,39 +42,32 @@ program xsem_make_kernel_mask
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 7
+  integer, parameter :: nargs = 6
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: source_xyz_list
   real(dp) :: source_gaussa
-  real(dp) :: depth_pass 
-  real(dp) :: depth_gaussa 
+  character(len=MAX_STRING_LEN) :: out_tag
   character(len=MAX_STRING_LEN) :: out_dir
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
   integer :: i, iproc
-
   ! mpi
   integer :: myrank, nrank
-
   ! source locations
   character(len=MAX_STRING_LEN), allocatable :: lines(:)
   integer :: nsource, isrc
   real(dp), allocatable :: source_xyz(:,:)
-
   ! mesh
   type(sem_mesh_data) :: mesh_data
   integer :: nspec, iglob, igllx, iglly, igllz, ispec
-
   ! mask gll 
   real(dp), allocatable :: mask(:,:,:,:)
   real(dp) :: xyz(3), weight
   ! source
   real(dp) :: dist_sq
-  ! depth mask
-  real(dp) :: depth
 
   !===== start MPI
 
@@ -87,7 +79,7 @@ program xsem_make_kernel_mask
   if (command_argument_count() /= nargs) then
     if (myrank == 0) then
       call selfdoc()
-      print *, "[ERROR] xsem_make_kernel_mask: check your inputs."
+      print *, "[ERROR] xsem_make_source_mask: check your inputs."
       call abort_mpi()
     endif
   endif
@@ -100,9 +92,29 @@ program xsem_make_kernel_mask
   read(args(2), '(a)') mesh_dir
   read(args(3), '(a)') source_xyz_list
   read(args(4), *) source_gaussa
-  read(args(5), *) depth_pass 
-  read(args(6), *) depth_gaussa
-  read(args(7), '(a)') out_dir
+  read(args(5), '(a)') out_tag
+  read(args(6), '(a)') out_dir
+
+  ! validate input
+  if (source_gaussa < 0.0) then
+    if (myrank == 0) then
+      call selfdoc()
+      print *, "[ERROR] source_gaussa must > 0.0"
+      call abort_mpi()
+    endif
+  endif
+  call synchronize_all()
+
+  ! log output
+  if (myrank == 0) then
+    print *, "#[LOG] xsem_make_source_mask"
+    print *, "#[LOG] nproc=", nproc
+    print *, "#[LOG] mesh_dir=", trim(mesh_dir)
+    print *, "#[LOG] source_xyz_list=", trim(source_xyz_list)
+    print *, "#[LOG] source_gaussa=", source_gaussa
+    print *, "#[LOG] out_tag=", out_tag
+    print *, "#[LOG] out_dir=", out_dir
+  endif
 
   !====== read source_xyz_list
   call sem_utils_read_line(source_xyz_list, lines, nsource)
@@ -118,8 +130,6 @@ program xsem_make_kernel_mask
 
   ! non-dimensionalization
   source_gaussa = source_gaussa / R_EARTH_KM
-  depth_pass = depth_pass / R_EARTH_KM
-  depth_gaussa = depth_gaussa / R_EARTH_KM
 
   do iproc = myrank, (nproc-1), nrank
 
@@ -143,23 +153,15 @@ program xsem_make_kernel_mask
             ! gll point xyz
             iglob = mesh_data%ibool(igllx,iglly,igllz,ispec)
             xyz = mesh_data%xyz_glob(:,iglob)
-            depth = 1.0 - sqrt(sum(xyz**2))
-            
-            weight = 1.0_dp
             
             ! source mask: mask source region
-            if (source_gaussa > 0.0) then
-              do isrc = 1, nsource
-                dist_sq = sum((xyz - source_xyz(:,isrc))**2)
-                weight = weight * (1.0_dp - &
-                    exp(-0.5*dist_sq/source_gaussa**2))
-              enddo
-            endif
+            weight = 1.0_dp
 
-            ! depth mask: mask shallow depth
-            if (depth_pass>0.0 .and. depth_gaussa>0.0 .and. depth<depth_pass) then
-                weight = weight * exp(-0.5*((depth-depth_pass)/depth_gaussa)**2)
-            endif
+            do isrc = 1, nsource
+              dist_sq = sum((xyz - source_xyz(:,isrc))**2)
+              weight = weight * (1.0_dp - &
+                  exp(-0.5*dist_sq/source_gaussa**2))
+            enddo
 
             mask(igllx,iglly,igllz,ispec) = weight
 
@@ -168,10 +170,10 @@ program xsem_make_kernel_mask
       enddo
     enddo
 
-    print *,'mask value range: ', minval(mask), maxval(mask)
+    print *,'min/max=', minval(mask), maxval(mask)
 
     ! save mask gll file
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, "mask", mask)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, out_tag, mask)
 
   enddo ! iproc
 

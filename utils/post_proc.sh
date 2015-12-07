@@ -54,7 +54,7 @@ then
         tmp_file=$(mktemp)
         if [ -f ${misfit_file} ]
         then
-            $base_dir/bin/print_misfit.py $misfit_file > $tmp_file
+            $sem_utils/utils/print_misfit.py $misfit_file > $tmp_file
         else
             rm $tmp_file
             continue

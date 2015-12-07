@@ -29,7 +29,7 @@ echo "#====== get adjoint source [$(date)]"
 echo
 
 cd $event_dir
-rm syn obs
+rm -rf syn obs
 ln -sf OUTPUT_forward syn
 ln -sf $data_dir/$event_id/disp obs
 cd $event_dir/DATA
@@ -37,6 +37,7 @@ rm station.txt
 ln -sf $data_dir/$event_id/data/station.txt ./
 
 cd $event_dir
+rm -rf adj misfit
 mkdir adj misfit
 $sem_utils/utils/measure_misfit.py DATA obs syn adj misfit $freqmin $freqmax
 
@@ -64,6 +65,7 @@ if [ ! -d adj ];then
     echo "[ERROR] $event_dir/adj does NOT exist!"
     exit -1
 fi
+rm -rf SEM
 ln -sf adj SEM
 
 #----- STATIONS_ADJOINT

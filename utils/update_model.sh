@@ -20,8 +20,10 @@ control_file=$(readlink -f $control_file)
 source ${control_file}
 
 echo
-echo "Start updating model [$(date)]."
+echo "#====== Start updating model [$(date)]."
 echo
+
+mkdir -p $model_dir/DATABASES_MPI
 
 #====== kernel preconditioner
 if [ "${use_depth_mask}" -eq 1 ]
@@ -51,11 +53,11 @@ echo
 if [ "${iter}" -le "${iter0}" ]
 then
 
-    echo "# no model update is needed [iter# $iter]"
+    echo "#-- no model update is needed [iter=$iter iter0=$iter0]"
 
 elif [ "${iter_minus_one}" -eq "${iter0}" ] || [ "${use_lbfgs}" -eq 0 ]
 then
-    echo "use steepest descent [iter# $iter]"
+    echo "#-- use steepest descent [iter=$iter iter0=$iter0]"
 
     mkdir -p $model_dir/DATABASES_MPI
     mask_dir=$model_dir/DATABASES_MPI
@@ -70,7 +72,7 @@ then
         ${use_depth_mask} ${mask_dir} \
         ${model_dir}/DATABASES_MPI
 else
-    echo "use L-BFGS [iter# $iter]"
+    echo "use L-BFGS [iter=$iter iter0=$iter0]"
 
     mkdir -p $model_dir/DATABASES_MPI
 
@@ -121,33 +123,39 @@ then
     echo "#====== amplitude thresholding [$(date)]"
     echo
 
-    for tag in mu_dmodel lamda_dmodel rho_dmodel
+    for tag in mu lamda rho
     do
-        # create PDF of kernel amplitudes
+        echo "#-- model parameter: $tag"
+        echo "## create PDF of kernel amplitudes"
         ${mpi_exec} $sem_utils/bin/xsem_pdf \
             ${nproc} \
             ${prev_mesh_dir}/DATABASES_MPI \
             ${model_dir}/DATABASES_MPI \
-            ${tag} \
+            ${tag}_dmodel \
             1000 \
             1 \
-            ${model_dir}/${tag}_amp_bin.txt
+            ${model_dir}/${tag}_dmodel_amp_bin.txt
+
         # get corner amplitude
-        zc=$(grep -v ^# ${model_dir}/${tag}_amp_bin.txt | awk \
+        echo "## get corner amplitudes"
+        zc=$(grep -v ^# ${model_dir}/${tag}_dmodel_amp_bin.txt | awk \
             '{a+=$3; if(a>thred){print ($1+$2)/2; exit}}' thred=$threshold_corner)
+        echo "## ${tag}_dmodel: corner amplitude at $threshold_corner is $zc"
+
         # thresholding
+        echo "## amplitude thresholding"
         cd ${model_dir}/DATABASES_MPI
-        ls *_dmodel.bin | awk '{sub(/\.bin/,"",$1); \
+        ls *${tag}_dmodel.bin | awk '{sub(/\.bin/,"",$1); \
             printf "mv %s.bin %s_no_threshold.bin\n",$1,$1}' > rename.sh
         bash rename.sh
         ${mpi_exec} $sem_utils/bin/xsem_thresholding \
             ${nproc} \
             ${prev_mesh_dir}/DATABASES_MPI \
             ${model_dir}/DATABASES_MPI \
-            ${tag}_no_threshold \
+            ${tag}_dmodel_no_threshold \
             $zc $threshold_rmax \
             ${model_dir}/DATABASES_MPI \
-            ${tag}
+            ${tag}_dmodel
     done
 
 fi
@@ -179,7 +187,8 @@ then
         ${max_dlnv_allowed} \
         ${force_max_dlnv_allowed} \
         ${fix_rho} \
-        ${model_dir}/DATABASES_MPI > ${model_dir}/xsem_add_dmodel.log
+        ${model_dir}/DATABASES_MPI \
+        ${model_dir}/xsem_add_dmodel.log
 else
     echo "[ERROR] $prev_model_dir/DATABASES_MPI/proc000000_reg1_vpv.bin does NOT exist!"
     exit -1

@@ -4,10 +4,10 @@
 
 #------ iteration number
 # current iteration number
-iter=5
+iter=6
 
 # starting iteration number for kernel calculation
-iter0=1
+iter0=5
 
 #------ Data directories
 # project root directory
@@ -31,11 +31,10 @@ data_dir=$(readlink -f $base_dir/events)
 
 #------ SEM
 ## number of MPI processors
-nproc_request=264 # multples of 12
+nproc_request=264 # specific to lonestar: multiples of 12 
 nproc=256
-#nproc=2
-## running time
-run_time_mesher=00:10:00 #mesh
+## wallclock time
+run_time_mesher=00:10:00 #update_model + mesh
 run_time_event=03:00:00 #forward+adjoint for one event
 run_time_update=00:30:00 #update_kernel.sh (12 proc)
 
@@ -47,22 +46,22 @@ run_time_update=00:30:00 #update_kernel.sh (12 proc)
 use_depth_mask=1
 depth_stop=10
 depth_pass=500
-taper_type="linear"
+depth_mask_type="linear"
 #-- L-BFGS (xsem_get_dmodel_lbfgs) 
 use_lbfgs=1
-nstep_lbfgs=2
+nstep_lbfgs=1
 #-- steepest descent (xsem_get_dmodel_steepest_descent)
 sd_scale_factor=1.0 # kernel scaling factor in steepest-descent
 #-- thresholding model update direction (xsem_thresholding)
-use_thresholding=1
+use_threshold=1
 threshold_corner=0.9 #corner ratio to threshold kernel amplitudes
 threshold_rmax=0.1 # maximum ratio exceeding corner amplitude
 #-- make new model (xem_add_dmodel_***_to_tiso)
 #used model tags for model update
 #used_kernel_names=mu_kernel
 #maximum model relative perturbation ratio
-max_dlnv_allowed=0.05
-force_max_dlnv_allowed=0
+max_dlnv_allowed=0.03
+force_max_dlnv_allowed=1
 #fix density model
 fix_rho=1
 

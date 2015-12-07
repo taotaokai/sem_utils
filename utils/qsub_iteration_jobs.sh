@@ -145,11 +145,6 @@ cd $iter_dir/$evid
 ibrun $sem_build_dir/bin/xspecfem3D
 
 echo
-echo "#====== measure misfit [\$(date)]"
-echo
-$sem_utils/utils/measure_adjoint.sh $control_file $evid
-
-echo
 echo "#====== adjoint(model) [\$(date)]"
 echo
 $sem_utils/utils/setup_adjoint.sh $control_file $evid

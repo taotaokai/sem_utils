@@ -3,8 +3,8 @@
 # setup event folder for SEM adjoint simulation
 
 #====== command line args
-control_file=${1:?must provide control_file}
-event_id=${2:?must provide event_id}
+control_file=${1:?[arg] need control_file}
+event_id=${2:?[arg] need event_id}
 
 # check inputs
 if [ ! -f "$control_file" ]
@@ -38,7 +38,7 @@ ln -sf $data_dir/$event_id/data/station.txt ./
 
 cd $event_dir
 mkdir adj misfit
-$base_dir/bin/measure_misfit.py DATA obs syn adj misfit $freqmin $freqmax
+$sem_utils/utils/measure_misfit.py DATA obs syn adj misfit $freqmin $freqmax
 
 #====== setup files
 echo

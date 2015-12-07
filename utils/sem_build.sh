@@ -4,22 +4,22 @@
 
 wkdir=$(pwd)
 
-config_dir=$wkdir/${1:-sem_config}
-build_dir=$wkdir/${2:-specfem3d_globe}
+sem_config_dir=$wkdir/${1:-sem_config}
+sem_build_dir=$wkdir/${2:-specfem3d_globe}
 
-# prepare build_dir
-cd $build_dir/
+# prepare sem_build_dir
+cd $sem_build_dir/
 mkdir DATABASES_MPI OUTPUT_FILES
 
-cd $build_dir/DATA
-ln -sf $config_dir/DATA/Par_file .
-ln -sf $config_dir/DATA/CMTSOLUTION .
+cd $sem_build_dir/DATA
+ln -sf $sem_config_dir/DATA/Par_file .
+ln -sf $sem_config_dir/DATA/CMTSOLUTION .
 
-cd $build_dir/setup
-ln -sf $config_dir/setup/*.h.in .
+cd $sem_build_dir/setup
+ln -sf $sem_config_dir/setup/*.h.in .
 
 # build
-cd $build_dir
+cd $sem_build_dir
 
 ./configure FC=mpif90 MPIFC=mpif90 FCFLAGS="-fc=ifort -O3"
 make clean

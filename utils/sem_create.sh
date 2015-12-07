@@ -4,15 +4,15 @@
 
 source_dir=${1:?[arg] need source folder}
 #source_dir=~/tools/specfem3d_globe_modified
-build_dir=${2:-specfem3d_globe}
+sem_build_dir=${2:-specfem3d_globe}
 
 source_dir=$(readlink -f $source_dir)
-build_dir=$(readlink -f $build_dir)
+sem_build_dir=$(readlink -f $sem_build_dir)
 
-# prepare build_dir
-rm -rf $build_dir
-mkdir $build_dir
-cd $build_dir
+# prepare sem_build_dir
+rm -rf $sem_build_dir
+mkdir $sem_build_dir
+cd $sem_build_dir
 
 ln -s ${source_dir}/src ./
 ln -s ${source_dir}/config* ./

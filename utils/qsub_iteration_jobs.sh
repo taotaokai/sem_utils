@@ -86,7 +86,7 @@ $sem_utils/utils/setup_mesh.sh $control_file
 echo
 echo "# run mesher"
 cd $mesh_dir
-ibrun $build_dir/bin/xmeshfem3D
+ibrun $sem_build_dir/bin/xmeshfem3D
 
 echo
 echo "Job ends: JOB_ID=\${JOB_ID} [\$(date)]"
@@ -142,7 +142,7 @@ echo "#====== forward [\$(date)]"
 echo
 $sem_utils/utils/setup_event.sh $control_file $evid
 cd $iter_dir/$evid
-ibrun $build_dir/bin/xspecfem3D
+ibrun $sem_build_dir/bin/xspecfem3D
 
 echo
 echo "#====== measure misfit [\$(date)]"
@@ -154,7 +154,7 @@ echo "#====== adjoint(model) [\$(date)]"
 echo
 $sem_utils/utils/setup_adjoint.sh $control_file $evid
 cd $iter_dir/$evid
-ibrun $build_dir/bin/xspecfem3D
+ibrun $sem_build_dir/bin/xspecfem3D
 
 echo
 echo "Job ends: JOB_ID=\${JOB_ID} [\$(date)]"

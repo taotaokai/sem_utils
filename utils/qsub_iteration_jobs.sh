@@ -77,13 +77,13 @@ echo
 echo
 echo "====== create new model [\$(date)]"
 echo
-$base_dir/bin/update_model.sh $control_file ibrun
+$sem_utils/utils/update_model.sh $control_file ibrun
 
 echo
 echo "====== mesh [\$(date)]"
 echo
 echo "# setup mesh directory"
-$base_dir/bin/setup_mesh.sh $control_file
+$sem_utils/utils/setup_mesh.sh $control_file
 echo
 echo "# run mesher"
 cd $mesh_dir
@@ -141,19 +141,19 @@ echo
 echo
 echo "====== forward [\$(date)]"
 echo
-$base_dir/bin/setup_event.sh $control_file $evid
+$sem_utils/utils/setup_event.sh $control_file $evid
 cd $iter_dir/$evid
 ibrun $build_dir/bin/xspecfem3D
 
 echo
 echo "====== measure misfit [\$(date)]"
 echo
-$base_dir/bin/measure_adjoint.sh $control_file $evid
+$sem_utils/utils/measure_adjoint.sh $control_file $evid
 
 echo
 echo "====== adjoint(model) [\$(date)]"
 echo
-$base_dir/bin/setup_adjoint.sh $control_file $evid
+$sem_utils/utils/setup_adjoint.sh $control_file $evid
 cd $iter_dir/$evid
 ibrun $build_dir/bin/xspecfem3D
 
@@ -211,7 +211,7 @@ echo
 echo "====== update model gradient [\$(date)]"
 echo
 
-$base_dir/bin/update_kernel.sh $control_file $event_list ibrun
+$sem_utils/utils/update_kernel.sh $control_file $event_list ibrun
 
 echo
 echo "Job ends: JOB_ID=\${JOB_ID} [\$(date)]"

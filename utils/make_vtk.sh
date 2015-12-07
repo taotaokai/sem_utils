@@ -10,7 +10,7 @@ model_names=${3:-[arg] need model_name (e.g. mu_kernel,lamda_kernel,rho_kernel)}
 # source parameters in control_file
 source ${control_file}
 
-topo_dir=${mesh_dir}/DATABASES_MPI
+topo_dir=${init_model_dir}/DATABASES_MPI
 model_dir=DATABASES_MPI
 out_dir=vtk
 iresolution=0

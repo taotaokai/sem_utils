@@ -125,7 +125,7 @@ then
 fi
 
 #-- kernel statistics: depth binning of volumetric amplitudes 
-echo "#-- kernel depth weighting [$(date)]"
+echo "#-- kernel depth distribution [$(date)]"
 # get depth PDF of volum integral of kernel amplitude
 for tag in lamda mu rho
 do

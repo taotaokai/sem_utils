@@ -282,7 +282,7 @@ program get_dmodel_lbfgs
 
   if (use_mask) then
     if (myrank==0) write(IOUT,'(a)') '# mask is applied.'
-    call sem_io_read_gll_file_1(kernel_dir, myrank, iregion, 'mask', mask)
+    call sem_io_read_gll_file_1(mask_dir, myrank, iregion, 'mask', mask)
     q = q * spread(mask,1,nmodel)
   endif
 

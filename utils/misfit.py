@@ -1464,8 +1464,8 @@ class Misfit(object):
             fig.text(0.5, 0.95, str_title, size='x-large', horizontalalignment='center')
 
             #------ station map
-            ax_origin = [0.25, 0.70]
-            ax_size = [0.5, 0.25]
+            ax_origin = [0.3, 0.73]
+            ax_size = [0.4, 0.2]
             ax_map = fig.add_axes(ax_origin + ax_size)
             m = Basemap(projection='merc', resolution='l',
                     llcrnrlat=min_lat, llcrnrlon=min_lon, 

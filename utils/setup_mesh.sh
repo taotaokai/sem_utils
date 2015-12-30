@@ -35,11 +35,15 @@ ln -sf $sem_build_dir/DATA/* ./
 # modify Par_file
 rm Par_file
 cp -L $sem_config_dir/DATA/Par_file .
-if [ ${iter} -eq 0 ] # save mesh file for starting model
+# do not save mesh files
+sed -i "/^SAVE_MESH_FILES/s/=.*/= .false./" Par_file
+# read GLL model
+sed -i "/^MODEL/s/=.*/= GLL/" Par_file
+# use initial_model in the first iteration 
+if [ ${iter} -eq 0 ]
 then
-    sed -i "/^SAVE_MESH_FILES/s/=.*/= .true./" Par_file
-else
-    sed -i "/^SAVE_MESH_FILES/s/=.*/= .false./" Par_file
+    cd $iter_dir
+    ln -s ${init_model_dir} model
 fi
 
 # link model directory to DATA/GLL

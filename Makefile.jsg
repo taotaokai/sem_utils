@@ -54,7 +54,8 @@ program = xsem_slice_gcircle \
 	xsem_math \
 	xsem_pdf \
 	xsem_depth_pdf \
-	xsem_thresholding
+	xsem_thresholding \
+	xsem_combine_solver_data_in_v5.1
 
 
 #------------------------------------------

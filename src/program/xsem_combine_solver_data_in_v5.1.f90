@@ -98,6 +98,10 @@ program xsem_combine_solver_data
     ! open new solver_data.bin for write
     call sem_io_open_file_for_write(new_mesh_dir, iproc, iregion, 'solver_data', IOUT)
 
+    ! write nspec, nglob
+    write(IOUT) nspec
+    write(IOUT) nglob
+
     ! read old mesh data: solver_data_2.bin
     call sem_io_open_file_for_read(old_mesh_dir, iproc, iregion, 'solver_data_2', IIN)
     ! x coordinate

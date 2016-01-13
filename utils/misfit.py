@@ -1512,6 +1512,14 @@ class Misfit(object):
                 plot_ymax = max(y) + 2*dy
                 plot_ymin = min(y) - 2*dy
         
+            #plot traveltime curves 
+            for i in range(3):
+                ax = ax_RTZ[i]
+                ax.plot([x[1]-rayp*x[0] for x in ttcurve_p], [x[0] for x in ttcurve_p], 'b-', linewidth=0.2)
+                ax.plot([x[1]-rayp*x[0] for x in ttcurve_P], [x[0] for x in ttcurve_P], 'b-', linewidth=0.2)
+                ax.plot([x[1]-rayp*x[0] for x in ttcurve_s], [x[0] for x in ttcurve_s], 'c-', linewidth=0.2)
+                ax.plot([x[1]-rayp*x[0] for x in ttcurve_S], [x[0] for x in ttcurve_S], 'c-', linewidth=0.2)
+ 
             cmp_names = ['R', 'T', 'Z']
             for station_id in data_azbin:
                 sta = data_azbin[station_id]
@@ -1555,7 +1563,7 @@ class Misfit(object):
                     ax.plot(t_plot, obs+dist_degree, 'k-', linewidth=0.5)
                     ax.plot(t_plot, syn+dist_degree, 'r-', linewidth=0.5)
 
-                    # mark time window
+                    # annotatate time window
                     if use_window:
                         ax.plot(win_t0, dist_degree, 'k|', markersize=8)
                         ax.plot(win_t1, dist_degree, 'k|', markersize=8)
@@ -1569,33 +1577,31 @@ class Misfit(object):
                             ax.text(win[1], dist_degree, ' %.1f' % (window['weight']), 
                                     verticalalignment='center', fontsize=7)
 
-                    #plot ttcurve
-                    ax.plot([x[1]-rayp*x[0] for x in ttcurve_p], [x[0] for x in ttcurve_p], 'b-', linewidth=0.2)
-                    ax.plot([x[1]-rayp*x[0] for x in ttcurve_P], [x[0] for x in ttcurve_P], 'b-', linewidth=0.2)
-                    ax.plot([x[1]-rayp*x[0] for x in ttcurve_s], [x[0] for x in ttcurve_s], 'c-', linewidth=0.2)
-                    ax.plot([x[1]-rayp*x[0] for x in ttcurve_S], [x[0] for x in ttcurve_S], 'c-', linewidth=0.2)
-        
-                    # config
-                    ax.set_xlim(win[0], win[1])
-                    ax.set_ylim(plot_ymin, plot_ymax)
-                    ax.set_title(cmp_names[i])
-                    ax.set_xlabel('t - {:.1f}*dist (s)'.format(rayp))
-                    ax.tick_params(axis='both',labelsize=10)
-        
-                    # ylabel 
-                    if i == 0:
-                        ax.set_ylabel('dist (deg)')
-                    else:
-                        ax.set_yticklabels([])
                     #annotate station names 
                     if i == 2:
                         #str_annot = '%.3f,%.1f,%s' % (
                         #        misfit['CC0'], window['weight'], station_id)
                         ax.text(win[1], dist_degree, ' '+station_id, \
                                 verticalalignment='center', fontsize=7)
+
                 #for i in range(3):
             #for sta_id in data:
         
+            # control axes limits and lables, annotation
+            for i in range(3):
+                # axis 
+                ax.set_xlim(win[0], win[1])
+                ax.set_ylim(plot_ymin, plot_ymax)
+                ax.set_title(cmp_names[i])
+                ax.set_xlabel('t - {:.1f}*dist (s)'.format(rayp))
+                ax.tick_params(axis='both',labelsize=10)
+                # ylabel 
+                if i == 0:
+                    ax.set_ylabel('dist (deg)')
+                else:
+                    ax.set_yticklabels([])
+
+            # save figures
             if savefig:
                 if use_window:
                     out_file = '%s/%s_az_%03d_%03d_%s.pdf' % (

@@ -64,6 +64,8 @@ subroutine sem_utils_read_line(filename, lines, n)
     endif
   enddo
 
+  close(IIN)
+
 end subroutine
 
 

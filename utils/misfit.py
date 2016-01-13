@@ -1283,7 +1283,8 @@ class Misfit(object):
             syn_suffix='.sem.sac', savefig=False, out_dir='plot',
             use_STF=False, hdur=None,
             use_window=False, window_id='F.p,P',
-            min_SNR=None, min_CC0=None, min_CCmax=None):
+            min_SNR=None, min_CC0=None, min_CCmax=None,
+            dist_range=None):
         """ Plot seismograms for one event
             azbin:
                 azimuthal bin size
@@ -1385,8 +1386,12 @@ class Misfit(object):
                 meta = station['meta']
                 azimuth = meta['azimuth']
                 windows = station['windows']
+                dist = meta['dist_degree']
                 if station['stat']['code'] < 0:
                     continue
+                if dist_range:
+                    if dist < min(dist_range) or dist > max(dist_range):
+                        continue
                 if azimuth<azmin or azimuth>azmax:
                     continue
                 if use_window: 
@@ -1464,7 +1469,7 @@ class Misfit(object):
             fig.text(0.5, 0.95, str_title, size='x-large', horizontalalignment='center')
 
             #------ station map
-            ax_origin = [0.3, 0.73]
+            ax_origin = [0.3, 0.74]
             ax_size = [0.4, 0.2]
             ax_map = fig.add_axes(ax_origin + ax_size)
             m = Basemap(projection='merc', resolution='l',
@@ -1500,8 +1505,12 @@ class Misfit(object):
             y = [ x['meta']['dist_degree'] for x in data_azbin.itervalues() ]
             ny = len(y)
             dy = 0.5*(max(y)-min(y)+1)/ny
-            plot_ymax = max(y) + 2*dy
-            plot_ymin = min(y) - 2*dy
+            if dist_range:
+                plot_ymax = max(dist_range) + 2*dy
+                plot_ymin = min(dist_range) - 2*dy
+            else:
+                plot_ymax = max(y) + 2*dy
+                plot_ymin = min(y) - 2*dy
         
             cmp_names = ['R', 'T', 'Z']
             for station_id in data_azbin:

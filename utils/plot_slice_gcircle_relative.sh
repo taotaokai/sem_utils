@@ -80,6 +80,10 @@ do
     gmt makecpt -Cglobe > cpt
     gmt grdimage $etopo1_grd -R -J -Ccpt -O -K >> $ps
     gmt pscoast -R -J -Dl -A250 -N1/thinnest -O -K >> $ps
+    # plot Holocene intraplate volcanoes
+    awk -F"|" '{printf "%f %f\n",$6,$5}' \
+        $sem_config_dir/xsection/Holocene_volcanoes/volcanoes.list |\
+        gmt psxy -Skvolcano/0.25 -Gdeeppink -R -J -O -K >> $ps
     # gcircle
     awk '{print $3, $2}' gcircle.list | gmt psxy -R -J -Wthin -O -K >> $ps
     # xsection marker

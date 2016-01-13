@@ -63,7 +63,7 @@ program xsem_combine_solver_data
   enddo
   read(args(1), *) nproc
   read(args(2), '(a)') old_mesh_dir
-  read(args(2), '(a)') new_mesh_dir
+  read(args(3), '(a)') new_mesh_dir
 
   !===== loop each mesh slice
   do iproc = 0, (nproc-1)

@@ -1589,7 +1589,7 @@ class Misfit(object):
         
             # control axes limits and lables, annotation
             for i in range(3):
-                # axis 
+                ax = ax_RTZ[i]
                 ax.set_xlim(win[0], win[1])
                 ax.set_ylim(plot_ymin, plot_ymax)
                 ax.set_title(cmp_names[i])

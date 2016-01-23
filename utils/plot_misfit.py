@@ -42,18 +42,20 @@ print "\nplot seismograms\n"
 
 window_id = 'F.p,P'
 misfit.plot_seismograms(event_id,
-    azbin=20, win=[0, 100], rayp=10,
-    obs_dir=obs_dir, syn_dir=syn_dir, syn_band_code='MX',
-    syn_suffix='.sem.sac', out_dir=misfit_dir, savefig=True,
+    azbin=5, win=[0, 150], rayp=10,
+    obs_dir=obs_dir, 
+    syn_dir=syn_dir, syn_band_code='BH', syn_suffix='', 
+    out_dir=misfit_dir, savefig=True,
     use_STF=True, 
     use_window=True, window_id=window_id,
     min_SNR=10, min_CCmax=0.5)
  
 window_id = 'F.s,S'
 misfit.plot_seismograms(event_id,
-    azbin=20, win=[30, 200], rayp=16,
-    obs_dir=obs_dir, syn_dir=syn_dir, syn_band_code='MX',
-    syn_suffix='.sem.sac', out_dir=misfit_dir, savefig=True,
+    azbin=5, win=[30, 300], rayp=16,
+    obs_dir=obs_dir, 
+    syn_dir=syn_dir, syn_band_code='BH', syn_suffix='', 
+    out_dir=misfit_dir, savefig=True,
     use_STF=True, 
     use_window=True, window_id=window_id,
     min_SNR=10, min_CCmax=0.5)

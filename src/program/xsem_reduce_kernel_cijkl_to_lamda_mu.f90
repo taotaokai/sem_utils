@@ -119,9 +119,9 @@ program xsem_reduce_kernel_cijkl_to_lamda_mu
                    cijkl_kernel(8,:,:,:,:) + &
                    cijkl_kernel(12,:,:,:,:)
 
-    mu_kernel = cijkl_kernel(1,:,:,:,:)  + &
-                cijkl_kernel(7,:,:,:,:)  + &
-                cijkl_kernel(12,:,:,:,:) + &
+    mu_kernel = 2.0*( cijkl_kernel(1,:,:,:,:)  + &
+                      cijkl_kernel(7,:,:,:,:)  + &
+                      cijkl_kernel(12,:,:,:,:) ) + &
                 cijkl_kernel(16,:,:,:,:) + &
                 cijkl_kernel(19,:,:,:,:) + &
                 cijkl_kernel(21,:,:,:,:)

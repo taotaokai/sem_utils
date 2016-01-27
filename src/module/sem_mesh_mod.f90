@@ -375,16 +375,43 @@ subroutine sem_mesh_locate_kdtree2( &
   call anchor_point_index(iax, iay, iaz)
 
   ! get anchor and center points of each GLL element 
-  allocate(xyz_anchor(3, NGNOD, nspec))
   allocate(xyz_elem(3, nspec))
+  allocate(xyz_anchor(3, NGNOD, nspec))
+
   do ispec = 1, nspec
     do ia = 1, NGNOD
       iglob = mesh_data%ibool(iax(ia), iay(ia), iaz(ia), ispec)
       xyz_anchor(:, ia, ispec) = mesh_data%xyz_glob(:, iglob)
+      !xyz_anchor(1, ia, ispec) = mesh_data%xyz_glob(1, iglob)
+      !xyz_anchor(2, ia, ispec) = mesh_data%xyz_glob(2, iglob)
+      !xyz_anchor(3, ia, ispec) = mesh_data%xyz_glob(3, iglob)
+      ! DEBUG
+      !if (ispec == 1367) then
+      !  print *, "[DEBUG] ia,iglob=", ia, iglob
+      !  print *, "[DEBUG] xyz_glob(:, iglob)=", mesh_data%xyz_glob(:, iglob)
+      !  print *, "[DEBUG] xyz_anchor(:,ia,ispec)=", xyz_anchor(:, ia, ispec)
+      !endif
     enddo
+
     ! the last anchor point is the element center
-    xyz_elem(:,ispec) = mesh_data%xyz_glob(:,iglob)
+
+    !FIXME: the following line gives wrong points that are NOT in one cube, 
+    ! when compiled with -O3, but no problem with -O2 or less.
+    !xyz_elem(:, ispec) = mesh_data%xyz_glob(:, iglob)
+    xyz_elem(:,ispec) = xyz_anchor(:,NGNOD,ispec) ! however, this works for all -On
+
+    ! DEBUG
+    !if (ispec == 1367) then
+    !  print *, "[DEBUG] ispec/iglob=", ispec, iglob
+    !  print *, "[DEBUG] xyz_glob(:, iglob)=", mesh_data%xyz_glob(:, iglob)
+    !endif
+
   enddo
+
+  !DEBUG
+  !print *, "[DEBUG] ispec=1367"
+  !print *, "[DEBUG] xyz_elem(:, ispec)=", xyz_elem(:, 1367)
+  !print *, "[DEBUG] xyz_anchor(:,:,ispec)=", xyz_anchor(:, :, 1367)
 
   !===== build kdtree
 
@@ -434,6 +461,11 @@ subroutine sem_mesh_locate_kdtree2( &
       endif
 
       ! locate point to this element
+      ! DEBUG
+      !print *, "[DEBUG] ispec=", ispec
+      !print *, "[DEBUG] xyz_anchor(:,:,ispec)=", xyz_anchor(:,:,ispec)
+      !print *, "[DEBUG] xyz_anchor(1:3,1:NGNOD,ispec)=", xyz_anchor(1:3,1:NGNOD,ispec)
+
       call xyz2cube_bounded(xyz_anchor(:,:,ispec), xyz1, &
         uvw1, misloc1, flag_inside)
 
@@ -746,6 +778,10 @@ subroutine xyz2cube_bounded(xyz_anchor, xyz, uvw, misloc, flag_inside)
                           one = 1.0_dp, &
                           minus_one = -1.0_dp
 
+  ! DEBUG
+  !print *, "[DEBUG] xyz2cube_bounded"
+  !print *, "[DEBUG] xyz_anchor(3,NGNOD)=", xyz_anchor
+
   ! initialize 
   uvw = zero
   flag_inside = .true.
@@ -812,6 +848,11 @@ subroutine cube2xyz(anchor_xyz, uvw, xyz, DuvwDxyz)
   real(dp), dimension(NGNOD, 3) :: dershape3D
   real(dp) :: jacobian
   real(dp), dimension(3,3) :: DxyzDuvw
+
+  ! DEBUG
+  !print *, "[DEBUG] cube2xyz"
+  !print *, "[DEBUG] xyz_anchor(3,NGNOD)=", anchor_xyz
+  !stop
 
   if (NGNOD /= 27) then
     stop "[ERROR] cube2xyz: elements should have 27 control nodes"
@@ -921,6 +962,12 @@ subroutine cube2xyz(anchor_xyz, uvw, xyz, DuvwDxyz)
     print *, "uvw(3)=", uvw
     stop
   endif
+
+  ! DEBUG
+  !print *, "[DEBUG] jacobian=", jacobian
+  !print *, "[DEBUG] anchor_xyz(3,NGNOD)=", anchor_xyz
+  !print *, "[DEBUG] uvw(3)=", uvw
+  !stop
 
   ! inverse matrix: Duvw/Dxyz = inv(Dxyz/Duvw) = adj(DxyzDuvw)/det(DxyzDuvw)  
   DuvwDxyz = DuvwDxyz / jacobian

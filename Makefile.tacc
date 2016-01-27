@@ -18,7 +18,7 @@ shared_dir = ${src_dir}/shared
 program_dir = ${src_dir}/program
 
 # ifort
-FCFLAGS = -g
+FCFLAGS = -g -check bounds -check all
 FCFLAGS += -O3
 FCFLAGS += -I $(inc_dir) -I$(netcdf_mod) -module $(obj_dir)
 LDFLAGS = -L$(netcdf_lib) -lnetcdff

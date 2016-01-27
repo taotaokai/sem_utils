@@ -244,6 +244,7 @@ program xsem_interp_mesh
           (xyz_center_new(3,:) - mesh_old%xyz_glob(3,iglob))**2)))
       enddo
       if (min_dist > max_search_dist) then
+        print *, "#[INFO] old/new slices too far away, skip."
         cycle
       endif
 

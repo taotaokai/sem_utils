@@ -917,6 +917,8 @@ subroutine cube2xyz(anchor_xyz, uvw, xyz, DuvwDxyz)
             + DxyzDuvw(1,3)*DuvwDxyz(3,1)
   if (jacobian<=0.0_dp) then
     print *, "[ERROR] cube2xyz: 3D Jacobian undefined jacobian=", jacobian
+    print *, "anchor_xyz(3,NGNOD)=", anchor_xyz
+    print *, "uvw(3)=", uvw
     stop
   endif
 

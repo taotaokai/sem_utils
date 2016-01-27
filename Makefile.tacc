@@ -57,7 +57,8 @@ program = xsem_slice_gcircle \
 	xsem_depth_pdf \
 	xsem_thresholding \
 	xsem_combine_solver_data_in_v5.1 \
-	xsem_cijkl_over_rho_kernel
+	xsem_cijkl_over_rho_kernel \
+	xsem_diff_relative
 
 
 #------------------------------------------

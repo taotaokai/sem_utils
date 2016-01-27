@@ -9,8 +9,8 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_interp_mesh \"
-  print '(a)', "    <old_mesh_dir> <old_model_dir> <nproc_old> "
-  print '(a)', "    <new_mesh_dir> <new_model_dir> <nproc_new> "
+  print '(a)', "    <nproc_old> <old_mesh_dir> <old_model_dir> "
+  print '(a)', "    <nproc_new> <new_mesh_dir> <new_model_dir> "
   print '(a)', "    <model_tags> <output_dir> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
@@ -20,13 +20,13 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "PARAMETERS"
   print '(a)', ""
-  print '(a)', "  (string) old_mesh_dir: directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (int) nproc_old: number of slices of the old mesh"
+  print '(a)', "  (string) old_mesh_dir: directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (string) old_model_dir: directory holds proc*_reg1_<model_tag>.bin"
-  print '(a)', "  (string) model_tags: comma delimited string, e.g. vsv,vsh,rho "
-  print '(a)', "  (string) new_mesh_dir: directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (int) nproc_new: number of slices of the new mesh"
+  print '(a)', "  (string) new_mesh_dir: directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (string) new_model_dir: directory for new model files as background model"
+  print '(a)', "  (string) model_tags: comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', "  (string) output_dir: output directory for interpolated model files"
   print '(a)', ""
   print '(a)', "NOTES"
@@ -34,7 +34,7 @@ subroutine selfdoc()
   print '(a)', "  1) This program must run in parallel, e.g. mpirun -n <nproc> ..."
   print '(a)', "  2) use values_from_mesher.h for the old mesh to compile"
   print '(a)', "     use two values: ANGULAR_WIDTH_XI_IN_DEGREES_VAL, NEX_XI_VAL "
-  print '(a)', "  3) the new_model is used as the background model for the place "
+  print '(a)', "  3) the new_model is used as the background model where the"
   print '(a)', "     old mesh doesn't cover"
 ! print '(a)', "  2) max_misloc ~ 0.25 * typical element size of old mesh "
 ! print '(a)', "  3) max_search_dist ~ 5.0 * typical element size of old mesh"
@@ -58,14 +58,14 @@ program xsem_interp_mesh
   !-- command line args
   integer, parameter :: nargs = 8
   character(len=MAX_STRING_LEN) :: args(nargs)
-  character(len=MAX_STRING_LEN) :: old_mesh_dir, old_model_dir
+
   integer :: nproc_old
-  character(len=MAX_STRING_LEN) :: model_tags
+  character(len=MAX_STRING_LEN) :: old_mesh_dir, old_model_dir
 
-  character(len=MAX_STRING_LEN) :: new_mesh_dir
-  character(len=MAX_STRING_LEN) :: new_model_dir
   integer :: nproc_new
+  character(len=MAX_STRING_LEN) :: new_mesh_dir, new_model_dir
 
+  character(len=MAX_STRING_LEN) :: model_tags
   character(len=MAX_STRING_LEN) :: output_dir
 
   !-- region id
@@ -126,12 +126,12 @@ program xsem_interp_mesh
   do i = 1, nargs
     call get_command_argument(i, args(i), status=ier)
   enddo
-  read(args(1), '(a)') old_mesh_dir
-  read(args(2), '(a)') old_model_dir
-  read(args(3), *) nproc_old
-  read(args(4), '(a)') new_mesh_dir
-  read(args(5), '(a)') new_model_dir
-  read(args(6), *) nproc_new
+  read(args(1), *) nproc_old
+  read(args(2), '(a)') old_mesh_dir
+  read(args(3), '(a)') old_model_dir
+  read(args(4), *) nproc_new
+  read(args(5), '(a)') new_mesh_dir
+  read(args(6), '(a)') new_model_dir
   read(args(7), '(a)') model_tags
   read(args(8), '(a)') output_dir
 

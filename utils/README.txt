@@ -67,6 +67,44 @@ project/
 1. setup sem_config/
     
     * DATA/Par_file: define model geometry, mesh slices, simulation properties, etc.
+        - the following parameters must be set properly before compiling. Otherwise 
+            re-compilation is needed.
+
+            # mesh geometry
+            ANGULAR_WIDTH_XI_IN_DEGREES   = 50.d0      # angular size of a chunk
+            ANGULAR_WIDTH_ETA_IN_DEGREES  = 50.d0
+            CENTER_LATITUDE_IN_DEGREES    = 38.5d0
+            CENTER_LONGITUDE_IN_DEGREES   = 118.0d0
+            GAMMA_ROTATION_AZIMUTH        = -10.0d0
+            # number of elements at the surface along the two sides of the first chunk
+            # (must be multiple of 16 and 8 * multiple of NPROC below)
+            NEX_XI                          = 256
+            NEX_ETA                         = 256
+            # number of MPI processors along the two sides of the first chunk
+            NPROC_XI                        = 16
+            NPROC_ETA                       = 16
+            # parameters describing the Earth model
+            OCEANS                          = .true.
+            ELLIPTICITY                     = .true.
+            TOPOGRAPHY                      = .true.
+            GRAVITY                         = .true.
+            ROTATION                        = .true.
+            ATTENUATION                     = .true.
+            # absorbing boundary conditions for a regional simulation
+            ABSORBING_CONDITIONS            = .true.
+            # to undo attenuation for sensitivity kernel calculations or forward runs with SAVE_FORWARD
+            # use one (and only one) of the two flags below. UNDO_ATTENUATION is much better (it is exact)
+            # but requires a significant amount of disk space for temporary storage.
+            PARTIAL_PHYS_DISPERSION_ONLY    = .false.
+            UNDO_ATTENUATION                = .true.
+            # mem 
+            MEMORY_INSTALLED_PER_CORE_IN_GB = 2.5d0
+            PERCENT_OF_MEM_TO_USE_PER_CORE  = 90.d0
+            # kernel 
+            ANISOTROPIC_KL                  = .true.
+            SAVE_TRANSVERSE_KL_ONLY         = .false.
+            USE_FULL_TISO_MANTLE            = .true.
+
 
     * setup/constants.h.in: fine tuning of mesh parameters
         - regional_moho, moho_stretching, ...

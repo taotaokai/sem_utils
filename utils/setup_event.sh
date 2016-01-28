@@ -3,14 +3,14 @@
 # setup event folder for SEM forward simulation
 
 #====== command line args
-control_file=${1:?must provide control_file}
-event_id=${2:?must provide event_id}
+control_file=${1:?[arg] need control_file}
+event_id=${2:?[arg] need event_id}
 
 # check inputs
 if [ ! -f "$control_file" ]
 then
     echo "[ERROR] invalid control_file: ", $control_file
-    exit -1
+    exit 1
 fi
 control_file=$(readlink -f $control_file)
 
@@ -22,11 +22,12 @@ source ${control_file}
 #------ create event dir
 event_dir=${iter_dir}/$event_id
 
-if [ ! -d ${event_dir} ];then
+if [ ! -d "${event_dir}" ]
+then
     mkdir -p $event_dir
 else
     echo "[ERROR] event_dir=$event_dir already exits!"
-    exit -1
+    exit 1
 fi
 
 cd $event_dir
@@ -59,7 +60,7 @@ then
     cp -L $station_file ./
 else
     echo "[ERROR] $station_file does NOT exist!"
-    exit -1
+    exit 1
 fi
 
 #-- CMTSOLUTION
@@ -73,7 +74,7 @@ then
     cp -L $raw_cmt_file CMTSOLUTION
 else
     echo "[ERROR] failed to set CMTSOLUTION for iteration: $iter"
-    exit -1
+    exit 1
 fi
 # modify header line to include time shift
 tshift=$(awk '$0~/time shift/{print $3}' CMTSOLUTION)
@@ -99,7 +100,7 @@ proc_file=$mesh_dir/DATABASES_MPI/proc000000_reg1_solver_data.bin
 if [ ! -f "$proc_file" ]
 then
     echo "[ERROR] Run mesher first. $proc_file does NOT exit!"
-    exit -1
+    exit 1
 fi
 ln -sf $mesh_dir/DATABASES_MPI/*.bin ./
 

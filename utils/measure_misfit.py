@@ -53,7 +53,7 @@ print "weight_param= ", weight_param
 # 
 misfit.measure_windows_for_one_event(event_id=event_id,
         obs_dir=obs_dir, 
-        syn_dir=syn_dir, syn_band_code="BH", syn_suffix="",
+        syn_dir=syn_dir, syn_band_code="MX", syn_suffix=".sem.sac",
         adj_dir=adj_dir, adj_window_id_list=window_id_list,
         use_STF=True, plot=False, output_adj=True,
         weight_param=weight_param)

@@ -3,13 +3,13 @@
 # setup mesh folders, generate the batch script to run SEM meshfem3D
 
 #====== command line args
-control_file=${1:?must provide control_file}
+control_file=${1:?[arg] need control_file}
 
 # check inputs
 if [ ! -f "$control_file" ]
 then
     echo "[ERROR] invalid control_file: " $control_file
-    exit -1
+    exit 1
 fi
 control_file=$(readlink -f $control_file)
 
@@ -17,11 +17,12 @@ control_file=$(readlink -f $control_file)
 source ${control_file}
 
 #====== create mesh dir
-if [ ! -d ${mesh_dir} ];then
+if [ ! -d "${mesh_dir}" ]
+then
     mkdir -p $mesh_dir
 else
-    echo "[WARNING] mesh_dir=$mesh_dir already exits!"
-    exit -1
+    echo "[ERROR] mesh_dir=$mesh_dir already exits!"
+    exit 1
 fi
 
 #====== setup mesh dir
@@ -30,31 +31,22 @@ mkdir DATA DATABASES_MPI OUTPUT_FILES
 
 # create necessary files in mesh/DATA/
 cd $mesh_dir/DATA
-# all data files: topography, bathymetry, etc.
+# link data files: topography, bathymetry, etc.
 ln -sf $sem_build_dir/DATA/* ./
+
 # modify Par_file
 rm Par_file
 cp -L $sem_config_dir/DATA/Par_file .
-# do not save mesh files
-sed -i "/^SAVE_MESH_FILES/s/=.*/= .false./" Par_file
-# read GLL model
-sed -i "/^MODEL/s/=.*/= GLL/" Par_file
-# use initial_model in the first iteration 
-if [ ${iter} -eq 0 ]
-then
-    cd $iter_dir
-    ln -s ${init_model_dir} model
-fi
+# SAVE_MESH_FILES = .false.
+sed -i "/^[\s]*SAVE_MESH_FILES/s/=.*/= .false./" Par_file
+# MODEL = GLL
+sed -i "/^[\s]*MODEL/s/=.*/= GLL/" Par_file
 
-# link model directory to DATA/GLL
-cd $mesh_dir/DATA
-rm GLL
-ln -sf $model_dir/DATABASES_MPI GLL
+# link previous model directory to DATA/GLL
+rm $mesh_dir/DATA/GLL
+ln -sf $prev_model_dir $mesh_dir/DATA/GLL
 
-# backup parameter files into OUTPUT_FILES
-cd $mesh_dir
-cp -L DATA/Par_file OUTPUT_FILES
-cp -L DATA/CMTSOLUTION OUTPUT_FILES
-cp -L DATA/STATIONS OUTPUT_FILES
+# backup Par_file into OUTPUT_FILES/
+cp -L $mesh_dir/DATA/Par_file $mesh_dir/OUTPUT_FILES
 
 #END

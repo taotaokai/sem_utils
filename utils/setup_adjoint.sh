@@ -31,10 +31,10 @@ echo
 cd $event_dir
 rm -rf syn obs
 ln -sf OUTPUT_forward syn
-ln -sf $data_dir/$event_id/disp obs
+ln -sf $data_dir/$event_id/dis obs
 cd $event_dir/DATA
-rm station.txt
-ln -sf $data_dir/$event_id/data/station.txt ./
+rm channel.txt
+ln -sf $data_dir/$event_id/data/channel.txt ./
 
 cd $event_dir
 rm -rf adj misfit

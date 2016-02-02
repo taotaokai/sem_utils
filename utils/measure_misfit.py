@@ -17,8 +17,8 @@ freqmin = float(sys.argv[6])
 freqmax = float(sys.argv[7])
 
 #------ input files
-CMTSOLUTION_file = '%s/CMTSOLUTION.obs' % (data_dir)
-station_file = '%s/channel.txt' % (data_dir)
+CMTSOLUTION_file = '%s/CMTSOLUTION' % (data_dir)
+channel_file = '%s/channel.txt' % (data_dir)
 
 #------
 print "\ninitialize\n"
@@ -31,7 +31,7 @@ event_id = [ key for key in misfit.data['events'] ][0]
 
 #------
 print "\n====== setup stations\n"
-misfit.setup_stations_from_metafile(station_file)
+misfit.setup_stations_from_channel_file(channel_file)
 
 #------
 print "\n====== setup windows\n"

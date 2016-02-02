@@ -600,7 +600,7 @@ class Misfit(object):
 
     #------ filter obs and syn 
     # F = filter of data measurment
-    if filter_type == 'butter'
+    if filter_type == 'butter':
       filter_b, filter_a = signal.butter(filter_order,
         np.array(filter_freqlim)/syn_nyq, btype='band')
     else:

@@ -10,8 +10,8 @@ event_id=${2:?[arg] need event_id}
 # check inputs
 if [ ! -f "$control_file" ]
 then
-    echo "[ERROR] invalid control_file: " $control_file
-    exit -1
+  echo "[ERROR] invalid control_file: " $control_file
+  exit -1
 fi
 control_file=$(readlink -f $control_file)
 
@@ -25,14 +25,14 @@ event_dir=${iter_dir}/$event_id
 
 if [ ! -d "$event_dir" ]
 then
-    echo "[ERROR] invalid event_dir: " $event_dir
-    exit -1
+  echo "[ERROR] invalid event_dir: " $event_dir
+  exit 1
 fi
 cd $event_dir
 
 rm syn obs
 ln -sf OUTPUT_forward syn
-ln -sf $data_dir/$event_id/disp obs
+ln -sf $data_dir/$event_id/dis obs
 
 cd $event_dir
 

@@ -30,6 +30,13 @@ from taper import *
 def is_equal(lst):
   return not lst or [lst[0]]*len(lst) == lst
 
+def stf_spectrum_gauss(f, tau):
+  """ spectrum of the Gaussian STF of unit area: 
+      stf(t,tau) = 1/sqrt(PI)/tau * exp((t/tau)^2)
+      F_stf = exp(- pi^2 * f^2 * tau^2)
+  """
+  return np.exp(-np.pi**2 * f**2 * tau**2)
+
 #======
 class Misfit(object):
   """Class managing all misfit windows
@@ -85,25 +92,41 @@ class Misfit(object):
     with open(filename, 'r') as fp:
       self.data = json.load(fp)
 
-  def setup_event_from_CMTSOLUTION(self, cmt_file, update=False):
+  def setup_event_from_CMTSOLUTION(self, cmt_file, is_ECEF=False, update=False):
     """cmt_file (str): CMTSOLUTION format file
     """
     with open(cmt_file, 'r') as f:
-      cmt = [ x.split() for x in f.readlines() 
-          if not(x.startswith('#')) ]
-    year  = cmt[0][1]
-    month  = cmt[0][2]
-    day = cmt[0][3]
-    hour  = cmt[0][4]
-    minute = cmt[0][5]
-    second = cmt[0][6]
+      lines = [ x for x in f.readlines() if not(x.startswith('#')) ]
 
-    event_id = cmt[1][2]
-    time_shift = float(cmt[2][2])
-    half_duration = float(cmt[3][2])
-    lat = float(cmt[4][1])
-    lon = float(cmt[5][1])
-    depth = float(cmt[6][1])
+    dat = lines[0].split()
+    year   = dat[1]
+    month  = dat[2]
+    day    = dat[3]
+    hour   = dat[4]
+    minute = dat[5]
+    second = dat[6]
+
+    lines = [x.split(":") for x in lines]
+    event_id = lines[1][1].strip()
+    time_shift = float(lines[2][1])
+
+    if is_ECEF:
+      tau = float(lines[3][1])
+      x   = float(lines[4][1])
+      y   = float(lines[5][1])
+      z   = float(lines[6][1])
+      # initialize pyproj objects
+      geod = pyproj.Geod(ellps='WGS84')
+      ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
+      lla = pyproj.Proj(proj='latlong', ellps='WGS84', datum='WGS84')
+      # convert from ECEF(meters) to lla
+      lon, lat, alt = pyproj.transform(ecef, lla, x, y, z)
+      dep = -alt / 1000.0
+    else:
+      tau = float(lines[3][1]) / 1.628
+      lat = float(lines[4][1])
+      lon = float(lines[5][1])
+      dep = float(lines[6][1])
 
     # centroid time 
     isotime = '{:s}-{:s}-{:s}T{:s}:{:s}:{:s}Z'.format(
@@ -112,21 +135,22 @@ class Misfit(object):
 
     # moment tensor
     # basis: (r,theta,phi) corresponds to (up,south,east)
-    Mrr = float(cmt[7][1])
-    Mtt = float(cmt[8][1])
-    Mpp = float(cmt[9][1])
-    Mrt = float(cmt[10][1])
-    Mrp = float(cmt[11][1])
-    Mtp = float(cmt[12][1])
+    Mrr = float( lines[7][1])
+    Mtt = float( lines[8][1])
+    Mpp = float( lines[9][1])
+    Mrt = float(lines[10][1])
+    Mrp = float(lines[11][1])
+    Mtp = float(lines[12][1])
     M = [[Mrr, Mrt, Mrp], [Mrt, Mtt, Mtp], [Mrp, Mtp, Mpp]]
 
     # add event
     events = self.data['events']
-    gcmt = {'code': event_id,
+    gcmt = {'code':event_id,
         'centroid_time':str(centroid_time),
-        'half_duration':half_duration,
-        'latitude':lat, 'longitude':lon, 'depth':depth, 
+        'tau':tau,
+        'latitude':lat, 'longitude':lon, 'depth':dep,
         'moment_tensor':M }
+
     if event_id not in events:
       events[event_id] = {
           'gcmt': gcmt,
@@ -271,6 +295,9 @@ class Misfit(object):
         dist, az, baz = gps2DistAzimuth(gcmt['latitude'], gcmt['longitude'],
             channels[0]['latitude'], channels[0]['longitude'])
         dist_degree = kilometer2degrees(dist/1000.0)
+
+        #print gcmt['latitude'], gcmt['longitude'],channels[0]['latitude'], channels[0]['longitude']
+        #sys.exit()
 
         # make station metadata 
         meta = {'latitude': channels[0]['latitude'], 
@@ -556,7 +583,7 @@ class Misfit(object):
     events = self.data['events']
     event = events[event_id]
     cmt = event['gcmt']
-    half_duration = cmt['half_duration']
+    tau = cmt['tau']
     centroid_time = UTCDateTime(cmt['centroid_time'])
     stations = event['stations']
     station = stations[station_id]
@@ -607,16 +634,17 @@ class Misfit(object):
       print "[ERROR] not recognized filter_type: ", filter_type
       sys.exit()
 
+    # S: source spectrum (isosceles triangle)
     if syn_convolve_STF:
-      # S: source spectrum (isosceles triangle)
       f = np.fft.rfftfreq(syn_npts, d=syn_delta)
-      F_src = np.sinc(f * half_duration)**2
+      #F_src = np.sinc(f * tau)**2
+      F_src = stf_spectrum_gauss(f, tau)
 
     # filter syn/obs
     # obs = F * d
-    obs_ENZ[:,:] = signal.filtfilt(filter_b, filter_a, obs_ENZ)
+    obs_ENZ[:,:] = signal.lfilter(filter_b, filter_a, obs_ENZ)
     # syn = F * u
-    syn_ENZ[:,:] = signal.filtfilt(filter_b, filter_a, syn_ENZ)
+    syn_ENZ[:,:] = signal.lfilter(filter_b, filter_a, syn_ENZ)
     if syn_convolve_STF: # syn = F * S * u
       syn_ENZ[:,:] = np.fft.irfft(F_src*np.fft.rfft(syn_ENZ), syn_npts)
 
@@ -745,7 +773,7 @@ class Misfit(object):
         A0 = CC0 * obs_norm / syn_norm # amplitude raito: obs/syn
         adj = taper * (obs_ENZ_win - A0*syn_ENZ_win) / obs_norm / syn_norm
         # for zero phase filter: conj(F) = F
-        adj_ENZ_win = signal.filtfilt(filter_b, filter_a, adj)
+        adj_ENZ_win = signal.lfilter(filter_b, filter_a, adj)
         A_adj = np.sqrt(np.max(np.sum(adj_ENZ_win**2, axis=0)))
         # conj(S)
         if syn_convolve_STF:
@@ -760,7 +788,7 @@ class Misfit(object):
       #   where N = norm(syn)**2
       if output_hess:
         hess =  taper * syn_ENZ_win / (syn_norm**2)
-        hess_ENZ_win = signal.filtfilt(filter_b, filter_a, hess)
+        hess_ENZ_win = signal.lfilter(filter_b, filter_a, hess)
         if syn_convolve_STF:
           hess_ENZ_win = np.fft.irfft(np.conjugate(F_src) * 
               np.fft.rfft(hess_ENZ_win), syn_npts)
@@ -863,8 +891,8 @@ class Misfit(object):
         weight_param: one-sided cosine taper [stop, pass]
 
         syn_convolve_STF: 
-          flag to convolve source time function to synthetics. STF is 
-          specifed as isosceles triangle with half_duration in gcmt info.
+          flag to convolve source time function to synthetics. 
+          STF is specifed as Erf((t-t0)/tau).
     """
     # check inputs
     events = self.data['events']
@@ -1050,8 +1078,8 @@ class Misfit(object):
           '%.4f %.4f %.1f 0.0 0.0 END\n' % (evla1,evlo1,evdp1) )
         fp.write('event name:    %s\n'   % (event_id))
         fp.write('time shift:    0.0\n'        ) 
-        fp.write('half duration:   %.1f\n'   % (gcmt['half_duration']))
-        #fp.write('half duration:   0.0\n'  % (gcmt['half_duration']))
+        fp.write('tau:   %.1f\n'   % (gcmt['tau']))
+        #fp.write('half duration:   0.0\n'  % (gcmt['tau']))
         fp.write('latitude:    %.4f\n'   % (evla1)   )
         fp.write('longitude:     %.4f\n'   % (evlo1)   )
         fp.write('depth:       %.4f\n'   % (evdp1)   )
@@ -1315,7 +1343,7 @@ class Misfit(object):
       azbin=10, win=[0,100], rayp=10,
       obs_dir='obs', syn_dir='syn', syn_band_code='MX',
       syn_suffix='.sem.sac', savefig=False, out_dir='plot',
-      syn_convolve_STF=False, hdur=None,
+      syn_convolve_STF=False,
       use_window=False, window_id='F.p,P',
       min_SNR=None, min_CC0=None, min_CCmax=None,
       dist_range=None):
@@ -1340,11 +1368,8 @@ class Misfit(object):
     focmec = [ Mrr, Mtt, Mpp, Mrt, Mrp, Mtp ]
 
     if syn_convolve_STF:
-      if not hdur:
-        half_duration = gcmt['half_duration']
-      else:
-        half_duration = hdur
-      print "half_duration = ", half_duration
+      tau = gcmt['tau']
+      print "convolve syn with STF: tau=", tau
 
     #====== get list of station,window id
     stations = event['stations']
@@ -1468,12 +1493,13 @@ class Misfit(object):
         filter_b, filter_a = signal.butter(filter_order,
             np.array(filter_freqlim)/syn_nyq, btype='band')
         # filter obs: F * d
-        obs_ENZ[:,:] = signal.filtfilt(filter_b, filter_a, obs_ENZ)
+        obs_ENZ[:,:] = signal.lfilter(filter_b, filter_a, obs_ENZ)
         # filter syn: F * S * u
-        syn_ENZ[:,:] = signal.filtfilt(filter_b, filter_a, syn_ENZ)
+        syn_ENZ[:,:] = signal.lfilter(filter_b, filter_a, syn_ENZ)
         if syn_convolve_STF:
           f = np.fft.rfftfreq(syn_npts, d=syn_delta)
-          F_src = np.sinc(f * half_duration)**2
+          #F_src = np.sinc(f * tau)**2
+          F_src = stf_spectrum_gauss(f, tau)
           syn_ENZ[:,:] = np.fft.irfft(F_src*np.fft.rfft(syn_ENZ), syn_npts)
 
         # rotate EN -> TR (TRZ: right-hand convention)

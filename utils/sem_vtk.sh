@@ -3,12 +3,13 @@
 # make vtk file of SEM GLL model
 
 #====== command line args
-model_names=${1:?[arg] need model_name (e.g. mu_kernel,lamda_kernel,rho_kernel)}
-sem_dir=${2:?[arg] need sem_dir (for bin/xcombine_vol_data_vtk)}
+sem_dir=${1:?[arg] need sem_dir (for bin/xcombine_vol_data_vtk)}
 
-topo_dir=DATABASES_MPI
-model_dir=DATABASES_MPI
-out_dir=vtk
+model_names=${2:?[arg] need model_name (e.g. mu_kernel,lamda_kernel,rho_kernel)}
+topo_dir=${3:?[arg] need topo_dir(for *_solver_data.bin)}
+model_dir=${4:?[arg] need model_dir(for *_<tag>.bin)}
+out_dir=${5:-vtk}
+
 iresolution=0
 iregion=1
 

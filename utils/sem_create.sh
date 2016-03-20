@@ -34,7 +34,10 @@ mkdir DATABASES_MPI OUTPUT_FILES
 
 # link src/, config*
 ln -s ${sem_source_dir}/src ./
-ln -s ${sem_source_dir}/config* ./
+ln -s ${sem_source_dir}/config.guess ./
+ln -s ${sem_source_dir}/config.sub ./
+ln -s ${sem_source_dir}/configure ./
+ln -s ${sem_source_dir}/configure.ac ./
 ln -s ${sem_source_dir}/flags.guess ./
 ln -s ${sem_source_dir}/install-sh ./
 ln -s ${sem_source_dir}/Makefile.in ./

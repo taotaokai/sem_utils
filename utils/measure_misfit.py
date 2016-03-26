@@ -4,17 +4,27 @@
 """
 import sys
 from misfit import Misfit
-import json
+#import json
 import numpy as np
 
 # read command line args
-data_dir = str(sys.argv[1])
-obs_dir = str(sys.argv[2])
-syn_dir = str(sys.argv[3])
-adj_dir = str(sys.argv[4])
-misfit_dir = str(sys.argv[5])
-freqmin = float(sys.argv[6])
-freqmax = float(sys.argv[7])
+
+data_dir = "DATA" 
+obs_dir = "obs"
+syn_dir = "syn"
+adj_dir = "adj"
+misfit_dir = "misfit"
+freqmin = 0.01
+freqmax = 0.1
+
+
+#data_dir = str(sys.argv[1])
+#obs_dir = str(sys.argv[2])
+#syn_dir = str(sys.argv[3])
+#adj_dir = str(sys.argv[4])
+#misfit_dir = str(sys.argv[5])
+#freqmin = float(sys.argv[6])
+#freqmax = float(sys.argv[7])
 
 #------ input files
 CMTSOLUTION_file = '%s/CMTSOLUTION' % (data_dir)
@@ -26,38 +36,46 @@ misfit = Misfit()
 
 #------
 print "\n====== setup event\n"
-misfit.setup_event_from_CMTSOLUTION(CMTSOLUTION_file, is_ECEF=True)
-event_id = [ key for key in misfit.data['events'] ][0]
+misfit.setup_event(CMTSOLUTION_file, is_ECEF=True)
 
 #------
-print "\n====== setup stations\n"
-misfit.setup_stations_from_channel_file(channel_file)
+print "\n====== setup station\n"
+misfit.setup_station(channel_file)
 
 #------
-print "\n====== setup windows\n"
+print "\n====== read seismogram: obs, syn\n"
+misfit.read_obs_syn(
+  obs_dir=obs_dir, 
+  syn_dir=syn_dir, syn_band_code="MX", syn_suffix=".sem.sac",
+  left_pad=100, right_pad=0)
+
+##------
+print "\n====== setup window\n"
 window_list = [ 
-        ('F','p,P',[-30,50]), 
-        ('F','s,S',[-40,70]) ]
+    ('F','p,P',[-30,50]), 
+]
 print "window_list= ", window_list
 filter_param=('butter', 3, [freqmin, freqmax])
 print "filter_param= ", filter_param
-misfit.setup_windows(window_list=window_list,
+misfit.setup_window(window_list=window_list,
         filter_param=filter_param)
 
 #------
-print "\n====== measure windows\n"
-#window_id_list = ['F.p,P','F.s,S']
-window_id_list = [ '.'.join(x[0:2]) for x in window_list ]
-weight_param={'SNR':[10, 15], 'CCmax':[0.6,0.8], 'CC0':[0.5,0.7]}
+print "\n====== measure window\n"
+#weight_param={'SNR':[10, 15], 'CCmax':[0.6,0.8], 'CC0':[0.5,0.7]}
+weight_param={}
 print "weight_param= ", weight_param
 # 
-misfit.measure_windows_for_one_event(event_id=event_id,
-        obs_dir=obs_dir, 
-        syn_dir=syn_dir, syn_band_code="BX", syn_suffix=".sem.sac",
-        syn_convolve_STF=True, 
-        adj_dir=adj_dir, adj_window_id_list=window_id_list,
-        plot=False, output_adj=True,
-        weight_param=weight_param)
+misfit.measure_window(
+    syn_convolve_STF=True, 
+    plot=False,
+    weight_param=weight_param)
+
+#------
+print "\n====== output adjoint source\n"
+misfit.output_adjoint_source(
+    out_dir=adj_dir,
+    syn_band_code="MX")
 
 #------
 #print "\n====== relocate\n"
@@ -70,4 +88,4 @@ misfit.measure_windows_for_one_event(event_id=event_id,
 
 #------
 print "\n====== save data\n"
-misfit.save(filename='%s/misfit.json' % (misfit_dir))
+misfit.save(filename='%s/misfit.pkl' % (misfit_dir))

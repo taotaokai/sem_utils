@@ -6,7 +6,6 @@
 run_dir=${1:?[arg]need run_dir(for all output)}
 par_dir=${2:?[arg]need par_dir(for Par_file,STATIONS,CMTSOLUTION)}
 mesh_dir=${3:?[arg]need mesh_dir(for DATABASES/*)}
-sem_dir=${4:?[arg]need sem_dir(for code, DATA/*)}
 
 if [ -d "$run_dir" ]
 then
@@ -39,16 +38,9 @@ then
     exit 1
 fi
 
-if [ ! -d "$sem_dir" ]
-then
-    echo "[ERROR] sem_dir($sem_dir) does NOT exit!"
-    exit 1
-fi
-
 run_dir=$(readlink -f $run_dir)
 par_dir=$(readlink -f $par_dir)
 mesh_dir=$(readlink -f $mesh_dir)
-sem_dir=$(readlink -f $sem_dir)
 
 #====== setup run_dir
 cd $run_dir
@@ -56,7 +48,7 @@ mkdir DATA DATABASES_MPI OUTPUT_FILES
 
 # link data files: topography, bathymetry, etc.
 cd $run_dir/DATA
-ln -sf $sem_dir/DATA/* ./
+#ln -sf $mesh_dir/DATA/* ./
 
 rm -rf Par_file STATIONS CMTSOLUTION
 cp -L $par_dir/Par_file .

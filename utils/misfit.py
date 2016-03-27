@@ -438,22 +438,26 @@ self.data = {
         obs_starttime = tr.stats.starttime
         obs_endtime = tr.stats.endtime
         # check if obs record is long enough
-        if obs_starttime > syn_starttime or obs_endtime < syn_endtime:
+        if obs_starttime > syn_starttime or obs_endtime < syn_endtime-syn_delta:
           flag = False
           print "[WARN] obs record is not long enough: %s" % (obs_files[i])
           print "       skip  %s" % (station_id)
+          print obs_starttime, obs_endtime 
+          print syn_starttime, syn_endtime 
           break
         # lowpass below the nyquist frequency of synthetics
         # repeat twice to avoid numerical inaccuries
-        tr.detrend(type='linear')
-        tr.detrend(type='linear')
+        #tr.detrend(type='linear')
+        #tr.detrend(type='linear')
         # repeat process twice to make sharper edge
-        tr.filter('lowpass', freq=0.8*syn_nyq, corners=10, zerophase=True)
-        tr.filter('lowpass', freq=0.8*syn_nyq, corners=10, zerophase=True)
+        tr.filter('lowpass', freq=0.8*syn_nyq, corners=20, zerophase=True)
+        #tr.filter('lowpass', freq=0.8*syn_nyq, corners=10, zerophase=True)
         # interpolation: windowed sinc reconstruction
         obs_ENZ[i,:] = lanczos_interp1(tr.data, obs_delta,
             syn_times+(syn_starttime-obs_starttime), na=20)
-      if not flag: continue
+      # if bad data, skip this station
+      if not flag:
+        continue
 
       #------ rotate obs to ENZ
       # projection matrix: obs = proj * ENZ => ENZ = inv(proj) * obs
@@ -657,12 +661,27 @@ self.data = {
           sys.exit()
 
         # filter obs, syn
+        #NOTE: use lfilter (causal filter) to avoid contamination from the right
+        # end of the signal, but with asymmetric response and 
+        # peak shift ~ 1/4 min. period (e.g. 0.01-0.1Hz -> 2.5s peak shift)
+        # , however the duration of the filter response is determined by the
+        # max. period (e.g. 0.01-0.1Hz -> ~50s). So the time window chosen 
+        # should not be affected by the relatively small peak shift.
         # obs = F * d
-        obs_ENZ_filt = signal.filtfilt(filter_b, filter_a, obs_ENZ)
-        # syn = F * u
-        syn_ENZ_filt = signal.filtfilt(filter_b, filter_a, syn_ENZ)
-        if syn_convolve_STF: # syn = F * S * u
-          syn_ENZ_win = np.fft.irfft(F_src*np.fft.rfft(syn_ENZ_filt), syn_nt)
+        obs_ENZ_filt = signal.lfilter(filter_b, filter_a, obs_ENZ)
+        # syn = F * [S] * u
+        syn_ENZ_filt = signal.lfilter(filter_b, filter_a, syn_ENZ)
+        if syn_convolve_STF:
+          syn_ENZ_filt = np.fft.irfft(F_src*np.fft.rfft(syn_ENZ_filt), syn_nt)
+
+        #DEBUG
+        #diff = obs_ENZ_filt - syn_ENZ_filt
+        #for i in range(3):
+        #  plt.subplot(311+i)
+        #  plt.plot(syn_times, obs_ENZ_filt[i,:], 'k')
+        #  plt.plot(syn_times, syn_ENZ_filt[i,:], 'r')
+        #  plt.plot(syn_times, diff[i,:], 'c')
+        #plt.show()
 
         # noise: use signals 40s before first arrival time on obs
         first_arrtime = event['t0'] + meta['ttime'][0].time
@@ -729,6 +748,15 @@ self.data = {
         # noise
         noise_ENZ_win = np.dot(proj_matrix, noise_ENZ_filt)
 
+        #DEBUG
+        #diff = obs_ENZ_win - syn_ENZ_win
+        #for i in range(3):
+        #  plt.subplot(311+i)
+        #  plt.plot(syn_times, obs_ENZ_win[i,:], 'k')
+        #  plt.plot(syn_times, syn_ENZ_win[i,:], 'r')
+        #  plt.plot(syn_times, diff[i,:], 'c')
+        #plt.show()
+
         # measure SNR
         A_syn = np.sqrt(np.max(np.sum(syn_ENZ_win**2, axis=0)))
         A_obs = np.sqrt(np.max(np.sum(obs_ENZ_win**2, axis=0)))
@@ -755,12 +783,25 @@ self.data = {
         for i in range(3):
           # NOTE the order (obs,syn) is important. The positive time on 
           #   CC means shifting syn in the positive time direction
+          # [-(nt-1), nt) * dt
           cc += signal.fftconvolve(
               obs_ENZ_win[i,:], syn_ENZ_win[i,::-1], 'full')
+
+        #DEBUG
+        #print window_id
+        #print cc[syn_nt-2] - np.sum(obs_ENZ_win * syn_ENZ_win)
+        #print cc[syn_nt-1] - np.sum(obs_ENZ_win * syn_ENZ_win)
+        #print cc[syn_nt] - np.sum(obs_ENZ_win * syn_ENZ_win)
+        #print cc[syn_nt+1] - np.sum(obs_ENZ_win * syn_ENZ_win)
+        #print cc[syn_nt+2] - np.sum(obs_ENZ_win * syn_ENZ_win)
+
         cc /= obs_norm * syn_norm
         # zero-lag cc coeff.
-        CC0 = cc[syn_nt]
+        CC0 = cc[syn_nt-1] #the n-th point corresponds to zero lag time 
         AR0 = CC0 * syn_norm / obs_norm # amplitude ratio syn/obs 
+
+        #DEBUG
+        #print CC0 - np.sum(obs_ENZ_win * syn_ENZ_win)/obs_norm/syn_norm
 
         # tshift>0: synthetic is shifted along the positive time direction
         CC_shift_range = window_len/2.0 #TODO: more reasonable choice?
@@ -792,10 +833,17 @@ self.data = {
         #   where A = CC0(un-normalized) / norm(syn)**2, N = norm(obs)*norm(syn)
         A0 = CC0 * obs_norm / syn_norm # amplitude raito: obs/syn
         adj = taper * (obs_ENZ_win - A0*syn_ENZ_win) / obs_norm / syn_norm
-        # for zero phase filter: conj(F) = F
-        adj_ENZ_win = signal.filtfilt(filter_b, filter_a, adj)
+
+        #DEBUG
+        #print window_id
+        #print obs_norm, syn_norm
+        #print CC0, A0
+
+        # apply conj(F), equivalent to conj(F*conj(adj))
+        adj_ENZ_win = signal.lfilter(filter_b, filter_a, adj[::-1])
+        adj_ENZ_win = adj_ENZ_win[::-1]
         A_adj = np.sqrt(np.max(np.sum(adj_ENZ_win**2, axis=0)))
-        # conj(S)
+        # apply conj(S)
         if syn_convolve_STF:
           adj_ENZ_win = np.fft.irfft(np.conjugate(F_src) * 
               np.fft.rfft(adj_ENZ_win), syn_nt)
@@ -830,7 +878,7 @@ self.data = {
                   % (station_id, CC_time_shift, CCmax, ARmax, 
                     CC0, AR0, A_obs, A_noise, snr, weight) )
             plt.plot(t, obs_ENZ_filt[i,:]/A_obs, 'k', linewidth=0.2)
-            plt.plot(t, syn_ENZ_filt[i,:]/A_syn, 'r', linewidth=0.2)
+            plt.plot(t, syn_ENZ_filt[i,:]/A_obs*A0, 'r', linewidth=0.2)
             plt.plot(t[noise_idx], noise_ENZ_filt[i,:]/A_obs, 'b', linewidth=1.0)
             idx = (win_b <= syn_times) & (syn_times <= win_e)
             plt.plot(t[idx], obs_ENZ_win[i,idx]/A_obs, 'k', linewidth=1.0)
@@ -908,19 +956,19 @@ self.data = {
   #enddef output_adjoint_source
 
 
-  def calculate_du
+# def calculate_du
 
 
-  def load_diff_seismogram():
-    """ Load differential seismograms
-    """
-
-
-
+# def load_diff_seismogram():
+#   """ Load differential seismograms
+#   """
 
 
 
-  #enddef load_diff_seismogram():
+
+
+
+# #enddef load_diff_seismogram():
 
 
   def relocate_1d(self, 

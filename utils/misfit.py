@@ -32,10 +32,24 @@ def is_equal(lst):
 
 def stf_spectrum_gauss(f, tau):
   """ spectrum of the Gaussian STF of unit area: 
-      stf(t,tau) = 1/sqrt(PI)/tau * exp((t/tau)^2)
+      stf(t,tau) = 1/sqrt(PI)/tau * exp(-(t/tau)^2)
       F_stf = exp(- pi^2 * f^2 * tau^2)
   """
   return np.exp(-np.pi**2 * f**2 * tau**2)
+
+def stf_gauss(n, dt, tau):
+  """ Gaussian source time function
+    stf(t,tau) = 1/sqrt(PI)/tau * exp(-(t/tau)^2)
+    t = dt * [0:(n+1)/2, -n/2:-1]
+  """
+  n = int(n)
+  idx = np.arange(n)
+  idx[(n+1)/2:] -= n
+  t = idx * dt / tau
+  stf = np.exp(-t**2)/tau/np.pi**0.5
+  Ds_Dt0 = 2.0/tau * t * stf
+  Ds_Dtau = 2.0/tau * (t**2 - 0.5) * stf 
+  return stf, Ds_Dt0, Ds_Dtau
 
 #======
 class Misfit(object):
@@ -45,10 +59,10 @@ self.data = {
 
     'event': {event_id, lat,lon, depth, t0, tau, moment tensor},
 
-    'source_derivative': {
-        <param>: [value]
-        ...
-    }
+    #'source_derivative': {
+    #    <param>: [value]
+    #    ...
+    #}
 
     'station': {
 
@@ -61,9 +75,12 @@ self.data = {
                 'ttime':
             },
 
-            'time_sample': {starttime:, delta:, nt:, nl:, nr},
-            'syn': 3 x Nt (u),
-            'obs': 3 x Nt (d),
+            'waveform': {
+                'time_sample': {starttime:, delta:, nt:, nl:, nr},
+                'obs': 3 x Nt (d), # observed seismograms
+                'grf': 3 x Nt (g), # green's function (delta stf in simulation)
+                'syn': 3 x Nt (u), # synthetic seismograms (grf convolve stf)
+            },
 
             'windows': {
                 <window_id>: {
@@ -82,14 +99,18 @@ self.data = {
                 ...
             },
 
-            'adj': 3 x Nt (DfDu),
+            'dchi_du': 3 x Nt (Dchi/Du), #chi: misfit function
 
-            'waveform_derivative': { (DuDm)
-                <param>: {'dm': , 'du': 3 x Nt}
+            'derivative': {
+               'dt0': {'dm':, 'du':(3 x Nt), 'dchi':(scalar)}
+               'dtau': {'dm':, 'du':(3 x Nt), 'dchi':(scalar)}
+               'dxs': {'dm':, 'dgrf':, 'du':, 'dchi':} # finite-difference
+               'dmt': {'dm':, 'dgrf':, 'du':, 'dchi':} # moment-tensor
             },
 
-            'source_hessian': {
-
+            'hessian_chi': {
+                ('dt0','dt0'):,
+                ...
             },
 
         },
@@ -101,11 +122,17 @@ self.data = {
   NOTE:
     1. 1D Earth model: ak135
   """
+#
+#======================================================
+#
 
   def __init__(self):
     """Misfit dict
     """
     self.data = {}
+#
+#======================================================
+#
 
   def save(self, filename='misfit.pkl'):
     """Save data
@@ -113,12 +140,18 @@ self.data = {
     # use highest protocol available 
     with open(filename, 'wb') as fp:
       pickle.dump(self.data, fp, -1)
+#
+#======================================================
+#
 
   def load(self, filename='misfit.pkl'):
     """Load data
     """
     with open(filename, 'rb') as fp:
       self.data = pickle.load(fp)
+#
+#======================================================
+#
 
   def setup_event(self, cmt_file, is_ECEF=False, update=False):
     """cmt_file (str): CMTSOLUTION format file
@@ -200,6 +233,9 @@ self.data = {
 
   #enddef setup_event
 
+#
+#======================================================
+#
 
   def setup_station(self,
       channel_file,
@@ -365,15 +401,19 @@ self.data = {
     #endfor net_sta_loc in stations_all:
   #enddef setup_stations_from_channel_file
 
+#
+#======================================================
+#
 
-  def read_obs_syn(self,
+  def read_obs_grf(self,
       obs_dir='obs',
       syn_dir='syn', syn_band_code='MX', syn_suffix='.sem.sac',
       left_pad=100, right_pad=0):
-    """ Get waveforms for all stations.
-
-      left_pad: time length to pad before synthetics 
-      right_pad: time length to pad after synthetics 
+    """ read in observed seismograms and synthetic Green's functions.
+    Note:
+      1) left_pad: time length to pad before synthetics 
+        right_pad: time length to pad after synthetics 
+      2) use delta STF in simulation to approximate green's function
     """
     syn_orientation_codes = ['E', 'N', 'Z']
 
@@ -410,8 +450,8 @@ self.data = {
       #------ get time samples of syn seismograms
       if not is_equal( [ (tr.stats.starttime, tr.stats.delta, tr.stats.npts) \
           for tr in syn_st ] ):
-        raise Exception('%s:%s: not equal time samples in'\
-            ' synthetic seismograms.' % (event_id, station_id))
+        raise Exception('%s not equal time samples in'\
+            ' synthetic seismograms.' % (station_id))
       tr = syn_st[0]
       syn_delta = tr.stats.delta
       syn_npts = tr.stats.npts
@@ -477,17 +517,23 @@ self.data = {
       obs_ENZ = np.dot(inv_proj, obs_ENZ)
 
       #------ record data 
-      station['time_sample'] = {
+      if 'waveform' not in station:
+        station['waveform'] = {}
+      waveform = station['waveform']
+      waveform['time_sample'] = {
           'starttime': syn_starttime, 'delta': syn_delta,
           'nt': nt, 'nl': nl, 'nr': nr }
-      station['obs'] = obs_ENZ
-      station['syn'] = syn_ENZ
+      waveform['obs'] = obs_ENZ
+      waveform['grf'] = syn_ENZ
 
       #DEBUG: plot seismograms
 
     #endfor station_id in station_dict:
-  #enddef read_obs_syn
+  #enddef read_obs_grf
 
+#
+#======================================================
+#
 
   def setup_window(self,
       window_list=[('F','p,P',[-30,50]), ('F','s,S',[-40,70])],
@@ -589,16 +635,16 @@ self.data = {
 
   #enddef setup_windows
 
+#
+#======================================================
+#
 
   def measure_window(self,
-      syn_convolve_STF=False,
       plot=False,
       cc_delta=0.01, 
       weight_param={'SNR':[10,15], 'CCmax':[0.6,0.8], 'CC0':[0.5,0.7]}):
     """ calculate adjoint sources
-
         misfit functional: normalized zero-lag correlation coef. 
-
         adjoint source:  derivative of synthetic trace
     """
     #------
@@ -615,8 +661,9 @@ self.data = {
 
       meta = station['meta']
       window_dict = station['window']
-      time_sample = station['time_sample']
 
+      waveform = station['waveform']
+      time_sample = waveform['time_sample']
       syn_starttime = time_sample['starttime']
       syn_delta = time_sample['delta']
       syn_nyq = 0.5/syn_delta
@@ -625,17 +672,15 @@ self.data = {
       syn_nr = time_sample['nr']
       syn_times = syn_delta * np.arange(syn_nt)
 
-      obs_ENZ = station['obs']
-      syn_ENZ = station['syn']
+      obs_ENZ = waveform['obs']
+      syn_ENZ = waveform['grf']
 
       # source spectrum (moment-rate function)
-      if syn_convolve_STF:
-        syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
-        #F_src = np.sinc(f * tau)**2
-        F_src = stf_spectrum_gauss(syn_freq, event['tau'])
+      syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
+      F_src = stf_spectrum_gauss(syn_freq, event['tau'])
 
       #------ loop each window
-      adj_ENZ = np.zeros((3, syn_nt))
+      dchi_du = np.zeros((3, syn_nt))
       taper = np.zeros(syn_nt)
       proj_matrix = np.zeros((3,3))
       cc = np.zeros(2*syn_nt-1)
@@ -669,10 +714,9 @@ self.data = {
         # should not be affected by the relatively small peak shift.
         # obs = F * d
         obs_ENZ_filt = signal.lfilter(filter_b, filter_a, obs_ENZ)
-        # syn = F * [S] * u
+        # syn = F * S * g (green's func)
         syn_ENZ_filt = signal.lfilter(filter_b, filter_a, syn_ENZ)
-        if syn_convolve_STF:
-          syn_ENZ_filt = np.fft.irfft(F_src*np.fft.rfft(syn_ENZ_filt), syn_nt)
+        syn_ENZ_filt = np.fft.irfft(F_src*np.fft.rfft(syn_ENZ_filt), syn_nt)
 
         #DEBUG
         #diff = obs_ENZ_filt - syn_ENZ_filt
@@ -743,7 +787,7 @@ self.data = {
         # apply window taper and projection
         # obs = w * F * d
         obs_ENZ_win = np.dot(proj_matrix, obs_ENZ_filt) * taper
-        # obs = w * F * [S] * u
+        # syn = w * F * S * g
         syn_ENZ_win = np.dot(proj_matrix, syn_ENZ_filt) * taper
         # noise
         noise_ENZ_win = np.dot(proj_matrix, noise_ENZ_filt)
@@ -832,7 +876,7 @@ self.data = {
         # adj = conj(F * [S]) * w * [ w * F * d - A * w * F * [S] * u] / N, 
         #   where A = CC0(un-normalized) / norm(syn)**2, N = norm(obs)*norm(syn)
         A0 = CC0 * obs_norm / syn_norm # amplitude raito: obs/syn
-        adj = taper * (obs_ENZ_win - A0*syn_ENZ_win) / obs_norm / syn_norm
+        adj_ENZ_win = taper * (obs_ENZ_win - A0*syn_ENZ_win) / obs_norm / syn_norm
 
         #DEBUG
         #print window_id
@@ -840,16 +884,16 @@ self.data = {
         #print CC0, A0
 
         # apply conj(F), equivalent to conj(F*conj(adj))
-        adj_ENZ_win = signal.lfilter(filter_b, filter_a, adj[::-1])
+        adj_ENZ_win = signal.lfilter(filter_b, filter_a, adj_ENZ_win[::-1])
         adj_ENZ_win = adj_ENZ_win[::-1]
-        A_adj = np.sqrt(np.max(np.sum(adj_ENZ_win**2, axis=0)))
-        # apply conj(S)
-        if syn_convolve_STF:
-          adj_ENZ_win = np.fft.irfft(np.conjugate(F_src) * 
-              np.fft.rfft(adj_ENZ_win), syn_nt)
 
-        # add into adjoint source for current window
-        adj_ENZ += weight * adj_ENZ_win
+        # apply conj(S)
+        #if syn_convolve_STF:
+        #  adj_ENZ_win = np.fft.irfft(np.conjugate(F_src) * 
+        #      np.fft.rfft(adj_ENZ_win), syn_nt)
+
+        # add into dchi_du
+        dchi_du += weight * adj_ENZ_win
 
         # record results
         quality_dict = {
@@ -869,6 +913,7 @@ self.data = {
         # plot measure window and results 
         if plot:
           syn_orientation_codes = ['E', 'N', 'Z']
+          A_adj = np.sqrt(np.max(np.sum(adj_ENZ_win**2, axis=0)))
           t = syn_times
           for i in range(3):
             plt.subplot(411+i)
@@ -894,11 +939,15 @@ self.data = {
           plt.show()
       #end for window_id in windows:
 
-      station['adj'] = adj_ENZ
+      # store adjoint source
+      station['dchi_du'] = dchi_du
 
     #endfor station_id in station_dict:
   #enddef measure_windows_for_one_station(self,
 
+#
+#======================================================
+#
 
   def output_adjoint_source(self, 
       out_dir='adj',
@@ -955,18 +1004,148 @@ self.data = {
     #endfor station_id in station_dict:
   #enddef output_adjoint_source
 
+#
+#======================================================
+#
 
-# def calculate_du
+  def derivative_stf(self):
+    """ Calculate derivatives for source time function (t0, tau)
+    NOTE:
+      1) 'syn' must be Green's function (tau set to zero in simulation)
+    """
+    event = self.data['event']
+    t0 = event['t0']
+    tau = event['tau']
+
+    station_dict = self.data['station']
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected statations
+      if station['stat']['code'] < 0:
+        continue
+
+      # source time function
+      time_sample = station['time_sample']
+      starttime = time_sample['starttime']
+      dt = time_sample['delta']
+      nt = time_sample['nt']
+      t = np.arange(nt) * dt + (starttime - t0) #referred to t0
+      # s(t), Ds(t)/Dt0, Ds(t)/Dtau
+      stf, Ds_Dt0, Ds_Dtau = stf_gauss(nt, dt, tau)
+
+      #------ waveform derivative
+      # green's function
+      green = station['syn']
+      # convolve Ds(t)/Dt0,tau with synthetic Green's function
+      Du_Dt0 = np.fft.irfft(np.fft.rfft(Ds_Dt0) * np.fft.rfft(green), nt)
+      Du_Dtau = np.fft.irfft(np.fft.rfft(Ds_Dtau) * np.fft.rfft(green), nt)
+      # zero records before origin time (wrap around from the end)
+      idx = t < -5.0*tau
+      Du_Dt0[:,idx] = 0.0
+      Du_Dtau[:,idx] = 0.0
+
+      #------ misfit derivative
+      # adjoint source = Dchi/Du
+      adj = station['adj']
+      Dchi_Dt0 = np.sum(adj * Du_Dt0)
+      Dchi_Dtau = np.sum(adj * Du_Dtau)
+
+      #------ record derivatives
+      if 'derivative' not in station:
+        station['derivative'] = {}
+      station['derivative']['t0'] = {
+          'dm':1.0, 'du':Du_Dt0, 'dchi':Dchi_Dt0 }
+      station['derivative']['tau'] = {
+          'dm':1.0, 'du': Du_Dtau, 'dchi':Dchi_Dtau }
+
+      # DEBUG
+      #print Dchi_Dt0, Dchi_Dtau
+      #for i in range(3):
+      #  plt.subplot(311+i)
+      #  #plt.plot(t, stf, 'k', t, Ds_Dt0, 'y', t, Ds_Dtau, 'c')
+      #  plt.plot(t, Du_Dt0[i,:], 'b', t, Du_Dtau[i,:], 'r')
+      #plt.show()
+
+  #enddef derivative_stf(self)
+
+#
+#======================================================
+#
+
+  def derivative_srcloc(self, dxs, sacdir, 
+      syn_band_code='MX', syn_suffix='.sem.sac'):
+    """ Calculate derivative for source location along one direction
+    NOTE:
+      1) use finite difference to get waveform derivative
+      2) dxs: length 3 vector (unit: meter)
+      3) green's function for input (i.e. set tau to zero in simulation)
+    """
+    syn_orientation_codes = ['E', 'N', 'Z']
+
+    event = self.data['event']
+    station_dict = self.data['station']
+
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected statations
+      if station['stat']['code'] < 0:
+        continue
+
+      #------ time samples
+      time_sample = station['time_sample']
+      starttime = time_sample['starttime']
+      dt = time_sample['delta']
+      nt = time_sample['nt']
+      nl = time_sample['nl'] # npts of left padding
+      nr = time_sample['nr'] # npts of right padding
+      t = np.arange(nt) * dt + (starttime - t0) #referred to t0
+
+      #------ get file paths of syn seismograms
+      syn_files = [ '{:s}/{:s}.{:2s}{:1s}{:s}'.format(
+        syn_dir, station_id, syn_band_code, x, syn_suffix)
+        for x in syn_orientation_codes ]
+      #------ read in obs, syn seismograms
+      syn_st  = read(syn_files[0])
+      syn_st += read(syn_files[1])
+      syn_st += read(syn_files[2])
+      #------ check the same time samples as original syn
+      if not is_equal( [ (tr.stats.starttime, tr.stats.delta, tr.stats.npts) \
+          for tr in syn_st ] ):
+        raise Exception('%s: not equal time samples in'\
+            ' synthetic seismograms.' % (station_id))
+      tr = syn_st[0]
+      if tr.stats.delta != dt:
+        raise Exception("%s: not the same dt for diff-srcloc!" % (station_id))
+      if (tr.stats.starttime - nl*dt) != starttime:
+        raise Exception("%s: not the same origin time for diff-srcloc!" % (station_id))
+      if tr.stats.npts != (nt-nl-nr):
+        raise Exception("%s: not the same npts for diff-srcloc!" % (station_id))
+      #------ read syn seismograms from the differential source location
+      syn_ENZ = np.zeros((3, nt))
+      for i in range(3):
+        syn_ENZ[i,nl:(nl+nt)] = syn_st[i].data
+      #differential green's function 
+      du = syn_ENZ - station['syn']
+      dchi = np.sum(station['adj'] * du)
+
+      #------ record derivatives
+      if 'derivative' not in station:
+        station['derivative'] = {}
+      station['derivative']['dxs'] = {
+          'dm':dxs, 'du':du, 'dchi':dchi }
+
+      # DEBUG
+      print dchi
+      for i in range(3):
+        plt.subplot(311+i)
+        #plt.plot(t, stf, 'k', t, Ds_Dt0, 'y', t, Ds_Dtau, 'c')
+        plt.plot(t, Du_Dt0[i,:], 'b', t, Du_Dtau[i,:], 'r')
+      plt.show()
 
 
-# def load_diff_seismogram():
-#   """ Load differential seismograms
-#   """
-
-
-
-
-
+#
+#======================================================
+#
 
 # #enddef load_diff_seismogram():
 

@@ -10,7 +10,7 @@ import numpy as np
 # read command line args
 
 data_dir = "DATA" 
-obs_dir = "fake_obs"
+obs_dir = "obs"
 syn_dir = "output_green"
 adj_dir = "adj"
 misfit_dir = "misfit"

@@ -44,8 +44,8 @@ print "\n====== setup station\n"
 misfit.setup_station(channel_file)
 
 #------
-print "\n====== read seismogram: obs, syn\n"
-misfit.read_obs_syn(
+print "\n====== read seismogram: obs, grf\n"
+misfit.read_obs_grf(
   obs_dir=obs_dir, 
   syn_dir=syn_dir, syn_band_code=syn_band_code, syn_suffix=".sem.sac",
   left_pad=100, right_pad=0)
@@ -67,25 +67,16 @@ print "\n====== measure window\n"
 weight_param={}
 print "weight_param= ", weight_param
 # 
-misfit.measure_window(
-    syn_convolve_STF=True, 
+misfit.measure_adj(
     plot=False,
     weight_param=weight_param)
 
 #------
 print "\n====== output adjoint source\n"
-misfit.output_adjoint_source(
+misfit.output_adj(
+    adj_type='dchi_dg',
     out_dir=adj_dir,
     syn_band_code=syn_band_code)
-
-#------
-#print "\n====== relocate\n"
-#fix_depth = True
-#out_cmt_file = "%s/CMTSOLUTION.reloc" % (misfit_dir)
-#misfit.relocate_1d(event_id, 
-#        window_id_list=window_id_list,
-#        fix_depth=fix_depth,
-#        out_cmt_file=out_cmt_file)
 
 #------
 print "\n====== save data\n"

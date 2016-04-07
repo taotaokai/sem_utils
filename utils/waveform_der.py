@@ -17,10 +17,7 @@ freqmin = 0.01
 freqmax = 0.1
 syn_band_code = "MX"
 syn_suffix = ".sem.sac"
-srcfrechet_file = "output_srcfrechet/src_frechet.000001"
-
-outdir_dxs = "output_dxs"
-outdir_dmt = "output_dmt"
+srcfrechet_file = "output_adj/src_frechet.000001"
 
 #------
 print "\n====== initialize\n"

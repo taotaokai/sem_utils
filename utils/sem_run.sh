@@ -70,5 +70,6 @@ ln -s $mesh_dir/DATABASES_MPI/*_stacey.bin .
 
 # OUTPUT_FILES
 cp $mesh_dir/OUTPUT_FILES/addressing.txt $run_dir/OUTPUT_FILES
+cp $mesh_dir/OUTPUT_FILES/addressing.txt $run_dir/DATABASES_MPI
 
 #END

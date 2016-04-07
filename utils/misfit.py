@@ -849,7 +849,7 @@ self.data = {
         #------ measure CC time shift (between w*F*d and w*F*u)
         obs_norm = np.sqrt(np.sum(obs_filt_win**2))
         syn_norm = np.sqrt(np.sum(syn_filt_win**2))
-        # window normalization factor
+        # window normalization factor (without dt)
         Nw = obs_norm * syn_norm
         cc[:] = 0.0
         # NOTE the order (obs,syn) is important. The positive time on 
@@ -902,15 +902,16 @@ self.data = {
         # , where A = CC0(un-normalized) / norm(u)**2, N = norm(d)*norm(u)
         Aw = CC0 * obs_norm / syn_norm # window amplitude raito
         #-- dchiw_du
-        dchiw_du = win_func * (obs_filt_win - Aw*syn_filt_win) / Nw
+        #NOTE: *dt is put back to Nw
+        dchiw_du1 = win_func * (obs_filt_win - Aw*syn_filt_win) / Nw / syn_delta
         # apply conj(F), equivalent to conj(F*conj(adj))
-        dchiw_du = signal.lfilter(filter_b, filter_a, dchiw_du[:,::-1])
+        dchiw_du = signal.lfilter(filter_b, filter_a, dchiw_du1[:,::-1])
         dchiw_du = dchiw_du[:,::-1]
         #DEBUG
         #for i in range(3):
         #  plt.subplot(311+i)
-        #  plt.plot(syn_times, adj_ENZ_win1[i,:], 'k')
-        #  plt.plot(syn_times, adj_ENZ_win[i,:], 'r')
+        #  plt.plot(syn_times, dchiw_du1[i,:], 'k')
+        #  plt.plot(syn_times, dchiw_du[i,:], 'r')
         #plt.show()
         # add into total dchi_du
         dchi_du += weight * dchiw_du
@@ -919,6 +920,12 @@ self.data = {
             np.fft.rfft(dchiw_du), syn_nt)
         # add into total dchi_dg
         dchi_dg += weight * dchiw_dg 
+        #DEBUG
+        #for i in range(3):
+        #  plt.subplot(311+i)
+        #  plt.plot(syn_times, dchiw_du[i,:], 'k')
+        #  plt.plot(syn_times, dchiw_dg[i,:], 'r')
+        #plt.show()
 
         #------ record results
         quality_dict = {
@@ -938,8 +945,10 @@ self.data = {
 
         #------ plot measure window and results 
         if plot:
+          syn_npts = syn_nt - syn_nl - syn_nr
           syn_orientation_codes = ['E', 'N', 'Z']
-          A_adj = np.sqrt(np.max(np.sum(dchiw_du**2, axis=0)))
+          adj = dchiw_dg
+          Amax_adj = np.sqrt(np.max(np.sum(adj**2, axis=0)))
           t = syn_times
           for i in range(3):
             plt.subplot(411+i)
@@ -947,16 +956,18 @@ self.data = {
               plt.title('%s dt %.2f CCmax %.3f ARmax %.3f CC0 %.3f '
                   'AR0 %.3f \nAobs %g Anoise %g SNR %.1f weight %.3f'
                   % (station_id, CC_time_shift, CCmax, ARmax, 
-                    CC0, AR0, A_obs, A_noise, snr, weight) )
-            plt.plot(t, obs_filt[i,:]/A_obs, 'k', linewidth=0.2)
-            plt.plot(t, syn_filt[i,:]/A_obs*A0, 'r', linewidth=0.2)
-            plt.plot(t[noise_idx], noise_filt[i,:]/A_obs, 'b', linewidth=1.0)
+                    CC0, AR0, Amax_obs, Amax_noise, snr, weight) )
+            idx_plt = range(syn_nl,(syn_nl+syn_npts))
+            plt.plot(t[idx_plt], obs_filt[i,idx_plt]/Amax_obs, 'k', linewidth=0.2)
+            plt.plot(t[idx_plt], syn_filt[i,idx_plt]/Amax_obs*Aw, 'r', linewidth=0.2)
+            #plt.plot(t[noise_idx], noise_filt[i,:]/Amax_obs, 'b', linewidth=1.0)
             idx = (win_b <= syn_times) & (syn_times <= win_e)
-            plt.plot(t[idx], obs_filt_win[i,idx]/A_obs, 'k', linewidth=1.0)
-            plt.plot(t[idx], syn_filt_win[i,idx]/A_obs * A0, 'r', linewidth=1.0)
-            plt.plot(t, dchiw_du[i,:]/A_adj, 'c', linewidth=1.0)
+            plt.plot(t[idx], obs_filt_win[i,idx]/Amax_obs, 'k', linewidth=1.0)
+            plt.plot(t[idx], syn_filt_win[i,idx]/Amax_obs*Aw, 'r', linewidth=1.0)
+            plt.plot(t[idx_plt], adj[i,idx_plt]/Amax_adj, 'c', linewidth=1.0)
             plt.ylim((-1.5, 1.5))
-            plt.xlim((min(t), max(t)))
+            #plt.xlim((min(t), max(t)))
+            plt.xlim((t[syn_nl], t[syn_nl+syn_npts-1]))
             plt.ylabel(syn_orientation_codes[i])
           plt.subplot(414)
           plt.plot(cc_times, cci, 'k-')
@@ -1144,8 +1155,8 @@ self.data = {
       # green's function
       grf = waveform['grf']
       # convolve Ds(t)/Dt0,tau with Green's function
-      du_dt0 = np.fft.irfft(np.fft.rfft(ds_dt0) * np.fft.rfft(grf), nt)
-      du_dtau = np.fft.irfft(np.fft.rfft(ds_dtau) * np.fft.rfft(grf), nt)
+      du_dt0 = np.fft.irfft(np.fft.rfft(ds_dt0) * np.fft.rfft(grf), nt) * dt
+      du_dtau = np.fft.irfft(np.fft.rfft(ds_dtau) * np.fft.rfft(grf), nt) * dt
       # zero records before origin time (wrap around from the end)
       idx = t < -5.0*tau
       du_dt0[:,idx] = 0.0
@@ -1154,15 +1165,15 @@ self.data = {
       #------ misfit derivative
       # adjoint source = Dchi/Du
       dchi_du = station['dchi_du']
-      dchi_dt0 = np.sum(dchi_du * du_dt0)
-      dchi_dtau = np.sum(dchi_du * du_dtau)
+      dchi_dt0 = np.sum(dchi_du * du_dt0) * dt
+      dchi_dtau = np.sum(dchi_du * du_dtau) * dt
 
       #------ record derivatives
-      if 'derivative' not in station:
-        station['derivative'] = {}
-      station['derivative']['dt0'] = {
+      if 'waveform_der' not in station:
+        station['waveform_der'] = {}
+      station['waveform_der']['dt0'] = {
           'dm':1.0, 'du':du_dt0, 'dchi':dchi_dt0 }
-      station['derivative']['dtau'] = {
+      station['waveform_der']['dtau'] = {
           'dm':1.0, 'du': du_dtau, 'dchi':dchi_dtau }
 
       # DEBUG
@@ -1304,11 +1315,11 @@ self.data = {
         syn_ENZ[i,nl:(nl+nt)] = syn_st[i].data
 
       # differential green's function 
-      grf0 = waveform['grf']
-      dg = syn_ENZ - grf0
+      grf = waveform['grf']
+      dg = syn_ENZ - grf
 
       # diff synthetics
-      #source spectrum (moment-rate function)
+      # convlove source time function
       freq = np.fft.rfftfreq(nt, d=dt)
       F_src = stf_spectrum_gauss(freq, tau)
       du = np.fft.irfft(F_src * np.fft.rfft(dg), nt)
@@ -1317,12 +1328,12 @@ self.data = {
       du[:,idx] = 0.0
 
       # diff Chi
-      dchi = np.sum(station['dchi_dg'] * dg)
+      dchi = np.sum(station['dchi_dg'] * dg) * dt
 
       #------ record derivatives
-      if 'derivative' not in station:
-        station['derivative'] = {}
-      station['derivative']['dxs'] = {
+      if 'waveform_der' not in station:
+        station['waveform_der'] = {}
+      station['waveform_der']['dxs'] = {
           'dm':dxs, 'dg':dg, 'du':du, 'dchi':dchi }
 
       # DEBUG
@@ -1478,9 +1489,9 @@ self.data = {
       dchi = np.sum(station['dchi_dg'] * dg)
 
       #------ record derivatives
-      if 'derivative' not in station:
-        station['derivative'] = {}
-      station['derivative']['dmt'] = {
+      if 'waveform_der' not in station:
+        station['waveform_der'] = {}
+      station['waveform_der']['dmt'] = {
           'dm':np.array(dmt), 'dg':dg, 'du':du, 'dchi':dchi }
 
       # DEBUG
@@ -1540,7 +1551,7 @@ self.data = {
       F_src = stf_spectrum_gauss(syn_freq, event['tau'])
 
       # waveform derivatives
-      waveform_der = station['derivative']
+      waveform_der = station['waveform_der']
 
       #------ loop each window
       window_dict = station['window']
@@ -1581,6 +1592,10 @@ self.data = {
         # window amplitude raito
         Aw = np.sum(wFd * wFu) / norm_wFu**2
 
+        #DEBUG
+        #print "Nw: %e %e" % (Nw, window['cc']['Nw'])
+        #print "Aw: %e %e" % (Aw, window['cc']['Aw'])
+
         #------ filter differential seismograms (w * F * du_dm)
         wFdu = {}
         for param in src_param:
@@ -1589,6 +1604,8 @@ self.data = {
           wFdu[param] = np.dot(proj_matrix, Fdu) * win_func 
 
         #------ hessian src
+        # chi: zero-lag correlation coef. between wFu and wFd
+        # hessian: ddchi_dmdm
         hessian_src = {}
         for i in range(n_srcparam):
           for j in range(i, n_srcparam):
@@ -1601,7 +1618,8 @@ self.data = {
             wFu_wFdu2 = np.sum(wFu * wFdu2)
             wFd_wFdu1 = np.sum(wFd * wFdu1)
             wFd_wFdu2 = np.sum(wFd * wFdu2)
-            hessian_src[(par1, par2)] = ( \
+            key12 = (par1, par2)
+            hessian_src[key12] = ( \
                 - Aw * wFdu1_wFdu2 \
                 + ( 3.0 * Aw * wFu_wFdu1 * wFu_wFdu2 \
                              - wFu_wFdu1 * wFd_wFdu2 \
@@ -1650,7 +1668,7 @@ self.data = {
       # dchi_dm
       for i in range(n_srcparam):
         key = src_param[i]
-        dchi_dm[i] += station['derivative'][key]['dchi']
+        dchi_dm[i] += station['waveform_der'][key]['dchi']
 
       #-- loop each window
       window_dict = station['window']
@@ -1670,27 +1688,54 @@ self.data = {
             par2 = src_param[j]
             key = (par1,par2)
             hessian[i,j] += weight * hessian_win[key]
-
       #end for window_id in windows:
-    #end for station_id in station_dict:
 
-    print dchi_dm 
-    print hessian
+    #end for station_id in station_dict:
 
     for i in range(n_srcparam):
       for j in range(i+1, n_srcparam):
           hessian[j,i] = hessian[i,j]
 
+    print "dchi_dm:"
+    print dchi_dm 
+
+    print "hessian:"
     print hessian
 
+    print "====== 0:4:"
+    w, v = np.linalg.eigh(hessian, UPLO='U')
+    print w
+    print v
     x, residual, rank, sigval = np.linalg.lstsq(hessian, -dchi_dm)
-    print x
-    print sigval
+    print " inv(hessian)*(-1.0 * dchi_dm): \n", x
+    print "dt0: \n", x[0]
+    print "dtau:\n", x[1]
+    print "dxs: \n", x[2]*self.data['src_perturb']['dxs'] 
+    print "dmt: \n", x[3]*self.data['src_perturb']['dmt'] 
 
-    print "dt0: ",  x[0]
-    print "dtau: ", x[1]
-    print "dxs: ",  x[2]*self.data['src_perturb']['dxs'] 
-    print "dmt: ",  x[3]*self.data['src_perturb']['dmt'] 
+    print "====== only 0:3"
+    h3 = hessian[0:3,0:3]
+    v3 = dchi_dm[0:3]
+    w, v = np.linalg.eigh(h3, UPLO='U')
+    print w
+    print v
+    x, residual, rank, sigval = np.linalg.lstsq(h3, -v3)
+    print "inv(hessian)*(-1.0 * dchi_dm): \n", x
+    print "dt0: \n", x[0]
+    print "dtau:\n", x[1]
+    print "dxs: \n", x[2]*self.data['src_perturb']['dxs'] 
+    #print "dmt: \n", x[3]*self.data['src_perturb']['dmt'] 
+
+    print "====== only 0:2"
+    h3 = hessian[0:2,0:2]
+    v3 = dchi_dm[0:2]
+    w, v = np.linalg.eigh(h3, UPLO='U')
+    print w
+    print v
+    x, residual, rank, sigval = np.linalg.lstsq(h3, -v3)
+    print "inv(hessian)*(-1.0 * dchi_dm): \n", x
+    print "dt0: \n", x[0]
+    print "dtau:\n", x[1]
 
   #enddef measure_windows_for_one_station(self,
 

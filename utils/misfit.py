@@ -3,7 +3,8 @@
 """Managing misfit windows
 """
 import sys
-import os.path
+import warnings
+#import os.path
 import re
 #
 import numpy as np
@@ -235,7 +236,25 @@ self.data = {
     m13 = float(lines[11][1])
     m23 = float(lines[12][1])
     mt = np.array([[m11, m12, m13], [m12, m22, m23], [m13, m23, m33]])
-    #TODO transform from spherical to cartesian coordinate
+    # transform from spherical to cartesian coordinate
+    if is_ECEF:
+      mt_xyz = mt
+    else:
+      r = (x**2 + y**2 + z**2)**0.5
+      theta = np.arccos(z/r)
+      phi = np.arctan2(y, x)
+      # rotation matrix
+      sthe = np.sin(theta)
+      cthe = np.cos(theta)
+      sphi = np.sin(phi)
+      cphi = np.cos(phi)
+      a = np.array(
+          [ [ sthe*cphi, cthe*cphi, -1.0*sphi ],
+            [ sthe*sphi, cthe*sphi,      cphi ],
+            [ cthe     , -1.0*sthe,      0.0  ] ])
+      # harvard cmt use dyn*cm, change to N*m
+      mt *= 1.0e-7
+      mt_xyz = np.dot(np.dot(a, mt), np.transpose(a))
 
     # add event
     event = {
@@ -243,7 +262,7 @@ self.data = {
         'header':' '.join(header),
         'longitude':lon, 'latitude':lat, 'depth':dep,
         't0':t0, 'tau':tau,
-        'xs':[x, y, z], 'mt':mt,
+        'xs':[x, y, z], 'mt':mt_xyz,
         'stat': {'code':0, 'msg':"created on "+UTCDateTime.now().isoformat()}
         }
 
@@ -434,11 +453,12 @@ self.data = {
   def read_obs_grf(self,
       obs_dir='obs',
       syn_dir='syn', syn_band_code='MX', syn_suffix='.sem.sac',
-      left_pad=100, right_pad=0):
+      left_pad=100, right_pad=0, obs_preevent=100):
     """ read in observed seismograms and synthetic Green's functions.
     Note:
       1) left_pad: time length to pad before synthetics 
         right_pad: time length to pad after synthetics 
+        obs_pretime: pre-event time length of obs (for noise assessment)
       2) use delta STF in simulation to approximate green's function
     """
     syn_orientation_codes = ['E', 'N', 'Z']
@@ -447,11 +467,14 @@ self.data = {
     station_dict = self.data['station']
 
     if left_pad < 0:
-      print "[WARN] left_pad must g.e. 0"
+      warnings.warn("[arg] left_pad must g.e. 0, set to 0.0")
       left_pad = 0
     if right_pad < 0:
       right_pad = 0
-      print "[WARN] right_pad must g.e. 0"
+      warnings.warn("[arg] right_pad must g.e. 0, set to 0.0")
+    if obs_preevent < 0:
+      obs_preevent = 50.0
+      warnings.warn("[arg] obs_preevent must g.e. 0, set to 50")
 
     for station_id in station_dict:
       station = station_dict[station_id]
@@ -466,12 +489,21 @@ self.data = {
         for x in syn_orientation_codes ]
 
       #------ read in obs, syn seismograms
-      obs_st  = read(obs_files[0])
-      obs_st += read(obs_files[1])
-      obs_st += read(obs_files[2])
-      syn_st  = read(syn_files[0])
-      syn_st += read(syn_files[1])
-      syn_st += read(syn_files[2])
+      try:
+        obs_st  = read(obs_files[0])
+        obs_st += read(obs_files[1])
+        obs_st += read(obs_files[2])
+        syn_st  = read(syn_files[0])
+        syn_st += read(syn_files[1])
+        syn_st += read(syn_files[2])
+      except Exception as e:
+        warn_str = "failed to read in sac files for %s, SKIP (%s)" \
+            % (station_id, sys.exc_info()[0])
+        warnings.warn(warn_str, UserWarning)
+        station['stat']['code'] = -1
+        station['stat']['msg'] = "failed to read in sac files [%s]" \
+            % UTCDateTime.now().isoformat()
+        continue
 
       #------ get time samples of syn seismograms
       if not is_equal( [ (tr.stats.starttime, tr.stats.delta, tr.stats.npts) \
@@ -503,24 +535,42 @@ self.data = {
         obs_delta = tr.stats.delta
         obs_starttime = tr.stats.starttime
         obs_endtime = tr.stats.endtime
-        # check if obs record is long enough
-        if obs_starttime > syn_starttime or obs_endtime < syn_endtime-syn_delta:
+        # check if obs has enough pre-event records
+        first_arrtime = event['t0'] + meta['ttime'][0].time
+        obs_tmin = first_arrtime - obs_preevent
+        if obs_starttime > obs_tmin or obs_endtime < syn_endtime:
           flag = False
-          print "[WARN] obs record is not long enough: %s" % (obs_files[i])
-          print "       skip  %s" % (station_id)
+          warn_str = "%s: record not long enough, SKIP %s" \
+              % (obs_files[i], station_id)
+          warnings.warn(warn_str)
           print obs_starttime, obs_endtime 
-          print syn_starttime, syn_endtime 
+          print obs_tmin, syn_endtime 
+          station['stat']['code'] = -1
+          station['stat']['msg'] = "%s [%s]" \
+              % (warn_str, UTCDateTime.now().isoformat())
           break
+
+        #DEBUG
+        #print station_id, obs_files[i]
+        #obs_times = (obs_starttime-syn_starttime) + np.arange(obs_npts)*obs_delta
+        #plt.plot(obs_times, tr.data, 'k')
+
         # lowpass below the nyquist frequency of synthetics
         # repeat twice to avoid numerical inaccuries
-        #tr.detrend(type='linear')
-        #tr.detrend(type='linear')
-        # repeat process twice to make sharper edge
-        tr.filter('lowpass', freq=0.8*syn_nyq, corners=20, zerophase=True)
-        #tr.filter('lowpass', freq=0.8*syn_nyq, corners=10, zerophase=True)
+        tr.detrend(type='linear')
+        tr.detrend(type='linear')
+        # repeat lowpass filter twice to make sharper edge
+        tr.filter('lowpass', freq=0.8*syn_nyq, corners=10, zerophase=True)
+        tr.filter('lowpass', freq=0.8*syn_nyq, corners=10, zerophase=True)
         # interpolation: windowed sinc reconstruction
         obs_ENZ[i,:] = lanczos_interp1(tr.data, obs_delta,
             syn_times+(syn_starttime-obs_starttime), na=20)
+
+        #DEBUG
+        #plt.plot(obs_times, tr.data, 'r')
+        ##plt.plot(syn_times, obs_ENZ[i,:], 'r')
+        #plt.show()
+
       # if bad data, skip this station
       if not flag:
         continue
@@ -552,7 +602,9 @@ self.data = {
       waveform['obs'] = obs_ENZ
       waveform['grf'] = syn_ENZ
 
-      #DEBUG: plot seismograms
+      station['stat']['code'] = 0
+      station['stat']['msg'] = "read_obs_grf OK [%s]" \
+          % (UTCDateTime.now().isoformat())
 
     #endfor station_id in station_dict:
   #enddef read_obs_grf
@@ -579,13 +631,11 @@ self.data = {
     if not 0.0 < taper_param[1] < 0.5:
       raise ValueError("taper ratio must lie between 0 and 0.5.")
 
-
     event = self.data['event']
     station_dict = self.data['station']
 
     # loop each station
     for station_id in station_dict:
-
       station = station_dict[station_id]
       meta = station['meta']
       arrivals = meta['ttime']
@@ -791,12 +841,9 @@ self.data = {
         syn_filt = signal.lfilter(filter_b, filter_a, grf)
         syn_filt = np.fft.irfft(F_src*np.fft.rfft(syn_filt), syn_nt)
         #DEBUG
-        #diff = obs_ENZ_filt - syn_ENZ_filt
         #for i in range(3):
         #  plt.subplot(311+i)
-        #  plt.plot(syn_times, obs_ENZ_filt[i,:], 'k')
-        #  plt.plot(syn_times, syn_ENZ_filt[i,:], 'r')
-        #  plt.plot(syn_times, diff[i,:], 'c')
+        #  plt.plot(syn_times, obs[i,:], 'k', syn_times, obs_filt[i,:], 'r')
         #plt.show()
         #-- noise: use signals 40s before first arrival time on obs
         first_arrtime = event['t0'] + meta['ttime'][0].time
@@ -877,7 +924,7 @@ self.data = {
         ncc = int(CC_shift_range / cc_delta)
         cc_times = np.arange(-ncc,ncc+1) * cc_delta
         if syn_delta < cc_delta:
-          raise Warning("syn_delta(%f) < cc_time_step(%f)" \
+          warnings.warn("syn_delta(%f) < cc_time_step(%f)" \
               % (syn_delta, cc_delta))
         ti = cc_times + (syn_nt-1)*syn_delta  # -(npts-1)*dt: begin time in cc
         cci = lanczos_interp1(cc, syn_delta, ti, na=20)
@@ -1560,7 +1607,7 @@ self.data = {
         window = window_dict[window_id]
         # skip bad windows
         if window['stat']['code'] < 1:
-          raise Warning("Window %s not measured for adj, SKIP" % window_id)
+          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
           continue
 
         #------ window parameters 
@@ -1637,7 +1684,7 @@ self.data = {
           window['stat'] = {'code': 2,
               'msg': "update hessian_src on "+UTCDateTime.now().isoformat()}
         else:
-          raise Warning("hessian_src already set, nothing changed")
+          warnings.warn("hessian_src already set, nothing changed")
       # end for window_id in windows:
     # endfor station_id in station_dict:
   #enddef measure_windows_for_one_station(self,
@@ -1677,7 +1724,7 @@ self.data = {
         window = window_dict[window_id]
         # skip bad windows
         if window['stat']['code'] < 1:
-          raise Warning("Window %s not measured for adj, SKIP" % window_id)
+          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
           continue
         # 
         weight = window['weight']

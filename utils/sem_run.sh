@@ -67,6 +67,8 @@ ln -s $mesh_dir/DATABASES_MPI/*_solver_data.bin .
 ln -s $mesh_dir/DATABASES_MPI/*_solver_data_mpi.bin .
 ln -s $mesh_dir/DATABASES_MPI/*_boundary.bin .
 ln -s $mesh_dir/DATABASES_MPI/*_stacey.bin .
+ln -s $mesh_dir/DATABASES_MPI/*_topo.bin .
+ln -s $mesh_dir/DATABASES_MPI/*_attenuation.bin .
 
 # OUTPUT_FILES
 cp $mesh_dir/OUTPUT_FILES/addressing.txt $run_dir/OUTPUT_FILES

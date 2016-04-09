@@ -2204,11 +2204,9 @@ self.data = {
     #fig.savefig("misfit.pdf", bbox_inches='tight', format='pdf')
 
 
-  def plot_seismograms(self, event_id,
+  def plot_seismograms(self,
       azbin=10, win=[0,100], rayp=10,
-      obs_dir='obs', syn_dir='syn', syn_band_code='MX',
-      syn_suffix='.sem.sac', savefig=False, out_dir='plot',
-      syn_convolve_STF=False,
+      savefig=False, out_dir='plot',
       use_window=False, window_id='F.p,P',
       min_SNR=None, min_CC0=None, min_CCmax=None,
       dist_range=None):
@@ -2216,34 +2214,28 @@ self.data = {
       azbin:
         azimuthal bin size
     """
-    event = self.data['events'][event_id]
-
-    #====== get event data
-    gcmt = event['gcmt']
-    centroid_time = UTCDateTime(gcmt['centroid_time'])
-    evla = gcmt['latitude']
-    evlo = gcmt['longitude']
-    M = gcmt['moment_tensor']
+    event = self.data['event']
+    t0 = event['centroid_time'])
+    tau = gcmt['tau']
+    evla = event['latitude']
+    evlo = event['longitude']
+    M = event['mt']
     Mrr = M[0][0]
     Mtt = M[1][1]
     Mpp = M[2][2]
     Mrt = M[0][1]
     Mrp = M[0][2]
     Mtp = M[1][2]
-    focmec = [ Mrr, Mtt, Mpp, Mrt, Mrp, Mtp ]
-
-    if syn_convolve_STF:
-      tau = gcmt['tau']
-      print "convolve syn with STF: tau=", tau
+    focmec = [Mrr, Mtt, Mpp, Mrt, Mrp, Mtp]
 
     #====== get list of station,window id
-    stations = event['stations']
+    station_dict = self.data['station']
     stla_all = []
     stlo_all = []
-    for station_id in stations:
-      station = stations[station_id]
-      windows = station['windows']
+    for station_id in station_dict:
+      station = station_dict[station_id]
       meta = station['meta']
+      window_dict = station['window']
       # select data 
       if station['stat']['code'] < 0:
         continue

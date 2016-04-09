@@ -48,7 +48,6 @@ mkdir DATA DATABASES_MPI OUTPUT_FILES
 
 # link data files: topography, bathymetry, etc.
 cd $run_dir/DATA
-#ln -sf $mesh_dir/DATA/* ./
 
 rm -rf Par_file STATIONS CMTSOLUTION
 cp -L $par_dir/Par_file .
@@ -63,12 +62,7 @@ cp -L Par_file CMTSOLUTION STATIONS $run_dir/OUTPUT_FILES/
 
 # link mesh database
 cd $run_dir/DATABASES_MPI
-ln -s $mesh_dir/DATABASES_MPI/*_solver_data.bin .
-ln -s $mesh_dir/DATABASES_MPI/*_solver_data_mpi.bin .
-ln -s $mesh_dir/DATABASES_MPI/*_boundary.bin .
-ln -s $mesh_dir/DATABASES_MPI/*_stacey.bin .
-ln -s $mesh_dir/DATABASES_MPI/*_topo.bin .
-ln -s $mesh_dir/DATABASES_MPI/*_attenuation.bin .
+ln -s $mesh_dir/DATABASES_MPI/*.bin .
 
 # OUTPUT_FILES
 cp $mesh_dir/OUTPUT_FILES/addressing.txt $run_dir/OUTPUT_FILES

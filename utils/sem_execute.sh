@@ -41,6 +41,24 @@ do
     sleep 1m
   fi
 
+  if [ x"$wk" == xadj ]; then
+    echo ====== $wk
+    out_dir=output_srcfrechet
+    rm -rf $out_dir OUTPUT_FILES
+    mkdir $out_dir
+    ln -sf $out_dir OUTPUT_FILES
+    cp DATABASES_MPI/addressing.txt OUTPUT_FILES
+    cp -L DATA/Par_file OUTPUT_FILES
+    cp -L DATA/CMTSOLUTION OUTPUT_FILES
+    cp -L DATA/STATIONS_ADJOINT OUTPUT_FILES
+    sed -i "/^[\s]*SIMULATION_TYPE/s/=.*/= 2/" $par_file
+    echo [$(date $datefmt)] mpirun -np $nproc $sem_dir/bin/xspecfem3D
+    mpirun -np $nproc $sem_dir/bin/xspecfem3D
+    echo [$(date $datefmt)] done.
+    sleep 1m
+  fi
+
+
 #  if [ x"$wk" == xadj ]
 #  then
 #    setup_dirs output_srcfrechet

@@ -726,10 +726,15 @@ self.data = {
   def measure_adj(self,
       plot=False,
       cc_delta=0.01, 
-      weight_param={'SNR':[10,15], 'CCmax':[0.6,0.8], 'CC0':[0.5,0.7]}):
+      weight_param={
+        'SNR':[10,15], 
+        'CC0':[0.5,0.7], 
+        'CCmax':None}
+      ):
     """ calculate adjoint sources (dchi_du)
         chi: misfit functional (normalized zero-lag correlation coef.)
         u: synthetic waveform
+        weight_param: SNR, CCmax, CC0
     """
     #------
     event = self.data['event']
@@ -950,7 +955,7 @@ self.data = {
         if 'SNR' in weight_param:
           weight *= cosine_taper(snr, weight_param['SNR'])
         if 'CCmax' in weight_param:
-          weight *= cosine_taper(CCmax, weight_param['CCmax'])
+          weight *= cosine_taper(CCmax, weight_param['SNR'])
         if 'CC0' in weight_param:
           weight *= cosine_taper(CC0, weight_param['CC0'])
 
@@ -2264,6 +2269,7 @@ self.data = {
     station_dict = self.data['station']
     stla_all = []
     stlo_all = []
+    dist_all = []
     for station_id in station_dict:
       station = station_dict[station_id]
       meta = station['meta']
@@ -2275,10 +2281,11 @@ self.data = {
         continue
       stla_all.append(meta['latitude'])
       stlo_all.append(meta['longitude'])
+      dist_all.append(meta['dist_degree'])
 
     #------ traveltime curve
     model = TauPyModel(model="ak135")
-    dist_ttcurve = np.arange(0.0,40,0.1)
+    dist_ttcurve = np.arange(0.0,max(dist_all),0.5)
     ttcurve_p = []
     ttcurve_P = []
     ttcurve_s = []
@@ -2357,7 +2364,7 @@ self.data = {
         cc = window['cc']
         if window['stat']['code'] <= 0:
           continue
-        if plot_SNR and quality['SNR']<min(plot_min_SNR):
+        if plot_SNR and quality['SNR']<min(plot_SNR):
           continue
         if plot_CC0 and cc['CC0']<min(plot_CC0):
           continue
@@ -2436,7 +2443,8 @@ self.data = {
       ax_bm.scatter(sx, sy, s=10, marker='^', facecolor='blue', edgecolor='')
       # plot focal mechanism
       sx, sy = ax_bm(evlo, evla)
-      b = Beach(focmec, xy=(sx, sy), width=400000, linewidth=0.2, facecolor='r')
+      bb_width = 110000.0 * np.abs(max(stlo_all)-min(stlo_all)) * 0.1
+      b = Beach(focmec, xy=(sx, sy), width=bb_width, linewidth=0.2, facecolor='r')
       ax_map.add_collection(b)
       #-- plot the station location
       stla = [ x['meta']['latitude'] for x in data_azbin.itervalues() ]

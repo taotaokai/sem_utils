@@ -66,7 +66,8 @@ self.data = {
         't0':[utcdatetime], # centroid time
         'tau':, # gaussian width exp(-(t-t0)^2/tau^2)/tau/pi^0.5
         'xs': [x, y, z], #ECEF coordinate
-        'mt':}, #mt: moment tensor
+        'mt_xyz':, # moment tensor in ECEF coord
+        'mt_rtp':}, # moment tensor in spherical coord
 
     'src_frechet': { #derivative of misfit function w.r.t. source param.
         'stat':{'code':, 'msg':},
@@ -237,23 +238,29 @@ self.data = {
     m23 = float(lines[12][1])
     mt = np.array([[m11, m12, m13], [m12, m22, m23], [m13, m23, m33]])
     # transform from spherical to cartesian coordinate
+    r = (x**2 + y**2 + z**2)**0.5
+    theta = np.arccos(z/r)
+    phi = np.arctan2(y, x)
+    # rotation matrix
+    sthe = np.sin(theta)
+    cthe = np.cos(theta)
+    sphi = np.sin(phi)
+    cphi = np.cos(phi)
+    # D(x,y,z)/D(r,t,p): rtp -> xyz 
+    a = np.array(
+        [ [ sthe*cphi, cthe*cphi, -1.0*sphi ],
+          [ sthe*sphi, cthe*sphi,      cphi ],
+          [ cthe     , -1.0*sthe,      0.0  ] ])
     if is_ECEF:
       mt_xyz = mt
-    else:
-      r = (x**2 + y**2 + z**2)**0.5
-      theta = np.arccos(z/r)
-      phi = np.arctan2(y, x)
-      # rotation matrix
-      sthe = np.sin(theta)
-      cthe = np.cos(theta)
-      sphi = np.sin(phi)
-      cphi = np.cos(phi)
+      mt_rtp = np.dot(np.dot(np.transpose(a), mt), a)
+    else: # spherical coordinate
       a = np.array(
           [ [ sthe*cphi, cthe*cphi, -1.0*sphi ],
             [ sthe*sphi, cthe*sphi,      cphi ],
             [ cthe     , -1.0*sthe,      0.0  ] ])
       # harvard cmt use dyn*cm, change to N*m
-      mt *= 1.0e-7
+      mt_rtp = mt*1.0e-7
       mt_xyz = np.dot(np.dot(a, mt), np.transpose(a))
 
     # add event
@@ -262,7 +269,7 @@ self.data = {
         'header':' '.join(header),
         'longitude':lon, 'latitude':lat, 'depth':dep,
         't0':t0, 'tau':tau,
-        'xs':[x, y, z], 'mt':mt_xyz,
+        'xs':[x, y, z], 'mt_xyz':mt_xyz, 'mt_rtp':mt_rtp,
         'stat': {'code':0, 'msg':"created on "+UTCDateTime.now().isoformat()}
         }
 
@@ -442,6 +449,9 @@ self.data = {
         station[station_id]['meta'].update(meta)
         station[station_id]['stat']['code'] = 1
         station[station_id]['stat']['msg'] = "updated on "+UTCDateTime.now().isoformat()
+      else:
+        warn_str = "station_id(%s) exists and non-update mode, nothing changed"
+        warnings.warn(warn_str)
 
     #endfor net_sta_loc in stations_all:
   #enddef setup_stations_from_channel_file
@@ -500,6 +510,7 @@ self.data = {
         warn_str = "failed to read in sac files for %s, SKIP (%s)" \
             % (station_id, sys.exc_info()[0])
         warnings.warn(warn_str, UserWarning)
+        print e
         station['stat']['code'] = -1
         station['stat']['msg'] = "failed to read in sac files [%s]" \
             % UTCDateTime.now().isoformat()
@@ -876,8 +887,8 @@ self.data = {
         #plt.show()
 
         #------ measure SNR (based on maximum amplitude)
-        Amax_syn = np.sqrt(np.max(np.sum(obs_filt_win**2, axis=0)))
-        Amax_obs = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
+        Amax_obs = np.sqrt(np.max(np.sum(obs_filt_win**2, axis=0)))
+        Amax_syn = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
         Amax_noise =  np.sqrt(np.max(np.sum(noise_filt_win**2, axis=0)))
         if Amax_obs == 0: # bad record
           print '[WARN] %s:%s:%s empty obs trace, SKIP.' \
@@ -1253,7 +1264,7 @@ self.data = {
     event = self.data['event']
     tau = event['tau']
     xs = event['xs']
-    mt = event['mt']
+    mt = event['mt_xyz']
 
     # get perturbed source location
     if 'src_frechet' not in self.data:
@@ -1415,7 +1426,7 @@ self.data = {
     event = self.data['event']
     tau = event['tau']
     xs = event['xs']
-    mt = event['mt']
+    mt = event['mt_xyz']
 
     # get perturbed moment tensor 
     if 'src_frechet' not in self.data:
@@ -1955,6 +1966,10 @@ self.data = {
         fp.write('Mrp:       %12.4e\n' % (M[0][2]) )
         fp.write('Mtp:       %12.4e\n' % (M[1][2]) )
 
+#
+#======================================================
+#
+
 
   def plot_misfit(self, event_id, window_id, out_file=None):
     """Plot misfit for a certain event and window_id  
@@ -2203,32 +2218,49 @@ self.data = {
     fig.savefig(out_file, format='pdf')
     #fig.savefig("misfit.pdf", bbox_inches='tight', format='pdf')
 
+#
+#======================================================
+#
 
-  def plot_seismograms(self,
-      azbin=10, win=[0,100], rayp=10,
+  def plot_seismogram(self,
       savefig=False, out_dir='plot',
-      use_window=False, window_id='F.p,P',
-      min_SNR=None, min_CC0=None, min_CCmax=None,
-      dist_range=None):
+      plot_param={
+        'time':[0,100], 'rayp':10., 'azbin':10, 'window_id':'F.p,P',
+        'SNR':None, 'CC0':None, 'CCmax':None, 'dist':None }
+      ):
     """ Plot seismograms for one event
-      azbin:
-        azimuthal bin size
+      azbin: azimuthal bin size
+      win: 
     """
+    comp_name = ['R', 'T', 'Z']
+    #------ selection parameters
+    plot_time = plot_param['time']
+    plot_azbin = plot_param['azbin']
+    plot_rayp = plot_param['rayp']
+    plot_window_id = plot_param['window_id']
+
+    plot_SNR = plot_param['SNR']
+    plot_CC0 = plot_param['CC0']
+    plot_CCmax = plot_param['CCmax']
+    plot_dist = plot_param['dist']
+
+    #------ event info
     event = self.data['event']
-    t0 = event['centroid_time'])
-    tau = gcmt['tau']
+    t0 = event['t0']
+    tau = event['tau']
     evla = event['latitude']
     evlo = event['longitude']
-    M = event['mt']
-    Mrr = M[0][0]
-    Mtt = M[1][1]
-    Mpp = M[2][2]
-    Mrt = M[0][1]
-    Mrp = M[0][2]
-    Mtp = M[1][2]
+    evdp = event['depth']
+    mt = event['mt_rtp']
+    Mrr = mt[0][0]
+    Mtt = mt[1][1]
+    Mpp = mt[2][2]
+    Mrt = mt[0][1]
+    Mrp = mt[0][2]
+    Mtp = mt[1][2]
     focmec = [Mrr, Mtt, Mpp, Mrt, Mrp, Mtp]
 
-    #====== get list of station,window id
+    #------ station info
     station_dict = self.data['station']
     stla_all = []
     stlo_all = []
@@ -2239,13 +2271,12 @@ self.data = {
       # select data 
       if station['stat']['code'] < 0:
         continue
-      if use_window and (window_id not in windows):
+      if plot_window_id not in window_dict:
         continue
-      #
       stla_all.append(meta['latitude'])
       stlo_all.append(meta['longitude'])
 
-    #====== calculate traveltime curve
+    #------ traveltime curve
     model = TauPyModel(model="ak135")
     dist_ttcurve = np.arange(0.0,40,0.1)
     ttcurve_p = []
@@ -2253,8 +2284,10 @@ self.data = {
     ttcurve_s = []
     ttcurve_S = []
     for dist in dist_ttcurve:
-      arrivals = model.get_travel_times(source_depth_in_km=gcmt['depth'],
-        distance_in_degree=dist, phase_list=['p','P','s','S'])
+      arrivals = model.get_travel_times(
+          source_depth_in_km=evdp, 
+          distance_in_degree=dist, 
+          phase_list=['p','P','s','S'])
       for arr in arrivals:
         if arr.name == 'p':
           ttcurve_p.append((arr.distance, arr.time, arr.ray_param))
@@ -2264,14 +2297,11 @@ self.data = {
           ttcurve_s.append((arr.distance, arr.time, arr.ray_param))
         elif arr.name == 'S':
           ttcurve_S.append((arr.distance, arr.time, arr.ray_param))
-    
     # sort phases
     ttcurve_p = sorted(ttcurve_p, key=lambda x: x[2])
     ttcurve_P = sorted(ttcurve_P, key=lambda x: x[2])
     ttcurve_s = sorted(ttcurve_s, key=lambda x: x[2])
     ttcurve_S = sorted(ttcurve_S, key=lambda x: x[2])
-    
-    #====== plot map/seismograms in azimuthal bins
 
     #------ map configuration 
     min_lat = min(min(stla_all), evla)
@@ -2284,233 +2314,240 @@ self.data = {
     lon_range = max_lon - min_lon
     min_lon -= 0.1*lon_range
     max_lon += 0.1*lon_range
-    #lat_true_scale = np.mean(stla_list)
     lat_0 = np.mean(stla_all)
     lon_0 = np.mean(stlo_all)
     # 
     parallels = np.arange(0.,81,10.)
     meridians = np.arange(0.,351,10.)
 
-    #------ plot each azimuthal bin
-    for az in np.arange(0, 360, azbin):
+    #------ plot azimuthal bins (one figure per azbin)
+    if plot_azbin <= 0.0:
+      raise Exception("plot_param['azbin']=%f must > 0.0" % plot_azbin)
+
+    for az in np.arange(0, 360, plot_azbin):
       azmin = az
-      azmax = az + azbin
-      # read available stations within azbin
+      azmax = az + plot_azbin
+
+      print azmin, azmax
+
+      #---- gather data for the current azbin 
       data_azbin = {}
-      for station_id in stations:
-        station = stations[station_id]
-        meta = station['meta']
-        azimuth = meta['azimuth']
-        windows = station['windows']
-        dist = meta['dist_degree']
+      for station_id in station_dict:
+        # skip bad station
+        station = station_dict[station_id]
         if station['stat']['code'] < 0:
           continue
-        if dist_range:
-          if dist < min(dist_range) or dist > max(dist_range):
-            continue
-        if azimuth<azmin or azimuth>azmax:
-          continue
-        if use_window: 
-          if (window_id not in windows):
-            continue
-          window = windows[window_id]
-          quality = window['quality']
-          misfit = window['misfit']
-          if window['stat']['code'] != 1:
-            continue
-          if min_SNR and quality['SNR']<min_SNR:
-            continue
-          if min_CC0 and misfit['CC0']<min_CC0:
-            continue
-          if min_CCmax and misfit['CCmax']<min_CCmax:
-            continue
-        try:
-          syn_st, obs_st = self.read_seismograms(
-            event_id, station_id,
-            obs_dir=obs_dir, syn_dir=syn_dir,
-            syn_band_code=syn_band_code, syn_suffix=syn_suffix)
-        except Exception as e:
-          print str(e)
-          continue
-        # syn/obs data arrays
-        syn_npts = syn_st[0].stats.npts
-        syn_delta = syn_st[0].stats.delta
-        syn_nyq = 0.5 / syn_delta
-        syn_ENZ = np.zeros((3, syn_npts))
-        obs_ENZ = np.zeros((3, syn_npts))
-        for i in range(3):
-          syn_ENZ[i,:] = syn_st[i].data
-          obs_ENZ[i,:] = obs_st[i].data
 
-        # desgin filter
-        filter_param = station['filter']
-        filter_type = filter_param['type']
-        filter_order = filter_param['order']
-        filter_freqlim = filter_param['freqlim']
-        filter_b, filter_a = signal.butter(filter_order,
-            np.array(filter_freqlim)/syn_nyq, btype='band')
-        # filter obs: F * d
-        obs_ENZ[:,:] = signal.filtfilt(filter_b, filter_a, obs_ENZ)
-        # filter syn: F * S * u
-        syn_ENZ[:,:] = signal.filtfilt(filter_b, filter_a, syn_ENZ)
-        if syn_convolve_STF:
-          f = np.fft.rfftfreq(syn_npts, d=syn_delta)
-          #F_src = np.sinc(f * tau)**2
-          F_src = stf_spectrum_gauss(f, tau)
-          syn_ENZ[:,:] = np.fft.irfft(F_src*np.fft.rfft(syn_ENZ), syn_npts)
+        # skip un-selected station 
+        meta = station['meta']
+        azimuth = meta['azimuth']
+        dist_degree = meta['dist_degree']
+        if plot_dist:
+          if dist_degree < min(plot_dist) or dist_degree > max(plot_dist):
+            continue
+        if azimuth < azmin or azimuth >= azmax:
+          continue
+        if plot_window_id not in window_dict:
+          continue
 
-        # rotate EN -> TR (TRZ: right-hand convention)
+        # skip bad window
+        window_dict = station['window']
+        window = window_dict[plot_window_id]
+        quality = window['quality']
+        cc = window['cc']
+        if window['stat']['code'] <= 0:
+          continue
+        if plot_SNR and quality['SNR']<min(plot_min_SNR):
+          continue
+        if plot_CC0 and cc['CC0']<min(plot_CC0):
+          continue
+        if plot_CCmax and cc['CCmax']<min(plot_CCmax):
+          continue
+
+        # get seismograms: syn/obs
+        waveform = station['waveform']
+        time_sample = waveform['time_sample']
+        syn_starttime = time_sample['starttime']
+        syn_npts = time_sample['nt']
+        syn_delta = time_sample['delta']
+        syn_nyq = 0.5/syn_delta
+        obs = waveform['obs']
+        grf = waveform['grf']
+        # filter parameter
+        filter_param = window['filter']
+        filter_a = filter_param['a']
+        filter_b = filter_param['b']
+        # filter seismograms 
+        obs = signal.lfilter(filter_b, filter_a, obs)
+        grf = signal.lfilter(filter_b, filter_a, grf)
+        # convolve stf on grf
+        freq = np.fft.rfftfreq(syn_npts, d=syn_delta)
+        F_src = stf_spectrum_gauss(freq, event['tau'])
+        syn = np.fft.irfft(F_src*np.fft.rfft(grf), syn_npts)
+        # project to polarity defined by the window
+        proj_matrix = window['polarity']['proj_matrix']
+        obs = np.dot(proj_matrix, obs)
+        syn = np.dot(proj_matrix, syn)
+        # rotate EN(0:2) -> RT(0:2) (T-R-Z: right-hand convention)
         Raz = (meta['back_azimuth'] + 180.0) % 360.0
         sin_Raz = np.sin(np.deg2rad(Raz))
         cos_Raz = np.cos(np.deg2rad(Raz))
-        proj_matrix = [ [sin_Raz,  cos_Raz],
-                [cos_Raz, -sin_Raz] ]
-        syn_ENZ[0:2,:] = np.dot(proj_matrix, syn_ENZ[0:2,:])
-        obs_ENZ[0:2,:] = np.dot(proj_matrix, obs_ENZ[0:2,:])
-        syn_RTZ = syn_ENZ
-        obs_RTZ = obs_ENZ
-        # record results
-        starttime = syn_st[0].stats.starttime
-        dt = syn_st[0].stats.delta
-        npts = syn_st[0].stats.npts
-        times = dt * np.arange(npts)
-        data_azbin[station_id] = {'meta':meta, 'starttime':starttime,
-            'times':times, 'syn':syn_RTZ, 'obs':obs_RTZ}
+        proj_matrix = [ 
+            [sin_Raz,  cos_Raz], 
+            [cos_Raz, -sin_Raz] ]
+        obs[0:2,:] = np.dot(proj_matrix, obs[0:2,:])
+        syn[0:2,:] = np.dot(proj_matrix, syn[0:2,:])
+        # append to data
+        data_dict = {
+            'meta': meta,
+            'window': window,
+            'syn': syn,
+            'obs': obs
+            }
+        data_azbin[station_id] = data_dict
+      #endfor station_id in station_dict:
+  
+      #---- skip empty azbin
+      if not data_azbin:
+        warn_str = "No station in the azbin [%f %f]." %(azmin, azmax)
+        warnings.warn(warn_str)
+        continue
 
-      if not data_azbin: continue
-
-      #====== create figure and axes
+      #---- create figure
       fig = plt.figure(figsize=(8.5, 11)) # US letter
       str_title = '{:s} (win: {:s}, az: {:04.1f}~{:04.1f})'.format(
-          event_id, window_id, azmin, azmax)
+          event['id'], plot_window_id, azmin, azmax)
       fig.text(0.5, 0.95, str_title, size='x-large', horizontalalignment='center')
-
-      #------ station map
+      #---- plot station/event map
       ax_origin = [0.3, 0.74]
       ax_size = [0.4, 0.2]
       ax_map = fig.add_axes(ax_origin + ax_size)
-      m = Basemap(projection='merc', resolution='l',
+      ax_bm = Basemap(projection='merc', resolution='l',
           llcrnrlat=min_lat, llcrnrlon=min_lon, 
           urcrnrlat=max_lat, urcrnrlon=max_lon,
           lat_0=lat_0, lon_0=lon_0 )
-      m.drawcoastlines(linewidth=0.1)
-      m.drawcountries(linewidth=0.1)
-      m.drawparallels(parallels, linewidth=0.1, labels=[1,0,0,1], 
+      ax_bm.drawcoastlines(linewidth=0.1)
+      ax_bm.drawcountries(linewidth=0.1)
+      ax_bm.drawparallels(parallels, linewidth=0.1, labels=[1,0,0,1], 
           fontsize=10, fmt='%3.0f')
-      m.drawmeridians(meridians, linewidth=0.1, labels=[1,0,0,1], 
+      ax_bm.drawmeridians(meridians, linewidth=0.1, labels=[1,0,0,1], 
           fontsize=10, fmt='%3.0f')
-      sx, sy = m(stlo_all, stla_all)
-      m.scatter(sx, sy, s=10, marker='^', facecolor='blue', edgecolor='')
-      # plot stations inside the bin
-      stla = [data_azbin[x]['meta']['latitude'] for x in data_azbin]
-      stlo = [data_azbin[x]['meta']['longitude'] for x in data_azbin]
-      sx, sy = m(stlo, stla)
-      m.scatter(sx, sy, s=10, marker='^', facecolor='red', edgecolor='')
-
-      # focal mechanism
-      sx, sy = m(evlo, evla)
+      sx, sy = ax_bm(stlo_all, stla_all)
+      ax_bm.scatter(sx, sy, s=10, marker='^', facecolor='blue', edgecolor='')
+      # plot focal mechanism
+      sx, sy = ax_bm(evlo, evla)
       b = Beach(focmec, xy=(sx, sy), width=400000, linewidth=0.2, facecolor='r')
       ax_map.add_collection(b)
- 
-      #------ plot waveforms 
+      #-- plot the station location
+      stla = [ x['meta']['latitude'] for x in data_azbin.itervalues() ]
+      stlo = [ x['meta']['longitude'] for x in data_azbin.itervalues() ]
+      sx, sy = ax_bm(stlo, stla)
+      ax_bm.scatter(sx, sy, s=10, marker='^', facecolor='red', edgecolor='')
+
+      #-- create axis for seismograms
       ax_RTZ = []
       for i in range(3):
         ax_origin = [0.07+0.3*i, 0.05]
         ax_size = [0.25, 0.65]
         ax_RTZ.append(fig.add_axes(ax_origin + ax_size))
 
-      y = [ x['meta']['dist_degree'] for x in data_azbin.itervalues() ]
-      ny = len(y)
-      dy = 0.5*(max(y)-min(y)+1)/ny
-      if dist_range:
-        plot_ymax = max(dist_range) + 2*dy
-        plot_ymin = min(dist_range) - 2*dy
-      else:
-        plot_ymax = max(y) + 2*dy
-        plot_ymin = min(y) - 2*dy
-    
-      #plot traveltime curves 
+      #-- plot traveltime curves
       for i in range(3):
         ax = ax_RTZ[i]
-        ax.plot([x[1]-rayp*x[0] for x in ttcurve_p], [x[0] for x in ttcurve_p], 'b-', linewidth=0.2)
-        ax.plot([x[1]-rayp*x[0] for x in ttcurve_P], [x[0] for x in ttcurve_P], 'b-', linewidth=0.2)
-        ax.plot([x[1]-rayp*x[0] for x in ttcurve_s], [x[0] for x in ttcurve_s], 'c-', linewidth=0.2)
-        ax.plot([x[1]-rayp*x[0] for x in ttcurve_S], [x[0] for x in ttcurve_S], 'c-', linewidth=0.2)
- 
-      cmp_names = ['R', 'T', 'Z']
+        ax.plot([x[1]-plot_rayp*x[0] for x in ttcurve_p], \
+            [x[0] for x in ttcurve_p], 'b-', linewidth=0.2)
+        ax.plot([x[1]-plot_rayp*x[0] for x in ttcurve_P], \
+            [x[0] for x in ttcurve_P], 'b-', linewidth=0.2)
+        ax.plot([x[1]-plot_rayp*x[0] for x in ttcurve_s], \
+            [x[0] for x in ttcurve_s], 'c-', linewidth=0.2)
+        ax.plot([x[1]-plot_rayp*x[0] for x in ttcurve_S], \
+            [x[0] for x in ttcurve_S], 'c-', linewidth=0.2)
+
+      #-- ylim setting
+      y = [ x['meta']['dist_degree'] for x in data_azbin.itervalues() ]
+      ny = len(y)
+      plot_dy = 0.5*(max(y)-min(y)+1)/ny
+      if plot_dist:
+        plot_ymax = max(plot_dist) + 2*plot_dy
+        plot_ymin = min(plot_dist) - 2*plot_dy
+      else:
+        plot_ymax = max(y) + 2*plot_dy
+        plot_ymin = min(y) - 2*plot_dy
+
+      #-- plot each station
       for station_id in data_azbin:
-        sta = data_azbin[station_id]
-        meta = sta['meta']
+        station = data_azbin[station_id]
+        meta = station['meta']
+        window = station['window']
+        syn = station['syn']
+        obs = station['obs']
+
+        # get plot time 
         dist_degree = meta['dist_degree']
-        reduced_time = dist_degree * rayp
+        reduced_time = dist_degree * plot_rayp
         # time of first sample referred to centroid time 
-        t0 = sta['starttime'] - centroid_time
+        t0 = syn_starttime - event['t0']
         # time of samples referred to centroid time
-        t = sta['times'] + t0
-        plot_t0 = win[0] + reduced_time
-        plot_t1 = win[1] + reduced_time
-        idx = (t > plot_t0) & (t < plot_t1)
-          
-        t_plot = t[idx] - reduced_time
-        obs_RTZ = sta['obs']
-        syn_RTZ = sta['syn']
+        syn_times = syn_delta*np.arange(syn_npts) + t0
+        # plot time window
+        plot_t0 = min(plot_time) + reduced_time
+        plot_t1 = max(plot_time) + reduced_time
+        plot_idx = (syn_times > plot_t0) & (syn_times < plot_t1)
+        # plot time
+        t_plot = syn_times[plot_idx] - reduced_time
 
-        windows = stations[station_id]['windows']
-        if use_window and (window_id in windows):
-          window = windows[window_id]
-          quality = window['quality']
-          A_obs = quality['A_obs']
-          A_syn = quality['A_syn']
-          win_starttime = UTCDateTime(window['starttime'])
-          win_endtime = UTCDateTime(window['endtime'])
-          win_t0 = win_starttime - centroid_time - reduced_time
-          win_t1 = win_endtime - centroid_time - reduced_time
-        else:
-          A_obs = np.sqrt(np.max(np.sum(obs_RTZ[:,idx]**2, axis=0)))
-          A_syn = np.sqrt(np.max(np.sum(syn_RTZ[:,idx]**2, axis=0)))
+        #  window begin/end
+        taper = window['taper']
+        win_starttime = taper['starttime']
+        win_endtime = taper['endtime']
+        win_t0 = (win_starttime - event['t0']) - reduced_time
+        win_t1 = (win_endtime - event['t0']) - reduced_time
 
+        # plot seismograms
+        Amax_obs = np.sqrt(np.max(np.sum(obs[:,plot_idx]**2, axis=0)))
+        Amax_syn = np.sqrt(np.max(np.sum(syn[:,plot_idx]**2, axis=0)))
         for i in range(3):
-          #normalize data
-          obs = obs_RTZ[i, idx]
-          obs = dy*obs/A_obs
-          syn = syn_RTZ[i, idx]
-          syn = dy*syn/A_syn
-
           ax = ax_RTZ[i]
-          ax.plot(t_plot, obs+dist_degree, 'k-', linewidth=0.5)
-          ax.plot(t_plot, syn+dist_degree, 'r-', linewidth=0.5)
-
-          # annotatate time window
-          if use_window:
-            ax.plot(win_t0, dist_degree, 'k|', markersize=8)
-            ax.plot(win_t1, dist_degree, 'k|', markersize=8)
-            misfit = window['misfit']
-            # CC0
-            if i == 0:
-              ax.text(win[1], dist_degree, ' %.3f' % (misfit['CC0']), 
-                  verticalalignment='center', fontsize=7)
-            # window weight
-            if i == 1:
-              ax.text(win[1], dist_degree, ' %.1f' % (window['weight']), 
-                  verticalalignment='center', fontsize=7)
-
+          ax.plot(t_plot, plot_dy*obs[i,plot_idx]/Amax_obs+dist_degree, \
+              'k-', linewidth=0.5)
+          ax.plot(t_plot, plot_dy*syn[i,plot_idx]/Amax_syn+dist_degree, \
+              'r-', linewidth=0.5)
+          # mark measure window range
+          ax.plot(win_t0, dist_degree, 'k|', markersize=8)
+          ax.plot(win_t1, dist_degree, 'k|', markersize=8)
+          # annotate amplitude
+          if i == 0:
+            ax.text(max(plot_time), dist_degree, '%.1e ' % (Amax_obs), 
+                verticalalignment='bottom', 
+                horizontalalignment='right', 
+                fontsize=7, color='black')
+            ax.text(max(plot_time), dist_degree, '%.1e ' % (Amax_syn), 
+                verticalalignment='top', 
+                horizontalalignment='right', 
+                fontsize=7, color='red')
+          # annotate CC0
+          if i == 0:
+            ax.text(max(plot_time), dist_degree, ' %.3f'%(window['cc']['CC0']),
+                verticalalignment='center', fontsize=7)
+          # annotate window weight
+          if i == 1:
+            ax.text(max(plot_time), dist_degree, ' %.1f' % (window['weight']),
+                verticalalignment='center', fontsize=7)
           #annotate station names 
           if i == 2:
             #str_annot = '%.3f,%.1f,%s' % (
             #    misfit['CC0'], window['weight'], station_id)
-            ax.text(win[1], dist_degree, ' '+station_id, \
+            ax.text(max(plot_time), dist_degree, ' '+station_id, \
                 verticalalignment='center', fontsize=7)
+      #endfor data in data_azbin:
 
-        #for i in range(3):
-      #for sta_id in data:
-    
-      # control axes limits and lables, annotation
+      #-- set axes limits and lables, annotation
       for i in range(3):
         ax = ax_RTZ[i]
-        ax.set_xlim(win[0], win[1])
+        ax.set_xlim(min(plot_time), max(plot_time))
         ax.set_ylim(plot_ymin, plot_ymax)
-        ax.set_title(cmp_names[i])
-        ax.set_xlabel('t - {:.1f}*dist (s)'.format(rayp))
+        ax.set_title(comp_name[i])
+        ax.set_xlabel('t - {:.1f}*dist (s)'.format(plot_rayp))
         ax.tick_params(axis='both',labelsize=10)
         # ylabel 
         if i == 0:
@@ -2518,18 +2555,13 @@ self.data = {
         else:
           ax.set_yticklabels([])
 
-      # save figures
-      if savefig:
-        if use_window:
-          out_file = '%s/%s_az_%03d_%03d_%s.pdf' % (
-              out_dir, event_id, azmin, azmax, window_id)
-        else:
-          out_file = '%s/%s_az_%03d_%03d.pdf' % (
-              out_dir, event_id, azmin, azmax)
+      #-- save figures
+      if savefig: 
+        out_file = '%s/%s_az_%03d_%03d_%s.pdf' \
+            % (out_dir, event['id'], azmin, azmax, plot_window_id)
         plt.savefig(out_file, format='pdf')
       else:
         plt.show()
-
       plt.close(fig)
     
 #END class misfit

@@ -21,6 +21,7 @@ import pyproj
 #
 from lanczos_interp1 import lanczos_interp1
 #
+from matplotlib import colors, ticker, cm
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 #
@@ -1423,7 +1424,7 @@ self.data = {
 
   def make_cmt_dmt(self,
       out_file="CMTSOLUTION.dmt",
-      fix_M0=True):
+      fix_M0=True, zerotrace=True):
     """ Calculate derivative for source location along one direction
       fix_M0: project dmt orthogonal mt to keep seismic moment M0 = sqrt(0.5*m:m) fixed
     """
@@ -1444,6 +1445,9 @@ self.data = {
     # project dmt
     if fix_M0:
       dmt = dmt - mt*np.sum(dmt*mt)/np.sum(mt**2)
+      dmt = dmt/(0.5*np.sum(dmt**2))**0.5
+    if zerotrace:
+      dmt = dmt - np.identity(3)*np.trace(dmt)/3.0
       dmt = dmt/(0.5*np.sum(dmt**2))**0.5
     # use 1% of M0 as the magnitude of dmt
     m0 = (0.5*np.sum(mt**2))**0.5
@@ -1800,8 +1804,228 @@ self.data = {
     print "dt0: \n", x[0]
     print "dtau:\n", x[1]
 
+    print "====== only 0,2"
+    idx = [0,2]
+    hess = hessian[idx,:][:,idx]
+    kernel = dchi_dm[idx]
+    print hess
+    eigs, eigv = np.linalg.eigh(hess, UPLO='U')
+    print eigs
+    print eigv
+    x, residual, rank, sigval = np.linalg.lstsq(hess, -kernel)
+    print "inv(hessian)*(-1.0 * dchi_dm): \n", x
+    print "dt0: \n", x[0]
+    print "dxs:\n", x[1]
+
   #enddef measure_windows_for_one_station(self,
 
+#
+#======================================================
+#
+
+  def cc_perturbed_seismogram(self, 
+      dm={'dt0':None, 'dxs':None}
+      ):
+    """ calculate normalized zero-lag cc for perturbed seismograms from linear combination of waveform derivatives
+
+    dm={<model_name>:<model_vector>, ...}
+    model_name: ['dt0', 'dxs']
+    model_vector: ndarray of the same length
+
+    return cc_sum, weight_sum
+    """
+    # check model vectors in dm have the same length
+    if (not dm) or len(dm) == 0:
+      error_str = "dm must not be empty"
+      raise Exception(error_str)
+    model_num = len(dm)
+
+    vector_size = []
+    for model_name in dm:
+      if dm[model_name].ndim != 1:
+        error_str = "dm[%s] must be vector" % model_name
+        raise Exception(error_str)
+      vector_size.append(np.size(dm[model_name]))
+    if not is_equal(vector_size) or vector_size[0] < 1:
+      error_str = "vectors in dm must have the same non-zero length"
+      raise Exception(error_str)
+    vector_size = vector_size[0]
+
+    #------ loop each station
+    cc_sum = np.zeros(vector_size)
+    # number of data windows
+    weight_sum = np.zeros(vector_size)
+
+    event = self.data['event']
+    station_dict = self.data['station']
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected statations
+      if station['stat']['code'] < 0:
+        continue
+
+      # check if model parameter included in waveform_der
+      waveform_der = station['waveform_der']
+      for model_name in dm:
+        if model_name not in waveform_der:
+          error_str = "%s not in waveform_der of %s" % (model_name, station_id)
+          raise Exception(error_str)
+
+      #---- get seismograms: obs,grf 
+      waveform = station['waveform']
+      obs = waveform['obs']
+      grf = waveform['grf']
+      # time samples
+      time_sample = waveform['time_sample']
+      syn_delta = time_sample['delta']
+      syn_nt = time_sample['nt']
+      syn_nl = time_sample['nl']
+      syn_nr = time_sample['nr']
+      # convlove source time function: syn = stf * grf
+      freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
+      F_src = stf_spectrum_gauss(freq, event['tau'] )
+      syn = np.fft.irfft(F_src*np.fft.rfft(grf), syn_nt)
+
+      #---- measure misfit
+      window_dict = station['window']
+      for window_id in window_dict:
+        window = window_dict[window_id]
+        # skip bad windows
+        if window['stat']['code'] < 1:
+          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+          continue
+        # window weight
+        weight = window['weight']
+        weight_sum += weight
+        # filter
+        filter_dict = window['filter']
+        filter_a = filter_dict['a']
+        filter_b = filter_dict['b']
+        # taper
+        win_func = window['taper']['win']
+        # polarity projection 
+        proj_matrix = window['polarity']['proj_matrix']
+        #-- filter,project,taper obs
+        # F * d
+        obs_filt = signal.lfilter(filter_b, filter_a, obs)
+        # w * F * d
+        wFd = np.dot(proj_matrix, obs_filt) * win_func 
+        norm_wFd = np.sqrt(np.sum(wFd**2))
+        #-- filter,project,taper syn 
+        # F * u
+        syn_filt = signal.lfilter(filter_b, filter_a, syn)
+        # w * F * u
+        wFu = np.dot(proj_matrix, syn_filt) * win_func 
+        #-- un-normalized cc
+        ccu_wFd_wFu = np.sum(wFd * wFu)
+        #-- filter,project,taper du
+        wFdu = {}
+        ccu_wFd_wFdu = {}
+        for model_name in dm:
+          du = waveform_der[model_name]['du']
+          du = signal.lfilter(filter_b, filter_a, du)
+          wFdu[model_name] = np.dot(proj_matrix, du) * win_func 
+          # un-normalized cc
+          ccu_wFd_wFdu[model_name] = np.sum(wFd * wFdu[model_name])
+        #-- misfit function: zero-lag cc
+        for idx in range(vector_size):
+          wFu1 = wFu 
+          # normalizing factor: Nw
+          for model_name in dm:
+            wFu1 += dm[model_name][idx] * wFdu[model_name]
+          norm_wFu1 = np.sqrt(np.sum(wFu1**2))
+          Nw = norm_wFd * norm_wFu1
+          # cc between obs and perturbed syn
+          ccu_wFd_wFu1 = ccu_wFd_wFu
+          for model_name in dm:
+            ccu_wFd_wFu1 += dm[model_name][idx] * ccu_wFd_wFdu[model_name]
+          #
+          cc_sum[idx] += weight * ccu_wFd_wFu1/Nw
+      #end for window_id in window_dict:
+    #end for station_id in station_dict:
+
+    return cc_sum, weight_sum
+
+#
+#======================================================
+#
+
+  def cc_perturb_grid2(self, 
+      dm = {
+        'dt0': np.linspace(-10,0,11), 
+        'dxs': np.linspace(-5,5,11) 
+        }, 
+      plot=False, outfig="cc_perturb_grid2.pdf"
+      ):
+    """ calculate misfit over 2D model grids based on perturbed seismograms 
+    """
+    # grid parameters
+    if len(dm) != 2:
+      error_str = "Must have two model parameters in dm !"
+      raise Exception(error_str)
+
+    model_name = []
+    for par in dm:
+      model_name.append(par)
+
+    x = dm[model_name[0]]
+    y = dm[model_name[1]]
+    nx = len(x)
+    ny = len(y)
+
+    # 2D mesh grid
+    xx, yy = np.meshgrid(x, y, indexing='ij')
+    nxy = xx.size
+
+    # calculate cc values on all grid points 
+    dm_all = {
+        model_name[0]: xx.reshape(nxy),
+        model_name[1]: yy.reshape(nxy) }
+    zz, weight = self.cc_perturbed_seismogram(dm=dm_all)
+    zz /= weight
+    zz = zz.reshape((nx,ny))
+
+    # get maximum cc value 
+    imax = np.argmax(zz)
+    ij_max = np.unravel_index(imax, (nx,ny))
+    zz_max = zz[ij_max]
+    
+    # plot
+    if plot:
+      # figure size
+      fig = plt.figure(figsize=(11, 8.5))
+      #title_str = "CCmax=%f at (%f,%f)" % (zz_max, xx[ij_max], yy[ij_max])
+      #fig.text(0.5, 0.95, str_title, size='x-large', 
+      #    horizontalalignment='center')
+      #-- plot 2D surface
+      ax = fig.add_axes([0.05, 0.05, 0.6, 0.8])
+      title_str = "CCmax=%f at (%f,%f)" % (zz_max, xx[ij_max], yy[ij_max])
+      ax.set_title(title_str)
+      #zz_cut = zz
+      hc = ax.contourf(xx, yy, zz, locator=ticker.LogLocator(), cmap=cm.PuBu_r)
+      fig.colorbar(hc)
+
+      ax.plot(xx[ij_max], yy[ij_max], 'ro')
+
+      ax.set_xlabel(model_name[0])
+      ax.set_ylabel(model_name[1])
+      
+      # plot cross-section
+      ax = fig.add_axes([0.55, 0.5, 0.6, 0.4])
+      ax.plot(yy[ij_max[0],:], zz[ij_max[0],:], 'ro')
+      ax.set_xlabel(model_name[0])
+      
+      ax = fig.add_axes([0.55, 0.05, 0.6, 0.4])
+      ax.plot(xx[:,ij_max[1]], zz[:,ij_max[1]], 'ro')
+      ax.set_xlabel(model_name[1])
+      
+      if outfig:
+        plt.savefig(outfig, format='pdf')
+      else:
+        plt.show()
+
+    # return 
+    #return xx[ij_max], yy[ij_max], zz_max, weight 
 
 #
 #======================================================

@@ -4,22 +4,11 @@
 """
 import sys
 from misfit import Misfit
-import numpy as np
-import matplotlib.pyplot as plt
+#import numpy as np
+#import matplotlib.pyplot as plt
 
 # read command line args
-data_dir = "DATA" 
-obs_dir = "obs"
-syn_dir = "output_green"
-adj_dir = "adj"
-misfit_dir = "misfit"
-freqmin = 0.01
-freqmax = 0.1
-syn_band_code = "MX"
-syn_suffix = ".sem.sac"
-#srcfrechet_file = "output_srcfrechet/src_frechet.000001"
-#outdir_dxs = "output_dxs"
-#outdir_dmt = "output_dmt"
+misfit_file = "misfit/misfit.pkl"
 
 #------
 print "\n====== initialize\n"
@@ -27,7 +16,7 @@ misfit = Misfit()
 
 #------
 print "\n====== load data\n"
-misfit.load(filename='%s/misfit.pkl' % (misfit_dir))
+misfit.load(filename=misfit_file)
 
 print "\n====== measure_hessian_src\n"
 misfit.measure_hessian_src()

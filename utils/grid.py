@@ -5,13 +5,11 @@
 import sys
 from misfit import Misfit
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 # read command line args
 misfit_file = "misfit/misfit.pkl"
-figure_dir = "misfit"
-
-plot_param = {
-  'time':[-50,200], 'rayp':10., 'azbin':30, 'window_id':'F.p,P',
-  'SNR':None, 'CC0':None, 'CCmax':None, 'dist':None }
 
 #------
 print "\n====== initialize\n"
@@ -20,8 +18,9 @@ misfit = Misfit()
 print "\n====== load data\n"
 misfit.load(filename=misfit_file)
 
-print "\n====== plot seismograms\n"
-misfit.plot_seismogram(
-    savefig=True,
-    out_dir=figure_dir,
-    plot_param=plot_param)
+print "\n====== grid2 \n"
+dm = {
+    'dt0': np.linspace(-10,0,11),
+    'dxs': np.linspace(-5,5,11),
+    }
+misfit.cc_perturb_grid2(dm=dm, plot=True, outfig=None)

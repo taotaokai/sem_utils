@@ -27,35 +27,45 @@ from mpl_toolkits.basemap import Basemap
 #
 from taper import *
 
+#NOTE
+# 1. spectrum relation between DFT and FT
+#   x(n*dt): DFT[x]*dt ~ FT[x], IDFT[FT[x]]/dt ~ x
+
 
 #====== utility functions
 def is_equal(lst):
   return not lst or [lst[0]]*len(lst) == lst
 
-def stf_spectrum_gauss(f, tau):
+def stf_gauss_spectrum(f, tau):
   """ spectrum of the Gaussian STF of unit area: 
       stf(t,tau) = 1/sqrt(PI)/tau * exp(-(t/tau)^2)
       F_stf = exp(- pi^2 * f^2 * tau^2)
   """
-  return np.exp(-np.pi**2 * f**2 * tau**2)
+  F_src = np.exp(-np.pi**2 * f**2 * tau**2)
+# F_ds_dt0 = -2.0j * np.pi * f * F_src
+# F_ds_dtau = -2.0 * (np.pi*f)**2 * tau * F_src
+# return F_src, F_ds_dt0, F_ds_dtau
+  return F_src
 
-def stf_gauss(n, dt, tau):
-  """ Gaussian source time function
-    stf(t,tau) = 1/sqrt(PI)/tau * exp(-(t/tau)^2)
-    t = dt * [0:(n+1)/2, -n/2:-1]
-  """
-  n = int(n)
-  idx = np.arange(n)
-  idx[(n+1)/2:] -= n
-  t = idx * dt / tau
-  stf = np.exp(-t**2)/tau/np.pi**0.5
-  ds_dt0 = 2.0/tau * t * stf
-  ds_dtau = 2.0/tau * (t**2 - 0.5) * stf 
-  return stf, ds_dt0, ds_dtau
+#def stf_gauss(n, dt, tau):
+#  """ Gaussian source time function
+#    stf(t,tau) = 1/sqrt(PI)/tau * exp(-(t/tau)^2)
+#    t = dt * [0:(n+1)/2, -n/2:-1]
+#  """
+#  n = int(n)
+#  idx = np.arange(n)
+#  idx[(n+1)/2:] -= n
+#  t = idx * dt / tau
+#  stf = np.exp(-t**2)/tau/np.pi**0.5
+#  ds_dt0 = 2.0/tau * t * stf
+#  ds_dtau = 2.0/tau * (t**2 - 0.5) * stf 
+#  return stf, ds_dt0, ds_dtau
 
 #======
 class Misfit(object):
   """Class managing all misfit windows
+
+  Unit: kg,m,s
 
 self.data = {
 
@@ -74,7 +84,7 @@ self.data = {
         'stat':{'code':, 'msg':},
         'dchi_dt0':, 'dchi_dau':, 'dchi_dxs':, 'dchi_dmt':},
 
-    'src_perturb': {'dt0':1, 'dtau':1, 'dxs':, 'dmt':, },
+    'src_perturb': {'dxs':, 'dmt':, },
 
     'station': {
 
@@ -130,10 +140,10 @@ self.data = {
             'dchi_dg': array([3,nt]), #conj(stf)*dchi_du
 
             'waveform_der': {
-               'dt0': {'dm':scalar, 'du':array([3,nt]), 'dchi':scalar},
-               'dtau': {'dm':, 'du':, 'dchi':},
-               'dxs': {'dm':array(3), 'dg':, 'du':, 'dchi':}, #finite-difference
-               'dmt': {'dm':array([3,3]), 'dg':, 'du':, 'dchi':}, #moment-tensor
+               #'dt0': {'dm':scalar, 'du':array([3,nt]), 'dchi':scalar},
+               #'dtau': {'dm':, 'du':, 'dchi':},
+               'dxs': {'dm':array(3), 'dg':, }, #finite-difference
+               'dmt': {'dm':array([3,3]), 'dg':,}, #linear in moment-tensor
             },
 
         },
@@ -767,7 +777,7 @@ self.data = {
 
       # source spectrum (moment-rate function)
       syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
-      F_src = stf_spectrum_gauss(syn_freq, event['tau'])
+      F_src = stf_gauss_spectrum(syn_freq, event['tau'])
 
       #------ loop each window
       dchi_du = np.zeros((3, syn_nt))
@@ -980,8 +990,7 @@ self.data = {
         # add into total dchi_du
         dchi_du += weight * dchiw_du
         #-- dchiw_dg = conj(S) * dchiw_du
-        dchiw_dg = np.fft.irfft(np.conjugate(F_src) * 
-            np.fft.rfft(dchiw_du), syn_nt)
+        dchiw_dg = np.fft.irfft(np.conjugate(F_src) * np.fft.rfft(dchiw_du), syn_nt)
         # add into total dchi_dg
         dchi_dg += weight * dchiw_dg 
         #DEBUG
@@ -1191,64 +1200,65 @@ self.data = {
 #======================================================
 #
 
-  def waveform_der_stf(self):
-    """ Calculate waveform derivatives for source time function (t0, tau)
-    """
-    event = self.data['event']
-    t0 = event['t0']
-    tau = event['tau']
-
-    station_dict = self.data['station']
-    for station_id in station_dict:
-      station = station_dict[station_id]
-      # skip rejected statations
-      if station['stat']['code'] < 0:
-        continue
-
-      # source time function
-      waveform = station['waveform']
-      time_sample = waveform['time_sample']
-      starttime = time_sample['starttime']
-      dt = time_sample['delta']
-      nt = time_sample['nt']
-      t = np.arange(nt) * dt + (starttime - t0) #referred to t0
-      # s(t), Ds(t)/Dt0, Ds(t)/Dtau
-      stf, ds_dt0, ds_dtau = stf_gauss(nt, dt, tau)
-
-      #------ waveform derivative
-      # green's function
-      grf = waveform['grf']
-      # convolve Ds(t)/Dt0,tau with Green's function
-      du_dt0 = np.fft.irfft(np.fft.rfft(ds_dt0) * np.fft.rfft(grf), nt) * dt
-      du_dtau = np.fft.irfft(np.fft.rfft(ds_dtau) * np.fft.rfft(grf), nt) * dt
-      # zero records before origin time (wrap around from the end)
-      idx = t < -5.0*tau
-      du_dt0[:,idx] = 0.0
-      du_dtau[:,idx] = 0.0
-
-      #------ misfit derivative
-      # adjoint source = Dchi/Du
-      dchi_du = station['dchi_du']
-      dchi_dt0 = np.sum(dchi_du * du_dt0) * dt
-      dchi_dtau = np.sum(dchi_du * du_dtau) * dt
-
-      #------ record derivatives
-      if 'waveform_der' not in station:
-        station['waveform_der'] = {}
-      station['waveform_der']['dt0'] = {
-          'dm':1.0, 'du':du_dt0, 'dchi':dchi_dt0 }
-      station['waveform_der']['dtau'] = {
-          'dm':1.0, 'du': du_dtau, 'dchi':dchi_dtau }
-
-      # DEBUG
-      #print dchi_dt0, dchi_dtau
-      #for i in range(3):
-      #  plt.subplot(311+i)
-      #  #plt.plot(t, dchi_du[i,:], 'k')
-      #  plt.plot(t, du_dt0[i,:], 'b', t, du_dtau[i,:], 'r')
-      #plt.show()
-
-  #enddef derivative_stf(self)
+#  def waveform_der_stf(self):
+#    """ Calculate waveform derivatives for source time function (t0, tau)
+#    """
+#    event = self.data['event']
+#    t0 = event['t0']
+#    tau = event['tau']
+#
+#    station_dict = self.data['station']
+#    for station_id in station_dict:
+#      station = station_dict[station_id]
+#      # skip rejected statations
+#      if station['stat']['code'] < 0:
+#        continue
+#
+#      # source time function
+#      waveform = station['waveform']
+#      time_sample = waveform['time_sample']
+#      starttime = time_sample['starttime']
+#      dt = time_sample['delta']
+#      nt = time_sample['nt']
+#      t = np.arange(nt) * dt + (starttime - t0) #referred to t0
+#      # s(t), Ds(t)/Dt0, Ds(t)/Dtau
+#      freq = np.fft.rfftfreq(nt, d=dt)
+#      F_src, F_ds_dt0, F_ds_dtau = stf_gauss_spectrum(freq, tau)
+#
+#      #------ waveform derivative
+#      # green's function
+#      grf = waveform['grf']
+#      # convolve Ds(t)/Dt0,tau with Green's function
+#      du_dt0 = np.fft.irfft(F_ds_dt0 * np.fft.rfft(grf), nt)
+#      du_dtau = np.fft.irfft(F_ds_dtau * np.fft.rfft(grf), nt)
+#      # zero records before origin time (wrap around from the end)
+#      idx = t < -5.0*tau
+#      du_dt0[:,idx] = 0.0
+#      du_dtau[:,idx] = 0.0
+#
+#      #------ misfit derivative
+#      # adjoint source = Dchi/Du
+#      dchi_du = station['dchi_du']
+#      dchi_dt0 = np.sum(dchi_du * du_dt0) * dt
+#      dchi_dtau = np.sum(dchi_du * du_dtau) * dt
+#
+#      #------ record derivatives
+#      if 'waveform_der' not in station:
+#        station['waveform_der'] = {}
+#      station['waveform_der']['dt0'] = {
+#          'dm':1.0, 'du':du_dt0, 'dchi':dchi_dt0 }
+#      station['waveform_der']['dtau'] = {
+#          'dm':1.0, 'du': du_dtau, 'dchi':dchi_dtau }
+#
+#      # DEBUG
+#      #print dchi_dt0, dchi_dtau
+#      #for i in range(3):
+#      #  plt.subplot(311+i)
+#      #  #plt.plot(t, dchi_du[i,:], 'k')
+#      #  plt.plot(t, du_dt0[i,:], 'b', t, du_dtau[i,:], 'r')
+#      #plt.show()
+#
+#  #enddef derivative_stf(self)
 
 #
 #======================================================
@@ -1382,23 +1392,24 @@ self.data = {
       grf = waveform['grf']
       dg = syn_ENZ - grf
 
-      # diff synthetics
-      # convlove source time function
-      freq = np.fft.rfftfreq(nt, d=dt)
-      F_src = stf_spectrum_gauss(freq, tau)
-      du = np.fft.irfft(F_src * np.fft.rfft(dg), nt)
-      #zero records before origin time (wrap around from the end)
-      idx = t < -5.0*tau
-      du[:,idx] = 0.0
+      ## diff synthetics
+      ## convlove source time function
+      #syn_freq = np.fft.rfftfreq(nt, d=dt)
+      #F_src = stf_gauss_spectrum(syn_freq, tau)
+      #du = np.fft.irfft(F_src * np.fft.rfft(dg), nt)
+      ##zero records before origin time (wrap around from the end)
+      #idx = t < -5.0*tau
+      #du[:,idx] = 0.0
 
-      # diff Chi
-      dchi = np.sum(station['dchi_dg'] * dg) * dt
+      ## diff Chi
+      #dchi = np.sum(station['dchi_dg'] * dg) * dt
 
       #------ record derivatives
       if 'waveform_der' not in station:
         station['waveform_der'] = {}
       station['waveform_der']['dxs'] = {
-          'dm':dxs, 'dg':dg, 'du':du, 'dchi':dchi }
+          'dm':dxs, 'dg':dg }
+      #'dm':dxs, 'dg':dg, 'du':du, 'dchi':dchi }
 
       # DEBUG
       #print dchi
@@ -1424,9 +1435,11 @@ self.data = {
 
   def make_cmt_dmt(self,
       out_file="CMTSOLUTION.dmt",
-      fix_M0=True, zerotrace=True):
+      fix_M0=True, zerotrace=True, percentage_M0=0.01):
     """ Calculate derivative for source location along one direction
       fix_M0: project dmt orthogonal mt to keep seismic moment M0 = sqrt(0.5*m:m) fixed
+      zerotrace: zero tr(dmt)
+      percentage: magnitude of dmt is set to <percentage>% of M0
     """
     # get source parameters
     event = self.data['event']
@@ -1434,7 +1447,10 @@ self.data = {
     xs = event['xs']
     mt = event['mt_xyz']
 
-    # get perturbed moment tensor 
+    if percentage_M0 <= 0.0:
+      raise ValueError("percentage_M0 must > 0")
+
+    # get perturbed moment tensor
     if 'src_frechet' not in self.data:
       raise Exception('src_frechet not set.')
     src_frechet = self.data['src_frechet']
@@ -1451,8 +1467,7 @@ self.data = {
       dmt = dmt/(0.5*np.sum(dmt**2))**0.5
     # use 1% of M0 as the magnitude of dmt
     m0 = (0.5*np.sum(mt**2))**0.5
-    dmt = (0.01 * m0) * dmt
-    print "norm(dmt) = %e" % (0.01*m0)
+    dmt = (percentage_M0 * m0) * dmt
 
     # record dmt
     if 'src_perturb' not in self.data:
@@ -1460,7 +1475,6 @@ self.data = {
     self.data['src_perturb']['dmt'] = dmt
 
     # write out new CMTSOLUTION file
-    mt1 = mt + dmt
     with open(out_file, 'w') as fp:
       fp.write('%s\n' % event['header'])
       fp.write('%-18s %s_dmt\n' % ('event name:',event['id']))
@@ -1469,12 +1483,12 @@ self.data = {
       fp.write('%-18s %+15.8E\n' % ('x(m):',     xs[0]))
       fp.write('%-18s %+15.8E\n' % ('y(m):',     xs[1]))
       fp.write('%-18s %+15.8E\n' % ('z(m):',     xs[2]))
-      fp.write('%-18s %+15.8E\n' % ('Mxx(N*m):', mt1[0,0]))
-      fp.write('%-18s %+15.8E\n' % ('Myy(N*m):', mt1[1,1]))
-      fp.write('%-18s %+15.8E\n' % ('Mzz(N*m):', mt1[2,2]))
-      fp.write('%-18s %+15.8E\n' % ('Mxy(N*m):', mt1[0,1]))
-      fp.write('%-18s %+15.8E\n' % ('Mxz(N*m):', mt1[0,2]))
-      fp.write('%-18s %+15.8E\n' % ('Myz(N*m):', mt1[1,2]))
+      fp.write('%-18s %+15.8E\n' % ('Mxx(N*m):', dmt[0,0]))
+      fp.write('%-18s %+15.8E\n' % ('Myy(N*m):', dmt[1,1]))
+      fp.write('%-18s %+15.8E\n' % ('Mzz(N*m):', dmt[2,2]))
+      fp.write('%-18s %+15.8E\n' % ('Mxy(N*m):', dmt[0,1]))
+      fp.write('%-18s %+15.8E\n' % ('Mxz(N*m):', dmt[0,2]))
+      fp.write('%-18s %+15.8E\n' % ('Myz(N*m):', dmt[1,2]))
 
 #
 #======================================================
@@ -1544,22 +1558,23 @@ self.data = {
       for i in range(3):
         dg[i,nl:(nl+nt)] = syn_st[i].data
 
-      #source spectrum (moment-rate function)
-      freq = np.fft.rfftfreq(nt, d=dt)
-      F_src = stf_spectrum_gauss(freq, tau)
-      du = np.fft.irfft(F_src * np.fft.rfft(dg), nt)
-      #zero records before origin time (wrap around from the end)
-      idx = t < -5.0*tau
-      du[:,idx] = 0.0
+      ##source spectrum (moment-rate function)
+      #syn_freq = np.fft.rfftfreq(nt, d=dt)
+      #F_src = stf_gauss_spectrum(syn_freq, tau)
+      #du = np.fft.irfft(F_src * np.fft.rfft(dg), nt)
+      ##zero records before origin time (wrap around from the end)
+      #idx = t < -5.0*tau
+      #du[:,idx] = 0.0
 
-      # diff Chi
-      dchi = np.sum(station['dchi_dg'] * dg)
+      ## diff Chi
+      #dchi = np.sum(station['dchi_dg'] * dg)
 
       #------ record derivatives
       if 'waveform_der' not in station:
         station['waveform_der'] = {}
       station['waveform_der']['dmt'] = {
-          'dm':np.array(dmt), 'dg':dg, 'du':du, 'dchi':dchi }
+          'dm':np.array(dmt), 'dg':dg }
+      #'dm':np.array(dmt), 'dg':dg, 'du':du, 'dchi':dchi }
 
       # DEBUG
       #print dchi
@@ -1615,7 +1630,7 @@ self.data = {
 
       # source spectrum (moment-rate function)
       syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
-      F_src = stf_spectrum_gauss(syn_freq, event['tau'])
+      F_src = stf_gauss_spectrum(syn_freq, event['tau'])
 
       # waveform derivatives
       waveform_der = station['waveform_der']
@@ -1823,8 +1838,9 @@ self.data = {
 #======================================================
 #
 
-  def cc_perturbed_seismogram(self, 
-      dm={'dt0':None, 'dxs':None}
+  def cc_perturbed_seismogram(self,
+      dm={'dt0':None, 'dxs':None},
+      plot=False
       ):
     """ calculate normalized zero-lag cc for perturbed seismograms from linear combination of waveform derivatives
 
@@ -1851,12 +1867,21 @@ self.data = {
       raise Exception(error_str)
     vector_size = vector_size[0]
 
-    #------ loop each station
-    cc_sum = np.zeros(vector_size)
-    # number of data windows
-    weight_sum = np.zeros(vector_size)
-
+    # check parameters
     event = self.data['event']
+    if 'dtau' in dm:
+      tau = dm['dtau'] + event['tau']
+      if any(tau <= 0):
+        error_str = "dm['dtau'] has invalid values (event['tau']=%f)!" \
+            % event['tau']
+        raise Exception(error_str)
+
+    #------ loop each station
+    # sum of weighted normalized zero-lag cc at each model grid
+    wcc_sum = np.zeros(vector_size)
+    # sum of all windows' weighting
+    weight_sum = 0.0
+
     station_dict = self.data['station']
     for station_id in station_dict:
       station = station_dict[station_id]
@@ -1877,14 +1902,12 @@ self.data = {
       grf = waveform['grf']
       # time samples
       time_sample = waveform['time_sample']
+      syn_starttime = time_sample['starttime']
       syn_delta = time_sample['delta']
       syn_nt = time_sample['nt']
       syn_nl = time_sample['nl']
       syn_nr = time_sample['nr']
-      # convlove source time function: syn = stf * grf
-      freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
-      F_src = stf_spectrum_gauss(freq, event['tau'] )
-      syn = np.fft.irfft(F_src*np.fft.rfft(grf), syn_nt)
+      syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
 
       #---- measure misfit
       window_dict = station['window']
@@ -1903,59 +1926,118 @@ self.data = {
         filter_b = filter_dict['b']
         # taper
         win_func = window['taper']['win']
+        win_starttime = window['taper']['starttime']
+        win_endtime = window['taper']['endtime']
         # polarity projection 
         proj_matrix = window['polarity']['proj_matrix']
         #-- filter,project,taper obs
         # F * d
         obs_filt = signal.lfilter(filter_b, filter_a, obs)
-        # w * F * d
-        wFd = np.dot(proj_matrix, obs_filt) * win_func 
-        norm_wFd = np.sqrt(np.sum(wFd**2))
-        #-- filter,project,taper syn 
-        # F * u
-        syn_filt = signal.lfilter(filter_b, filter_a, syn)
-        # w * F * u
-        wFu = np.dot(proj_matrix, syn_filt) * win_func 
-        #-- un-normalized cc
-        ccu_wFd_wFu = np.sum(wFd * wFu)
-        #-- filter,project,taper du
-        wFdu = {}
-        ccu_wFd_wFdu = {}
+        # w * p * F * d (window,project,filter)
+        wpFd = np.dot(proj_matrix, obs_filt) * win_func 
+        norm_wpFd = np.sqrt(np.sum(wpFd**2))
+        #-- filter,project grf 
+        # F * g
+        grf_filt = signal.lfilter(filter_b, filter_a, grf)
+        # p * F * g
+        pFg = np.dot(proj_matrix, grf_filt)
+        if plot:
+          F_src = stf_gauss_spectrum(syn_freq, event['tau'])
+          # S * F * g
+          syn_filt = np.fft.irfft(F_src*np.fft.rfft(grf_filt), syn_nt)
+          # w * p * S * F * g
+          wpFu = np.dot(proj_matrix, syn_filt) * win_func
+        #-- filter,project dg: pFdg
+        pFdg = {}
         for model_name in dm:
-          du = waveform_der[model_name]['du']
-          du = signal.lfilter(filter_b, filter_a, du)
-          wFdu[model_name] = np.dot(proj_matrix, du) * win_func 
-          # un-normalized cc
-          ccu_wFd_wFdu[model_name] = np.sum(wFd * wFdu[model_name])
+          # exclude source time function
+          if model_name not in ['dt0', 'dtau']:
+            dg = waveform_der[model_name]['dg']
+            dg_filt = signal.lfilter(filter_b, filter_a, dg)
+            pFdg[model_name] = np.dot(proj_matrix, dg_filt)
         #-- misfit function: zero-lag cc
-        for idx in range(vector_size):
-          wFu1 = wFu 
-          # normalizing factor: Nw
+        for idx_model in range(vector_size):
+          # perturbed grf: pFg1
+          pFg1 = np.zeros((3,syn_nt))
+          pFg1 += pFg
           for model_name in dm:
-            wFu1 += dm[model_name][idx] * wFdu[model_name]
-          norm_wFu1 = np.sqrt(np.sum(wFu1**2))
-          Nw = norm_wFd * norm_wFu1
-          # cc between obs and perturbed syn
-          ccu_wFd_wFu1 = ccu_wFd_wFu
-          for model_name in dm:
-            ccu_wFd_wFu1 += dm[model_name][idx] * ccu_wFd_wFdu[model_name]
-          #
-          cc_sum[idx] += weight * ccu_wFd_wFu1/Nw
+            # exclude source time function
+            if model_name not in ['dt0', 'dtau']:
+              pFg1 += dm[model_name][idx_model] * pFdg[model_name]
+          # perturbed source time function
+          dt0 = 0.0
+          if 'dt0' in dm:
+            dt0 = dm['dt0'][idx_model]
+          dtau = 0.0
+          if 'dtau' in dm:
+            dtau = dm['dtau'][idx_model]
+          F_src = stf_gauss_spectrum(syn_freq, event['tau']+dtau)
+          # perturbed syn: w * S * p * F * g1
+          phase_shift = np.exp(-2.0j * np.pi * syn_freq * dt0)
+          wpFu1 = np.fft.irfft(phase_shift*F_src*np.fft.rfft(pFg1), syn_nt) \
+              * win_func
+          norm_wpFu1 = np.sqrt(np.sum(wpFu1**2))
+          Nw = norm_wpFd * norm_wpFu1
+          #normalized cc between obs and perturbed syn
+          cc_wpFd_wpFu1 = np.sum(wpFd*wpFu1) / Nw
+          # weighted cc
+          wcc_sum[idx_model] += weight * cc_wpFd_wpFu1
+          #DEBUG
+          if plot:
+            syn_npts = syn_nt - syn_nl - syn_nr
+            syn_orientation_codes = ['E', 'N', 'Z']
+            syn_times = np.arange(syn_nt) * syn_delta
+            Amax_obs = np.max(np.sum(wpFd**2, axis=0))**0.5
+            Amax_syn = np.max(np.sum(wpFu**2, axis=0))**0.5
+            Amax_syn1 = np.max(np.sum(wpFu1**2, axis=0))**0.5
+            win_b = win_starttime - syn_starttime
+            win_e = win_endtime - syn_starttime
+            for i in range(3):
+              plt.subplot(311+i)
+
+              if i == 0:
+                title_str = "%s.%s " % (station_id, window_id)
+                for model_name in dm:
+                  title_str += "%s:%.2f " \
+                      % (model_name, dm[model_name][idx_model])
+                title_str += "NCCwin:%.2f" % (cc_wpFd_wpFu1)
+                plt.title(title_str)
+
+              idx_plt = range(syn_nl,(syn_nl+syn_npts))
+              plt.plot(syn_times[idx_plt], obs_filt[i,idx_plt]/Amax_obs, 
+                  'k', linewidth=0.2)
+              plt.plot(syn_times[idx_plt], syn_filt[i,idx_plt]/Amax_syn,
+                  'b', linewidth=0.2)
+
+              idx_plt = (win_b <= syn_times) & (syn_times <= win_e)
+              plt.plot(syn_times[idx_plt], wpFd[i,idx_plt]/Amax_obs,
+                  'k', linewidth=1.0)
+              plt.plot(syn_times[idx_plt], wpFu[i,idx_plt]/Amax_syn,
+                  'b', linewidth=1.0)
+              plt.plot(syn_times[idx_plt], wpFu1[i,idx_plt]/Amax_syn1,
+                  'r', linewidth=1.0)
+
+              plt.xlim((syn_times[syn_nl], syn_times[syn_nl+syn_npts-1]))
+              plt.ylim((-1.5, 1.5))
+              plt.ylabel(syn_orientation_codes[i])
+            plt.show()
+
       #end for window_id in window_dict:
     #end for station_id in station_dict:
 
-    return cc_sum, weight_sum
+    return wcc_sum, weight_sum
 
 #
 #======================================================
 #
 
-  def cc_perturb_grid2(self, 
+  def grid2_cc_perturbed_seismogram(self, 
       dm = {
         'dt0': np.linspace(-10,0,11), 
         'dxs': np.linspace(-5,5,11) 
         }, 
-      plot=False, outfig="cc_perturb_grid2.pdf"
+      plot=False, outfig="cc_perturb_grid2.pdf",
+      plot_seism=False
       ):
     """ calculate misfit over 2D model grids based on perturbed seismograms 
     """
@@ -1981,8 +2063,8 @@ self.data = {
     dm_all = {
         model_name[0]: xx.reshape(nxy),
         model_name[1]: yy.reshape(nxy) }
-    zz, weight = self.cc_perturbed_seismogram(dm=dm_all)
-    zz /= weight
+    zz, weight = self.cc_perturbed_seismogram(dm=dm_all, plot=plot_seism)
+    zz /= weight # weighted average normalized zero-lag cc
     zz = zz.reshape((nx,ny))
 
     # get maximum cc value 
@@ -1994,38 +2076,37 @@ self.data = {
     if plot:
       # figure size
       fig = plt.figure(figsize=(11, 8.5))
-      #title_str = "CCmax=%f at (%f,%f)" % (zz_max, xx[ij_max], yy[ij_max])
-      #fig.text(0.5, 0.95, str_title, size='x-large', 
-      #    horizontalalignment='center')
-      #-- plot 2D surface
-      ax = fig.add_axes([0.05, 0.05, 0.6, 0.8])
-      title_str = "CCmax=%f at (%f,%f)" % (zz_max, xx[ij_max], yy[ij_max])
+      # plot 2D surface
+      ax = fig.add_axes([0.1, 0.1, 0.35, 0.35])
+      title_str = "average weighted normalized zero-lag CC"
       ax.set_title(title_str)
-      #zz_cut = zz
-      hc = ax.contourf(xx, yy, zz, locator=ticker.LogLocator(), cmap=cm.PuBu_r)
-      fig.colorbar(hc)
-
+      levels = zz_max * np.linspace(0.95, 1.0, 10)
+      cs = ax.contour(xx, yy, zz, levels, colors='k')
+      plt.clabel(cs, fontsize=9, inline=1)
+      text_str = "(%.1f,%.1f)" % (xx[ij_max], yy[ij_max])
+      ax.text(xx[ij_max], yy[ij_max], text_str,
+          horizontalalignment="center", verticalalignment="top")
       ax.plot(xx[ij_max], yy[ij_max], 'ro')
 
       ax.set_xlabel(model_name[0])
       ax.set_ylabel(model_name[1])
       
-      # plot cross-section
-      ax = fig.add_axes([0.55, 0.5, 0.6, 0.4])
-      ax.plot(yy[ij_max[0],:], zz[ij_max[0],:], 'ro')
-      ax.set_xlabel(model_name[0])
-      
-      ax = fig.add_axes([0.55, 0.05, 0.6, 0.4])
+      # plot cross-sections through maximum point
+      ax = fig.add_axes([0.55, 0.1, 0.35, 0.35])
       ax.plot(xx[:,ij_max[1]], zz[:,ij_max[1]], 'ro')
+      ax.set_xlabel(model_name[0])
+ 
+      ax = fig.add_axes([0.55, 0.55, 0.35, 0.35])
+      ax.plot(yy[ij_max[0],:], zz[ij_max[0],:], 'ro')
       ax.set_xlabel(model_name[1])
-      
+     
       if outfig:
         plt.savefig(outfig, format='pdf')
       else:
         plt.show()
 
     # return 
-    #return xx[ij_max], yy[ij_max], zz_max, weight 
+    return xx[ij_max], yy[ij_max], zz_max, weight 
 
 #
 #======================================================
@@ -2612,8 +2693,8 @@ self.data = {
         obs = signal.lfilter(filter_b, filter_a, obs)
         grf = signal.lfilter(filter_b, filter_a, grf)
         # convolve stf on grf
-        freq = np.fft.rfftfreq(syn_npts, d=syn_delta)
-        F_src = stf_spectrum_gauss(freq, event['tau'])
+        syn_freq = np.fft.rfftfreq(syn_npts, d=syn_delta)
+        F_src = stf_gauss_spectrum(syn_freq, event['tau'])
         syn = np.fft.irfft(F_src*np.fft.rfft(grf), syn_npts)
         # project to polarity defined by the window
         proj_matrix = window['polarity']['proj_matrix']

@@ -1435,20 +1435,22 @@ self.data = {
 
   def make_cmt_dmt(self,
       out_file="CMTSOLUTION.dmt",
-      fix_M0=True, zerotrace=True, percentage_M0=0.01):
+      fix_M0=True, zerotrace=True, ratio_M0=0.01):
     """ Calculate derivative for source location along one direction
       fix_M0: project dmt orthogonal mt to keep seismic moment M0 = sqrt(0.5*m:m) fixed
       zerotrace: zero tr(dmt)
-      percentage: magnitude of dmt is set to <percentage>% of M0
+      ratio_M0: magnitude of dmt is set to the ratio of M0
     """
     # get source parameters
     event = self.data['event']
     tau = event['tau']
     xs = event['xs']
     mt = event['mt_xyz']
-
-    if percentage_M0 <= 0.0:
-      raise ValueError("percentage_M0 must > 0")
+    
+    # check parameters
+    if ratio_M0 <= 0.0:
+      error_str = "ratio_M0(%f) must > 0" % ratio_M0
+      raise ValueError(error_str)
 
     # get perturbed moment tensor
     if 'src_frechet' not in self.data:
@@ -1456,18 +1458,16 @@ self.data = {
     src_frechet = self.data['src_frechet']
     # set dmt parallel to dchi_dmt
     dmt = src_frechet['dchi_dmt']
-    # normalize dmt to have unit seismic moment
-    dmt = dmt/(0.5*np.sum(dmt**2))**0.5
-    # project dmt
+    # project dmt perpendicular to M0 change direction
     if fix_M0:
       dmt = dmt - mt*np.sum(dmt*mt)/np.sum(mt**2)
-      dmt = dmt/(0.5*np.sum(dmt**2))**0.5
     if zerotrace:
       dmt = dmt - np.identity(3)*np.trace(dmt)/3.0
-      dmt = dmt/(0.5*np.sum(dmt**2))**0.5
-    # use 1% of M0 as the magnitude of dmt
+    # normalize dmt to have unit seismic moment
+    dmt = dmt/(0.5*np.sum(dmt**2))**0.5
+    # use ratio_M0 as the magnitude of dmt
     m0 = (0.5*np.sum(mt**2))**0.5
-    dmt = (percentage_M0 * m0) * dmt
+    dmt *= ratio_M0 * m0
 
     # record dmt
     if 'src_perturb' not in self.data:

@@ -1892,7 +1892,8 @@ self.data = {
       # check if model parameter included in waveform_der
       waveform_der = station['waveform_der']
       for model_name in dm:
-        if model_name not in waveform_der:
+        if (model_name not in ['dt0', 'dtau']) and \
+           (model_name not in waveform_der):
           error_str = "%s not in waveform_der of %s" % (model_name, station_id)
           raise Exception(error_str)
 
@@ -2080,7 +2081,7 @@ self.data = {
       ax = fig.add_axes([0.1, 0.1, 0.35, 0.35])
       title_str = "average weighted normalized zero-lag CC"
       ax.set_title(title_str)
-      levels = zz_max * np.linspace(0.95, 1.0, 10)
+      levels = zz_max * np.linspace(0.5, 1.0, 20)
       cs = ax.contour(xx, yy, zz, levels, colors='k')
       plt.clabel(cs, fontsize=9, inline=1)
       text_str = "(%.1f,%.1f)" % (xx[ij_max], yy[ij_max])

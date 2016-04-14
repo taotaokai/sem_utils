@@ -23,9 +23,6 @@ misfit = Misfit()
 print "\n====== load data\n"
 misfit.load(filename=misfit_file)
 
-print "\n====== waveform_der_stf\n"
-misfit.waveform_der_stf()
-  
 print "\n====== waveform_der_dxs\n"
 misfit.waveform_der_dxs(
     syn_dir=outdir_dxs,

@@ -464,6 +464,9 @@ class Misfit(object):
       # add station info
       station[station_id] = {
           'meta': meta,
+          'waveform':{},
+          'window':{},
+          'waveform_der':{},
           'stat': {
             'code': 0,
             'msg': "created on "+UTCDateTime.now().isoformat()} 
@@ -2094,7 +2097,8 @@ class Misfit(object):
           zz_1d = zz[np.ix_(*idx)].squeeze()
 
           # plot cross-sections through maximum point
-          fig = plt.figure(figsize=(8.5,11))
+          #fig = plt.figure(figsize=(8.5,11))
+          fig = plt.figure()
           plt.plot(x[ix], zz_1d, 'ro')
 
           xlabel_str = "alpha (* d%s)" % model_name[ix]
@@ -2109,13 +2113,9 @@ class Misfit(object):
           ix = model_name.index(xy[0])
           iy = model_name.index(xy[1])
           idx = [range(len(v)) for v in x]
-          print model_name
-          print idx_max
-          print idx
           for i in range(model_num):
             if i != ix and i != iy:
               idx[i] = [idx_max[i],]
-          print idx
           idx = np.ix_(*idx)
           zz_2d = zz[idx].squeeze()
           xx_2d = xx[ix][idx].squeeze()
@@ -2125,7 +2125,8 @@ class Misfit(object):
             xx_2d = np.transpose(xx_2d)
             yy_2d = np.transpose(yy_2d)
           # plot 2D surface through the maximum
-          fig = plt.figure(figsize=(8.5, 11))
+          #fig = plt.figure(figsize=(8.5, 11))
+          fig = plt.figure()
 
           title_str = "average weighted normalized zero-lag CC"
           plt.title(title_str)

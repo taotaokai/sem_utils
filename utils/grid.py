@@ -20,11 +20,12 @@ misfit.load(filename=misfit_file)
 
 print "\n====== grid_cc \n"
 dm = {
-    't0': np.linspace(-10,0,11),
+    't0': np.linspace(-5,5,11),
     'tau': np.linspace(-2,5,8),
-    'xs': np.linspace(-10,10,21),
+    'xs': np.linspace(0,15,16),
     }
-axes = [ ['tau','xs'], ['tau','t0'], ['t0','xs'] ]
+axes = [ ['tau','xs'], ['t0', 'xs'], ['t0', 'tau'] ]
+#axes = [ ['xs'] ]
 outfig = "grid_cc.pdf"
 
 model, ccmax, weight = misfit.grid_cc_perturbed_seismogram(

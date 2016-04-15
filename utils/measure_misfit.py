@@ -36,6 +36,8 @@ misfit.setup_event(cmt_file, is_ECEF=True)
 print "\n====== setup station\n"
 misfit.setup_station(channel_file)
 
+#print [x for x in misfit.data['station']]
+
 print "\n====== read seismogram: obs, grf\n"
 misfit.read_obs_grf(
   obs_dir=obs_dir,

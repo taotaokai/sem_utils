@@ -22,6 +22,7 @@ import pyproj
 from lanczos_interp1 import lanczos_interp1
 #
 from matplotlib import colors, ticker, cm
+from matplotlib.backends.backend_pdf import PdfPages 
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 #
@@ -67,7 +68,10 @@ class Misfit(object):
 
   Unit: kg,m,s
 
-self.data = {
+  Coordinate: ECEF cartesian
+
+  Data:
+  {
 
     'event': {
         'stat':{'code':, 'msg':},
@@ -76,15 +80,17 @@ self.data = {
         'lattidue':, 'longitude':, 'depth':, 
         't0':[utcdatetime], # centroid time
         'tau':, # gaussian width exp(-(t-t0)^2/tau^2)/tau/pi^0.5
-        'xs': [x, y, z], #ECEF coordinate
-        'mt_xyz':, # moment tensor in ECEF coord
+        'xs': [x, y, z], # source location in ECEF coordinate
+        'mt':, # moment tensor in ECEF coord
         'mt_rtp':}, # moment tensor in spherical coord
 
     'src_frechet': { #derivative of misfit function w.r.t. source param.
         'stat':{'code':, 'msg':},
-        'dchi_dt0':, 'dchi_dau':, 'dchi_dxs':, 'dchi_dmt':},
+        't0':, 'dau':, 'xs':, 'mt':},
 
-    'src_perturb': {'dxs':, 'dmt':, },
+    'src_perturb': {'t0':1.0, 'tau':1.0, 'xs':, 'mt':, },
+
+    'chi': # weighted average of normalized zero-lag CC
 
     'station': {
 
@@ -136,33 +142,50 @@ self.data = {
                 <window_id>...
             },
 
-            'dchi_du': array([3,nt]), #chi: misfit function
+            #'dchi_du': array([3,nt]), #chi: misfit function
             'dchi_dg': array([3,nt]), #conj(stf)*dchi_du
 
             'waveform_der': {
-               #'dt0': {'dm':scalar, 'du':array([3,nt]), 'dchi':scalar},
-               #'dtau': {'dm':, 'du':, 'dchi':},
-               'dxs': {'dm':array(3), 'dg':, }, #finite-difference
-               'dmt': {'dm':array([3,3]), 'dg':,}, #linear in moment-tensor
+               'xs': {'dm':array(3), 'dg':, }, #finite-difference
+               'mt': {'dm':array([3,3]), 'dg':,}, #linear in moment-tensor
             },
 
         },
 
         <station_id>...
     },
-}
+  }
+
+  Methods:
+    1. setup_event
+    2. setup_station
+    3. setup_window
+    4. measure_window
+    5. window_quality_control (determine bad/OK, and window weight)
+    6. output_adj
+    7. make_cmt_dxs/dmt
+    8. waveform_der_dxs/dmt
+    9. cc_perturbed_seisomgram
+    10. grid_cc
 
   NOTE:
     1. 1D Earth model: ak135
+
   """
 #
 #======================================================
 #
 
   def __init__(self):
-    """Misfit dict
+    """ initialize
     """
-    self.data = {}
+    self.data = {
+        'event':{},
+        'src_frechet':{},
+        'src_perturb':{'t0':1.0, 'tau':1.0},
+        'station':{},
+        'chi':0.0,
+        }
 #
 #======================================================
 #
@@ -186,7 +209,7 @@ self.data = {
 #======================================================
 #
 
-  def setup_event(self, cmt_file, is_ECEF=False, update=False):
+  def setup_event(self, cmt_file, is_ECEF=False):
     """cmt_file (str): CMTSOLUTION format file
     """
     with open(cmt_file, 'r') as f:
@@ -280,19 +303,10 @@ self.data = {
         'header':' '.join(header),
         'longitude':lon, 'latitude':lat, 'depth':dep,
         't0':t0, 'tau':tau,
-        'xs':[x, y, z], 'mt_xyz':mt_xyz, 'mt_rtp':mt_rtp,
+        'xs':[x, y, z], 'mt':mt_xyz, 'mt_rtp':mt_rtp,
         'stat': {'code':0, 'msg':"created on "+UTCDateTime.now().isoformat()}
         }
-
-    data = self.data
-    if 'event' not in data:
-      data['event'] = event
-    elif update:
-      data['event'].update(event)
-      data['event']['stat']['code'] = 1
-      data['event']['stat']['msg'] = "updated on "+UTCDateTime.now().isoformat()
-    else:
-      raise Exception('Event info already existed, not updated.')
+    self.data['event'] = event
 
   #enddef setup_event
 
@@ -304,7 +318,7 @@ self.data = {
       channel_file,
       band_code=None, 
       three_channels=True, 
-      update=False):
+      ):
     """ Setup station metadata.
 
       channel_file (str):
@@ -361,8 +375,7 @@ self.data = {
     event = data['event']
 
     # initialize station dict
-    if 'station' not in data:
-      data['station'] = {}
+    data['station'] = {}
     station = data['station']
 
     # station active time is set to centroid time
@@ -449,20 +462,12 @@ self.data = {
           'ttime': arrivals}
 
       # add station info
-      if station_id not in station:
-        station[station_id] = {
-            'meta': meta,
-            'stat': {
-              'code': 0,
-              'msg': "created on "+UTCDateTime.now().isoformat()} 
-            }
-      elif update:
-        station[station_id]['meta'].update(meta)
-        station[station_id]['stat']['code'] = 1
-        station[station_id]['stat']['msg'] = "updated on "+UTCDateTime.now().isoformat()
-      else:
-        warn_str = "station_id(%s) exists and non-update mode, nothing changed"
-        warnings.warn(warn_str)
+      station[station_id] = {
+          'meta': meta,
+          'stat': {
+            'code': 0,
+            'msg': "created on "+UTCDateTime.now().isoformat()} 
+          }
 
     #endfor net_sta_loc in stations_all:
   #enddef setup_stations_from_channel_file
@@ -664,8 +669,7 @@ self.data = {
       baz = meta['back_azimuth']
 
       # initialize window dict
-      if 'window' not in station:
-        station['window'] = {}
+      station['window'] = {}
       window = station['window']
 
       # loop each window
@@ -1180,10 +1184,10 @@ self.data = {
 
     # record 
     src_frechet = {
-        'dchi_dt0':dchi_dt0,
-        'dchi_dtau':dchi_dtau,
-        'dchi_dxs':dchi_dxs,
-        'dchi_dmt':dchi_dmt,
+        't0':dchi_dt0,
+        'tau':dchi_dtau,
+        'xs':dchi_dxs,
+        'mt':dchi_dmt,
         'stat': {'code':0, 'msg':"created on "+UTCDateTime.now().isoformat()}
         }
 
@@ -1280,13 +1284,13 @@ self.data = {
     event = self.data['event']
     tau = event['tau']
     xs = event['xs']
-    mt = event['mt_xyz']
+    mt = event['mt']
 
     # get perturbed source location
     if 'src_frechet' not in self.data:
       raise Exception('src_frechet not set.')
     src_frechet = self.data['src_frechet']
-    dxs = src_frechet['dchi_dxs']
+    dxs = src_frechet['xs']
     # normalize dxs
     dxs = dxs/(np.sum(dxs**2))**0.5
     # apply given norm 
@@ -1301,7 +1305,7 @@ self.data = {
     # record dxs
     if 'src_perturb' not in self.data:
       self.data['src_perturb'] = {}
-    self.data['src_perturb']['dxs'] = dxs
+    self.data['src_perturb']['xs'] = dxs
 
     # write out new CMTSOLUTION file
     with open(out_file, 'w') as fp:
@@ -1341,7 +1345,7 @@ self.data = {
     t0 = event['t0']
 
     # src_perturb
-    dxs = self.data['src_perturb']['dxs']
+    dxs = self.data['src_perturb']['xs']
 
     station_dict = self.data['station']
     for station_id in station_dict:
@@ -1407,7 +1411,7 @@ self.data = {
       #------ record derivatives
       if 'waveform_der' not in station:
         station['waveform_der'] = {}
-      station['waveform_der']['dxs'] = {
+      station['waveform_der']['xs'] = {
           'dm':dxs, 'dg':dg }
       #'dm':dxs, 'dg':dg, 'du':du, 'dchi':dchi }
 
@@ -1445,7 +1449,7 @@ self.data = {
     event = self.data['event']
     tau = event['tau']
     xs = event['xs']
-    mt = event['mt_xyz']
+    mt = event['mt']
     
     # check parameters
     if ratio_M0 <= 0.0:
@@ -1457,7 +1461,7 @@ self.data = {
       raise Exception('src_frechet not set.')
     src_frechet = self.data['src_frechet']
     # set dmt parallel to dchi_dmt
-    dmt = src_frechet['dchi_dmt']
+    dmt = src_frechet['mt']
     # project dmt perpendicular to M0 change direction
     if fix_M0:
       dmt = dmt - mt*np.sum(dmt*mt)/np.sum(mt**2)
@@ -1472,7 +1476,7 @@ self.data = {
     # record dmt
     if 'src_perturb' not in self.data:
       self.data['src_perturb'] = {}
-    self.data['src_perturb']['dmt'] = dmt
+    self.data['src_perturb']['mt'] = dmt
 
     # write out new CMTSOLUTION file
     with open(out_file, 'w') as fp:
@@ -1511,7 +1515,7 @@ self.data = {
     t0 = event['t0']
 
     # src_perturb
-    dmt = self.data['src_perturb']['dmt']
+    dmt = self.data['src_perturb']['mt']
 
     station_dict = self.data['station']
     for station_id in station_dict:
@@ -1572,7 +1576,7 @@ self.data = {
       #------ record derivatives
       if 'waveform_der' not in station:
         station['waveform_der'] = {}
-      station['waveform_der']['dmt'] = {
+      station['waveform_der']['mt'] = {
           'dm':np.array(dmt), 'dg':dg }
       #'dm':np.array(dmt), 'dg':dg, 'du':du, 'dchi':dchi }
 
@@ -1728,118 +1732,118 @@ self.data = {
 #======================================================
 #
 
-  def update_source(self):
-    """ Update source parameters based on waveform derivatives and hessian
-    """
-    event = self.data['event']
-    src_param = ('dt0','dtau','dxs','dmt')
-    n_srcparam = len(src_param)
+# def update_source(self):
+#   """ Update source parameters based on waveform derivatives and hessian
+#   """
+#   event = self.data['event']
+#   src_param = ('dt0','dtau','dxs','dmt')
+#   n_srcparam = len(src_param)
 
-    dchi_dm = np.zeros(n_srcparam)
-    hessian = np.zeros([n_srcparam,n_srcparam])
+#   dchi_dm = np.zeros(n_srcparam)
+#   hessian = np.zeros([n_srcparam,n_srcparam])
 
-    #------ get dchi_dm and Hessian 
-    #-- loop each station
-    station_dict = self.data['station']
-    for station_id in station_dict:
-      station = station_dict[station_id]
-      # skip rejected statations
-      if station['stat']['code'] < 0:
-        continue
+#   #------ get dchi_dm and Hessian 
+#   #-- loop each station
+#   station_dict = self.data['station']
+#   for station_id in station_dict:
+#     station = station_dict[station_id]
+#     # skip rejected statations
+#     if station['stat']['code'] < 0:
+#       continue
 
-      # dchi_dm
-      for i in range(n_srcparam):
-        key = src_param[i]
-        dchi_dm[i] += station['waveform_der'][key]['dchi']
+#     # dchi_dm
+#     for i in range(n_srcparam):
+#       key = src_param[i]
+#       dchi_dm[i] += station['waveform_der'][key]['dchi']
 
-      #-- loop each window
-      window_dict = station['window']
-      for window_id in window_dict:
-        # window parameters
-        window = window_dict[window_id]
-        # skip bad windows
-        if window['stat']['code'] < 1:
-          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
-          continue
-        # 
-        weight = window['weight']
-        hessian_win = window['hessian_src']
-        for i in range(n_srcparam):
-          for j in range(i, n_srcparam):
-            par1 = src_param[i]
-            par2 = src_param[j]
-            key = (par1,par2)
-            hessian[i,j] += weight * hessian_win[key]
-      #end for window_id in windows:
+#     #-- loop each window
+#     window_dict = station['window']
+#     for window_id in window_dict:
+#       # window parameters
+#       window = window_dict[window_id]
+#       # skip bad windows
+#       if window['stat']['code'] < 1:
+#         warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+#         continue
+#       # 
+#       weight = window['weight']
+#       hessian_win = window['hessian_src']
+#       for i in range(n_srcparam):
+#         for j in range(i, n_srcparam):
+#           par1 = src_param[i]
+#           par2 = src_param[j]
+#           key = (par1,par2)
+#           hessian[i,j] += weight * hessian_win[key]
+#     #end for window_id in windows:
 
-    #end for station_id in station_dict:
+#   #end for station_id in station_dict:
 
-    for i in range(n_srcparam):
-      for j in range(i+1, n_srcparam):
-          hessian[j,i] = hessian[i,j]
+#   for i in range(n_srcparam):
+#     for j in range(i+1, n_srcparam):
+#         hessian[j,i] = hessian[i,j]
 
-    print "dchi_dm:"
-    print dchi_dm 
+#   print "dchi_dm:"
+#   print dchi_dm 
 
-    print "hessian:"
-    print hessian
+#   print "hessian:"
+#   print hessian
 
-    print "====== 0:4:"
-    w, v = np.linalg.eigh(hessian, UPLO='U')
-    print w
-    print v
-    x, residual, rank, sigval = np.linalg.lstsq(hessian, -dchi_dm)
-    print " inv(hessian)*(-1.0 * dchi_dm): \n", x
-    print "dt0: \n", x[0]
-    print "dtau:\n", x[1]
-    print "dxs: \n", x[2]*self.data['src_perturb']['dxs'] 
-    print "dmt: \n", x[3]*self.data['src_perturb']['dmt'] 
+#   print "====== 0:4:"
+#   w, v = np.linalg.eigh(hessian, UPLO='U')
+#   print w
+#   print v
+#   x, residual, rank, sigval = np.linalg.lstsq(hessian, -dchi_dm)
+#   print " inv(hessian)*(-1.0 * dchi_dm): \n", x
+#   print "dt0: \n", x[0]
+#   print "dtau:\n", x[1]
+#   print "dxs: \n", x[2]*self.data['src_perturb']['xs'] 
+#   print "dmt: \n", x[3]*self.data['src_perturb']['mt'] 
 
-    print "====== only 0:3"
-    h3 = hessian[0:3,0:3]
-    v3 = dchi_dm[0:3]
-    w, v = np.linalg.eigh(h3, UPLO='U')
-    print w
-    print v
-    x, residual, rank, sigval = np.linalg.lstsq(h3, -v3)
-    print "inv(hessian)*(-1.0 * dchi_dm): \n", x
-    print "dt0: \n", x[0]
-    print "dtau:\n", x[1]
-    print "dxs: \n", x[2]*self.data['src_perturb']['dxs'] 
-    #print "dmt: \n", x[3]*self.data['src_perturb']['dmt'] 
+#   print "====== only 0:3"
+#   h3 = hessian[0:3,0:3]
+#   v3 = dchi_dm[0:3]
+#   w, v = np.linalg.eigh(h3, UPLO='U')
+#   print w
+#   print v
+#   x, residual, rank, sigval = np.linalg.lstsq(h3, -v3)
+#   print "inv(hessian)*(-1.0 * dchi_dm): \n", x
+#   print "dt0: \n", x[0]
+#   print "dtau:\n", x[1]
+#   print "dxs: \n", x[2]*self.data['src_perturb']['xs'] 
+#   #print "dmt: \n", x[3]*self.data['src_perturb']['dmt'] 
 
-    print "====== only 0:2"
-    h3 = hessian[0:2,0:2]
-    v3 = dchi_dm[0:2]
-    w, v = np.linalg.eigh(h3, UPLO='U')
-    print w
-    print v
-    x, residual, rank, sigval = np.linalg.lstsq(h3, -v3)
-    print "inv(hessian)*(-1.0 * dchi_dm): \n", x
-    print "dt0: \n", x[0]
-    print "dtau:\n", x[1]
+#   print "====== only 0:2"
+#   h3 = hessian[0:2,0:2]
+#   v3 = dchi_dm[0:2]
+#   w, v = np.linalg.eigh(h3, UPLO='U')
+#   print w
+#   print v
+#   x, residual, rank, sigval = np.linalg.lstsq(h3, -v3)
+#   print "inv(hessian)*(-1.0 * dchi_dm): \n", x
+#   print "dt0: \n", x[0]
+#   print "dtau:\n", x[1]
 
-    print "====== only 0,2"
-    idx = [0,2]
-    hess = hessian[idx,:][:,idx]
-    kernel = dchi_dm[idx]
-    print hess
-    eigs, eigv = np.linalg.eigh(hess, UPLO='U')
-    print eigs
-    print eigv
-    x, residual, rank, sigval = np.linalg.lstsq(hess, -kernel)
-    print "inv(hessian)*(-1.0 * dchi_dm): \n", x
-    print "dt0: \n", x[0]
-    print "dxs:\n", x[1]
+#   print "====== only 0,2"
+#   idx = [0,2]
+#   hess = hessian[idx,:][:,idx]
+#   kernel = dchi_dm[idx]
+#   print hess
+#   eigs, eigv = np.linalg.eigh(hess, UPLO='U')
+#   print eigs
+#   print eigv
+#   x, residual, rank, sigval = np.linalg.lstsq(hess, -kernel)
+#   print "inv(hessian)*(-1.0 * dchi_dm): \n", x
+#   print "dt0: \n", x[0]
+#   print "dxs:\n", x[1]
 
-  #enddef measure_windows_for_one_station(self,
+# #enddef measure_windows_for_one_station(self,
 
 #
 #======================================================
 #
 
   def cc_perturbed_seismogram(self,
-      dm={'dt0':None, 'dxs':None},
+      dm={'t0':None, 'xs':None},
       plot=False
       ):
     """ calculate normalized zero-lag cc for perturbed seismograms from linear combination of waveform derivatives
@@ -1869,8 +1873,8 @@ self.data = {
 
     # check parameters
     event = self.data['event']
-    if 'dtau' in dm:
-      tau = dm['dtau'] + event['tau']
+    if 'tau' in dm:
+      tau = dm['tau'] + event['tau']
       if any(tau <= 0):
         error_str = "dm['dtau'] has invalid values (event['tau']=%f)!" \
             % event['tau']
@@ -1892,7 +1896,7 @@ self.data = {
       # check if model parameter included in waveform_der
       waveform_der = station['waveform_der']
       for model_name in dm:
-        if (model_name not in ['dt0', 'dtau']) and \
+        if (model_name not in ['t0', 'tau']) and \
            (model_name not in waveform_der):
           error_str = "%s not in waveform_der of %s" % (model_name, station_id)
           raise Exception(error_str)
@@ -1952,7 +1956,7 @@ self.data = {
         pFdg = {}
         for model_name in dm:
           # exclude source time function
-          if model_name not in ['dt0', 'dtau']:
+          if model_name not in ['t0', 'tau']:
             dg = waveform_der[model_name]['dg']
             dg_filt = signal.lfilter(filter_b, filter_a, dg)
             pFdg[model_name] = np.dot(proj_matrix, dg_filt)
@@ -1963,15 +1967,15 @@ self.data = {
           pFg1 += pFg
           for model_name in dm:
             # exclude source time function
-            if model_name not in ['dt0', 'dtau']:
+            if model_name not in ['t0', 'tau']:
               pFg1 += dm[model_name][idx_model] * pFdg[model_name]
           # perturbed source time function
           dt0 = 0.0
-          if 'dt0' in dm:
-            dt0 = dm['dt0'][idx_model]
+          if 't0' in dm:
+            dt0 = dm['t0'][idx_model]
           dtau = 0.0
-          if 'dtau' in dm:
-            dtau = dm['dtau'][idx_model]
+          if 'tau' in dm:
+            dtau = dm['tau'][idx_model]
           F_src = stf_gauss_spectrum(syn_freq, event['tau']+dtau)
           # perturbed syn: w * S * p * F * g1
           phase_shift = np.exp(-2.0j * np.pi * syn_freq * dt0)
@@ -2032,82 +2036,137 @@ self.data = {
 #======================================================
 #
 
-  def grid2_cc_perturbed_seismogram(self, 
+  def grid_cc_perturbed_seismogram(self,
       dm = {
-        'dt0': np.linspace(-10,0,11), 
-        'dxs': np.linspace(-5,5,11) 
-        }, 
-      plot=False, outfig="cc_perturb_grid2.pdf",
+        't0': np.linspace(-10,0,11), 
+        'xs': np.linspace(-5,5,11) 
+        },
+      axes=[ ('t0','xs'), ('t0',), ('xs',) ],
+      outfig="grid_cc.pdf",
       plot_seism=False
       ):
     """ calculate misfit over 2D model grids based on perturbed seismograms 
     """
     # grid parameters
-    if len(dm) != 2:
-      error_str = "Must have two model parameters in dm !"
-      raise Exception(error_str)
+    model_num = len(dm)
+    model_name = [x for x in dm]
 
-    model_name = []
-    for par in dm:
-      model_name.append(par)
+    # check parameters 
+    for xy in axes:
+      if len(xy) < 1 or len(xy) > 2:
+        error_str = "axes should have one or two elements"
+        raise Exception(error_str)
+      for axis in xy:
+        if axis not in model_name:
+          error_str = "axis(%s) not in dm" % axis
+          raise Exception(error_str)
 
-    x = dm[model_name[0]]
-    y = dm[model_name[1]]
-    nx = len(x)
-    ny = len(y)
+    # model grid
+    x = [np.array(dm[s]) for s in model_name]
+    xx = np.meshgrid(*x, indexing='ij')
+    nn = xx[0].size
 
-    # 2D mesh grid
-    xx, yy = np.meshgrid(x, y, indexing='ij')
-    nxy = xx.size
+    # calculate cc values over all grid points 
+    dm_grid = {}
+    for i in range(model_num):
+      par = model_name[i]
+      dm_grid[par] = xx[i].flatten()
 
-    # calculate cc values on all grid points 
-    dm_all = {
-        model_name[0]: xx.reshape(nxy),
-        model_name[1]: yy.reshape(nxy) }
-    zz, weight = self.cc_perturbed_seismogram(dm=dm_all, plot=plot_seism)
-    zz /= weight # weighted average normalized zero-lag cc
-    zz = zz.reshape((nx,ny))
+    zz, weight = self.cc_perturbed_seismogram(dm=dm_grid, plot=plot_seism)
+    zz /= weight # weighted average of normalized zero-lag CC
+    zz = zz.reshape(xx[0].shape)
 
     # get maximum cc value 
     imax = np.argmax(zz)
-    ij_max = np.unravel_index(imax, (nx,ny))
-    zz_max = zz[ij_max]
+    idx_max = np.unravel_index(imax, xx[0].shape)
+    zz_max = zz[idx_max]
+
+    # plot out results
+    with PdfPages(outfig) as pdf:
+      for xy in axes:
+        # plot 1D section
+        if (len(xy) == 1) or (xy[0] == xy[1]):
+          ix = model_name.index(xy[0])
+          idx = [range(len(v)) for v in x]
+          for i in range(model_num):
+            if i != ix:
+              idx[i] = [idx_max[i],]
+          zz_1d = zz[np.ix_(*idx)].squeeze()
+
+          # plot cross-sections through maximum point
+          fig = plt.figure(figsize=(8.5,11))
+          plt.plot(x[ix], zz_1d, 'ro')
+
+          xlabel_str = "alpha (* d%s)" % model_name[ix]
+          plt.xlabel(xlabel_str)
+          plt.ylabel("weighted avg. CC")
+
+          pdf.savefig()
+          plt.close()
+
+        # plot 2D cross section
+        else:
+          ix = model_name.index(xy[0])
+          iy = model_name.index(xy[1])
+          idx = [range(len(v)) for v in x]
+          print model_name
+          print idx_max
+          print idx
+          for i in range(model_num):
+            if i != ix and i != iy:
+              idx[i] = [idx_max[i],]
+          print idx
+          idx = np.ix_(*idx)
+          zz_2d = zz[idx].squeeze()
+          xx_2d = xx[ix][idx].squeeze()
+          yy_2d = xx[iy][idx].squeeze()
+          if ix > iy:
+            zz_2d = np.transpose(zz_2d)
+            xx_2d = np.transpose(xx_2d)
+            yy_2d = np.transpose(yy_2d)
+          # plot 2D surface through the maximum
+          fig = plt.figure(figsize=(8.5, 11))
+
+          title_str = "average weighted normalized zero-lag CC"
+          plt.title(title_str)
+
+          levels = zz_max * np.linspace(0.5, 1.0, 20)
+          cs = plt.contour(xx_2d, yy_2d, zz_2d, levels, colors='k')
+          plt.clabel(cs, fontsize=9, inline=1)
+
+          x_max = xx[ix][idx_max]
+          y_max = xx[iy][idx_max]
+          text_str = "(%.1f,%.1f)" % (x_max, y_max)
+          plt.text(x_max, y_max, text_str,
+              horizontalalignment="center", verticalalignment="top")
+          plt.plot(x_max, y_max, 'ro')
+
+          xlabel_str = "alpha (* d%s)" % model_name[ix]
+          plt.xlabel(xlabel_str)
+          ylabel_str = "alpha (* d%s)" % model_name[iy]
+          plt.ylabel(ylabel_str)
+
+          pdf.savefig()
+          plt.close()
+
+    # get best model
+    event = self.data['event']
+    src_perturb = self.data['src_perturb']
     
-    # plot
-    if plot:
-      # figure size
-      fig = plt.figure(figsize=(11, 8.5))
-      # plot 2D surface
-      ax = fig.add_axes([0.1, 0.1, 0.35, 0.35])
-      title_str = "average weighted normalized zero-lag CC"
-      ax.set_title(title_str)
-      levels = zz_max * np.linspace(0.5, 1.0, 20)
-      cs = ax.contour(xx, yy, zz, levels, colors='k')
-      plt.clabel(cs, fontsize=9, inline=1)
-      text_str = "(%.1f,%.1f)" % (xx[ij_max], yy[ij_max])
-      ax.text(xx[ij_max], yy[ij_max], text_str,
-          horizontalalignment="center", verticalalignment="top")
-      ax.plot(xx[ij_max], yy[ij_max], 'ro')
+    model = {}
+    for par in dm:
+      m0 = event[par]
+      dm = src_perturb[par]
+      ix = model_name.index(par)
+      alpha = xx[ix][idx_max]
+      model[par] = {
+          'm0':m0, 
+          'dm':dm,
+          'alpha':alpha,
+          'm1':m0+alpha*dm
+          }
 
-      ax.set_xlabel(model_name[0])
-      ax.set_ylabel(model_name[1])
-      
-      # plot cross-sections through maximum point
-      ax = fig.add_axes([0.55, 0.1, 0.35, 0.35])
-      ax.plot(xx[:,ij_max[1]], zz[:,ij_max[1]], 'ro')
-      ax.set_xlabel(model_name[0])
- 
-      ax = fig.add_axes([0.55, 0.55, 0.35, 0.35])
-      ax.plot(yy[ij_max[0],:], zz[ij_max[0],:], 'ro')
-      ax.set_xlabel(model_name[1])
-     
-      if outfig:
-        plt.savefig(outfig, format='pdf')
-      else:
-        plt.show()
-
-    # return 
-    return xx[ij_max], yy[ij_max], zz_max, weight 
+    return model, zz_max, weight
 
 #
 #======================================================

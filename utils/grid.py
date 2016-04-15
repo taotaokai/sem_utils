@@ -18,26 +18,16 @@ misfit = Misfit()
 print "\n====== load data\n"
 misfit.load(filename=misfit_file)
 
-print "\n====== grid2 \n"
-#dm = {
-#    'dt0': np.linspace(-10,0,11),
-#    'dxs': np.linspace(-20,20,11),
-#    }
-#dm = {
-#    'dt0': np.linspace(-10,0,11),
-#    'dtau': np.linspace(-2,10,13),
-#    }
+print "\n====== grid_cc \n"
 dm = {
-    'dt0': np.linspace(-10,0,11),
-    'dmt': np.linspace(-50,50,11),
+    't0': np.linspace(-10,0,11),
+    'tau': np.linspace(-2,5,8),
+    'xs': np.linspace(-10,10,21),
     }
-models = [x for x in dm]
-outfig = "cc_grid2_%s_%s.pdf" % (models[0], models[1])
-xmax, ymax, ccmax, weight = \
-  misfit.grid2_cc_perturbed_seismogram(dm=dm, plot=True, outfig=outfig, 
-      plot_seism=False)
+axes = [ ['tau','xs'], ['tau','t0'], ['t0','xs'] ]
+outfig = "grid_cc.pdf"
 
-print models
-print misfit.data['src_perturb']
+model, ccmax, weight = misfit.grid_cc_perturbed_seismogram(
+    dm=dm, axes=axes, outfig=outfig, plot_seism=False)
 
-print xmax, ymax, ccmax, weight
+print model, ccmax, weight

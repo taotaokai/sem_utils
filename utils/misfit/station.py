@@ -3,17 +3,16 @@
 """Managing misfit windows
 """
 import sys
+import os 
 import warnings
-#import os.path
 import re
 #
 import numpy as np
 import scipy.signal as signal
 #
-import cPickle as pickle 
+import pickle
 #
-from obspy import UTCDateTime, read, Trace
-from obspy.core.util.geodetics import gps2DistAzimuth, kilometer2degrees
+from obspy import UTCDateTime, read, Trace, geodetics
 from obspy.taup import TauPyModel
 from obspy.imaging.beachball import Beach
 #
@@ -64,112 +63,70 @@ def stf_gauss_spectrum(f, tau):
 
 #======
 class Misfit(object):
-  """Class managing all misfit windows
+  """
+  Class managing all misfit windows
 
   Unit: kg,m,s
 
   Coordinate: ECEF cartesian
 
-  Data:
-  {
+  Attributes
+  ----------
+  stat: {code:, msg:},
+  network, station, location, channel[]:{code,az,dip,...}
+  latitude:, longitude:, elevation:, depth:,
+  azimuth:, back_azimuth:, dist_degree:, ttime
 
-    'event': {
-        'stat':{'code':, 'msg':},
-        'id':, # event ID
-        'header':, # have centroid time in it
-        'lattidue':, 'longitude':, 'depth':, 
-        't0':[utcdatetime], # centroid time
-        'tau':, # gaussian width exp(-(t-t0)^2/tau^2)/tau/pi^0.5
-        'xs': [x, y, z], # source location in ECEF coordinate
-        'mt':, # moment tensor in ECEF coord
-        'mt_rtp':}, # moment tensor in spherical coord
+  simulation_t0, simulation_delta, simulation_npts
 
-    'src_frechet': { #derivative of misfit function w.r.t. source param.
-        'stat':{'code':, 'msg':},
-        't0':, 'dau':, 'xs':, 'mt':},
-
-    'src_perturb': {'t0':1.0, 'tau':1.0, 'xs':, 'mt':, },
-
-    'chi': # weighted average of normalized zero-lag CC
-
-    'station': {
-
-        <station_id> : {
-            'stat': {code:, msg:},
-            'meta': {
-                latitude:, longitude:, elevation:, depth:,
-                azimuth:, back_azimuth:, dist_degree:,
-                'channel': [ {code,az,dip,...}, ...]
-                'ttime':
-            },
-
-            'waveform': {
-                'time_sample': {starttime:, delta:, nt:, nl:, nr},
-                'obs': array([3,nt]), # observed seismograms
-                'grf': array([3,nt], # green's function
-                #'syn': 3 x nt (u), # synthetic seismograms (grf convolve stf)
-            },
-
-            'window': {
-                <window_id>: {
-                    'stat': {code:, msg:}, 
-                    #bad:<0, ok:0, measured adj:1, and hessian_src:2
-
-                    'filter': {'type':,'order':,'freqlim':,'a':,'b':},
-                    'taper': {
-                        'starttime':, 'endtime':,
-                        'type':, 'ratio':, 'win':array(nt) }, 
-                    'polarity': {
-                        'component':, 'azimuth':, 'dip':,
-                        'proj_matrix':array([3,3]) },
-
-                    'quality': {
-                        'Amax_obs':, 'Amax_noise':, 'Amax_syn':, 'SNR':, },
-                    'cc': {'time':, 'cc':, 'cc_tshift': 
-                        'CC0':, 'CCmax':, 'AR0':, 'ARmax':},
-                    'weight':,
-
-                    #'dchi_du':, # adjoint source from this window
-                    #'dchi_dg':,
-
-                    'hessian_src':{ # approximated Hessian of chi to source
-                        ('dt0','dt0'):,
-                        ('dtau','dtau'):,
-                        ('dxs','dxs'):,
-                        ...
-                    },
-                },
-                <window_id>...
-            },
-
-            #'dchi_du': array([3,nt]), #chi: misfit function
-            'dchi_dg': array([3,nt]), #conj(stf)*dchi_du
-
-            'waveform_der': {
-               'xs': {'dm':array(3), 'dg':, }, #finite-difference
-               'mt': {'dm':array([3,3]), 'dg':,}, #linear in moment-tensor
-            },
-
-        },
-
-        <station_id>...
-    },
+  class Waveform {
+    sampling_rate': # uniform data sampling rate
+    obs_starttime':, 'obs': (3,:), # observed data 
+    grf_t0':, # begin time, impulsive source is at zero time
+    grf': (3,:), # synthetic green's function
+    # used for adjoint source output
   }
 
-  Methods:
-    1. setup_event
-    2. setup_station
-    3. setup_window
-    4. measure_window
-    5. window_quality_control (determine bad/OK, and window weight)
-    6. output_adj
-    7. make_cmt_dxs/dmt
-    8. waveform_der_dxs/dmt
-    9. cc_perturbed_seisomgram
-    10. grid_cc
+  (class Waveform): obs, green, green_derivative
+  (class Waveform) green_derivative:{
+     'xs': {'dm':array(3), 'dg':, }, #finite-difference
+     'mt': {'dm':array([3,3]), 'dg':,}, #linear in moment-tensor
+  },
 
-  NOTE:
-    1. 1D Earth model: ak135
+  class Window[] {
+    status: {code:, msg:}, #bad:<0, ok:0, measured adj:1, and hessian_src:2
+    code,
+    filter, filter_order, filter_flo, filter_fhi,
+    starttime, endtime,
+    taper, taper_percentage,
+    component, azimuth, dip,
+    proj_matrix,
+    'quality': { 'Amax_obs':, 'Amax_noise':, 'Amax_syn':, 'SNR':, },
+    'cc': {'time':, 'cc':, 'cc_tshift': 'CC0':, 'CCmax':, 'AR0':, 'ARmax':},
+    'weight':, }
+    }
+  }
+
+  Methods
+  -------
+  setup_event
+  setup_station
+  read_observed_data:
+      - seismograms are resampled to sampling_rate, with 0.8*nyq low-pass filter
+  read_sythetic_green:
+      - 0.8*nyq low-pass filter before resampling
+  setup_window
+  measure_window
+  make_adjoint_source
+  window_quality_control (determine bad/OK, and window weight)
+  make_cmt_dxs/dmt
+  waveform_der_dxs/dmt
+  cc_perturbed_seisomgram
+  grid_cc
+
+  NOTE
+  ----
+  1D Earth model: ak135
 
   """
 #
@@ -177,433 +134,102 @@ class Misfit(object):
 #
 
   def __init__(self):
-    """ initialize
-    """
-    self.data = {
-        'event':{},
-        'src_frechet':{},
-        'src_perturb':{'t0':1.0, 'tau':1.0},
-        'station':{},
-        'chi':0.0,
-        }
-#
-#======================================================
-#
-
-  def save(self, filename='misfit.pkl'):
-    """Save data
-    """
-    # use highest protocol available 
-    with open(filename, 'wb') as fp:
-      pickle.dump(self.data, fp, -1)
-#
-#======================================================
-#
-
-  def load(self, filename='misfit.pkl'):
-    """Load data
-    """
-    with open(filename, 'rb') as fp:
-      self.data = pickle.load(fp)
-#
-#======================================================
-#
-
-  def setup_event(self, cmt_file, is_ECEF=False):
-    """cmt_file (str): CMTSOLUTION format file
-    """
-    with open(cmt_file, 'r') as f:
-      lines = [ x for x in f.readlines() if not(x.startswith('#')) ]
-
-    header = lines[0].split()
-    year   = header[1]
-    month  = header[2]
-    day    = header[3]
-    hour   = header[4]
-    minute = header[5]
-    second = header[6]
-
-    lines = [x.split(":") for x in lines]
-    event_id = lines[1][1].strip()
-    time_shift = float(lines[2][1])
-
-    # initialize pyproj objects
-    geod = pyproj.Geod(ellps='WGS84')
-    ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
-    lla = pyproj.Proj(proj='latlong', ellps='WGS84', datum='WGS84')
-
-    if is_ECEF:
-      tau = float(lines[3][1])
-      x   = float(lines[4][1])
-      y   = float(lines[5][1])
-      z   = float(lines[6][1])
-      # convert from ECEF(meters) to lla
-      lon, lat, alt = pyproj.transform(ecef, lla, x, y, z)
-      dep = -alt / 1000.0
-    else:
-      tau = float(lines[3][1]) / 1.628 # mimic triangle with gaussian
-      lat = float(lines[4][1])
-      lon = float(lines[5][1])
-      dep = float(lines[6][1])
-      # convert from lla to ECEF(meters)
-      alt = -1000.0 * dep #NOTE ignore local topography
-      x, y, z = pyproj.transform(lla, ecef, lon, lat, alt)
-
-    # centroid time: t0
-    isotime = '{:s}-{:s}-{:s}T{:s}:{:s}:{:s}Z'.format(
-        year, month, day, hour, minute, second)
-    t0 = UTCDateTime(isotime) + time_shift
-    # modify origin time in header line to have centroid time 
-    header[1] = str(t0.year)
-    header[2] = str(t0.month)
-    header[3] = str(t0.day)
-    header[4] = str(t0.hour)
-    header[5] = str(t0.minute)
-    header[6] = str(t0.second + 1.0e-6*t0.microsecond)
-
-    # moment tensor
-    # is_ECEF=false: 1,2,3 -> r,theta,phi
-    # is_ECEF=true:  1,2,3 -> x,y,z
-    m11 = float( lines[7][1])
-    m22 = float( lines[8][1])
-    m33 = float( lines[9][1])
-    m12 = float(lines[10][1])
-    m13 = float(lines[11][1])
-    m23 = float(lines[12][1])
-    mt = np.array([[m11, m12, m13], [m12, m22, m23], [m13, m23, m33]])
-    # transform from spherical to cartesian coordinate
-    r = (x**2 + y**2 + z**2)**0.5
-    theta = np.arccos(z/r)
-    phi = np.arctan2(y, x)
-    # rotation matrix
-    sthe = np.sin(theta)
-    cthe = np.cos(theta)
-    sphi = np.sin(phi)
-    cphi = np.cos(phi)
-    # D(x,y,z)/D(r,t,p): rtp -> xyz 
-    a = np.array(
-        [ [ sthe*cphi, cthe*cphi, -1.0*sphi ],
-          [ sthe*sphi, cthe*sphi,      cphi ],
-          [ cthe     , -1.0*sthe,      0.0  ] ])
-    if is_ECEF:
-      mt_xyz = mt
-      mt_rtp = np.dot(np.dot(np.transpose(a), mt), a)
-    else: # spherical coordinate
-      a = np.array(
-          [ [ sthe*cphi, cthe*cphi, -1.0*sphi ],
-            [ sthe*sphi, cthe*sphi,      cphi ],
-            [ cthe     , -1.0*sthe,      0.0  ] ])
-      # harvard cmt use dyn*cm, change to N*m
-      mt_rtp = mt*1.0e-7
-      mt_xyz = np.dot(np.dot(a, mt), np.transpose(a))
-
-    # add event
-    event = {
-        'id':event_id,
-        'header':' '.join(header),
-        'longitude':lon, 'latitude':lat, 'depth':dep,
-        't0':t0, 'tau':tau,
-        'xs':[x, y, z], 'mt':mt_xyz, 'mt_rtp':mt_rtp,
-        'stat': {'code':0, 'msg':"created on "+UTCDateTime.now().isoformat()}
-        }
-    self.data['event'] = event
-
-  #enddef setup_event
+    self.network = ""
+    self.station = ""
+    self.location = ""
+    self.channels = []
+    self.latitude = 0.0
+    self.longitude = 0.0
+    self.elevation = 0.0
+    self.depth = 0.0
+    self.azimuth = 0.0
+    self.back_azimuth = 0.0
+    self.dist_degree = 0.0
+    self.waveforms = []
 
 #
 #======================================================
 #
 
-  def setup_station(self,
-      channel_file,
-      band_code=None, 
-      three_channels=True, 
+  def read_observed_data(self,
+      data_dir,
+      before_first_arrival=200.0,
+      after_first_arrival=500.0,
+      sampling_rate=1.0,
       ):
-    """ Setup station metadata.
-
-      channel_file (str):
-        FDSN-station text format file at channel level
-      event_id_list (list): 
-        list of event ID's to which stations are added [default: None]
-        default to all events.
-      band_code (str):
-        instrument/band code [default: None]
-      three_channels (bool):
-        check for completeness of 3 channels [default: False]
-
-      Note: 
-      1) only use stations which have the same lat/lon/ele/depth 
-        in all the available channels.
-      2) gcmt info must be set first.
     """
-    # initiate taup
-    taup_model = TauPyModel(model="ak135")
-
-    # read station file
-    with open(channel_file, 'r') as f:
-      lines = [x.replace('\n','').split('|')  \
-          for x in f.readlines() if not(x.startswith('#'))]
+    Read in recorded seismograms.
     
-    # get all station metadata
-    metadata = {}
-    for x in lines:
-      net_sta_loc = (x[0], x[1], x[2])
-      date1 = [ int(a) for a in re.sub("\D", " ", x[15]).split() ]
-      date2 = [ int(a) for a in re.sub("\D", " ", x[16]).split() ]
-      t1 = UTCDateTime(date1[0], date1[1], date1[2]) \
-          + 60.0*(60.0*date1[3] + date1[4]) + date1[5]
-      t2 = UTCDateTime(date2[0], date2[1], date2[2]) \
-          + 60.0*(60.0*date2[3] + date2[4]) + date2[5]
-      channel = {
-          'code':    x[3],
-          'latitude':  float(x[4]),
-          'longitude':   float(x[5]),
-          'elevation':   float(x[6]),
-          'depth':     float(x[7]),
-          'azimuth':   float(x[8]),
-          'dip':     float(x[9]),
-          'starttime':   t1,
-          'endtime':   t2}
-      if net_sta_loc not in metadata:
-        metadata[net_sta_loc] = []
-      metadata[net_sta_loc].append(channel)
+    Parameters
+    ----------
+    data_dir : string
+        directory of input files
 
-    # check if event info is set 
-    data = self.data
-    if ('event' not in data) or (data['event']['stat']['code'] < 0):
-      raise Exception('Event info not set.')
-    event = data['event']
+    before_first_arrival : scalar, optional
+        data must begin before this time relative to the first arrival
 
-    # initialize station dict
-    data['station'] = {}
-    station = data['station']
+    after_first_arrival : scalar, optional
+        data must end after this time
 
-    # station active time is set to centroid time
-    # used to filter channel list
-    active_time = event['t0']
-
-    for net_sta_loc in metadata:
-      # station_id: net.sta.loc
-      station_id = '.'.join(net_sta_loc)
-
-      # skip existing stations if not update
-      if (station_id in station) and (not update):
-        raise Exception('station %s already exist' % (station_id))
-
-      # select channels which are active at the specified time 
-      channel = [ x for x in metadata[net_sta_loc] 
-          if x['starttime'] < active_time and x['endtime'] > active_time ]
-
-      # select band code (e.g. BH )
-      if band_code:
-        n = len(band_code)
-        channel = [ x for x in channel if x['code'][0:n]==band_code ]
-
-      # check if all selected channels have the same location
-      lats = [ x['latitude'] for x in channel ]
-      lons = [ x['longitude'] for x in channel ]
-      eles = [ x['elevation'] for x in channel ]
-      deps = [ x['depth'] for x in channel ]
-      if lats.count(lats[0])!=len(lats) or \
-          lons.count(lons[0])!=len(lons) or \
-          eles.count(eles[0])!=len(eles) or \
-          deps.count(deps[0])!=len(deps):
-        print "[WARNING] %s: " \
-          "channels do NOT have the same coordinates, SKIP." \
-          % (station_id)
-        continue
-
-      # check completeness for 3-components
-      if three_channels:
-        if len(channel) != 3:
-          print '[WARNING] %s: not exactly 3 components found, '\
-            'SKIP.' % (station_id)
-          continue
-        # check channel orientations
-        Z_comp = [ (x['code'], x['azimuth'], x['dip'])
-            for x in channel if x['code'][2] == 'Z']
-        if len(Z_comp) != 1 or abs(Z_comp[0][2]) != 90.0: 
-          print '[WARNING] %s: problematic Z channel, SKIP' \
-              % (station_id)
-          print '      channel: ', H_comp
-          continue
-        H_comp = [ (x['code'], x['azimuth'], x['dip']) \
-            for x in channel if x['code'][2] != 'Z']
-        if len(H_comp) != 2 or \
-            abs(H_comp[0][2]) != 0.0 or \
-            abs(H_comp[1][2]) != 0.0 or \
-            abs(np.cos(np.deg2rad(
-              H_comp[0][1] - H_comp[1][1]))) > 0.1: 
-          print '[WARNING] %s: problematic horizontal channels, SKIP'\
-              % (station_id)
-          print '      channel: ', H_comp
-          continue
-
-      # geodetic and ak135 traveltimes
-      dist, az, baz = gps2DistAzimuth(
-          event['latitude'], event['longitude'],
-          channel[0]['latitude'], channel[0]['longitude'])
-      dist_degree = kilometer2degrees(dist/1000.0)
-
-      arrivals = taup_model.get_travel_times(
-          source_depth_in_km=event['depth'],
-          distance_in_degree=dist_degree)
-
-      # make station metadata 
-      meta = { #TODO remove dumplicated info in channels?
-          'latitude': channel[0]['latitude'], 
-          'longitude': channel[0]['longitude'],
-          'elevation': channel[0]['elevation'],
-          'depth': channel[0]['depth'],
-          'channel': channel,
-          'azimuth': az,
-          'back_azimuth': baz,
-          'dist_degree': dist_degree,
-          'ttime': arrivals}
-
-      # add station info
-      station[station_id] = {
-          'meta': meta,
-          'waveform':{},
-          'window':{},
-          'waveform_der':{},
-          'stat': {
-            'code': 0,
-            'msg': "created on "+UTCDateTime.now().isoformat()} 
-          }
-
-    #endfor net_sta_loc in stations_all:
-  #enddef setup_stations_from_channel_file
-
-#
-#======================================================
-#
-
-  def read_obs_grf(self,
-      obs_dir='obs',
-      syn_dir='syn', syn_band_code='MX', syn_suffix='.sem.sac',
-      left_pad=100, right_pad=0, obs_preevent=100):
-    """ read in observed seismograms and synthetic Green's functions.
-    Note:
-      1) left_pad: time length to pad before synthetics 
-        right_pad: time length to pad after synthetics 
-        obs_pretime: pre-event time length of obs (for noise assessment)
-      2) use delta STF in simulation to approximate green's function
     """
-    syn_orientation_codes = ['E', 'N', 'Z']
+    #------ check parameters
+    if not os.path.isdir(data_dir):
+      err = "data_dir(%s) does not exist!" % data_dir
+      raise Exception(err)
 
+    #------ loop each station
+    sampling_rate = self.data['sampling_rate']
+    nyq = 0.5*sampling_rate
     event = self.data['event']
     station_dict = self.data['station']
-
-    if left_pad < 0:
-      warnings.warn("[arg] left_pad must g.e. 0, set to 0.0")
-      left_pad = 0
-    if right_pad < 0:
-      right_pad = 0
-      warnings.warn("[arg] right_pad must g.e. 0, set to 0.0")
-    if obs_preevent < 0:
-      obs_preevent = 50.0
-      warnings.warn("[arg] obs_preevent must g.e. 0, set to 50")
-
+    #
     for station_id in station_dict:
       station = station_dict[station_id]
       meta = station['meta']
       channel = meta['channel']
- 
-      #------ get file paths of obs, syn seismograms
-      obs_files = [ '{:s}/{:s}.{:s}'.format(
-        obs_dir, station_id, x['code']) for x in channel ]
-      syn_files = [ '{:s}/{:s}.{:2s}{:1s}{:s}'.format(
-        syn_dir, station_id, syn_band_code, x, syn_suffix)
-        for x in syn_orientation_codes ]
-
-      #------ read in obs, syn seismograms
+      #---- read in seismograms
+      file_path = [ '{:s}/{:s}.{:s}'.format(
+        data_dir, '.'.join(station_id), x['code']) for x in channel ]
       try:
-        obs_st  = read(obs_files[0])
-        obs_st += read(obs_files[1])
-        obs_st += read(obs_files[2])
-        syn_st  = read(syn_files[0])
-        syn_st += read(syn_files[1])
-        syn_st += read(syn_files[2])
+        st  = read(file_path[0])
+        st += read(file_path[1])
+        st += read(file_path[2])
       except Exception as e:
-        warn_str = "failed to read in sac files for %s, SKIP (%s)" \
-            % (station_id, sys.exc_info()[0])
-        warnings.warn(warn_str, UserWarning)
-        print e
-        station['stat']['code'] = -1
-        station['stat']['msg'] = "failed to read in sac files [%s]" \
-            % UTCDateTime.now().isoformat()
+        warn = "Error reading files: %s" % (str(station_id))
+        warnings.warn(warn)
+        print(e)
+        del station_dict[statoin_id]
         continue
-
-      #------ get time samples of syn seismograms
-      if not is_equal( [ (tr.stats.starttime, tr.stats.delta, tr.stats.npts) \
-          for tr in syn_st ] ):
-        raise Exception('%s not equal time samples in'\
-            ' synthetic seismograms.' % (station_id))
-      tr = syn_st[0]
-      syn_delta = tr.stats.delta
-      syn_npts = tr.stats.npts
-      # padding
-      nl = int(left_pad/syn_delta)
-      nr = int(right_pad/syn_delta)
-      nt = syn_npts + nl + nr
-      # ENZ_syn
-      syn_starttime = tr.stats.starttime - nl * syn_delta
-      syn_endtime = syn_starttime + (nt-1)*syn_delta
-      syn_times = np.arange(nt) * syn_delta
-      syn_ENZ = np.zeros((3, nt))
+      #---- check time range
+      obs_starttime = max([st[i].stats.starttime for i in range(3)])
+      obs_endtime = min([st[i].stats.endtime for i in range(3)])
+      first_arrtime = event['t0'] + meta['ttime'][0].time
+      data_starttime = first_arrtime - before_first_arrival 
+      data_endtime = first_arrtime + after_first_arrival
+      if obs_starttime > data_starttime or obs_endtime < data_endtime:
+        warn = "%s: record does not cover the required time range \
+            (%s, %s), SKIP" \
+            % (file_path[i], data_starttime, data_endtime)
+        warnings.warn(warn)
+        #del station_dict[statoin_id]
+        continue
+      #---- resample the seismograms
+      # anti-aliasing low-pass filter below nyquist frequency
+      if sampling_rate < st[0].stats.sampling_rate:
+        st.filter('lowpass', freq=0.8*nyq, corners=10, zerophase=True)
+      # interpolation: windowed sinc reconstruction
+      nt = int((data_endtime - data_starttime) * sampling_rate)
+      ts = np.arange(nt)/sampling_rate
+      ENZ = np.zeros((3, nt))
       for i in range(3):
-        syn_ENZ[i,nl:(nl+syn_npts)] = syn_st[i].data
-
-      #------ interpolate obs into the same time samples of syn
-      obs_ENZ = np.zeros((3, nt))
-      syn_nyq = 0.5/syn_delta
-      flag = True
-      for i in range(3):
-        tr = obs_st[i]
-        obs_npts = tr.stats.npts
-        obs_delta = tr.stats.delta
-        obs_starttime = tr.stats.starttime
-        obs_endtime = tr.stats.endtime
-        # check if obs has enough pre-event records
-        first_arrtime = event['t0'] + meta['ttime'][0].time
-        obs_tmin = first_arrtime - obs_preevent
-        if obs_starttime > obs_tmin or obs_endtime < syn_endtime:
-          flag = False
-          warn_str = "%s: record not long enough, SKIP %s" \
-              % (obs_files[i], station_id)
-          warnings.warn(warn_str)
-          print obs_starttime, obs_endtime 
-          print obs_tmin, syn_endtime 
-          station['stat']['code'] = -1
-          station['stat']['msg'] = "%s [%s]" \
-              % (warn_str, UTCDateTime.now().isoformat())
-          break
-
+        time_shift = data_starttime - st[i].stats.starttime
+        ENZ[i,:] = lanczos_interp1( st[i].data, st[i].stats.delta, 
+            ts + time_shift, na=20)
         #DEBUG
-        #print station_id, obs_files[i]
-        #obs_times = (obs_starttime-syn_starttime) + np.arange(obs_npts)*obs_delta
-        #plt.plot(obs_times, tr.data, 'k')
-
-        # lowpass below the nyquist frequency of synthetics
-        # repeat twice to avoid numerical inaccuries
-        tr.detrend(type='linear')
-        tr.detrend(type='linear')
-        # repeat lowpass filter twice to make sharper edge
-        tr.filter('lowpass', freq=0.8*syn_nyq, corners=10, zerophase=True)
-        tr.filter('lowpass', freq=0.8*syn_nyq, corners=10, zerophase=True)
-        # interpolation: windowed sinc reconstruction
-        obs_ENZ[i,:] = lanczos_interp1(tr.data, obs_delta,
-            syn_times+(syn_starttime-obs_starttime), na=20)
-
-        #DEBUG
-        #plt.plot(obs_times, tr.data, 'r')
-        ##plt.plot(syn_times, obs_ENZ[i,:], 'r')
+        #tr = st[i]
+        #plt.plot(tr.times(), tr.data, 'k')
+        #plt.plot(ts, ENZ[i,:], 'r')
         #plt.show()
-
-      # if bad data, skip this station
-      if not flag:
-        continue
 
       #------ rotate obs to ENZ
       # projection matrix: obs = proj * ENZ => ENZ = inv(proj) * obs
@@ -620,24 +246,101 @@ class Misfit(object):
         proj_matrix[i,2] = -sin_dip     # proj to Z
       # inverse projection matrix: ENZ = inv(proj) * obs
       inv_proj = np.linalg.inv(proj_matrix)
-      obs_ENZ = np.dot(inv_proj, obs_ENZ)
+      ENZ = np.dot(inv_proj, ENZ)
 
       #------ record data 
       if 'waveform' not in station:
         station['waveform'] = {}
       waveform = station['waveform']
-      waveform['time_sample'] = {
-          'starttime': syn_starttime, 'delta': syn_delta,
-          'nt': nt, 'nl': nl, 'nr': nr }
-      waveform['obs'] = obs_ENZ
-      waveform['grf'] = syn_ENZ
+      waveform['obs_starttime'] = obs_starttime
+      waveform['obs'] = ENZ
 
       station['stat']['code'] = 0
-      station['stat']['msg'] = "read_obs_grf OK [%s]" \
+      station['stat']['msg'] = "read_observed_data OK [%s]" \
           % (UTCDateTime.now().isoformat())
 
     #endfor station_id in station_dict:
-  #enddef read_obs_grf
+  #enddef read_observed_data
+
+
+#
+#======================================================
+#
+
+  def read_synthetic_green(self, data_dir,
+      band_code="MX", suffix=".sem.sac"):
+    """
+    Read in synthetic Green's functions.
+
+    NOTE
+    ----
+    assume sac files and tr.stats.sac['b'] is the time before the origin time
+    of the pulsive source.
+
+    """
+    orientation_codes = ['E', 'N', 'Z']
+    event = self.data['event']
+    station_dict = self.data['station']
+    sampling_rate = self.data['sampling_rate']
+    nyq = 0.5/sampling_rate
+
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      meta = station['meta']
+      channel = meta['channel']
+      waveform = station['waveform']
+
+      #------ read in seismograms
+      file_path = [ '{:s}/{:s}.{:2s}{:1s}{:s}'.format(
+        data_dir, '.'.join(station_id), band_code, x, suffix)
+        for x in orientation_codes ]
+      try:
+        st  = read(file_path[0])
+        st += read(file_path[1])
+        st += read(file_path[2])
+      except Exception as e:
+        warn_str = "failed to read in file %s, SKIP (%s)" \
+            % (station_id, sys.exc_info()[0])
+        warnings.warn(warn_str, UserWarning)
+        print(e)
+        station['stat']['code'] = -1
+        station['stat']['msg'] = "failed to read in synthetic data [%s]" \
+            % UTCDateTime.now().isoformat()
+        continue
+
+      #------ resample data
+      # check if same times in all 3 components
+      syn_meta = [ ( tr.stats.sac['b'], tr.stats.starttime, tr.stats.delta, 
+                     tr.stats.npts) for tr in st ]
+      if not is_equal(syn_meta):
+        err = "not equal time samples in synthetics: %s" % (str(station_id))
+        raise Exception(err)
+      # anti-aliasing filter: lowpass below the nyquist frequency of synthetics
+      if sampling_rate < st[0].stats.sampling_rate:
+        st.filter('lowpass', freq=0.8*nyq, corners=10, zerophase=True)
+      # resample
+      syn_t0 = st[0].stats.sac['b']
+      syn_delta = st[0].stats.delta
+      syn_npts = st[0].stats.npts
+      nt = int(syn_npts * syn_delta * sampling_rate)
+      ts = np.arange(nt)/sampling_rate
+      ENZ = np.zeros((3, nt))
+      for i in range(3):
+        ENZ[i,:] = lanczos_interp1(st[i].data, syn_delta, ts, na=20)
+
+      #------ record data
+      waveform['simulation_delta'] = syn_delta
+      waveform['simulation_npts'] = syn_npts
+
+      waveform['grf_t0'] = syn_t0
+      waveform['grf'] = ENZ
+
+      station['stat']['code'] = 0
+      station['stat']['msg'] = "read_synthetic_green OK [%s]" \
+          % (UTCDateTime.now().isoformat())
+
+    #endfor station_id in station_dict:
+  #enddef read_synthetic_green
 
 #
 #======================================================
@@ -681,7 +384,7 @@ class Misfit(object):
         phase = win[1]
         signal_begin = float(win[2][0])
         signal_end = float(win[2][1])
-        window_id = "%s.%s" % (comp, phase)
+        window_id = (comp, phase)
 
         # window time range
         phase_list = phase.split(',')
@@ -695,8 +398,8 @@ class Misfit(object):
           #print "[INFO] phase %s: min(ttime)=%f, ref_time=%s" \
           #    % (phase, min(ttime), ref_time)
         else:
-          print "[INFO] phase %s not found, use event origin time=%s" \
-              % (phase, ref_time)
+          print("[INFO] phase %s not found, use event origin time=%s" \
+              % (phase, ref_time))
         starttime = ref_time + signal_begin
         endtime = ref_time + signal_end
         taper_dict = {'type':taper_param[0], 'ratio':taper_param[1],
@@ -719,7 +422,7 @@ class Misfit(object):
           cmpaz = float('nan')
           cmpdip = float('nan')
         else:
-          print "[WARN] %s: unrecognized component, SKIP." % (comp)
+          print("[WARN] %s: unrecognized component, SKIP." % (comp))
           continue
         polarity_dict = {'component':comp, 'azimuth': cmpaz, 'dip': cmpdip }
 
@@ -732,8 +435,8 @@ class Misfit(object):
           'taper': taper_dict,
           'polarity': polarity_dict }
 
-      #endfor win in window_list:
-    #endfor station_id, station in station_dict.iteritems():
+      #endfor window_id in window_dict:
+    #endfor station_id in station_dict:
 
   #enddef setup_windows
 
@@ -741,7 +444,46 @@ class Misfit(object):
 #======================================================
 #
 
-  def measure_adj(self,
+  def _synthetic(self, station_id, t0=None, tau=None):
+    """
+    Make synthetic seismograms by convolving green's function with source time function
+
+    Parameters
+    ----------
+    station_id : (net,sta,loc)
+      
+    t0 : scalar, optional
+      centroid time relative to event['t0']
+
+    tau : scalar, optional
+      Gaussian width of source time function
+
+    Return
+    ------
+    syn : (3,:)
+      synthetic seismograms on the same time samples of observed data
+
+    """
+    event = self.data['event']
+    station = self.data['station'][station_id]
+    sampling_rate = self.data['sampling_rate']
+
+    waveform = station['waveform']
+
+    obs_t0 = waveform['obs_t0']
+    obs = waveform['obs']
+    grf_t0 = waveform['grf_t0']
+    grf = waveform['grf']
+
+    if not stf_t0:
+      stf_t0 = event['t0']
+
+#
+#======================================================
+#
+
+
+  def measure_window(self,
       plot=False,
       cc_delta=0.01, 
       weight_param={
@@ -749,55 +491,107 @@ class Misfit(object):
         'CC0':[0.5,0.7], 
         'CCmax':None}
       ):
-    """ calculate adjoint sources (dchi_du)
-        chi: misfit functional (normalized zero-lag correlation coef.)
-        u: synthetic waveform
-        weight_param: SNR, CCmax, CC0
+    """ 
+    Measure the data misfit in the selected windows
+
+    Parameters
+    ----------
+    weight_param: SNR, CCmax, CC0
+
+    chi: misfit functional (normalized zero-lag correlation coef.)
+    u: synthetic waveform
+
     """
-    #------
     event = self.data['event']
+    sampling_rate = self.data['sampling_rate']
+    delta = 1.0/sampling_rate
+    nyq = 0.5*sampling_rate
+
+    #------ loop each station
     station_dict = self.data['station']
-
-    # loop each station
     for station_id in station_dict:
-
       station = station_dict[station_id]
       # skip rejected statations
       if station['stat']['code'] < 0:
         continue
-
+      
       meta = station['meta']
-      window_dict = station['window']
-
       waveform = station['waveform']
-      time_sample = waveform['time_sample']
-      syn_starttime = time_sample['starttime']
-      syn_delta = time_sample['delta']
-      syn_nyq = 0.5/syn_delta
-      syn_nt = time_sample['nt']
-      syn_nl = time_sample['nl']
-      syn_nr = time_sample['nr']
-      syn_times = syn_delta * np.arange(syn_nt)
-
+      obs_starttime = waveform['obs_starttime']
       obs = waveform['obs']
+      obs_npts = obs.shape[1]
+      obs_times = np.arange(obs_npts)/sampling_rate
+
+      #---- get synthetics
+      grf_t0 = waveform['grf_t0']
       grf = waveform['grf']
+      grf_npts = grf.shape[1]
+      # source spectrum
+      grf_freq = np.fft.rfftfreq(grf_npts, d=delta)
+      src_spectrum = stf_gauss_spectrum(grf_freq, event['tau'])
+      # align time samples between obs and syn
+      n_shift = ((obs_starttime - event['t0']) - grf_t0)*sampling_rate
+      dn_shift = n_shift - int(n_shift)
+      ph_shift = np.exp(2.0j*np.pi*grf_freq*dn_shift*delta)
+      # convolve STF
+      x = np.fft.irfft(src_spectrum*np.fft.rfft(grf)*ph_shift, grf_npts)
+      syn = np.zeros(obs.shape)
+      n_shift = int(n_shift)
+      n_last = grf_npts - n_shift
+      print(n_last, n_shift)
+      if n_last > obs_npts:
+        n_last = obs_npts
+        warn = "synthetic is longer than obs"
+        warnings.warn(warn)
+      syn[:,0:n_last] = x[:, n_shift:(n_shift+n_last)]
+      syn_endtime = obs_starttime + (n_last - 1)*delta
 
-      # source spectrum (moment-rate function)
-      syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
-      F_src = stf_gauss_spectrum(syn_freq, event['tau'])
-
-      #------ loop each window
-      dchi_du = np.zeros((3, syn_nt))
-      dchi_dg = np.zeros((3, syn_nt))
-      win_func = np.zeros(syn_nt)
+      #---- loop each window
+      dchi_dg = np.zeros((3, obs_npts))
+      win_func = np.zeros(obs_npts)
       proj_matrix = np.zeros((3,3))
-      cc = np.zeros(2*syn_nt-1)
+      cc = np.zeros(2*obs_npts-1)
+
+      window_dict = station['window']
       for window_id in window_dict:
         # window parameters
         window = window_dict[window_id]
         # skip bad windows
         if window['stat']['code'] < 0:
           continue
+
+        #------ taper
+        taper = window['taper']
+        taper_type = taper['type']
+        taper_ratio = taper['ratio']
+        # time range
+        window_starttime = taper['starttime']
+        window_endtime = taper['endtime']
+        # check window time range inside syn time
+        if window_endtime > (syn_endtime - 2.0*event['tau']):
+          warn = "%s|%s|windwo_endtime(%s) > syn_endtime(%s)-2.0*(%f), SKIP" \
+              % (station_id, window_id, window_endtime, syn_endtime, event['tau'])
+          warnings.warn(warn)
+          window['stat']['code'] = -1
+          window['stat']['msg'] = warn
+          continue
+        if window_starttime < (data_starttime + 2.0*event['tau']):
+          warn = "%s|%s|window_starttime(%s) < data_starttime(%s)+2.0*(%f), SKIP" % (station_id, window_id, window_starttime, data_starttime, event['tau'])
+          warnings.warn(warn)
+          window['stat']['code'] = -1
+          window['stat']['msg'] = warn
+          continue
+        # taper design
+        win_b = window_starttime - obs_starttime
+        win_e = window_endtime - obs_starttime
+        window_len = window_endtime - window_starttime
+        taper_width = window_len * min(taper_ratio, 0.5)
+        win_c = [win_b, win_b+taper_width, win_e-taper_width, win_e]
+        if taper_type == "cosine":
+          win_func = cosine_taper(obs_times, win_c)
+        else:
+          raise Exception("taper_type not recognized.")
+        taper['win'] = win_func
 
         #------ filter
         filter_dict = window['filter']
@@ -807,33 +601,14 @@ class Misfit(object):
         # filter design 
         if filter_type == 'butter':
           filter_b, filter_a = signal.butter(filter_order,
-            np.array(filter_freqlim)/syn_nyq, btype='band')
+            np.array(filter_freqlim)/nyq, btype='band')
         else:
           raise Exception("filter_type %s not recognized" % filter_type)
         # record filter coeff.
         filter_dict['a'] = filter_a
         filter_dict['b'] = filter_b
 
-        #------ taper
-        taper = window['taper']
-        taper_type = taper['type']
-        taper_ratio = taper['ratio']
-        # time range
-        window_starttime = taper['starttime']
-        window_endtime = taper['endtime']
-        window_len = window_endtime - window_starttime
-        # taper design
-        win_b = window_starttime - syn_starttime
-        win_e = window_endtime - syn_starttime
-        taper_width = window_len * min(taper_ratio, 0.5)
-        win_c = [win_b, win_b+taper_width, win_e-taper_width, win_e]
-        if taper_type == "cosine":
-          win_func = cosine_taper(syn_times, win_c)
-        else:
-          raise Exception("taper_type not recognized.")
-        taper['win'] = win_func
-
-        #------ polarity 
+        #------ data window polarity 
         polarity = window['polarity']
         comp = polarity['component']
         cmpaz = polarity['azimuth']
@@ -857,8 +632,9 @@ class Misfit(object):
           proj_matrix[1,1] = 1.0
           proj_matrix[2,2] = 1.0
         else:
-          print '[WARNING] %s:%s:%s unrecognized component code, SKIP' \
-              % (event_id, station_id, window_id)
+          warn = "Unrecognized component code: %s | %s" \
+              % (str(station_id), str(window_id))
+          warnings.warn(warn)
           continue
         polarity['proj_matrix'] = proj_matrix
 
@@ -871,9 +647,8 @@ class Misfit(object):
         # should not be affected by the relatively small peak shift.
         #-- F * d
         obs_filt = signal.lfilter(filter_b, filter_a, obs)
-        #-- F * u (u = S*grf)
-        syn_filt = signal.lfilter(filter_b, filter_a, grf)
-        syn_filt = np.fft.irfft(F_src*np.fft.rfft(syn_filt), syn_nt)
+        #-- F * u
+        syn_filt = signal.lfilter(filter_b, filter_a, syn)
         #DEBUG
         #for i in range(3):
         #  plt.subplot(311+i)
@@ -882,8 +657,8 @@ class Misfit(object):
         #-- noise: use signals 40s before first arrival time on obs
         first_arrtime = event['t0'] + meta['ttime'][0].time
         #FIXME: better choice of the time length before first arrival? 
-        tnoise = (first_arrtime - 40.0) - syn_starttime
-        noise_idx = syn_times < tnoise
+        noise_idx1 = int( ((first_arrtime - obs_starttime) - 30.0) 
+            *sampling_rate)
         #t = syn_times[noise_idx]
         #b = t[0]
         #e = t[-1]
@@ -891,12 +666,12 @@ class Misfit(object):
         #win_c = [b, b+taper_width, e-taper_width, e]
         #taper = cosine_taper(t, win_c)
         # F * noise
-        noise_filt = obs_filt[:,noise_idx]
+        noise_filt = obs_filt[:,0:noise_idx1]
 
         #------ apply window taper and polarity projection
         # obs = w * F * d
-        obs_filt_win = np.dot(proj_matrix, obs_filt) * win_func 
-        # syn = w * F * u (u = S*g)
+        obs_filt_win = np.dot(proj_matrix, obs_filt) * win_func
+        # syn = w * F * u
         syn_filt_win = np.dot(proj_matrix, syn_filt) * win_func 
         # noise (only projection)
         noise_filt_win = np.dot(proj_matrix, noise_filt)
@@ -914,18 +689,20 @@ class Misfit(object):
         Amax_syn = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
         Amax_noise =  np.sqrt(np.max(np.sum(noise_filt_win**2, axis=0)))
         if Amax_obs == 0: # bad record
-          print '[WARN] %s:%s:%s empty obs trace, SKIP.' \
+          warn = "%s:%s:%s empty obs trace, SKIP." \
               % (event_id, station_id, window_id)
+          warnings.warn(warn)
           window['stat']['code'] = -1
           window['stat']['msg'] = "Amax_obs=0"
           continue
         if Amax_noise == 0: # could occure when the data begin time is too close to the first arrival
-          print '[WARN] %s:%s:%s empty noise trace, SKIP.' \
+          warn = "%s:%s:%s empty noise trace, SKIP." \
               % (event_id, station_id, window_id)
+          warnings.warn(warn)
           window['stat']['code'] = -1
           window['stat']['msg'] = "Amax_noise=0"
           continue
-        snr = 20.0 * np.log10(Amax_obs/Amax_noise)
+        snr = 20.0*np.log10(Amax_obs/Amax_noise)
  
         #------ measure CC time shift (between w*F*d and w*F*u)
         obs_norm = np.sqrt(np.sum(obs_filt_win**2))
@@ -949,7 +726,7 @@ class Misfit(object):
         #print cc[syn_nt+1] - np.sum(obs_ENZ_win * syn_ENZ_win)
         #print cc[syn_nt+2] - np.sum(obs_ENZ_win * syn_ENZ_win)
         #-- zero-lag cc coeff.
-        CC0 = cc[syn_nt-1] #the n-th point corresponds to zero lag time 
+        CC0 = cc[obs_npts-1] #the n-th point corresponds to zero lag time 
         AR0 = CC0 * syn_norm / obs_norm # amplitude ratio syn/obs 
         #DEBUG
         #print CC0 - np.sum(obs_ENZ_win * syn_ENZ_win)/obs_norm/syn_norm
@@ -957,11 +734,11 @@ class Misfit(object):
         CC_shift_range = window_len/2.0 #TODO: more reasonable choice?
         ncc = int(CC_shift_range / cc_delta)
         cc_times = np.arange(-ncc,ncc+1) * cc_delta
-        if syn_delta < cc_delta:
-          warnings.warn("syn_delta(%f) < cc_time_step(%f)" \
-              % (syn_delta, cc_delta))
-        ti = cc_times + (syn_nt-1)*syn_delta  # -(npts-1)*dt: begin time in cc
-        cci = lanczos_interp1(cc, syn_delta, ti, na=20)
+        if delta < cc_delta:
+          warnings.warn("delta(%f) < cc_time_step(%f)" \
+              % (delta, cc_delta))
+        ti = cc_times + (obs_npts-1)*delta  # -(npts-1)*dt: begin time in cc
+        cci = lanczos_interp1(cc, delta, ti, na=20)
         # time shift at the maximum correlation
         imax = np.argmax(cci)
         CC_time_shift = cc_times[imax]
@@ -983,10 +760,10 @@ class Misfit(object):
         # , where A = CC0(un-normalized) / norm(u)**2, N = norm(d)*norm(u)
         Aw = CC0 * obs_norm / syn_norm # window amplitude raito
         #-- dchiw_du
-        #NOTE: *dt is put back to Nw
-        dchiw_du1 = win_func * (obs_filt_win - Aw*syn_filt_win) / Nw / syn_delta
+        #NOTE: ignore 1.0/delta from Nw
+        dchiw_du = win_func * (obs_filt_win - Aw*syn_filt_win) / Nw
         # apply conj(F), equivalent to conj(F*conj(adj))
-        dchiw_du = signal.lfilter(filter_b, filter_a, dchiw_du1[:,::-1])
+        dchiw_du = signal.lfilter(filter_b, filter_a, dchiw_du[:,::-1])
         dchiw_du = dchiw_du[:,::-1]
         #DEBUG
         #for i in range(3):
@@ -995,11 +772,12 @@ class Misfit(object):
         #  plt.plot(syn_times, dchiw_du[i,:], 'r')
         #plt.show()
         # add into total dchi_du
-        dchi_du += weight * dchiw_du
+        #dchi_du += weight * dchiw_du
         #-- dchiw_dg = conj(S) * dchiw_du
-        dchiw_dg = np.fft.irfft(np.conjugate(F_src) * np.fft.rfft(dchiw_du), syn_nt)
+        dchiw_dg = np.fft.irfft(np.conjugate(src_spectrum) 
+            * np.fft.rfft(dchiw_du), obs_npts)
         # add into total dchi_dg
-        dchi_dg += weight * dchiw_dg 
+        dchi_dg += weight * dchiw_dg
         #DEBUG
         #for i in range(3):
         #  plt.subplot(311+i)
@@ -1013,7 +791,7 @@ class Misfit(object):
             'Amax_noise': Amax_noise, 'SNR': snr}
         cc_dict = {
             'time': cc_times, 'cc': cci,
-            'cc_tshift': CC_time_shift,
+            'time_shift': CC_time_shift,
             'CC0': CC0, 'CCmax': CCmax,
             'AR0': AR0, 'ARmax': ARmax,
             'Nw':Nw, 'Aw':Aw }
@@ -1025,11 +803,9 @@ class Misfit(object):
 
         #------ plot measure window and results 
         if plot:
-          syn_npts = syn_nt - syn_nl - syn_nr
-          syn_orientation_codes = ['E', 'N', 'Z']
+          orientation_codes = ['E', 'N', 'Z']
           adj = dchiw_dg
           Amax_adj = np.sqrt(np.max(np.sum(adj**2, axis=0)))
-          t = syn_times
           for i in range(3):
             plt.subplot(411+i)
             if i == 0:
@@ -1037,18 +813,26 @@ class Misfit(object):
                   'AR0 %.3f \nAobs %g Anoise %g SNR %.1f weight %.3f'
                   % (station_id, CC_time_shift, CCmax, ARmax, 
                     CC0, AR0, Amax_obs, Amax_noise, snr, weight) )
-            idx_plt = range(syn_nl,(syn_nl+syn_npts))
-            plt.plot(t[idx_plt], obs_filt[i,idx_plt]/Amax_obs, 'k', linewidth=0.2)
-            plt.plot(t[idx_plt], syn_filt[i,idx_plt]/Amax_obs*Aw, 'r', linewidth=0.2)
-            #plt.plot(t[noise_idx], noise_filt[i,:]/Amax_obs, 'b', linewidth=1.0)
-            idx = (win_b <= syn_times) & (syn_times <= win_e)
-            plt.plot(t[idx], obs_filt_win[i,idx]/Amax_obs, 'k', linewidth=1.0)
-            plt.plot(t[idx], syn_filt_win[i,idx]/Amax_obs*Aw, 'r', linewidth=1.0)
-            plt.plot(t[idx_plt], adj[i,idx_plt]/Amax_adj, 'c', linewidth=1.0)
+                  #idx_plt = range(syn_nl,(syn_nl+syn_npts))
+
+            plt.plot(obs_times, obs_filt[i,:]/Amax_obs, 'k', linewidth=0.2)
+            plt.plot(obs_times, syn_filt[i,:]/Amax_syn, 'r', linewidth=0.2)
+            plt.plot(obs_times[0:noise_idx1], 
+                noise_filt[i,:]/Amax_obs, 'b', linewidth=1.0)
+
+            idx = (win_b <= data_ts) & (obs_times <= win_e)
+            plt.plot(obs_times[idx], obs_filt_win[i,idx]/Amax_obs, 
+                'k', linewidth=1.0)
+            plt.plot(obs_times[idx], syn_filt_win[i,idx]/Amax_syn, 
+                'r', linewidth=1.0)
+            plt.plot(obs_times[idx], adj[i,idx]/Amax_adj, 
+                'c', linewidth=1.0)
+
             plt.ylim((-1.5, 1.5))
             #plt.xlim((min(t), max(t)))
-            plt.xlim((t[syn_nl], t[syn_nl+syn_npts-1]))
-            plt.ylabel(syn_orientation_codes[i])
+            plt.xlim((obs_times[0], obs_times[-1]))
+            plt.ylabel(orientation_codes[i])
+
           plt.subplot(414)
           plt.plot(cc_times, cci, 'k-')
           plt.xlim((min(cc_times), max(cc_times)))
@@ -1057,7 +841,7 @@ class Misfit(object):
       #====== end for window_id in windows:
 
       #------ store adjoint source for this station
-      station['dchi_du'] = dchi_du
+      #station['dchi_du'] = dchi_du
       station['dchi_dg'] = dchi_dg
 
       #DEBUG
@@ -1074,41 +858,32 @@ class Misfit(object):
 #======================================================
 #
 
-  def output_adj(self, 
+  def make_adjoint_source(self, 
       adj_type='dchi_dg',
       out_dir='adj',
-      syn_band_code='MX'):
-    """Output adjoint sources
-    NOTE:
-      1) dchi_dg: use tau=0 in forward/adjoint simulation
-      1) dchi_du: use real tau in forward/adjoint simulation
+      band_code='MX'):
     """
-    syn_orientation_codes = ['E', 'N', 'Z']
+    Output adjoint source
+
+    NOTE
+    ----
+    dchi_dg: use tau=0 in forward/adjoint simulation
+
+    dchi_du: use real tau in forward/adjoint simulation
+
+    """
+    orientation_codes = ['E', 'N', 'Z']
     event = self.data['event']
-    station_dict = self.data['station']
+    sampling_rate = self.data['sampling_rate']
+    delta = 1.0/sampling_rate
 
     tr = Trace()
+    station_dict = self.data['station']
     for station_id in station_dict:
       station = station_dict[station_id]
       # skip rejected statations
       if station['stat']['code'] < 0:
         continue
-      # time samples
-      waveform = station['waveform']
-      time_sample = waveform['time_sample']
-      syn_starttime = time_sample['starttime']
-      syn_delta = time_sample['delta']
-      syn_nt = time_sample['nt']
-      syn_nl = time_sample['nl']
-      syn_nr = time_sample['nr']
-      # without padding
-      npts = syn_nt - syn_nl - syn_nr
-      starttime = syn_starttime + syn_nl*syn_delta
-      # time samples for ascii output, referred to origin time
-      syn_times = np.arange(npts)*syn_delta
-      b = starttime - event['t0']
-      syn_times += b
-
       # adjoint source
       if adj_type == 'dchi_du':
         adj = station['dchi_du']
@@ -1118,29 +893,37 @@ class Misfit(object):
         raise Exception('unknown adj_type: %s (dchi_du or dchi_dg) ' \
             % (adj_type))
 
+      # time samples
+      waveform = station['waveform']
+      obs_starttime = waveform['obs_starttime']
+      grf_t0 = waveform['grf_t0']
+      simulation_delta = waveform['simulation_delta']
+      simulation_npts = waveform['simulation_npts']
+      simulation_times = np.arange(simulation_npts)*simulation_delta + grf_t0
+
       # loop ENZ
+      time_shift = event['t0'] - obs_starttime
       for i in range(3):
-        tr.data = adj[i, syn_nl:(syn_nl+npts)]
-        tr.stats.starttime = starttime
+        # interpolate back to synthetic time samples (required by SEM)
+        adj1 = lanczos_interp1(adj[i,:], delta, 
+            simulation_times + time_shift, na=20)
+        tr.data = adj1
+        tr.stats.starttime = event['t0'] + syn_t0
         tr.stats.delta = syn_delta
-
         out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
-            out_dir, station_id, syn_band_code,
-            syn_orientation_codes[i])
-
+            out_dir, station_id, band_code,
+            orientation_codes[i])
         # sac format
         tr.write(out_file + '.adj.sac', 'sac')
-
         # ascii format (needed by SEM)
         # time is relative to event origin time: t0
         with open(out_file+'.adj','w') as fp:
-          for j in range(npts):
+          for j in range(simulation_npts):
             fp.write("{:16.9e}  {:16.9e}\n".format(
-              syn_times[j], adj[i,syn_nl+j]))
+              simulation_times[j], adj1[j]))
 
-      #endfor i in range(3):
     #endfor station_id in station_dict:
-  #enddef output_adjoint_source
+  #enddef make_adjoint_source
 
 #
 #======================================================
@@ -1207,70 +990,6 @@ class Misfit(object):
 #======================================================
 #
 
-#  def waveform_der_stf(self):
-#    """ Calculate waveform derivatives for source time function (t0, tau)
-#    """
-#    event = self.data['event']
-#    t0 = event['t0']
-#    tau = event['tau']
-#
-#    station_dict = self.data['station']
-#    for station_id in station_dict:
-#      station = station_dict[station_id]
-#      # skip rejected statations
-#      if station['stat']['code'] < 0:
-#        continue
-#
-#      # source time function
-#      waveform = station['waveform']
-#      time_sample = waveform['time_sample']
-#      starttime = time_sample['starttime']
-#      dt = time_sample['delta']
-#      nt = time_sample['nt']
-#      t = np.arange(nt) * dt + (starttime - t0) #referred to t0
-#      # s(t), Ds(t)/Dt0, Ds(t)/Dtau
-#      freq = np.fft.rfftfreq(nt, d=dt)
-#      F_src, F_ds_dt0, F_ds_dtau = stf_gauss_spectrum(freq, tau)
-#
-#      #------ waveform derivative
-#      # green's function
-#      grf = waveform['grf']
-#      # convolve Ds(t)/Dt0,tau with Green's function
-#      du_dt0 = np.fft.irfft(F_ds_dt0 * np.fft.rfft(grf), nt)
-#      du_dtau = np.fft.irfft(F_ds_dtau * np.fft.rfft(grf), nt)
-#      # zero records before origin time (wrap around from the end)
-#      idx = t < -5.0*tau
-#      du_dt0[:,idx] = 0.0
-#      du_dtau[:,idx] = 0.0
-#
-#      #------ misfit derivative
-#      # adjoint source = Dchi/Du
-#      dchi_du = station['dchi_du']
-#      dchi_dt0 = np.sum(dchi_du * du_dt0) * dt
-#      dchi_dtau = np.sum(dchi_du * du_dtau) * dt
-#
-#      #------ record derivatives
-#      if 'waveform_der' not in station:
-#        station['waveform_der'] = {}
-#      station['waveform_der']['dt0'] = {
-#          'dm':1.0, 'du':du_dt0, 'dchi':dchi_dt0 }
-#      station['waveform_der']['dtau'] = {
-#          'dm':1.0, 'du': du_dtau, 'dchi':dchi_dtau }
-#
-#      # DEBUG
-#      #print dchi_dt0, dchi_dtau
-#      #for i in range(3):
-#      #  plt.subplot(311+i)
-#      #  #plt.plot(t, dchi_du[i,:], 'k')
-#      #  plt.plot(t, du_dt0[i,:], 'b', t, du_dtau[i,:], 'r')
-#      #plt.show()
-#
-#  #enddef derivative_stf(self)
-
-#
-#======================================================
-#
-
   def make_cmt_dxs(self, out_file="CMTSOLUTION.dxs", norm=2500.0):
     """ Calculate derivative for source location along one direction
     """
@@ -1291,7 +1010,7 @@ class Misfit(object):
 
     # get perturbed source location
     if 'src_frechet' not in self.data:
-      raise Exception('src_frechet not set.')
+      raise Exception('src_frechet is not set.')
     src_frechet = self.data['src_frechet']
     dxs = src_frechet['xs']
     # normalize dxs
@@ -1359,8 +1078,7 @@ class Misfit(object):
 
       #------ time samples
       waveform = station['waveform']
-      time_sample = waveform['time_sample']
-      starttime = time_sample['starttime']
+      data_starttime = time_sample['starttime']
       dt = time_sample['delta']
       nt = time_sample['nt']
       nl = time_sample['nl'] # npts of left padding
@@ -2219,7 +1937,7 @@ class Misfit(object):
     # check inputs
     events = self.data['events']
     if event_id not in events:
-      print "[ERROR] %s does NOT exist. Exit" % (event_id)
+      raise Exception("[ERROR] %s does NOT exist. Exit" % (event_id))
       sys.exit()
 
     # select windows
@@ -2388,8 +2106,7 @@ class Misfit(object):
     # check inputs
     events = self.data['events']
     if event_id not in events:
-      print "[ERROR] %s does NOT exist. Exit" \
-          % (event_id)
+      raise Exception("[ERROR] %s does NOT exist. Exit" % (event_id))
       sys.exit()
     event = events[event_id]
     stations = event['stations']
@@ -2640,6 +2357,10 @@ class Misfit(object):
       win: 
     """
     comp_name = ['R', 'T', 'Z']
+    sampling_rate = self.data['sampling_rate']
+    data_delta = 1.0/sampling_rate
+    data_nyq = 0.5*sampling_rate
+
     #------ selection parameters
     plot_time = plot_param['time']
     plot_azbin = plot_param['azbin']
@@ -2737,7 +2458,7 @@ class Misfit(object):
       azmin = az
       azmax = az + plot_azbin
 
-      print azmin, azmax
+      #print(azmin, azmax
 
       #---- gather data for the current azbin 
       data_azbin = {}
@@ -2775,11 +2496,8 @@ class Misfit(object):
 
         # get seismograms: syn/obs
         waveform = station['waveform']
-        time_sample = waveform['time_sample']
-        syn_starttime = time_sample['starttime']
-        syn_npts = time_sample['nt']
-        syn_delta = time_sample['delta']
-        syn_nyq = 0.5/syn_delta
+        data_starttime = waveform['starttime']
+        data_npts = waveform['npts']
         obs = waveform['obs']
         grf = waveform['grf']
         # filter parameter
@@ -2790,9 +2508,9 @@ class Misfit(object):
         obs = signal.lfilter(filter_b, filter_a, obs)
         grf = signal.lfilter(filter_b, filter_a, grf)
         # convolve stf on grf
-        syn_freq = np.fft.rfftfreq(syn_npts, d=syn_delta)
-        F_src = stf_gauss_spectrum(syn_freq, event['tau'])
-        syn = np.fft.irfft(F_src*np.fft.rfft(grf), syn_npts)
+        freq = np.fft.rfftfreq(data_npts, d=data_delta)
+        src_spectrum = stf_gauss_spectrum(freq, event['tau'])
+        syn = np.fft.irfft(src_spectrum*np.fft.rfft(grf), data_npts)
         # project to polarity defined by the window
         proj_matrix = window['polarity']['proj_matrix']
         obs = np.dot(proj_matrix, obs)
@@ -2896,9 +2614,9 @@ class Misfit(object):
         dist_degree = meta['dist_degree']
         reduced_time = dist_degree * plot_rayp
         # time of first sample referred to centroid time 
-        t0 = syn_starttime - event['t0']
+        t0 = data_starttime - event['t0']
         # time of samples referred to centroid time
-        syn_times = syn_delta*np.arange(syn_npts) + t0
+        syn_times = data_delta*np.arange(data_npts) + t0
         # plot time window
         plot_t0 = min(plot_time) + reduced_time
         plot_t1 = max(plot_time) + reduced_time

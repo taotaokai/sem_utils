@@ -25,20 +25,21 @@ class Event:
 
   Coordinate: ECEF cartesian
 
-  Attribute
-  ---------
+  Attributes
+  ----------
   code # event ID
   header, # have centroid time in it
-  lattidue, longitude, depth, 
+  latitude, longitude, depth, 
   centroid_time,
-  tau:, # gaussian width exp(-(t-t0)^2/tau^2)/tau/pi^0.5
+  gauss_width:, # gaussian width exp(-(t-t0)^2/tau^2)/tau/pi^0.5
   xs: [x, y, z], # source location in ECEF coordinate
   mt, # moment tensor in ECEF coord (N*m)
   mt_rtp, # in spherical coord
 
   Methods
   -------
-  read_CMTSOLUTION 
+  read_cmtsolution 
+  write_cmtsolution 
 
   """
 
@@ -167,7 +168,7 @@ class Event:
 #======================================================
 #
 
-  def make_cmtsolution(self, out_file, isECEF=True):
+  def write_cmtsolution(self, out_file, isECEF=True):
     """ 
     Output CMTSOLUTION file 
     """
@@ -197,4 +198,4 @@ class Event:
         fp.write('%-18s %+15.8E\n' % ('Mxz(N*m):', self.mt[0,2]))
         fp.write('%-18s %+15.8E\n' % ('Myz(N*m):', self.mt[1,2]))
     else:
-      warnings.warn("isECEF=False not implemented for make_cmtsolution")
+      warnings.warn("isECEF=False not implemented now")

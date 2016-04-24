@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Managing misfit windows
-"""
 import sys
 import os 
 import warnings
@@ -13,7 +11,7 @@ import scipy.signal as signal
 import pickle
 #
 from obspy import UTCDateTime, read, Trace, geodetics
-from obspy.taup import TauPyModel
+
 from obspy.imaging.beachball import Beach
 #
 import pyproj
@@ -31,7 +29,6 @@ from taper import *
 # 1. spectrum relation between DFT and FT
 #   x(n*dt): DFT[x]*dt ~ FT[x], IDFT[FT[x]]/dt ~ x
 
-
 #====== utility functions
 def is_equal(lst):
   return not lst or [lst[0]]*len(lst) == lst
@@ -42,27 +39,17 @@ def stf_gauss_spectrum(f, tau):
       F_stf = exp(- pi^2 * f^2 * tau^2)
   """
   F_src = np.exp(-np.pi**2 * f**2 * tau**2)
-# F_ds_dt0 = -2.0j * np.pi * f * F_src
-# F_ds_dtau = -2.0 * (np.pi*f)**2 * tau * F_src
-# return F_src, F_ds_dt0, F_ds_dtau
   return F_src
 
-#def stf_gauss(n, dt, tau):
-#  """ Gaussian source time function
-#    stf(t,tau) = 1/sqrt(PI)/tau * exp(-(t/tau)^2)
-#    t = dt * [0:(n+1)/2, -n/2:-1]
-#  """
-#  n = int(n)
-#  idx = np.arange(n)
-#  idx[(n+1)/2:] -= n
-#  t = idx * dt / tau
-#  stf = np.exp(-t**2)/tau/np.pi**0.5
-#  ds_dt0 = 2.0/tau * t * stf
-#  ds_dtau = 2.0/tau * (t**2 - 0.5) * stf 
-#  return stf, ds_dt0, ds_dtau
-
-#======
-class Misfit(object):
+#=====================================================
+class Station(object):
+  __slots__ = [
+      "status", "history",
+      "network", "station", "location", 
+      "metadata",
+      "waveform",
+      "windows",
+      ]
   """
   Class managing all misfit windows
 
@@ -72,29 +59,37 @@ class Misfit(object):
 
   Attributes
   ----------
-  stat: {code:, msg:},
-  network, station, location, channel[]:{code,az,dip,...}
-  latitude:, longitude:, elevation:, depth:,
-  azimuth:, back_azimuth:, dist_degree:, ttime
+  status
+  history
 
-  simulation_t0, simulation_delta, simulation_npts
-
-  class Waveform {
-    sampling_rate': # uniform data sampling rate
-    obs_starttime':, 'obs': (3,:), # observed data 
-    grf_t0':, # begin time, impulsive source is at zero time
-    grf': (3,:), # synthetic green's function
-    # used for adjoint source output
+  network
+  station
+  location
+  
+  metadata{
+    channel[]:{code,az,dip,...}
+    latitude:, longitude:, elevation:, depth:,
+    azimuth:, back_azimuth:, dist_degree, 
+    ttimes:, first_arrtime:(UTCDateTime)
   }
 
-  (class Waveform): obs, green, green_derivative
-  (class Waveform) green_derivative:{
-     'xs': {'dm':array(3), 'dg':, }, #finite-difference
-     'mt': {'dm':array([3,3]), 'dg':,}, #linear in moment-tensor
-  },
+  waveform{
+    sampling_rate: # uniform data sampling rate
+    data_starttime:, 
+    data: (3,:), # observed data 
 
-  class Window[] {
-    status: {code:, msg:}, #bad:<0, ok:0, measured adj:1, and hessian_src:2
+    #used for adjoint source output
+    simulation_t0, simulation_delta, simulation_npts
+
+    green_t0:, # begin time, impulsive source is at zero time
+    green: array(3,:), # synthetic green's function
+
+    # derivatives of green's function
+    green_derivative{'xs':, 'mt':}
+  }
+
+  windows[]{
+    status, # bad:<0, ok:0, measured adj:1, and hessian_src:2
     code,
     filter, filter_order, filter_flo, filter_fhi,
     starttime, endtime,
@@ -103,14 +98,12 @@ class Misfit(object):
     proj_matrix,
     'quality': { 'Amax_obs':, 'Amax_noise':, 'Amax_syn':, 'SNR':, },
     'cc': {'time':, 'cc':, 'cc_tshift': 'CC0':, 'CCmax':, 'AR0':, 'ARmax':},
-    'weight':, }
-    }
+    'weight':, 
   }
 
   Methods
   -------
-  setup_event
-  setup_station
+  read_metadata() 
   read_observed_data:
       - seismograms are resampled to sampling_rate, with 0.8*nyq low-pass filter
   read_sythetic_green:
@@ -129,29 +122,188 @@ class Misfit(object):
   1D Earth model: ak135
 
   """
-#
 #======================================================
-#
+  def __init__(self, network, station, location):
+    self.reset(self,network, station, location)
 
-  def __init__(self):
-    self.network = ""
-    self.station = ""
-    self.location = ""
-    self.channels = []
-    self.latitude = 0.0
-    self.longitude = 0.0
-    self.elevation = 0.0
-    self.depth = 0.0
-    self.azimuth = 0.0
-    self.back_azimuth = 0.0
-    self.dist_degree = 0.0
-    self.waveforms = []
-
-#
 #======================================================
-#
+  def reset(self,network, station, location):
+    self.status = 0
+    msg = "[{:s}] initialized\n".format(UTCDateTime.now().isoformat())
+    self.history = msg
+    self.network = str(network)
+    self.station = str(station)
+    self.location = str(location)
+    self.metadata = {}
+    self.waveform = {}
+    self.windows = []
 
-  def read_observed_data(self,
+#======================================================
+  def _update_status(self, status, msg):
+    self.status = status
+    msg = "[{:s}] {:s}\n".format(UTCDateTime.now().isoformat(), msg)
+    self.history += msg
+
+#======================================================
+  def setup_metadata(self,
+      channel_file,
+      event,
+      band_code="BH",
+      three_channels=True,
+      ):
+    """
+    setup station metadata
+
+    Parameters
+    ----------
+    channel_file : str 
+      FDSN-station text format file at channel level
+
+    event : class Event
+      event info
+
+    band_code : str
+      SEED band+instrument code, e.g. BH
+
+    three_channels : bool
+      check for completeness of 3 channels
+    """
+    #------ read channel file
+    with open(channel_file, 'r') as f:
+      lines = [x.replace('\n','').split('|')  \
+          for x in f.readlines() if not(x.startswith('#'))]
+
+    #------ get event info
+    active_time = event.centroid_time
+    evla = event.latitude
+    evlo = event.longitude
+    evdp = event.depth
+
+    #------ select channels
+    station_id = (self.network, self.station, self.location)
+    channels = []
+    for x in lines:
+      net_sta_loc = (x[0], x[1], x[2])
+      # check net,sta,loc
+      if net_sta_loc != station_id:
+        continue
+      # get operation time range
+      date1 = [ int(a) for a in re.sub("\D", " ", x[15]).split() ]
+      date2 = [ int(a) for a in re.sub("\D", " ", x[16]).split() ]
+      t1 = UTCDateTime(date1[0], date1[1], date1[2]) \
+          + 60.0*(60.0*date1[3] + date1[4]) + date1[5]
+      t2 = UTCDateTime(date2[0], date2[1], date2[2]) \
+          + 60.0*(60.0*date2[3] + date2[4]) + date2[5]
+      # check operation time
+      if active_time: 
+        if t1 > active_time or t2 < active_time:
+          continue
+      # check band code
+      if band_code:
+        n = len(band_code)
+        if x[3][0:n] != band_code:
+          continue
+      # gather available channels
+      channel = {
+          'code':    x[3],
+          'latitude':  float(x[4]),
+          'longitude':   float(x[5]),
+          'elevation':   float(x[6]),
+          'depth':     float(x[7]),
+          'azimuth':   float(x[8]),
+          'dip':     float(x[9]),
+          'starttime':   t1,
+          'endtime':   t2}
+      channels.append(channel)
+
+    #------ check if all selected channels have the same location
+    lats = [ x['latitude'] for x in channels ]
+    lons = [ x['longitude'] for x in channels ]
+    eles = [ x['elevation'] for x in channels ]
+    deps = [ x['depth'] for x in channels ]
+    if (lats.count(lats[0])!=len(lats) \
+        or lons.count(lons[0])!=len(lons) \
+        or eles.count(eles[0])!=len(eles) \
+        or deps.count(deps[0])!=len(deps)):
+      warn = "%s: channels do NOT have the same coordinates." \
+          % (str(station_id))
+      warnings.warn(warn)
+      self._update_status(-1, warn)
+      continue
+
+    #------ check completeness of 3-components
+    if three_channels:
+      if len(channel) != 3:
+        warn = "%s: Not exactly 3 components found" % (str(station_id))
+        warnings.warn(warn)
+        self._update_status(-1, warn)
+        continue
+      # check vertical component
+      Z_comp = [ (x['code'], x['azimuth'], x['dip']) 
+          for x in channel if x['code'][2] == 'Z']
+      if len(Z_comp) != 1 or abs(Z_comp[0][2]) != 90.0:
+        warn = "Problematic vertical channel: %s | %s" \
+            % (str(station_id), str(Z_comp))
+        warnings.warn(warn)
+        self._update_status(-1, warn)
+        continue
+      # check horizontal components
+      H_comp = [ (x['code'], x['azimuth'], x['dip']) \
+          for x in channel if x['code'][2] != 'Z']
+      if (len(H_comp) != 2 \
+          or abs(H_comp[0][2]) != 0.0 \
+          or abs(H_comp[1][2]) != 0.0 \
+          or abs(np.cos(np.deg2rad(H_comp[0][1] - H_comp[1][1]))) > 0.1 \
+          ):
+        warn = "Problematic horizontal channels: %s | %s" \
+            % (str(station_id), str(H_comp))
+        warnings.warn(warn)
+        self._update_status(-1, warn)
+        continue
+
+    #------ event-station 
+    # geodetics
+    from obspy import geodetics
+    stla = channels[0]['latitude']
+    stlo = channels[0]['longitude']
+    dist, az, baz = geodetics.gps2dist_azimuth(evla, evlo, stla, stlo)
+    dist_degree = geodetics.kilometer2degrees(dist/1000.0)
+
+    # traveltimes
+    from obspy import taup
+    taup_model = taup.TauPyModel(model="ak135")
+    ttimes = taup_model.get_travel_times(
+        source_depth_in_km=evdp,
+        distance_in_degree=dist_degree,
+        phase_list=['ttp'])
+    first_arrtime = event.centroid_time+ttimes[0].time
+
+    #------ setup metadata
+    # remove dumplicated info
+    chan = [
+        {'code':x['cod3'], 'azimuth':x['azimuth'], 'dip':x['dip'],
+         'starttime':x['starttime'], 'endtime':x['endtime'] 
+         } for x in channels]
+    meta = {
+        'latitude': channels[0]['latitude'], 
+        'longitude': channels[0]['longitude'],
+        'elevation': channels[0]['elevation'],
+        'depth': channels[0]['depth'],
+        'channels': chan, 
+        'azimuth': az,
+        'back_azimuth': baz,
+        'dist_degree': dist_degree,
+        'ttimes': ttimes,
+        'first_arrtime': first_arrtime,
+        }
+    self.metadata.update(meta)
+
+    # status
+    msg = "setup_metadata OK"
+    self._update_status(0, msg)
+
+#======================================================
+  def read_waveform_data(self,
       data_dir,
       before_first_arrival=200.0,
       after_first_arrival=500.0,
@@ -170,107 +322,97 @@ class Misfit(object):
 
     after_first_arrival : scalar, optional
         data must end after this time
-
     """
     #------ check parameters
     if not os.path.isdir(data_dir):
       err = "data_dir(%s) does not exist!" % data_dir
       raise Exception(err)
 
-    #------ loop each station
-    sampling_rate = self.data['sampling_rate']
-    nyq = 0.5*sampling_rate
-    event = self.data['event']
-    station_dict = self.data['station']
-    #
-    for station_id in station_dict:
-      station = station_dict[station_id]
-      meta = station['meta']
-      channel = meta['channel']
-      #---- read in seismograms
-      file_path = [ '{:s}/{:s}.{:s}'.format(
-        data_dir, '.'.join(station_id), x['code']) for x in channel ]
-      try:
-        st  = read(file_path[0])
-        st += read(file_path[1])
-        st += read(file_path[2])
-      except Exception as e:
-        warn = "Error reading files: %s" % (str(station_id))
-        warnings.warn(warn)
-        print(e)
-        del station_dict[statoin_id]
-        continue
-      #---- check time range
-      obs_starttime = max([st[i].stats.starttime for i in range(3)])
-      obs_endtime = min([st[i].stats.endtime for i in range(3)])
-      first_arrtime = event['t0'] + meta['ttime'][0].time
-      data_starttime = first_arrtime - before_first_arrival 
-      data_endtime = first_arrtime + after_first_arrival
-      if obs_starttime > data_starttime or obs_endtime < data_endtime:
-        warn = "%s: record does not cover the required time range \
-            (%s, %s), SKIP" \
-            % (file_path[i], data_starttime, data_endtime)
-        warnings.warn(warn)
-        #del station_dict[statoin_id]
-        continue
-      #---- resample the seismograms
-      # anti-aliasing low-pass filter below nyquist frequency
-      if sampling_rate < st[0].stats.sampling_rate:
-        st.filter('lowpass', freq=0.8*nyq, corners=10, zerophase=True)
-      # interpolation: windowed sinc reconstruction
-      nt = int((data_endtime - data_starttime) * sampling_rate)
-      ts = np.arange(nt)/sampling_rate
-      ENZ = np.zeros((3, nt))
-      for i in range(3):
-        time_shift = data_starttime - st[i].stats.starttime
-        ENZ[i,:] = lanczos_interp1( st[i].data, st[i].stats.delta, 
-            ts + time_shift, na=20)
-        #DEBUG
-        #tr = st[i]
-        #plt.plot(tr.times(), tr.data, 'k')
-        #plt.plot(ts, ENZ[i,:], 'r')
-        #plt.show()
+    #---- read in seismograms
+    station_id = (self.network,self,station,self.location)
+    channels = self.metadata['channels']
+    file_path = [ '{:s}/{:s}.{:s}'.format(
+      data_dir, '.'.join(station_id), x['code']) for x in channels ]
+    try:
+      st  = read(file_path[0])
+      st += read(file_path[1])
+      st += read(file_path[2])
+    except Exception as e:
+      warn = "Error reading data file: %s" % (str(station_id))
+      warnings.warn(warn)
+      print(e)
+      self._update_status(-1, warn)
+      continue
 
-      #------ rotate obs to ENZ
-      # projection matrix: obs = proj * ENZ => ENZ = inv(proj) * obs
-      proj_matrix = np.zeros((3, 3))
-      for i in range(3):
-        chan = channel[i]
-        sin_az = np.sin(np.deg2rad(chan['azimuth']))
-        cos_az = np.cos(np.deg2rad(chan['azimuth']))
-        sin_dip = np.sin(np.deg2rad(chan['dip']))
-        cos_dip = np.cos(np.deg2rad(chan['dip']))
-        # column vector = obs channel polarization 
-        proj_matrix[i,0] = cos_dip*sin_az # proj to E
-        proj_matrix[i,1] = cos_dip*cos_az # proj to N
-        proj_matrix[i,2] = -sin_dip     # proj to Z
-      # inverse projection matrix: ENZ = inv(proj) * obs
-      inv_proj = np.linalg.inv(proj_matrix)
-      ENZ = np.dot(inv_proj, ENZ)
+    #---- check time range
+    obs_starttime = max([st[i].stats.starttime for i in range(3)])
+    obs_endtime = min([st[i].stats.endtime for i in range(3)])
+    first_arrtime = self.metadata['first_arrtime']
+    data_starttime = first_arrtime - before_first_arrival 
+    data_endtime = first_arrtime + after_first_arrival
+    if obs_starttime > data_starttime or obs_endtime < data_endtime:
+      warn = "%s: record does not cover the required time range \
+          (%s, %s), SKIP" \
+          % (file_path[i], data_starttime, data_endtime)
+      warnings.warn(warn)
+      self._update_status(-1, warn)
+      continue
 
-      #------ record data 
-      if 'waveform' not in station:
-        station['waveform'] = {}
-      waveform = station['waveform']
-      waveform['obs_starttime'] = obs_starttime
-      waveform['obs'] = ENZ
+    #---- resample the seismograms
+    # anti-aliasing low-pass filter below nyquist frequency
+    if any(sampling_rate < [tr.stats.sampling_rate for tr in st]):
+      st.filter('lowpass', freq=0.8*nyq, corners=20, zerophase=True)
+    # interpolation: windowed sinc reconstruction
+    nt = int((data_endtime - data_starttime) * sampling_rate)
+    ts = np.arange(nt)/sampling_rate
+    ENZ = np.zeros((3, nt))
+    for i in range(3):
+      time_shift = data_starttime - st[i].stats.starttime
+      ENZ[i,:] = lanczos_interp1( st[i].data, st[i].stats.delta, 
+          ts + time_shift, na=20)
+    #DEBUG
+    #tr = st[i]
+    #plt.plot(tr.times(), tr.data, 'k')
+    #plt.plot(ts, ENZ[i,:], 'r')
+    #plt.show()
 
-      station['stat']['code'] = 0
-      station['stat']['msg'] = "read_observed_data OK [%s]" \
-          % (UTCDateTime.now().isoformat())
+    #------ rotate obs to ENZ
+    # projection matrix: obs = proj * ENZ => ENZ = inv(proj) * obs
+    proj_matrix = np.zeros((3, 3))
+    for i in range(3):
+      cmpaz = channels[i]['azimuth']
+      cmpdip = channels[i]['dip']
+      sin_az = np.sin(np.deg2rad(cmpaz))
+      cos_az = np.cos(np.deg2rad(cmpaz))
+      sin_dip = np.sin(np.deg2rad(cmpdip))
+      cos_dip = np.cos(np.deg2rad(cmpdip))
+      # column vector = obs channel polarization 
+      proj_matrix[i,0] = cos_dip*sin_az # proj to E
+      proj_matrix[i,1] = cos_dip*cos_az # proj to N
+      proj_matrix[i,2] = -sin_dip     # proj to Z
+    # inverse projection matrix: ENZ = inv(proj) * obs
+    inv_proj = np.linalg.inv(proj_matrix)
+    ENZ = np.dot(inv_proj, ENZ)
 
-    #endfor station_id in station_dict:
-  #enddef read_observed_data
+    #------ record waveform data
+    waveform = {
+        'sampling_rate':sampling_rate,
+        'data':ENZ,
+        'data_starttime':data_starttime,
+        }
+    self.waveform.update(waveform) 
 
+    msg = "read_waveform_data OK"
+    self._update_status(0, msg)
 
-#
 #======================================================
-#
-
-  def read_synthetic_green(self, data_dir,
-      band_code="MX", suffix=".sem.sac"):
+  def read_waveform_green(self, 
+      data_dir,
+      band_code="MX", 
+      suffix=".sem.sac",
+      ):
     """
-    Read in synthetic Green's functions.
+    Read synthetic Green's function
 
     NOTE
     ----
@@ -279,83 +421,119 @@ class Misfit(object):
 
     """
     orientation_codes = ['E', 'N', 'Z']
-    event = self.data['event']
-    station_dict = self.data['station']
-    sampling_rate = self.data['sampling_rate']
-    nyq = 0.5/sampling_rate
 
-    for station_id in station_dict:
-      station = station_dict[station_id]
-      meta = station['meta']
-      channel = meta['channel']
-      waveform = station['waveform']
+    #------ read seismograms
+    station_id = (self.network,self,station,self.location)
+    channels = self.metadata['channels']
+    file_path = [ '{:s}/{:s}.{:2s}{:1s}{:s}'.format(
+      data_dir, '.'.join(station_id), band_code, x, suffix)
+      for x in orientation_codes ]
+    try:
+      st  = read(file_path[0])
+      st += read(file_path[1])
+      st += read(file_path[2])
+    except Exception as e:
+      warn = "Error reading data file: %s" % (str(station_id))
+      warnings.warn(warn)
+      print(e)
+      self._update_status(0, warn)
+      continue
 
-      #------ read in seismograms
-      file_path = [ '{:s}/{:s}.{:2s}{:1s}{:s}'.format(
-        data_dir, '.'.join(station_id), band_code, x, suffix)
-        for x in orientation_codes ]
-      try:
-        st  = read(file_path[0])
-        st += read(file_path[1])
-        st += read(file_path[2])
-      except Exception as e:
-        warn_str = "failed to read in file %s, SKIP (%s)" \
-            % (station_id, sys.exc_info()[0])
-        warnings.warn(warn_str, UserWarning)
-        print(e)
-        station['stat']['code'] = -1
-        station['stat']['msg'] = "failed to read in synthetic data [%s]" \
-            % UTCDateTime.now().isoformat()
-        continue
+    #------ resample data
+    sampling_rate = self.waveform['sampling_rate']
+    # check if same times in all 3 components
+    syn_meta = [ ( tr.stats.sac['b'], tr.stats.starttime, tr.stats.delta, 
+                   tr.stats.npts) for tr in st ]
+    if not is_equal(syn_meta):
+      err = "not equal time samples in synthetics: %s" % (str(station_id))
+      raise Exception(err)
+    # anti-aliasing filter: lowpass below the nyquist frequency of synthetics
+    if any(sampling_rate < [tr.stats.sampling_rate for tr in st]):
+      st.filter('lowpass', freq=0.8*nyq, corners=20, zerophase=True)
+    # resample
+    syn_t0 = st[0].stats.sac['b']
+    syn_delta = st[0].stats.delta
+    syn_npts = st[0].stats.npts
+    nt = int(syn_npts * syn_delta * sampling_rate)
+    ts = np.arange(nt)/sampling_rate
+    ENZ = np.zeros((3, nt))
+    for i in range(3):
+      ENZ[i,:] = lanczos_interp1(st[i].data, syn_delta, ts, na=20)
 
-      #------ resample data
-      # check if same times in all 3 components
-      syn_meta = [ ( tr.stats.sac['b'], tr.stats.starttime, tr.stats.delta, 
-                     tr.stats.npts) for tr in st ]
-      if not is_equal(syn_meta):
-        err = "not equal time samples in synthetics: %s" % (str(station_id))
-        raise Exception(err)
-      # anti-aliasing filter: lowpass below the nyquist frequency of synthetics
-      if sampling_rate < st[0].stats.sampling_rate:
-        st.filter('lowpass', freq=0.8*nyq, corners=10, zerophase=True)
-      # resample
-      syn_t0 = st[0].stats.sac['b']
-      syn_delta = st[0].stats.delta
-      syn_npts = st[0].stats.npts
-      nt = int(syn_npts * syn_delta * sampling_rate)
-      ts = np.arange(nt)/sampling_rate
-      ENZ = np.zeros((3, nt))
-      for i in range(3):
-        ENZ[i,:] = lanczos_interp1(st[i].data, syn_delta, ts, na=20)
+    #------ record waveform data
+    waveform = {
+        'simulation_delta':syn_delta, 
+        'simulation_npts':syn_npts,
+        'green_t0':syn_t0,
+        'green':ENZ,
+        }
+    self.waveform.update(waveform)
 
-      #------ record data
-      waveform['simulation_delta'] = syn_delta
-      waveform['simulation_npts'] = syn_npts
+    msg = "read_waveform_green OK"
+    self._update_status(0, msg)
 
-      waveform['grf_t0'] = syn_t0
-      waveform['grf'] = ENZ
-
-      station['stat']['code'] = 0
-      station['stat']['msg'] = "read_synthetic_green OK [%s]" \
-          % (UTCDateTime.now().isoformat())
-
-    #endfor station_id in station_dict:
-  #enddef read_synthetic_green
-
-#
 #======================================================
-#
+  def _shift_green_as_data(self,
+      sampling_rate,
+      data_starttime, data_npts,
+      green_t0, green,
+      centroid_time,
+      ):
+    """ 
+    Shift zero time of green's function to centroid time
+    and cut/pad to align with data samples
+    """
+    #------ align time samples between data and green
+    n_shift = ((centroid_time - data_starttime) + green_t0)*sampling_rate
+    n_begin = int(n_shift) # green relative to data index
+    dn_shift = n_shift - n_begin
+    data_freq = np.fft.rfftfreq(data_npts, d=1.0/sampling_rate)
+    # the begin point is shifted to data index int(n_shift)
+    ph_shift = np.exp(-2.0j*np.pi*data_freq*dn_shift/sampling_rate)
+    green_npts = green.shape[1]
+    x = np.fft.irfft(np.fft.rfft(green)*ph_shift, green_npts)
 
-  def setup_window(self,
+    #------ cut/pad to the same samples as data
+    # i0,i1: begin/end index on data
+    # j0,j1: begin/end index on green 
+    if n_begin < 0:
+      i0 = 0
+      j0 = -n_begin
+      warn = "syn begin time is smaller than data"
+      warnings.warn(warn)
+    else:
+      i0 = n_begin
+      j0 = 0
+
+    n_end = green_npts + n_begin
+    if n_end > data_npts:
+      i1 = data_npts
+      j1 = green_npts - (n_end-data_npts)
+      warn = "syn end time is larger than data"
+      warnings.warn(warn)
+    else:
+      i1 = n_end
+      j1 = green_npts
+
+    green_cut = np.zeros((3,data_npts))
+    green_cut[:,i0:i1] = x[:,j0:j1]
+
+    return green_cut
+
+#======================================================
+  def setup_windows(self,
       window_list=[('F','p,P',[-30,50]), ('F','s,S',[-40,70])],
-      filter_param=('butter', 3, [0.01, 0.10]),
+      filter_param=('butter', 2, [0.01, 0.10]),
       taper_param=('cosine', 0.1)):
-    """ Setup data windows based on ray arrivals in 1D earth model.
+    """ 
+    Setup misfit windows
     
-      window_list: define data window
-      [ (component, phases, [begin, end]), ...]
+    Parameters
+    ----------
+    window_list: define data window
+    [ (component, phases, [begin, end]), ...]
 
-      filter_param: (type, freqlims)
+    filter_param: (type, freqlims)
     """
     # filter/taper parameters
     filter_dict = {'type': filter_param[0], 
@@ -425,6 +603,37 @@ class Misfit(object):
           print("[WARN] %s: unrecognized component, SKIP." % (comp))
           continue
         polarity_dict = {'component':comp, 'azimuth': cmpaz, 'dip': cmpdip }
+
+    #------ data window polarity 
+    polarity = window['polarity']
+    comp = polarity['component']
+    cmpaz = polarity['azimuth']
+    cmpdip = polarity['dip']
+    proj_matrix[:,:] = 0.0 #reset to zero
+    if comp in ['Z', 'R', 'T']:
+      sin_az = np.sin(np.deg2rad(cmpaz))
+      cos_az = np.cos(np.deg2rad(cmpaz))
+      sin_dip = np.sin(np.deg2rad(cmpdip))
+      cos_dip = np.cos(np.deg2rad(cmpdip))
+      n = np.array([ [cos_dip * sin_az], # cos(E, comp)
+             [cos_dip * cos_az], # N, comp
+             [-sin_dip] ])     # Z, comp
+      proj_matrix = np.dot(n, n.transpose())
+    elif comp == 'H': # horizontal vector 2d
+      proj_matrix[0,0] = 1.0 # E
+      proj_matrix[1,1] = 1.0 # N
+      proj_matrix[2,2] = 0.0 # Z
+    elif comp == 'F': # full 3d vector
+      proj_matrix[0,0] = 1.0
+      proj_matrix[1,1] = 1.0
+      proj_matrix[2,2] = 1.0
+    else:
+      warn = "Unrecognized component code: %s | %s" \
+          % (str(station_id), str(window_id))
+      warnings.warn(warn)
+      continue
+    polarity['proj_matrix'] = proj_matrix
+
 
         # add window
         window[window_id] = {

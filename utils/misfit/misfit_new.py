@@ -55,13 +55,17 @@ class Misfit(object):
   Attributes
   ----------
   event (class Event)
-  stations[] (class Station)
 
-  src_frechet: {
-    #derivative of misfit function w.r.t. source param.
-      'stat':{'code':, 'msg':},
-      't0':, 'dau':, 'xs':, 'mt':},
+  stations[] (class Station) {
+    status, history,
+    network, station, location,
+    metadata, waveform,
+    windows[] (class Window),
+  }
+
+  src_frechet: {'t0':, 'tau':, 'xs':, 'mt':},
   src_perturb: {'t0':1.0, 'tau':1.0, 'xs':, 'mt':, },
+
   chi: # weighted average of normalized zero-lag CC
 
   }

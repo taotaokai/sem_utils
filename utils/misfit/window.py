@@ -99,6 +99,10 @@ class Window:
     self.filter_flo = 0.01
     self.filter_fhi = 0.1
 
+    self.cc = {}
+    self.quality = {}
+    self.weight = 1.0
+
     # internal variables
     self._taper_func = None
     self._filter_a = None
@@ -220,7 +224,79 @@ class Window:
     return np.fft.irfft(src_spectrum*np.fft.rfft(green)*ph_shift, npts)
 
 #======================================================
-  def measure_cc(self,
+  def _process_data(self, 
+      sampling_rate, data_starttime, data, green,
+      t0, gauss_width, first_arrtime, back_azimuth,
+      ):
+    """ 
+    Process data (filter, taper, projection, convlove stf)
+
+    Parameters
+    ----------
+    data : ndarray (3,n)
+    green : ndarray (3,n)
+      green's function shifted/cut/pad to the same time samples as data
+      with impulsive source at centroid_time
+    t0 : scalar
+      relative time shift of centroid_time
+    gauss_width : scalar, > 0
+      source time function parameter (gaussian)
+
+    """
+    #------ setup window parameters
+    data_npts = data.shape[1]
+    self._setup_window(sampling_rate, data_starttime, data_npts, back_azimuth)
+
+    #------ filter obs, syn
+    #NOTE: use lfilter (causal filter) to avoid contamination from the right
+    # end of the signal, but with asymmetric response and 
+    # peak shift ~ 1/4 min. period (e.g. 0.01-0.1Hz -> 2.5s peak shift)
+    # , however the duration of the filter response is determined by the
+    # max. period (e.g. 0.01-0.1Hz -> ~50s). So the time window chosen 
+    # should not be affected by the relatively small peak shift.
+    #-- F * d
+    data_filt = signal.lfilter(self._filter_b, self._filter_a, data)
+    #-- syn = stf * green
+    syn = self._convolve_stf(sampling_rate, green, t0, gauss_width)
+    #-- F * u
+    syn_filt = signal.lfilter(self._filter_b, self._filter_a, syn)
+    #DEBUG
+    #for i in range(3):
+    #  plt.subplot(311+i)
+    #  plt.plot(syn_times, obs[i,:], 'k', syn_times, obs_filt[i,:], 'r')
+    #plt.show()
+    #-- noise: use signals 40s before first arrival time on data
+    #FIXME: better choice of the time length before first arrival? 
+    noise_idx1 = int(((first_arrtime - data_starttime) - 30.0)*sampling_rate)
+    #t = syn_times[noise_idx]
+    #b = t[0]
+    #e = t[-1]
+    #taper_width = (e-b) * 0.1
+    #win_c = [b, b+taper_width, e-taper_width, e]
+    #taper = cosine_taper(t, win_c)
+    # F * noise
+    noise_filt = data_filt[:,0:noise_idx1]
+
+    #------ apply taper window and projection
+    # w * F * d
+    data_filt_win = np.dot(self._proj_matrix, data_filt) * self._taper_func
+    # w * F * u
+    syn_filt_win = np.dot(self._proj_matrix, syn_filt) * self._taper_func
+    # noise (only projection)
+    noise_filt_win = np.dot(self._proj_matrix, noise_filt)
+    #DEBUG
+    #diff = obs_ENZ_win - syn_ENZ_win
+    #for i in range(3):
+    #  plt.subplot(311+i)
+    #  plt.plot(syn_times, obs_ENZ_win[i,:], 'k')
+    #  plt.plot(syn_times, syn_ENZ_win[i,:], 'r')
+    #  plt.plot(syn_times, diff[i,:], 'c')
+    #plt.show()
+
+    return data_filt_win, syn_filt_win, noise_filt_win
+
+#======================================================
+  def measure_cc(self, 
       sampling_rate, data_starttime, data, green,
       t0, gauss_width, first_arrtime, back_azimuth,
       plot=False,
@@ -241,230 +317,93 @@ class Window:
       source time function parameter (gaussian)
 
     """
-    #------ setup window parameters
-    data_npts = data.shape[1]
-    self._setup_window(sampling_rate, data_starttime, data_npts)
-
-    #------ filter obs, syn
-    #NOTE: use lfilter (causal filter) to avoid contamination from the right
-    # end of the signal, but with asymmetric response and 
-    # peak shift ~ 1/4 min. period (e.g. 0.01-0.1Hz -> 2.5s peak shift)
-    # , however the duration of the filter response is determined by the
-    # max. period (e.g. 0.01-0.1Hz -> ~50s). So the time window chosen 
-    # should not be affected by the relatively small peak shift.
-    #-- F * d
-    data_filt = signal.lfilter(self._filter_b, self._filter_a, data)
-    #-- syn = stf * green
-    syn = self._convolve_stf(sampling_rate, green, t0, gauss_width)
-    #-- F * u
-    syn_filt = signal.lfilter(self._filter_b, self._filter_a, green)
-    #DEBUG
-    #for i in range(3):
-    #  plt.subplot(311+i)
-    #  plt.plot(syn_times, obs[i,:], 'k', syn_times, obs_filt[i,:], 'r')
-    #plt.show()
-    #-- noise: use signals 40s before first arrival time on data
-    #FIXME: better choice of the time length before first arrival? 
-    noise_idx1 = int(((first_arrtime - data_starttime) - 30.0)*sampling_rate)
-    #t = syn_times[noise_idx]
-    #b = t[0]
-    #e = t[-1]
-    #taper_width = (e-b) * 0.1
-    #win_c = [b, b+taper_width, e-taper_width, e]
-    #taper = cosine_taper(t, win_c)
-    # F * noise
-    noise_filt = data_filt[:,0:noise_idx1]
-
-    #------ apply window taper and polarity projection
-    # obs = w * F * d
-    data_filt_win = np.dot(self.proj_matrix, data_filt) * self._taper_func
-    # syn = w * F * u
-    syn_filt_win = np.dot(self.proj_matrix, syn_filt) * self._taper_func
-    # noise (only projection)
-    noise_filt_win = np.dot(proj_matrix, noise_filt)
-    #DEBUG
-    #diff = obs_ENZ_win - syn_ENZ_win
-    #for i in range(3):
-    #  plt.subplot(311+i)
-    #  plt.plot(syn_times, obs_ENZ_win[i,:], 'k')
-    #  plt.plot(syn_times, syn_ENZ_win[i,:], 'r')
-    #  plt.plot(syn_times, diff[i,:], 'c')
-    #plt.show()
+    data_filt_win, syn_filt_win, noise_filt_win = self._process_data(
+        sampling_rate, data_starttime, data, green, 
+        t0, gauss_width, first_arrtime, back_azimuth)
 
     #------ measure SNR (based on maximum amplitude)
-    Amax_obs = np.sqrt(np.max(np.sum(obs_filt_win**2, axis=0)))
+    Amax_data = np.sqrt(np.max(np.sum(data_filt_win**2, axis=0)))
     Amax_syn = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
     Amax_noise =  np.sqrt(np.max(np.sum(noise_filt_win**2, axis=0)))
-    if Amax_obs == 0: # bad record
-      warn = "%s:%s:%s empty obs trace, SKIP." \
-          % (event_id, station_id, window_id)
-      warnings.warn(warn)
-      window['stat']['code'] = -1
-      window['stat']['msg'] = "Amax_obs=0"
-      continue
-    if Amax_noise == 0: # could occure when the data begin time is too close to the first arrival
-        warn = "%s:%s:%s empty noise trace, SKIP." \
-            % (event_id, station_id, window_id)
-        warnings.warn(warn)
-        window['stat']['code'] = -1
-        window['stat']['msg'] = "Amax_noise=0"
-        continue
-      snr = 20.0*np.log10(Amax_obs/Amax_noise)
+    # empty data record
+    if Amax_data == 0: 
+      msg = "empty data trace."
+      raise Exception(msg)
+    # could occure when the data begin time is too close to the first arrival
+    if Amax_noise == 0: 
+      msg = "empty noise trace."
+      raise Exception(msg)
+    # SNR
+    snr = 20.0*np.log10(Amax_data/Amax_noise)
  
-      #------ measure CC time shift (between w*F*d and w*F*u)
-      obs_norm = np.sqrt(np.sum(obs_filt_win**2))
-      syn_norm = np.sqrt(np.sum(syn_filt_win**2))
-      # window normalization factor (without dt)
-      Nw = obs_norm * syn_norm
-      cc[:] = 0.0
-      # NOTE the order (obs,syn) is important. The positive time on 
-      # CC means shifting syn in the positive time direction to match
-      # the observed obs, and vice verser.
-      # [-(nt-1), nt) * dt
-      for i in range(3):
-        cc += signal.fftconvolve(
-            obs_filt_win[i,:], syn_filt_win[i,::-1], 'full')
-      cc /= Nw
-      #DEBUG
-      #print window_id
-      #print cc[syn_nt-2] - np.sum(obs_ENZ_win * syn_ENZ_win)
-      #print cc[syn_nt-1] - np.sum(obs_ENZ_win * syn_ENZ_win)
-      #print cc[syn_nt] - np.sum(obs_ENZ_win * syn_ENZ_win)
-      #print cc[syn_nt+1] - np.sum(obs_ENZ_win * syn_ENZ_win)
-      #print cc[syn_nt+2] - np.sum(obs_ENZ_win * syn_ENZ_win)
-      #-- zero-lag cc coeff.
-      CC0 = cc[obs_npts-1] #the n-th point corresponds to zero lag time 
-      AR0 = CC0 * syn_norm / obs_norm # amplitude ratio syn/obs 
-      #DEBUG
-      #print CC0 - np.sum(obs_ENZ_win * syn_ENZ_win)/obs_norm/syn_norm
-      #-- interpolate cc to finer time samples
-      CC_shift_range = window_len/2.0 #TODO: more reasonable choice?
-      ncc = int(CC_shift_range / cc_delta)
-      cc_times = np.arange(-ncc,ncc+1) * cc_delta
-      if delta < cc_delta:
-        warnings.warn("delta(%f) < cc_time_step(%f)" \
-            % (delta, cc_delta))
-      ti = cc_times + (obs_npts-1)*delta  # -(npts-1)*dt: begin time in cc
-      cci = lanczos_interp1(cc, delta, ti, na=20)
-      # time shift at the maximum correlation
-      imax = np.argmax(cci)
-      CC_time_shift = cc_times[imax]
-      CCmax = cci[imax]
-      ARmax = CCmax * syn_norm / obs_norm # amplitude ratio: syn/obs
+    #------ measure CC time shift
+    data_norm = np.sqrt(np.sum(data_filt_win**2))
+    syn_norm = np.sqrt(np.sum(syn_filt_win**2))
+    # window normalization factor (without *dt)
+    Nw = data_norm * syn_norm
+    cc[:] = 0.0
+    # NOTE the order (obs,syn) is important. The positive time on 
+    # CC means shifting syn along the positive time direction in order to match
+    # the observed obs, and vice verser.
+    # [-(nt-1), nt) * dt
+    for i in range(3):
+      cc += signal.fftconvolve(
+          data_filt_win[i,:], syn_filt_win[i,::-1], 'full')
+    cc /= Nw
+    #DEBUG
+    #print window_id
+    #print cc[syn_nt-2] - np.sum(obs_ENZ_win * syn_ENZ_win)
+    #print cc[syn_nt-1] - np.sum(obs_ENZ_win * syn_ENZ_win)
+    #print cc[syn_nt] - np.sum(obs_ENZ_win * syn_ENZ_win)
+    #print cc[syn_nt+1] - np.sum(obs_ENZ_win * syn_ENZ_win)
+    #print cc[syn_nt+2] - np.sum(obs_ENZ_win * syn_ENZ_win)
+    #-- zero-lag cc coeff.
+    data_npts = data.shape[1]
+    CC0 = cc[data_npts-1] #the n-th point corresponds to zero lag time 
+    AR0 = CC0 * syn_norm / data_norm # amplitude ratio syn/obs 
+    #DEBUG
+    #print CC0 - np.sum(obs_ENZ_win * syn_ENZ_win)/obs_norm/syn_norm
+    #-- interpolate cc to finer time samples
+    win_len = self.endtime - self.starttime
+    CC_shift_range = win_len/2.0 #TODO: more reasonable choice?
+    ncc = int(CC_shift_range / cc_delta)
+    cc_times = np.arange(-ncc,ncc+1) * cc_delta
+    delta = 1.0/sampling_rate
+    if delta < cc_delta:
+      msg = "delta(%f) < cc_time_step(%f)" % (delta, cc_delta)
+      warnings.warn(msg)
+    ti = cc_times + (data_npts-1)*delta  # -(npts-1)*dt: begin time in cc
+    cci = lanczos_interp1(cc, delta, ti, na=20)
+    # time shift at the maximum correlation
+    imax = np.argmax(cci)
+    CC_time_shift = cc_times[imax]
+    CCmax = cci[imax]
+    ARmax = CCmax * syn_norm / obs_norm # amplitude ratio: syn/obs
 
-      #------ window weighting based on SNR and misfit
-      weight = 1.0
-      if 'SNR' in weight_param:
-        weight *= cosine_taper(snr, weight_param['SNR'])
-      if 'CCmax' in weight_param:
-        weight *= cosine_taper(CCmax, weight_param['SNR'])
-      if 'CC0' in weight_param:
-        weight *= cosine_taper(CC0, weight_param['CC0'])
+    # adjoint source: dchiw_du (misfit functional: zero-lag cc coef.)
+    # dchiw_du = conj(F * [S]) * w * [ w * F * d - A * w * F * S * g] / N, 
+    # , where A = CC0(un-normalized) / norm(u)**2, N = norm(d)*norm(u)
+    Aw = CC0 * data_norm / syn_norm # window amplitude raito
 
-      #------ measure adjoint source
-      # adjoint source: dchiw_du (misfit functional: zero-lag cc coef.)
-      # dchiw_du = conj(F * [S]) * w * [ w * F * d - A * w * F * S * g] / N, 
-      # , where A = CC0(un-normalized) / norm(u)**2, N = norm(d)*norm(u)
-      Aw = CC0 * obs_norm / syn_norm # window amplitude raito
-      #-- dchiw_du
-      #NOTE: ignore 1.0/delta from Nw
-      dchiw_du = win_func * (obs_filt_win - Aw*syn_filt_win) / Nw
-      # apply conj(F), equivalent to conj(F*conj(adj))
-      dchiw_du = signal.lfilter(filter_b, filter_a, dchiw_du[:,::-1])
-      dchiw_du = dchiw_du[:,::-1]
-      #DEBUG
-      #for i in range(3):
-      #  plt.subplot(311+i)
-      #  plt.plot(syn_times, dchiw_du1[i,:], 'k')
-      #  plt.plot(syn_times, dchiw_du[i,:], 'r')
-      #plt.show()
-      # add into total dchi_du
-      #dchi_du += weight * dchiw_du
-      #-- dchiw_dg = conj(S) * dchiw_du
-      dchiw_dg = np.fft.irfft(np.conjugate(src_spectrum) 
-          * np.fft.rfft(dchiw_du), obs_npts)
-      # add into total dchi_dg
-      dchi_dg += weight * dchiw_dg
-      #DEBUG
-      #for i in range(3):
-      #  plt.subplot(311+i)
-      #  plt.plot(syn_times, dchiw_du[i,:], 'k')
-      #  plt.plot(syn_times, dchiw_dg[i,:], 'r')
-      #plt.show()
+    #------ record results
+    quality_dict = {
+        'Amax_data': Amax_data, 'Amax_syn': Amax_syn, 
+        'Amax_noise': Amax_noise, 'SNR': snr}
 
-      #------ record results
-      quality_dict = {
-          'Amax_obs': Amax_obs, 'Amax_syn': Amax_syn, 
-          'Amax_noise': Amax_noise, 'SNR': snr}
-      cc_dict = {
-          'time': cc_times, 'cc': cci,
-          'time_shift': CC_time_shift,
-          'CC0': CC0, 'CCmax': CCmax,
-          'AR0': AR0, 'ARmax': ARmax,
-          'Nw':Nw, 'Aw':Aw }
-      window['quality'] = quality_dict
-      window['cc'] = cc_dict
-      window['weight'] = weight
-      window['stat'] = {'code': 1, 
-          'msg': "measure adj on "+UTCDateTime.now().isoformat()}
+    cc_dict = {
+        'time': cc_times, 'cc': cci,
+        'time_shift': CC_time_shift,
+        'CC0': CC0, 'CCmax': CCmax,
+        'AR0': AR0, 'ARmax': ARmax,
+        'Nw':Nw, 'Aw':Aw }
 
-      #------ plot measure window and results 
-      if plot:
-        orientation_codes = ['E', 'N', 'Z']
-        adj = dchiw_dg
-        Amax_adj = np.sqrt(np.max(np.sum(adj**2, axis=0)))
-        for i in range(3):
-          plt.subplot(411+i)
-          if i == 0:
-            plt.title('%s dt %.2f CCmax %.3f ARmax %.3f CC0 %.3f '
-                'AR0 %.3f \nAobs %g Anoise %g SNR %.1f weight %.3f'
-                % (station_id, CC_time_shift, CCmax, ARmax, 
-                  CC0, AR0, Amax_obs, Amax_noise, snr, weight) )
-                #idx_plt = range(syn_nl,(syn_nl+syn_npts))
+    self.quality.update(quality_dict)
+    self.cc.update(cc_dict)
 
-          plt.plot(obs_times, obs_filt[i,:]/Amax_obs, 'k', linewidth=0.2)
-          plt.plot(obs_times, syn_filt[i,:]/Amax_syn, 'r', linewidth=0.2)
-          plt.plot(obs_times[0:noise_idx1], 
-              noise_filt[i,:]/Amax_obs, 'b', linewidth=1.0)
+    msg = "measure_cc OK."
+    self._update_status(0, msg)
 
-          idx = (win_b <= data_ts) & (obs_times <= win_e)
-          plt.plot(obs_times[idx], obs_filt_win[i,idx]/Amax_obs, 
-              'k', linewidth=1.0)
-          plt.plot(obs_times[idx], syn_filt_win[i,idx]/Amax_syn, 
-              'r', linewidth=1.0)
-          plt.plot(obs_times[idx], adj[i,idx]/Amax_adj, 
-              'c', linewidth=1.0)
-
-          plt.ylim((-1.5, 1.5))
-          #plt.xlim((min(t), max(t)))
-          plt.xlim((obs_times[0], obs_times[-1]))
-          plt.ylabel(orientation_codes[i])
-
-        plt.subplot(414)
-        plt.plot(cc_times, cci, 'k-')
-        plt.xlim((min(cc_times), max(cc_times)))
-        plt.ylabel(window_id)
-        plt.show()
-      #====== end for window_id in windows:
-
-      #------ store adjoint source for this station
-      #station['dchi_du'] = dchi_du
-      station['dchi_dg'] = dchi_dg
-
-      #DEBUG
-      #for i in range(3):
-      #  plt.subplot(311+i)
-      #  plt.plot(syn_times, dchi_du[i,:], 'k')
-      #  plt.plot(syn_times, dchi_dg[i,:], 'r')
-      #plt.show()
-
-    #endfor station_id in station_dict:
-  #enddef measure_windows_for_one_station(self,
-
-#
 #======================================================
-#
-
   def make_adjoint_source(self, 
       adj_type='dchi_dg',
       out_dir='adj',

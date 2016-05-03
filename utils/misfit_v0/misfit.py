@@ -11,10 +11,10 @@ import numpy as np
 import scipy.signal as signal
 from scipy import interpolate
 #
-import cPickle as pickle 
+import pickle
 #
 from obspy import UTCDateTime, read, Trace
-from obspy.core.util.geodetics import gps2DistAzimuth, kilometer2degrees
+from obspy.geodetics import gps2dist_azimuth, kilometer2degrees
 from obspy.taup import TauPyModel
 from obspy.imaging.beachball import Beach
 #
@@ -409,24 +409,24 @@ class Misfit(object):
           lons.count(lons[0])!=len(lons) or \
           eles.count(eles[0])!=len(eles) or \
           deps.count(deps[0])!=len(deps):
-        print "[WARNING] %s: " \
+        print("[WARNING] %s: " \
           "channels do NOT have the same coordinates, SKIP." \
-          % (station_id)
+          % (station_id))
         continue
 
       # check completeness for 3-components
       if three_channels:
         if len(channel) != 3:
-          print '[WARNING] %s: not exactly 3 components found, '\
-            'SKIP.' % (station_id)
+          print('[WARNING] %s: not exactly 3 components found, '\
+            'SKIP.' % (station_id))
           continue
         # check channel orientations
         Z_comp = [ (x['code'], x['azimuth'], x['dip'])
             for x in channel if x['code'][2] == 'Z']
         if len(Z_comp) != 1 or abs(Z_comp[0][2]) != 90.0: 
-          print '[WARNING] %s: problematic Z channel, SKIP' \
-              % (station_id)
-          print '      channel: ', H_comp
+          print('[WARNING] %s: problematic Z channel, SKIP' \
+              % (station_id))
+          print('      channel: ', H_comp)
           continue
         H_comp = [ (x['code'], x['azimuth'], x['dip']) \
             for x in channel if x['code'][2] != 'Z']
@@ -435,20 +435,22 @@ class Misfit(object):
             abs(H_comp[1][2]) != 0.0 or \
             abs(np.cos(np.deg2rad(
               H_comp[0][1] - H_comp[1][1]))) > 0.1: 
-          print '[WARNING] %s: problematic horizontal channels, SKIP'\
-              % (station_id)
-          print '      channel: ', H_comp
+          print('[WARNING] %s: problematic horizontal channels, SKIP'\
+              % (station_id))
+          print('      channel: ', H_comp)
           continue
 
       # geodetic and ak135 traveltimes
-      dist, az, baz = gps2DistAzimuth(
+      dist, az, baz = gps2dist_azimuth(
           event['latitude'], event['longitude'],
           channel[0]['latitude'], channel[0]['longitude'])
       dist_degree = kilometer2degrees(dist/1000.0)
 
       arrivals = taup_model.get_travel_times(
           source_depth_in_km=event['depth'],
-          distance_in_degree=dist_degree)
+          distance_in_degree=dist_degree,
+          phase_list=['ttp','tts'],
+          )
 
       # make station metadata 
       meta = { #TODO remove dumplicated info in channels?
@@ -475,6 +477,361 @@ class Misfit(object):
 
     #endfor net_sta_loc in stations_all:
   #enddef setup_stations_from_channel_file
+
+#
+#======================================================
+#
+  def radiation_pattern(self, 
+      outfig="radiation.pdf", 
+      phase_list=['P','S','pP','sS'],
+      dist=[25, 180],
+      ):
+    """
+    Plot radiation pattern in the local ENU coordinate
+
+    Note:
+    """
+    #------ event location and focal mechanism 
+    event = self.data['event']
+    evla = event['latitude']
+    evlo = event['longitude']
+    evdp = event['depth']
+    mt_rtp = event['mt_rtp']
+
+    # locat ENU coord
+    mt_enu = np.zeros((3,3))
+    # e = p, n = -t, u = r
+    mt_enu[0,0] = mt_rtp[2,2] # ee = pp
+    mt_enu[0,1] = -1.0*mt_rtp[1,2] # en = -tp
+    mt_enu[1,0] = mt_enu[0,1]
+    mt_enu[0,2] = mt_rtp[0,2] # eu = rp
+    mt_enu[2,0] = mt_enu[0,2]
+    mt_enu[1,1] = mt_rtp[1,1] # nn = tt
+    mt_enu[1,2] = mt_rtp[0,1] # nu = -rt
+    mt_enu[2,1] = mt_enu[1,2]
+    mt_enu[2,2] = mt_rtp[0,0] # uu = rr
+
+    #------ stations 
+    # initialize taup
+    taup_model = TauPyModel(model="ak135")
+
+    station_dict = self.data['station']
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      if station['stat']['code'] < 0:
+        continue
+      meta = station['meta']
+      dist_degree = meta['dist_degree']
+      if dist_degree > min(dist) and dist_degree < max(dist):
+        arrivals = taup_model.get_travel_times(
+            source_depth_in_km=evdp,
+            distance_in_degree=dist_degree,
+            phase_list=phase_list,
+            )
+        meta['ttime'] = arrivals
+
+    #------ calculate radiation pattern for up-going rays 
+    #-- outgoing rays 
+    # cmpinc: incline angle measured from Up/Down direction for up/down-going rays
+    # cmpaz: azimuth measured on EN plane clockwise from North
+    dtheta = 0.5
+    cmpinc = np.arange(0.0, 90.0+dtheta/2, dtheta) 
+    cmpaz = np.arange(0.0, 360.0+dtheta/2, dtheta) 
+    tt, pp = np.meshgrid(cmpinc, cmpaz)
+    nn = tt.size
+    sin_inc = np.sin(np.deg2rad(tt.flatten())) 
+    cos_inc = np.cos(np.deg2rad(tt.flatten())) 
+    sin_az = np.sin(np.deg2rad(pp.flatten())) 
+    cos_az = np.cos(np.deg2rad(pp.flatten())) 
+    #-- unit vectors of up-going rays 
+    vu = np.zeros((3, nn))
+    vu[0,:] = sin_inc * sin_az
+    vu[1,:] = sin_inc * cos_az
+    vu[2,:] = cos_inc
+    #-- unit vectors of down-going rays 
+    # inc is measured from Down
+    vd = np.zeros((3, nn))
+    vd[0,:] = sin_inc * sin_az
+    vd[1,:] = sin_inc * cos_az
+    vd[2,:] = -1.0*cos_inc
+    #-- tractions of up/down-going rays
+    mt_vu = np.dot(mt_enu, vu)
+    mt_vd = np.dot(mt_enu, vd)
+    #-- P radiation pattern
+    Apu = np.zeros(nn) # amplitude of up-going rays
+    Apd = np.zeros(nn) # amplitudes of down-going rays
+    for i in range(nn):
+      Apu[i] = np.dot(vu[:,i], mt_vu[:,i])
+      Apd[i] = np.dot(vd[:,i], mt_vd[:,i])
+    #-- S radiation pattern
+    Ashu = np.zeros(nn)
+    Ashd = np.zeros(nn)
+    Asvu = np.zeros(nn)
+    Asvd = np.zeros(nn)
+    for i in range(nn):
+      Fsu = mt_vu[:,i] - vu[:,i]*Apu[i]
+      Fsd = mt_vd[:,i] - vd[:,i]*Apd[i]
+
+      Ashu[i] = cos_az[i]*Fsu[0] - sin_az[i]*Fsu[1]
+      Ashd[i] = cos_az[i]*Fsd[0] - sin_az[i]*Fsd[1]
+
+      Asvu[i] = -1.0*cos_inc[i]*(sin_az[i]*Fsu[0] + cos_az[i]*Fsu[1]) \
+          + sin_inc[i]*Fsu[2]
+      Asvd[i] = 1.0*cos_inc[i]*(sin_az[i]*Fsd[0] + cos_az[i]*Fsd[1]) \
+          + sin_inc[i]*Fsd[2]
+
+    #-- reshape into 2D array
+    Apu = Apu.reshape(tt.shape)
+    Apd = Apd.reshape(tt.shape)
+    Ashu = Ashu.reshape(tt.shape)
+    Ashd = Ashd.reshape(tt.shape)
+    Asvu = Asvu.reshape(tt.shape)
+    Asvd = Asvd.reshape(tt.shape)
+
+    #------ plot radiation pattern
+    # polar to cartesian
+    xx = tt * sin_az.reshape(tt.shape)
+    yy = tt * cos_az.reshape(tt.shape)
+    # outer circle
+    az = np.arange(0.0, 360.1, 1)
+    x_peri = 90.0 * np.sin(np.deg2rad(az))
+    y_peri = 90.0 * np.cos(np.deg2rad(az))
+    #
+    with PdfPages(outfig) as pdf:
+
+      #-- plot  P radiation pattern
+      Ap_max = max(np.max(np.abs(Apu)), np.max(np.abs(Apd)))
+
+      # up-going P
+      fig = plt.figure()
+      ax = fig.add_axes([0.1,0.1,0.8,0.8], aspect='equal')
+      # contour
+      levels = np.linspace(-1.0,1.0,21)
+      cs = ax.contour(xx, yy, Apu/Ap_max, levels, colors='k')
+      ax.clabel(cs, fontsize='x-small', inline=1, fmt='%.1f')
+      # plot axis
+      ax.plot(x_peri, y_peri, 'k')
+      for theta in np.arange(10, 90, 10):
+        xc = theta * np.sin(np.deg2rad(az))
+        yc = theta * np.cos(np.deg2rad(az))
+        ax.plot(xc, yc, '-', color=(0.5,0.5,0.5), linewidth=0.5)
+      for theta in np.arange(0, 360, 10):
+        xc = 90.0 * np.sin(np.deg2rad(theta))
+        yc = 90.0 * np.cos(np.deg2rad(theta))
+        ax.plot([0, xc], [0, yc], '-', color=(0.5,0.5,0.5), linewidth=0.5)
+      # plot stations
+      for station_id in station_dict:
+        station = station_dict[station_id]
+        if station['stat']['code'] < 0:
+          continue
+        meta = station['meta']
+        azimuth = meta['azimuth']
+        dist_degree = meta['dist_degree']
+        if dist_degree > min(dist) and dist_degree < max(dist):
+          for arr in meta['ttime']:
+            if arr.name[0] == "p":
+              takeoff_angle = arr.takeoff_angle
+              inc = 180.0 - takeoff_angle
+              xc = inc * np.sin(np.deg2rad(azimuth))
+              yc = inc * np.cos(np.deg2rad(azimuth))
+              ax.plot(xc, yc, 'r+')
+      # set axis
+      ax.set_title("Radiation pattern: up-going P")
+      pdf.savefig()
+      plt.close()
+
+      # down-going P
+      fig = plt.figure()
+      ax = fig.add_axes([0.1,0.1,0.8,0.8], aspect='equal')
+      # contour
+      levels = np.linspace(-1.0,1.0,21)
+      cs = ax.contour(xx, yy, Apd/Ap_max, levels, colors='k')
+      ax.clabel(cs, fontsize='x-small', inline=1, fmt='%.1f')
+      # plot axis
+      ax.plot(x_peri, y_peri, 'k')
+      for theta in np.arange(10, 90, 10):
+        xc = theta * np.sin(np.deg2rad(az))
+        yc = theta * np.cos(np.deg2rad(az))
+        ax.plot(xc, yc, '-', color=(0.5,0.5,0.5), linewidth=0.5)
+      for theta in np.arange(0, 360, 10):
+        xc = 90.0 * np.sin(np.deg2rad(theta))
+        yc = 90.0 * np.cos(np.deg2rad(theta))
+        ax.plot([0, xc], [0, yc], '-', color=(0.5,0.5,0.5), linewidth=0.5)
+      # plot stations
+      for station_id in station_dict:
+        station = station_dict[station_id]
+        if station['stat']['code'] < 0:
+          continue
+        meta = station['meta']
+        azimuth = meta['azimuth']
+        dist_degree = meta['dist_degree']
+        if dist_degree > min(dist) and dist_degree < max(dist):
+          for arr in meta['ttime']:
+            if arr.name[0] == "P":
+              takeoff_angle = arr.takeoff_angle
+              inc = takeoff_angle
+              xc = inc * np.sin(np.deg2rad(azimuth))
+              yc = inc * np.cos(np.deg2rad(azimuth))
+              ax.plot(xc, yc, 'r+')
+      # set axis
+      ax.set_title("Radiation pattern: down-going P")
+      pdf.savefig()
+      plt.close()
+
+      #-- plot SH radiation pattern
+      Ash_max = max(np.max(np.abs(Ashu)), np.max(np.abs(Ashd)))
+      
+      # up-going SH
+      fig = plt.figure()
+      # contour
+      ax = fig.add_axes([0.1,0.1,0.8,0.8], aspect='equal')
+      levels = np.linspace(-1.0,1.0,21)
+      cs = ax.contour(xx, yy, Ashu/Ash_max, levels, colors='k')
+      ax.clabel(cs, fontsize='x-small', inline=1, fmt='%.1f')
+      # axis
+      ax.plot(x_peri, y_peri, 'k')
+      for theta in np.arange(10, 90, 10):
+        xc = theta * np.sin(np.deg2rad(az))
+        yc = theta * np.cos(np.deg2rad(az))
+        ax.plot(xc, yc, '-', color=(0.5,0.5,0.5), linewidth=0.5)
+      for theta in np.arange(0, 360, 10):
+        xc = 90.0 * np.sin(np.deg2rad(theta))
+        yc = 90.0 * np.cos(np.deg2rad(theta))
+        ax.plot([0, xc], [0, yc], '-', color=(0.5,0.5,0.5), linewidth=0.5)
+      # plot stations
+      for station_id in station_dict:
+        station = station_dict[station_id]
+        if station['stat']['code'] < 0:
+          continue
+        meta = station['meta']
+        azimuth = meta['azimuth']
+        dist_degree = meta['dist_degree']
+        if dist_degree > min(dist) and dist_degree < max(dist):
+          for arr in meta['ttime']:
+            if arr.name[0] == "s":
+              takeoff_angle = arr.takeoff_angle
+              inc = 180.0 - takeoff_angle
+              xc = inc * np.sin(np.deg2rad(azimuth))
+              yc = inc * np.cos(np.deg2rad(azimuth))
+              ax.plot(xc, yc, 'r+')
+      # set axis
+      ax.set_title("Radiation pattern: up-going SH")
+      pdf.savefig()
+      plt.close()
+
+      #-- down-going SH
+      Ash_max = max(np.max(np.abs(Ashu)), np.max(np.abs(Ashd)))
+      fig = plt.figure()
+      # contour
+      ax = fig.add_axes([0.1,0.1,0.8,0.8], aspect='equal')
+      levels = np.linspace(-1.0,1.0,21)
+      cs = ax.contour(xx, yy, Ashd/Ash_max, levels, colors='k')
+      ax.clabel(cs, fontsize='x-small', inline=1, fmt='%.1f')
+      # axis
+      ax.plot(x_peri, y_peri, 'k')
+      for theta in np.arange(10, 90, 10):
+        xc = theta * np.sin(np.deg2rad(az))
+        yc = theta * np.cos(np.deg2rad(az))
+        ax.plot(xc, yc, '-', color=(0.5,0.5,0.5), linewidth=0.5)
+      for theta in np.arange(0, 360, 10):
+        xc = 90.0 * np.sin(np.deg2rad(theta))
+        yc = 90.0 * np.cos(np.deg2rad(theta))
+        ax.plot([0, xc], [0, yc], '-', color=(0.5,0.5,0.5), linewidth=0.5)
+      # plot stations
+      for station_id in station_dict:
+        station = station_dict[station_id]
+        if station['stat']['code'] < 0:
+          continue
+        meta = station['meta']
+        azimuth = meta['azimuth']
+        dist_degree = meta['dist_degree']
+        if dist_degree > min(dist) and dist_degree < max(dist):
+          for arr in meta['ttime']:
+            if arr.name[0] == "S":
+              takeoff_angle = arr.takeoff_angle
+              inc = takeoff_angle
+              xc = inc * np.sin(np.deg2rad(azimuth))
+              yc = inc * np.cos(np.deg2rad(azimuth))
+              ax.plot(xc, yc, 'r+')
+      # set axis
+      ax.set_title("Radiation pattern: down-going SH")
+      pdf.savefig()
+      plt.close()
+
+      #-- plot SV radiation pattern
+      Asv_max = max(np.max(np.abs(Asvu)), np.max(np.abs(Asvd)))
+      # up-going SV
+      fig = plt.figure()
+      ax = fig.add_axes([0.1,0.1,0.8,0.8], aspect='equal')
+      levels = np.linspace(-1.0,1.0,21)
+      cs = ax.contour(xx, yy, Asvu/Asv_max, levels, colors='k')
+      ax.clabel(cs, fontsize='x-small', inline=1, fmt='%.1f')
+      ax.plot(x_peri, y_peri, 'k')
+      for theta in np.arange(10, 90, 10):
+        xc = theta * np.sin(np.deg2rad(az))
+        yc = theta * np.cos(np.deg2rad(az))
+        ax.plot(xc, yc, '-', color=(0.5,0.5,0.5), linewidth=0.5)
+      for theta in np.arange(0, 360, 10):
+        xc = 90.0 * np.sin(np.deg2rad(theta))
+        yc = 90.0 * np.cos(np.deg2rad(theta))
+        ax.plot([0, xc], [0, yc], '-', color=(0.5,0.5,0.5), linewidth=0.5)
+      # plot stations
+      for station_id in station_dict:
+        station = station_dict[station_id]
+        if station['stat']['code'] < 0:
+          continue
+        meta = station['meta']
+        azimuth = meta['azimuth']
+        dist_degree = meta['dist_degree']
+        if dist_degree > min(dist) and dist_degree < max(dist):
+          for arr in meta['ttime']:
+            if arr.name[0] == "s":
+              takeoff_angle = arr.takeoff_angle
+              inc = 180.0 - takeoff_angle
+              xc = inc * np.sin(np.deg2rad(azimuth))
+              yc = inc * np.cos(np.deg2rad(azimuth))
+              ax.plot(xc, yc, 'r+')
+      # set axis
+      ax.set_title("Radiation pattern: up-going SV")
+      pdf.savefig()
+      plt.close()
+
+      # down-going SV
+      fig = plt.figure()
+      ax = fig.add_axes([0.1,0.1,0.8,0.8], aspect='equal')
+      levels = np.linspace(-1.0,1.0,21)
+      cs = ax.contour(xx, yy, Asvd/Asv_max, levels, colors='k')
+      ax.clabel(cs, fontsize='x-small', inline=1, fmt='%.1f')
+      ax.plot(x_peri, y_peri, 'k')
+      for theta in np.arange(10, 90, 10):
+        xc = theta * np.sin(np.deg2rad(az))
+        yc = theta * np.cos(np.deg2rad(az))
+        ax.plot(xc, yc, '-', color=(0.5,0.5,0.5), linewidth=0.5)
+      for theta in np.arange(0, 360, 10):
+        xc = 90.0 * np.sin(np.deg2rad(theta))
+        yc = 90.0 * np.cos(np.deg2rad(theta))
+        ax.plot([0, xc], [0, yc], '-', color=(0.5,0.5,0.5), linewidth=0.5)
+      # plot stations
+      for station_id in station_dict:
+        station = station_dict[station_id]
+        if station['stat']['code'] < 0:
+          continue
+        meta = station['meta']
+        azimuth = meta['azimuth']
+        dist_degree = meta['dist_degree']
+        if dist_degree > min(dist) and dist_degree < max(dist):
+          for arr in meta['ttime']:
+            if arr.name[0] == "S":
+              takeoff_angle = arr.takeoff_angle
+              inc = takeoff_angle
+              xc = inc * np.sin(np.deg2rad(azimuth))
+              yc = inc * np.cos(np.deg2rad(azimuth))
+              ax.plot(xc, yc, 'r+')
+      # set axis
+      ax.set_title("Radiation pattern: down-going SV")
+      pdf.savefig()
+      plt.close()
+
 
 #
 #======================================================
@@ -530,7 +887,7 @@ class Misfit(object):
         warn_str = "failed to read in sac files for %s, SKIP (%s)" \
             % (station_id, sys.exc_info()[0])
         warnings.warn(warn_str, UserWarning)
-        print e
+        print(e)
         station['stat']['code'] = -1
         station['stat']['msg'] = "failed to read in sac files [%s]" \
             % UTCDateTime.now().isoformat()
@@ -574,15 +931,15 @@ class Misfit(object):
           warn_str = "%s: record not long enough, SKIP %s" \
               % (obs_files[i], station_id)
           warnings.warn(warn_str)
-          print obs_starttime, obs_endtime 
-          print obs_tmin, syn_endtime 
+          print(obs_starttime, obs_endtime)
+          print(obs_tmin, syn_endtime)
           station['stat']['code'] = -1
           station['stat']['msg'] = "%s [%s]" \
               % (warn_str, UTCDateTime.now().isoformat())
           break
 
         #DEBUG
-        #print station_id, obs_files[i]
+        #print(station_id, obs_files[i]
         #obs_times = (obs_starttime-syn_starttime) + np.arange(obs_npts)*obs_delta
         #plt.plot(obs_times, tr.data, 'k')
 
@@ -693,11 +1050,11 @@ class Misfit(object):
             ttime.append(arr.time)
         if ttime:
           ref_time += min(ttime)
-          #print "[INFO] phase %s: min(ttime)=%f, ref_time=%s" \
+          #print("[INFO] phase %s: min(ttime)=%f, ref_time=%s" \
           #    % (phase, min(ttime), ref_time)
         else:
-          print "[INFO] phase %s not found, use event origin time=%s" \
-              % (phase, ref_time)
+          print("[INFO] phase %s not found, use event origin time=%s" \
+              % (phase, ref_time))
         starttime = ref_time + signal_begin
         endtime = ref_time + signal_end
         taper_dict = {'type':taper_param[0], 'ratio':taper_param[1],
@@ -720,7 +1077,7 @@ class Misfit(object):
           cmpaz = float('nan')
           cmpdip = float('nan')
         else:
-          print "[WARN] %s: unrecognized component, SKIP." % (comp)
+          print("[WARN] %s: unrecognized component, SKIP." % (comp))
           continue
         polarity_dict = {'component':comp, 'azimuth': cmpaz, 'dip': cmpdip }
 
@@ -788,11 +1145,10 @@ class Misfit(object):
       F_src = stf_gauss_spectrum(syn_freq, event['tau'])
 
       #------ loop each window
+      # sum of adjoint sources from all windows
       dchi_du = np.zeros((3, syn_nt))
       dchi_dg = np.zeros((3, syn_nt))
-      win_func = np.zeros(syn_nt)
-      proj_matrix = np.zeros((3,3))
-      cc = np.zeros(2*syn_nt-1)
+
       for window_id in window_dict:
         # window parameters
         window = window_dict[window_id]
@@ -839,7 +1195,6 @@ class Misfit(object):
         comp = polarity['component']
         cmpaz = polarity['azimuth']
         cmpdip = polarity['dip']
-        proj_matrix[:,:] = 0.0 #reset to zero
         if comp in ['Z', 'R', 'T']:
           sin_az = np.sin(np.deg2rad(cmpaz))
           cos_az = np.cos(np.deg2rad(cmpaz))
@@ -850,16 +1205,13 @@ class Misfit(object):
                  [-sin_dip] ])     # Z, comp
           proj_matrix = np.dot(n, n.transpose())
         elif comp == 'H': # horizontal vector 2d
-          proj_matrix[0,0] = 1.0 # E
-          proj_matrix[1,1] = 1.0 # N
-          proj_matrix[2,2] = 0.0 # Z
+          proj_matrix = np.identity(3)
+          proj_matrix[2,2] = 0.0 # zero Z component
         elif comp == 'F': # full 3d vector
-          proj_matrix[0,0] = 1.0
-          proj_matrix[1,1] = 1.0
-          proj_matrix[2,2] = 1.0
+          proj_matrix = np.identity(3)
         else:
-          print '[WARNING] %s:%s unrecognized component code, SKIP' \
-              % (station_id, window_id)
+          print('[WARNING] %s:%s unrecognized component code, SKIP' \
+              % (station_id, window_id))
           continue
         polarity['proj_matrix'] = proj_matrix
 
@@ -915,14 +1267,14 @@ class Misfit(object):
         Amax_syn = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
         Amax_noise =  np.sqrt(np.max(np.sum(noise_filt_win**2, axis=0)))
         if Amax_obs == 0: # bad record
-          print '[WARN] %s:%s:%s empty obs trace, SKIP.' \
-              % (event_id, station_id, window_id)
+          print('[WARN] %s:%s:%s empty obs trace, SKIP.' \
+              % (event_id, station_id, window_id))
           window['stat']['code'] = -1
           window['stat']['msg'] = "Amax_obs=0"
           continue
         if Amax_noise == 0: # could occure when the data begin time is too close to the first arrival
-          print '[WARN] %s:%s:%s empty noise trace, SKIP.' \
-              % (event_id, station_id, window_id)
+          print('[WARN] %s:%s:%s empty noise trace, SKIP.' \
+              % (event_id, station_id, window_id))
           window['stat']['code'] = -1
           window['stat']['msg'] = "Amax_noise=0"
           continue
@@ -933,27 +1285,27 @@ class Misfit(object):
         syn_norm = np.sqrt(np.sum(syn_filt_win**2))
         # window normalization factor (without dt)
         Nw = obs_norm * syn_norm
-        cc[:] = 0.0
         # NOTE the order (obs,syn) is important. The positive time on 
         # CC means shifting syn in the positive time direction to match
         # the observed obs, and vice verser.
         # [-(nt-1), nt) * dt
+        cc = np.zeros(2*syn_nt-1)
         for i in range(3):
           cc += signal.fftconvolve(
               obs_filt_win[i,:], syn_filt_win[i,::-1], 'full')
         cc /= Nw
         #DEBUG
-        #print window_id
-        #print cc[syn_nt-2] - np.sum(obs_ENZ_win * syn_ENZ_win)
-        #print cc[syn_nt-1] - np.sum(obs_ENZ_win * syn_ENZ_win)
-        #print cc[syn_nt] - np.sum(obs_ENZ_win * syn_ENZ_win)
-        #print cc[syn_nt+1] - np.sum(obs_ENZ_win * syn_ENZ_win)
-        #print cc[syn_nt+2] - np.sum(obs_ENZ_win * syn_ENZ_win)
+        #print(window_id
+        #print(cc[syn_nt-2] - np.sum(obs_ENZ_win * syn_ENZ_win)
+        #print(cc[syn_nt-1] - np.sum(obs_ENZ_win * syn_ENZ_win)
+        #print(cc[syn_nt] - np.sum(obs_ENZ_win * syn_ENZ_win)
+        #print(cc[syn_nt+1] - np.sum(obs_ENZ_win * syn_ENZ_win)
+        #print(cc[syn_nt+2] - np.sum(obs_ENZ_win * syn_ENZ_win)
         #-- zero-lag cc coeff.
         CC0 = cc[syn_nt-1] #the n-th point corresponds to zero lag time 
         AR0 = CC0 * syn_norm / obs_norm # amplitude ratio syn/obs 
         #DEBUG
-        #print CC0 - np.sum(obs_ENZ_win * syn_ENZ_win)/obs_norm/syn_norm
+        #print(CC0 - np.sum(obs_ENZ_win * syn_ENZ_win)/obs_norm/syn_norm
         #-- interpolate cc to finer time samples
         CC_shift_range = window_len/2.0 #TODO: more reasonable choice?
         ncc = int(CC_shift_range / cc_delta)
@@ -1264,7 +1616,7 @@ class Misfit(object):
 #          'dm':1.0, 'du': du_dtau, 'dchi':dchi_dtau }
 #
 #      # DEBUG
-#      #print dchi_dt0, dchi_dtau
+#      #print(dchi_dt0, dchi_dtau
 #      #for i in range(3):
 #      #  plt.subplot(311+i)
 #      #  #plt.plot(t, dchi_du[i,:], 'k')
@@ -1425,7 +1777,7 @@ class Misfit(object):
       #'dm':dxs, 'dg':dg, 'du':du, 'dchi':dchi }
 
       # DEBUG
-      #print dchi
+      #print(dchi
       #for i in range(3):
       #  plt.subplot(311+i)
       #  #plt.plot(t,grf0[i,:],'k', t,syn_ENZ[i,:],'r', t,dg[i,:], 'b')
@@ -1590,7 +1942,7 @@ class Misfit(object):
       #'dm':np.array(dmt), 'dg':dg, 'du':du, 'dchi':dchi }
 
       # DEBUG
-      #print dchi
+      #print(dchi
       #for i in range(3):
       #  plt.subplot(311+i)
       #  plt.plot(t, du[i,:], 'k')
@@ -1688,8 +2040,8 @@ class Misfit(object):
         Aw = np.sum(wFd * wFu) / norm_wFu**2
 
         #DEBUG
-        #print "Nw: %e %e" % (Nw, window['cc']['Nw'])
-        #print "Aw: %e %e" % (Aw, window['cc']['Aw'])
+        #print("Nw: %e %e" % (Nw, window['cc']['Nw'])
+        #print("Aw: %e %e" % (Aw, window['cc']['Aw'])
 
         #------ filter differential seismograms (w * F * du_dm)
         wFdu = {}
@@ -1791,59 +2143,59 @@ class Misfit(object):
 #     for j in range(i+1, n_srcparam):
 #         hessian[j,i] = hessian[i,j]
 
-#   print "dchi_dm:"
-#   print dchi_dm 
+#   print("dchi_dm:"
+#   print(dchi_dm 
 
-#   print "hessian:"
-#   print hessian
+#   print("hessian:"
+#   print(hessian
 
-#   print "====== 0:4:"
+#   print("====== 0:4:"
 #   w, v = np.linalg.eigh(hessian, UPLO='U')
-#   print w
-#   print v
+#   print(w
+#   print(v
 #   x, residual, rank, sigval = np.linalg.lstsq(hessian, -dchi_dm)
-#   print " inv(hessian)*(-1.0 * dchi_dm): \n", x
-#   print "dt0: \n", x[0]
-#   print "dtau:\n", x[1]
-#   print "dxs: \n", x[2]*self.data['src_perturb']['xs'] 
-#   print "dmt: \n", x[3]*self.data['src_perturb']['mt'] 
+#   print(" inv(hessian)*(-1.0 * dchi_dm): \n", x
+#   print("dt0: \n", x[0]
+#   print("dtau:\n", x[1]
+#   print("dxs: \n", x[2]*self.data['src_perturb']['xs'] 
+#   print("dmt: \n", x[3]*self.data['src_perturb']['mt'] 
 
-#   print "====== only 0:3"
+#   print("====== only 0:3"
 #   h3 = hessian[0:3,0:3]
 #   v3 = dchi_dm[0:3]
 #   w, v = np.linalg.eigh(h3, UPLO='U')
-#   print w
-#   print v
+#   print(w
+#   print(v
 #   x, residual, rank, sigval = np.linalg.lstsq(h3, -v3)
-#   print "inv(hessian)*(-1.0 * dchi_dm): \n", x
-#   print "dt0: \n", x[0]
-#   print "dtau:\n", x[1]
-#   print "dxs: \n", x[2]*self.data['src_perturb']['xs'] 
-#   #print "dmt: \n", x[3]*self.data['src_perturb']['dmt'] 
+#   print("inv(hessian)*(-1.0 * dchi_dm): \n", x
+#   print("dt0: \n", x[0]
+#   print("dtau:\n", x[1]
+#   print("dxs: \n", x[2]*self.data['src_perturb']['xs'] 
+#   #print("dmt: \n", x[3]*self.data['src_perturb']['dmt'] 
 
-#   print "====== only 0:2"
+#   print("====== only 0:2"
 #   h3 = hessian[0:2,0:2]
 #   v3 = dchi_dm[0:2]
 #   w, v = np.linalg.eigh(h3, UPLO='U')
-#   print w
-#   print v
+#   print(w
+#   print(v
 #   x, residual, rank, sigval = np.linalg.lstsq(h3, -v3)
-#   print "inv(hessian)*(-1.0 * dchi_dm): \n", x
-#   print "dt0: \n", x[0]
-#   print "dtau:\n", x[1]
+#   print("inv(hessian)*(-1.0 * dchi_dm): \n", x
+#   print("dt0: \n", x[0]
+#   print("dtau:\n", x[1]
 
-#   print "====== only 0,2"
+#   print("====== only 0,2"
 #   idx = [0,2]
 #   hess = hessian[idx,:][:,idx]
 #   kernel = dchi_dm[idx]
-#   print hess
+#   print(hess
 #   eigs, eigv = np.linalg.eigh(hess, UPLO='U')
-#   print eigs
-#   print eigv
+#   print(eigs
+#   print(eigv
 #   x, residual, rank, sigval = np.linalg.lstsq(hess, -kernel)
-#   print "inv(hessian)*(-1.0 * dchi_dm): \n", x
-#   print "dt0: \n", x[0]
-#   print "dxs:\n", x[1]
+#   print("inv(hessian)*(-1.0 * dchi_dm): \n", x
+#   print("dt0: \n", x[0]
+#   print("dxs:\n", x[1]
 
 # #enddef measure_windows_for_one_station(self,
 
@@ -1902,7 +2254,6 @@ class Misfit(object):
 
     station_dict = self.data['station']
     for station_id in station_dict:
-      print station_id
       station = station_dict[station_id]
       # skip rejected stations
       if station['stat']['code'] < 0:
@@ -1939,7 +2290,6 @@ class Misfit(object):
       #---- measure misfit
       window_dict = station['window']
       for window_id in window_dict:
-        print window_id
         window = window_dict[window_id]
         # skip bad windows
         if window['stat']['code'] < 1:
@@ -1947,6 +2297,9 @@ class Misfit(object):
           continue
         # window weight
         weight = window['weight']
+        # skip window with zero weight
+        if np.isclose(weight, 0.0):
+          continue
         weight_sum += weight
         # filter
         filter_dict = window['filter']
@@ -1963,7 +2316,6 @@ class Misfit(object):
           plt.title("wind_func")
         # polarity projection 
         proj_matrix = window['polarity']['proj_matrix']
-        print proj_matrix
         #-- filter,project,taper obs
         # F * d
         obs_filt = signal.filtfilt(filter_b, filter_a, obs)
@@ -2011,9 +2363,7 @@ class Misfit(object):
           wpFu1 = np.fft.irfft(phase_shift*F_src*np.fft.rfft(pFg1), syn_nt) \
               * win_func
           norm_wpFu1 = np.sqrt(np.sum(wpFu1**2))
-          print("norm_wpFu1 = %f" % (norm_wpFu1))
           Nw = norm_wpFd * norm_wpFu1
-          print("Nw = %f" % (Nw))
           #normalized cc between obs and perturbed syn
           cc_wpFd_wpFu1 = np.sum(wpFd*wpFu1) / Nw
           # weighted cc
@@ -2028,9 +2378,10 @@ class Misfit(object):
             Amax_syn1 = np.max(np.sum(wpFu1**2, axis=0))**0.5
             win_b = win_starttime - syn_starttime
             win_e = win_endtime - syn_starttime
+            obs_filt_proj = np.dot(proj_matrix, obs_filt)
+            syn_filt_proj = np.dot(proj_matrix, syn_filt)
             for i in range(3):
               plt.subplot(311+i)
-
               if i == 0:
                 title_str = "%s.%s " % (station_id, window_id)
                 for model_name in dm:
@@ -2040,11 +2391,12 @@ class Misfit(object):
                 plt.title(title_str)
 
               idx_plt = range(syn_nl,(syn_nl+syn_npts))
-              plt.plot(syn_times[idx_plt], obs_filt[i,idx_plt]/Amax_obs, 
+              # whole trace, projected
+              plt.plot(syn_times[idx_plt], obs_filt_proj[i,idx_plt]/Amax_obs, 
                   'k', linewidth=0.2)
-              plt.plot(syn_times[idx_plt], syn_filt[i,idx_plt]/Amax_syn,
+              plt.plot(syn_times[idx_plt], syn_filt_proj[i,idx_plt]/Amax_syn,
                   'b', linewidth=0.2)
-
+              # windowed trace
               idx_plt = (win_b <= syn_times) & (syn_times <= win_e)
               plt.plot(syn_times[idx_plt], wpFd[i,idx_plt]/Amax_obs,
                   'k', linewidth=1.0)
@@ -2148,11 +2500,13 @@ class Misfit(object):
           dm_opt[par] = x_max
           print("maximum at %.5e with cc %.5e" % (dm_opt[par], cc_max))
 
-      # print out optimal model
+      # print(out optimal model
       print("------ optimal alpha")
       for par in model_name:
         print("%s: %.5e" %(par, dm_opt[par]))
       niter += 1
+
+      sys.stdout.flush()
 
 #
 #======================================================
@@ -2254,9 +2608,9 @@ class Misfit(object):
           zz_2d = zz[idx].squeeze()
           xx_2d = xx[ix][idx].squeeze()
           yy_2d = xx[iy][idx].squeeze()
-          print xx_2d
-          print yy_2d
-          print zz_2d
+          print(xx_2d)
+          print(yy_2d)
+          print(zz_2d)
           if ix > iy:
             zz_2d = np.transpose(zz_2d)
             xx_2d = np.transpose(xx_2d)
@@ -2375,7 +2729,7 @@ class Misfit(object):
     # check inputs
     events = self.data['events']
     if event_id not in events:
-      print "[ERROR] %s does NOT exist. Exit" % (event_id)
+      print("[ERROR] %s does NOT exist. Exit" % (event_id))
       sys.exit()
 
     # select windows
@@ -2544,8 +2898,8 @@ class Misfit(object):
     # check inputs
     events = self.data['events']
     if event_id not in events:
-      print "[ERROR] %s does NOT exist. Exit" \
-          % (event_id)
+      print("[ERROR] %s does NOT exist. Exit" \
+          % (event_id))
       sys.exit()
     event = events[event_id]
     stations = event['stations']
@@ -2894,7 +3248,7 @@ class Misfit(object):
       azmin = az
       azmax = az + plot_azbin
 
-      print azmin, azmax
+      print(azmin, azmax)
 
       #---- gather data for the current azbin 
       data_azbin = {}

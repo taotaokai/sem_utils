@@ -24,10 +24,10 @@ event = misfit.data['event']
 src_perturb = misfit.data['src_perturb']
 
 model_alpha = {
-  'tau':  4.39320e-01,
-   'mt':  9.35254e-01,
-   't0': -2.05566e-02,
-   'xs':  1.24641e+00,
+  'tau': 2.67503e-02,
+   'mt': 1.57233e-01,
+   't0': 1.20793e-01,
+   'xs': 1.18584e+00,
   }
 
 model = {}

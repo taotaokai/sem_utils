@@ -33,5 +33,5 @@ misfit.search1d_cc_perturbed_seismogram(
     ngrid=4,
     range_ratio=0.85,
     dist_min=dist_min,
-    plot_seism=True,
+    plot_seism=False,
     )

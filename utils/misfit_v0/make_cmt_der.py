@@ -27,8 +27,8 @@ out_file='%s/CMTSOLUTION.dxs'%(data_dir)
 misfit.make_cmt_dxs(out_file=out_file, norm=norm_dxs)
 
 out_file='%s/CMTSOLUTION.dmt'%(data_dir)
-misfit.make_cmt_dmt(out_file=out_file, fix_M0=True,
-    zerotrace=True, ratio_M0=ratio_M0)
+misfit.make_cmt_dmt(out_file=out_file, 
+    fix_M0=False, zerotrace=False, ratio_M0=ratio_M0)
 
 print "\n====== save data\n"
 misfit.save(filename=misfit_file)

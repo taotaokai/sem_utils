@@ -252,12 +252,12 @@ class Misfit(object):
         year, month, day, hour, minute, second)
     t0 = UTCDateTime(isotime) + time_shift
     # modify origin time in header line to have centroid time 
-    header[1] = "{%04d}".format(t0.year)
-    header[2] = "{%02d}".format(t0.month)
-    header[3] = "{%02d}".format(t0.day)
-    header[4] = "{%02d}".format(t0.hour)
-    header[5] = "{%02d}".format(t0.minute)
-    header[6] = "{%07.4f}".format(t0.second + 1.0e-6*t0.microsecond)
+    header[1] = "{:04d}".format(t0.year)
+    header[2] = "{:02d}".format(t0.month)
+    header[3] = "{:02d}".format(t0.day)
+    header[4] = "{:02d}".format(t0.hour)
+    header[5] = "{:02d}".format(t0.minute)
+    header[6] = "{:07.4f}".format(t0.second + 1.0e-6*t0.microsecond)
 
     # moment tensor
     # ECEF=false: 1,2,3 -> r,theta,phi

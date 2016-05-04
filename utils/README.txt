@@ -42,14 +42,15 @@ project/
 |   |   |   *   DATA/ # necessary data files, Par_file 
 |   |   |
 |   |   *   <event_id>/
-|   |   |   *   DATABASES_MPI/ 
+|   |   |   *   DATABASES_MPI/ # link from mesh/
 |   |   |   *   DATA/ 
-|   |   |   *   OUTPUT_forward/ 
-|   |   |   *   OUTPUT_adjoint/ 
-|   |   |   *   misfit/ 
+|   |   |   *   green_function/ # forward simulation 
+|   |   |   *   source_frechet/ # adjoint simulation for source parameters ()
+|   |   |   *   model_frechet/  # adjoint simulation for model parameters
+|   |   |   *   misfit/ # data misfit
 |   |   |   |   *   CMTSOLUTION.reloc # source parameter
 |   |   |   |   *   misfit.json # misfit measured results (e.g. CC0, CCmax, ...)
-|   |   |   *   adj/
+|   |   |   *   adj/ # adjoint sources, SEM input
 |   |   |
 |   |   *   <event_id>/
 |   |   |   *   ...

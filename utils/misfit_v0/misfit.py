@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Managing misfit windows
-"""
 import sys
 import warnings
 #import os.path
@@ -73,7 +71,6 @@ class Misfit(object):
 
   Data:
   {
-
     'event': {
         'stat':{'code':, 'msg':},
         'id':, # event ID
@@ -210,7 +207,7 @@ class Misfit(object):
 #======================================================
 #
 
-  def setup_event(self, cmt_file, is_ECEF=False):
+  def setup_event(self, cmt_file, ECEF=False):
     """cmt_file (str): CMTSOLUTION format file
     """
     with open(cmt_file, 'r') as f:
@@ -233,7 +230,7 @@ class Misfit(object):
     ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
     lla = pyproj.Proj(proj='latlong', ellps='WGS84', datum='WGS84')
 
-    if is_ECEF:
+    if ECEF:
       tau = float(lines[3][1])
       x   = float(lines[4][1])
       y   = float(lines[5][1])
@@ -263,15 +260,18 @@ class Misfit(object):
     header[6] = str(t0.second + 1.0e-6*t0.microsecond)
 
     # moment tensor
-    # is_ECEF=false: 1,2,3 -> r,theta,phi
-    # is_ECEF=true:  1,2,3 -> x,y,z
+    # ECEF=false: 1,2,3 -> r,theta,phi
+    # ECEF=true:  1,2,3 -> x,y,z
     m11 = float( lines[7][1])
     m22 = float( lines[8][1])
     m33 = float( lines[9][1])
     m12 = float(lines[10][1])
     m13 = float(lines[11][1])
     m23 = float(lines[12][1])
-    mt = np.array([[m11, m12, m13], [m12, m22, m23], [m13, m23, m33]])
+    mt = np.array([
+      [m11, m12, m13], 
+      [m12, m22, m23], 
+      [m13, m23, m33]])
     # transform from spherical to cartesian coordinate
     r = (x**2 + y**2 + z**2)**0.5
     theta = np.arccos(z/r)
@@ -281,22 +281,20 @@ class Misfit(object):
     cthe = np.cos(theta)
     sphi = np.sin(phi)
     cphi = np.cos(phi)
-    # D(x,y,z)/D(r,t,p): rtp -> xyz 
+    # basis transform matrix: e_x,y,z = a * e_r,t,p
+    mt_xyz = np.zeros((3,3))
+    mt_rtp = np.zeros((3,3))
     a = np.array(
         [ [ sthe*cphi, cthe*cphi, -1.0*sphi ],
           [ sthe*sphi, cthe*sphi,      cphi ],
           [ cthe     , -1.0*sthe,      0.0  ] ])
-    if is_ECEF:
+    if ECEF:
       mt_xyz = mt
       mt_rtp = np.dot(np.dot(np.transpose(a), mt), a)
     else: # spherical coordinate
-      a = np.array(
-          [ [ sthe*cphi, cthe*cphi, -1.0*sphi ],
-            [ sthe*sphi, cthe*sphi,      cphi ],
-            [ cthe     , -1.0*sthe,      0.0  ] ])
       # harvard cmt use dyn*cm, change to N*m
       mt_rtp = mt*1.0e-7
-      mt_xyz = np.dot(np.dot(a, mt), np.transpose(a))
+      mt_xyz = np.dot(np.dot(a, mt_rtp), np.transpose(a))
 
     # add event
     event = {
@@ -310,6 +308,54 @@ class Misfit(object):
     self.data['event'] = event
 
   #enddef setup_event
+
+#
+#======================================================
+#
+
+  def write_cmtsolution(self, out_file, ECEF=True):
+    """ 
+    Write out CMTSOLUTION file 
+    """
+    # modify origin time in header line to have centroid time 
+    event = self.data['event']
+    event_id = event['id']
+    header = event['header']
+    tau = event['tau']
+
+    if ECEF:
+      xs = event['xs']
+      mt = event['mt']
+      with open(out_file, 'w') as fp:
+        fp.write('%s\n' % (header))
+        fp.write('%-18s %s\n' % ('event name:', event_id))
+        fp.write('%-18s %+15.8E\n' % ('t0(s):',    0.0))
+        fp.write('%-18s %+15.8E\n' % ('tau(s):',   tau))
+        fp.write('%-18s %+15.8E\n' % ('x(m):',     xs[0]))
+        fp.write('%-18s %+15.8E\n' % ('y(m):',     xs[1]))
+        fp.write('%-18s %+15.8E\n' % ('z(m):',     xs[2]))
+        fp.write('%-18s %+15.8E\n' % ('Mxx(N*m):', mt[0,0]))
+        fp.write('%-18s %+15.8E\n' % ('Myy(N*m):', mt[1,1]))
+        fp.write('%-18s %+15.8E\n' % ('Mzz(N*m):', mt[2,2]))
+        fp.write('%-18s %+15.8E\n' % ('Mxy(N*m):', mt[0,1]))
+        fp.write('%-18s %+15.8E\n' % ('Mxz(N*m):', mt[0,2]))
+        fp.write('%-18s %+15.8E\n' % ('Myz(N*m):', mt[1,2]))
+    else:
+      mt_rtp = event['mt_rtp']
+      with open(out_file, 'w') as fp:
+        fp.write('%s\n' % (header))
+        fp.write('%-18s %s\n' % ('event name:', event_id))
+        fp.write('%-18s %+15.8E\n' % ('time shift:',    0.0))
+        fp.write('%-18s %+15.8E\n' % ('half duration:', tau*1.628))
+        fp.write('%-18s %+15.8E\n' % ('latitude:',    event['latitude']))
+        fp.write('%-18s %+15.8E\n' % ('longitude:',   event['longitude']))
+        fp.write('%-18s %+15.8E\n' % ('depth:',       event['depth']))
+        fp.write('%-18s %+15.8E\n' % ('Mrr(dyn*cm):', mt_rtp[0,0]*1.0e7))
+        fp.write('%-18s %+15.8E\n' % ('Mtt(dyn*cm):', mt_rtp[1,1]*1.0e7))
+        fp.write('%-18s %+15.8E\n' % ('Mpp(dyn*cm):', mt_rtp[2,2]*1.0e7))
+        fp.write('%-18s %+15.8E\n' % ('Mrt(dyn*cm):', mt_rtp[0,1]*1.0e7))
+        fp.write('%-18s %+15.8E\n' % ('Mrp(dyn*cm):', mt_rtp[0,2]*1.0e7))
+        fp.write('%-18s %+15.8E\n' % ('Mtp(dyn*cm):', mt_rtp[1,2]*1.0e7))
 
 #
 #======================================================

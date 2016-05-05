@@ -2251,8 +2251,8 @@ class Misfit(object):
 
   def cc_perturbed_seismogram(self,
       dm={'t0':None, 'xs':None},
-      dist_min=0.0,
-      dist_max=180.0,
+#     dist_min=0.0,
+#     dist_max=180.0,
       plot=False
       ):
     """ calculate normalized zero-lag cc for perturbed seismograms from linear combination of waveform derivatives
@@ -2305,12 +2305,12 @@ class Misfit(object):
       if station['stat']['code'] < 0:
         continue
 
-      # skip stations out of the selected distance range
-      gcarc = station['meta']['dist_degree']
-      if gcarc < dist_min or gcarc > dist_max:
-        #print("SKIP %s: gcarc=%f not in (%f, %f)" % (
-        #  station_id, gcarc, dist_min, dist_max))
-        continue
+      ## skip stations out of the selected distance range
+      #gcarc = station['meta']['dist_degree']
+      #if gcarc < dist_min or gcarc > dist_max:
+      #  #print("SKIP %s: gcarc=%f not in (%f, %f)" % (
+      #  #  station_id, gcarc, dist_min, dist_max))
+      #  continue
 
       # check if model parameter included in waveform_der
       waveform_der = station['waveform_der']
@@ -2472,11 +2472,14 @@ class Misfit(object):
         'xs': [-5,5],
         'mt': [-5,5],
         },
-      dist_min=0.0,
-      dist_max=180.0,
+#     dist_min=0.0,
+#     dist_max=180.0,
       ngrid=4,
+      max_niter=5,
       range_ratio=0.7,
       plot_seism=False,
+      log_file="search1d_cc.log",
+      cmt_file="CMTSOLUTION.search1d",
       ):
     """ 
     calculate misfit over 2D model grids based on perturbed seismograms 
@@ -2486,7 +2489,22 @@ class Misfit(object):
     range_ratio : scalar
       between (0, 1), used to shrink the search range to cc values above range_ratio
       between cc_max and cc_min.
+
+    Return
+    ------
+    optimal dm
+
     """
+    # check validity of dm_range
+    event = self.data['event']
+    tau = event['tau']
+    if 'tau' in dm_range:
+      tau_lim = dm_range['tau']
+      if (min(tau_lim) + tau) < 1.0:
+        warnings.warn("Too small dtau value, increase to avoid negative tau")
+        dm_range['tau'][0] = -0.95*event['tau']
+        print(dm_range)
+
     # grid parameters
     model_name = [x for x in dm_range]
 
@@ -2498,21 +2516,28 @@ class Misfit(object):
     for par in model_name:
       dm_opt[par] = 0.0
 
+    # prepare log file
+    fid = open(log_file,"w")
+
     niter = 0
-    while niter < 10:
-      print("====== iteration: %d" % (niter))
+    while niter < max_niter:
+      fid.write("====== iteration: %d\n" % (niter))
+      fid.flush()
 
       # loop each parameter
       for par in model_name:
-        print("------ %s" % (par))
+        fid.write("------ %s\n" % (par))
+        fid.flush()
         xlim = np.array(dm_range[par])
 
         if xlim.size == 1:
           dm_opt[par] = xlim[0]
-          print("fixed at %.5e" % (dm_opt[par]))
+          fid.write("fixed at %.5e\n" % (dm_opt[par]))
+          fid.flush()
           continue
         else:
-          print("range: %.5e, %.5e" % (np.min(xlim), np.max(xlim)))
+          fid.write("range: %.5e, %.5e\n" % (np.min(xlim), np.max(xlim)))
+          fid.flush()
           xx = np.linspace(np.min(xlim), np.max(xlim), ngrid)
 
           # search
@@ -2523,8 +2548,8 @@ class Misfit(object):
               dm_grid[par_fix] = np.ones(ngrid) * dm_opt[par_fix]
           cc, weight = self.cc_perturbed_seismogram(
               dm=dm_grid, 
-              dist_min=dist_min, 
-              dist_max=dist_max,
+#             dist_min=dist_min, 
+#             dist_max=dist_max,
               plot=plot_seism)
           cc /= weight # weighted average of normalized zero-lag CC
 
@@ -2544,15 +2569,74 @@ class Misfit(object):
           dm_range[par] = [np.min(x1), np.max(x1)]
 
           dm_opt[par] = x_max
-          print("maximum at %.5e with cc %.5e" % (dm_opt[par], cc_max))
+          fid.write("maximum at %.5e with cc %.5e\n" % (dm_opt[par], cc_max))
+          fid.flush()
 
       # print(out optimal model
-      print("------ optimal alpha")
+      fid.write("------ optimal dm_alpha\n")
+      fid.flush()
       for par in model_name:
-        print("%s: %.5e" %(par, dm_opt[par]))
-      niter += 1
+        fid.write("%s: %.5e\n" %(par, dm_opt[par]))
+        fid.flush()
 
-      sys.stdout.flush()
+      niter += 1
+    #END while niter < 5:
+    fid.close()
+
+    # make new model
+    model = {}
+    event = self.data['event']
+    src_perturb = self.data['src_perturb']
+    for par in dm_opt:
+      m0 = event[par]
+      dm = src_perturb[par]
+      alpha = dm_opt[par]
+      model[par] = {
+          'm0':m0, 
+          'dm':dm,
+          'alpha':alpha,
+          'm1':m0+alpha*dm
+          }
+
+    # write out new CMTSOLUTION file
+    t0 = event['t0']
+    if 't0' in model: t0 = model['t0']['m1']
+    # modify origin time in header line to have centroid time 
+    header = event['header'].split()
+    header[1] = "{:04d}".format(t0.year)
+    header[2] = "{:02d}".format(t0.month)
+    header[3] = "{:02d}".format(t0.day)
+    header[4] = "{:02d}".format(t0.hour)
+    header[5] = "{:02d}".format(t0.minute)
+    header[6] = "{:07.4f}".format(t0.second + 1.0e-6*t0.microsecond)
+    
+    tau = event['tau']
+    if 'tau' in model: tau = model['tau']['m1']
+    xs = event['xs']
+    if 'xs' in model: xs = model['xs']['m1']
+    mt = event['mt']
+    m0 = (0.5*np.sum(mt**2))**0.5
+    if 'mt' in model: mt = model['mt']['m1']
+    # zero trace
+    mt = mt - np.identity(3)*np.trace(mt)/3.0
+    # scale to orignal moment
+    mt = mt/(0.5*np.sum(mt**2))**0.5
+    mt *= m0
+    
+    with open(cmt_file, 'w') as fp:
+      fp.write('%s \n' % (' '.join(header)))
+      fp.write('%-18s %s\n' % ('event name:', "search1d"))
+      fp.write('%-18s %+15.8E\n' % ('t0(s):',    0.0))
+      fp.write('%-18s %+15.8E\n' % ('tau(s):',   tau))
+      fp.write('%-18s %+15.8E\n' % ('x(m):',     xs[0]))
+      fp.write('%-18s %+15.8E\n' % ('y(m):',     xs[1]))
+      fp.write('%-18s %+15.8E\n' % ('z(m):',     xs[2]))
+      fp.write('%-18s %+15.8E\n' % ('Mxx(N*m):', mt[0,0]))
+      fp.write('%-18s %+15.8E\n' % ('Myy(N*m):', mt[1,1]))
+      fp.write('%-18s %+15.8E\n' % ('Mzz(N*m):', mt[2,2]))
+      fp.write('%-18s %+15.8E\n' % ('Mxy(N*m):', mt[0,1]))
+      fp.write('%-18s %+15.8E\n' % ('Mxz(N*m):', mt[0,2]))
+      fp.write('%-18s %+15.8E\n' % ('Myz(N*m):', mt[1,2]))
 
 #
 #======================================================
@@ -2561,7 +2645,7 @@ class Misfit(object):
   def grid_cc_perturbed_seismogram(self,
       dm = {
         't0': np.linspace(-10,0,11), 
-        'xs': np.linspace(-5,5,11) 
+        'xs': np.linspace(-5,5,11),
         },
       axes=[ ('t0','xs'), ('t0',), ('xs',) ],
       outfig="grid_cc.pdf",
@@ -3186,8 +3270,8 @@ class Misfit(object):
 #
 
   def plot_seismogram(self,
-      twopass_filt=False,
-      savefig=False, out_dir='plot',
+      savefig=False, 
+      out_dir='plot',
       plot_param={
         'time':[0,100], 'rayp':10., 'azbin':10, 'window_id':'F.p,P',
         'SNR':None, 'CC0':None, 'CCmax':None, 'dist':None }

@@ -1313,14 +1313,14 @@ class Misfit(object):
         Amax_syn = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
         Amax_noise =  np.sqrt(np.max(np.sum(noise_filt_win**2, axis=0)))
         if Amax_obs == 0: # bad record
-          print('[WARN] %s:%s:%s empty obs trace, SKIP.' \
-              % (event_id, station_id, window_id))
+          print('[WARN] %s:%s empty obs trace, SKIP.' % (
+            station_id, window_id))
           window['stat']['code'] = -1
           window['stat']['msg'] = "Amax_obs=0"
           continue
         if Amax_noise == 0: # could occure when the data begin time is too close to the first arrival
-          print('[WARN] %s:%s:%s empty noise trace, SKIP.' \
-              % (event_id, station_id, window_id))
+          print('[WARN] %s:%s empty noise trace, SKIP.' % (
+            station_id, window_id))
           window['stat']['code'] = -1
           window['stat']['msg'] = "Amax_noise=0"
           continue
@@ -2625,7 +2625,7 @@ class Misfit(object):
     
     with open(cmt_file, 'w') as fp:
       fp.write('%s \n' % (' '.join(header)))
-      fp.write('%-18s %s\n' % ('event name:', "search1d"))
+      fp.write('%-18s %s\n' % ('event name:', event['id']))
       fp.write('%-18s %+15.8E\n' % ('t0(s):',    0.0))
       fp.write('%-18s %+15.8E\n' % ('tau(s):',   tau))
       fp.write('%-18s %+15.8E\n' % ('x(m):',     xs[0]))
@@ -3819,13 +3819,14 @@ class Misfit(object):
         continue
 
       #---- create figure
-      fig = plt.figure(figsize=(8.5, 11)) # US letter
-      str_title = '{:s} (win: {:s}, az: {:04.1f}~{:04.1f})'.format(
-          event['id'], plot_window_id, azmin, azmax)
-      fig.text(0.5, 0.95, str_title, size='x-large', horizontalalignment='center')
+      fig = plt.figure(figsize=(11, 8.5)) # US Letter
+      str_title = '{:s} ({:s} az:{:04.1f}~{:04.1f} dep:{:.1f})'.format(
+          event['id'], plot_window_id, azmin, azmax, event['depth'])
+      fig.text(0.5, 0.965, str_title, size='x-large', horizontalalignment='center')
+
       #---- plot station/event map
-      ax_origin = [0.3, 0.74]
-      ax_size = [0.4, 0.2]
+      ax_origin = [0.05, 0.60]
+      ax_size = [0.3, 0.3]
       ax_map = fig.add_axes(ax_origin + ax_size)
       ax_bm = Basemap(projection='merc', resolution='l',
           llcrnrlat=min_lat, llcrnrlon=min_lon, 
@@ -3851,8 +3852,8 @@ class Misfit(object):
       ax_bm.scatter(sx, sy, s=10, marker='^', facecolor='red', edgecolor='')
 
       #-- create axis for seismograms
-      ax_origin = [0.2, 0.05]
-      ax_size = [0.6, 0.65]
+      ax_origin = [0.45, 0.05]
+      ax_size = [0.43, 0.90]
       ax_1comp = fig.add_axes(ax_origin + ax_size)
 
       #-- plot traveltime curves
@@ -3895,19 +3896,20 @@ class Misfit(object):
         plot_t0 = min(plot_time) + reduced_time
         plot_t1 = max(plot_time) + reduced_time
         plot_idx = (syn_times > plot_t0) & (syn_times < plot_t1)
-        # plot time
+        # plot time (reduced time)
         t_plot = syn_times[plot_idx] - reduced_time
 
         #  window begin/end
         taper = window['taper']
-        win_starttime = taper['starttime']
-        win_endtime = taper['endtime']
-        win_t0 = (win_starttime - event['t0']) - reduced_time
-        win_t1 = (win_endtime - event['t0']) - reduced_time
+        win_starttime = taper['starttime'] - event['t0']
+        win_endtime = taper['endtime'] - event['t0']
+        win_t0 = win_starttime - reduced_time
+        win_t1 = win_endtime - reduced_time
+        win_idx = (syn_times > win_starttime) & (syn_times < win_endtime)
 
         # plot seismograms
-        Amax_obs = np.sqrt(np.max(obs[plot_idx]**2))
-        Amax_syn = np.sqrt(np.max(syn[plot_idx]**2))
+        Amax_obs = np.sqrt(np.max(obs[win_idx]**2))
+        Amax_syn = np.sqrt(np.max(syn[win_idx]**2))
         ax_1comp.plot(t_plot, plot_dy*obs[plot_idx]/Amax_obs+dist_degree, \
             'k-', linewidth=0.5)
         ax_1comp.plot(t_plot, plot_dy*syn[plot_idx]/Amax_syn+dist_degree, \
@@ -3954,5 +3956,5 @@ class Misfit(object):
       else:
         plt.show()
       plt.close(fig)
- 
+
 #END class misfit

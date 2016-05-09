@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Process misfit
+"""
+Plot synthetic and observed seismograms
 """
 import sys
 from misfit import Misfit
@@ -8,8 +9,6 @@ from misfit import Misfit
 # read command line args
 misfit_file = str(sys.argv[1])
 figure_dir = str(sys.argv[2])
-#misfit_file = "misfit/misfit.pkl"
-#figure_dir = "misfit"
 
 #------
 print("\n====== initialize\n")

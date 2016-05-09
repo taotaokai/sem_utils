@@ -7,9 +7,7 @@ from misfit import Misfit
 #import numpy as np
 
 # read command line args
-#adj_dir = "adj"
 misfit_file = str(sys.argv[1])
-#syn_band_code = "MX"
 
 window_list = [
    ('Z','p,P', [-30,75]), 
@@ -51,9 +49,3 @@ misfit.measure_adj(
 
 print("\n====== save data\n")
 misfit.save(filename=misfit_file)
-
-#print("\n====== output adjoint source\n")
-#misfit.output_adj(
-#    adj_type='dchi_dg',
-#    out_dir=adj_dir,
-#    syn_band_code=syn_band_code)

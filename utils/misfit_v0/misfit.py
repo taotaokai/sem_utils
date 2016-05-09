@@ -20,6 +20,8 @@ import pyproj
 #
 from lanczos_interp1 import lanczos_interp1
 #
+import matplotlib
+matplotlib.use("pdf")
 from matplotlib import colors, ticker, cm
 from matplotlib.backends.backend_pdf import PdfPages 
 import matplotlib.pyplot as plt
@@ -1473,6 +1475,48 @@ class Misfit(object):
 
     #endfor station_id in station_dict:
   #enddef measure_windows_for_one_station(self,
+
+#
+#======================================================
+#
+
+  def output_misfit(self, out_file):
+    """
+    Output misfit measurements
+
+    """
+    event = self.data['event']
+    station_dict = self.data['station']
+
+    fp = open(out_file, 'w')
+    fp.write("#station window weight CC0 CCmax dt_cc SNR AR0 ARmax\n")
+
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected stations
+      if station['stat']['code'] < 0:
+        continue
+
+      window_dict = station['window']
+      for window_id in window_dict:
+        window = window_dict[window_id]
+        # skip rejected windows 
+        if window['stat']['code'] < 0:
+          continue
+
+        if window['weight'] < 1.0e-3:
+          continue
+
+        cc = window['cc']
+        quality = window['quality']
+
+        fp.write("{:15s} {:10s} {:7.5f}  {:7.5f}  {:7.5f}  {:+7.3f}" \
+            "  {:7.3f}  {:12.5e}  {:12.5e}\n".format(
+          station_id, window_id, window['weight'], 
+          cc['CC0'], cc['CCmax'], cc['cc_tshift'], 
+          quality['SNR'], cc['AR0'], cc['ARmax']))
+
+    fp.close()
 
 #
 #======================================================

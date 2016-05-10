@@ -28,6 +28,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 #
 from taper import *
+#
+import pyfftw
 
 #NOTE
 # 1. spectrum relation between DFT and FT
@@ -2377,6 +2379,12 @@ class Misfit(object):
       syn_nr = time_sample['nr']
       syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
 
+      #---- prepare pyfftw
+      fft_in = pyfftw.empty_aligned((3, syn_nt), dtype='float64')
+      fft_out = pyfftw.empty_aligned((3, syn_nt//2+1), dtype='complex128')
+      fft_object = pyfftw.FFTW(fft_in, fft_out, direction='FFTW_FORWARD')
+      bfft_object = pyfftw.FFTW(fft_out, fft_in, direction='FFTW_BACKWARD')
+
       #---- measure misfit
       window_dict = station['window']
       for window_id in window_dict:
@@ -2449,9 +2457,13 @@ class Misfit(object):
             dtau = dm['tau'][idx_model]
           F_src = stf_gauss_spectrum(syn_freq, event['tau']+dtau)
           # perturbed syn: w * S * p * F * g1
+          # pyfftw
           phase_shift = np.exp(-2.0j * np.pi * syn_freq * dt0)
-          wpFu1 = np.fft.irfft(phase_shift*F_src*np.fft.rfft(pFg1), syn_nt) \
-              * win_func
+          fft_in[:,:] = pFg1
+          fft_out[:,:] = fft_object() * F_src * phase_shift 
+          wpFu1 = bfft_object() * win_func
+          #wpFu1 = np.fft.irfft(phase_shift*F_src*np.fft.rfft(pFg1), syn_nt) \
+          #    * win_func
           norm_wpFu1 = np.sqrt(np.sum(wpFu1**2))
           Nw = norm_wpFd * norm_wpFu1
           #normalized cc between obs and perturbed syn
@@ -2499,7 +2511,7 @@ class Misfit(object):
               plt.ylim((-1.5, 1.5))
               plt.ylabel(syn_orientation_codes[i])
             plt.show()
-
+        #end for idx_model in range(vector_size):
       #end for window_id in window_dict:
     #end for station_id in station_dict:
 

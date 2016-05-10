@@ -45,7 +45,7 @@ fi
 #====== green's function
 cat <<EOF > $green_job
 #!/bin/bash
-#SBATCH -J ${event_id}.green
+#SBATCH -J ${event_id}.green.iter$iter_num
 #SBATCH -o $green_job.o%j
 #SBATCH -N 11
 #SBATCH -n 256
@@ -97,7 +97,7 @@ EOF
 #====== misfit
 cat <<EOF > $misfit_job
 #!/bin/bash
-#SBATCH -J ${event_id}.misfit
+#SBATCH -J ${event_id}.misfit.iter$iter_num
 #SBATCH -o $misfit_job.o%j
 #SBATCH -N 1
 #SBATCH -n 1
@@ -149,7 +149,7 @@ EOF
 #====== derivative of misfit function
 cat <<EOF > $srcfrechet_job
 #!/bin/bash
-#SBATCH -J ${event_id}.srcfrechet
+#SBATCH -J ${event_id}.srcfrechet.iter$iter_num
 #SBATCH -o $srcfrechet_job.o%j
 #SBATCH -N 11
 #SBATCH -n 256
@@ -203,7 +203,7 @@ EOF
 #====== derivatives of green's function: dxs, dmt
 cat <<EOF > $dgreen_job
 #!/bin/bash
-#SBATCH -J ${event_id}.dgreen
+#SBATCH -J ${event_id}.dgreen.iter$iter_num
 #SBATCH -o $dgreen_job.o%j
 #SBATCH -N 11
 #SBATCH -n 256
@@ -253,7 +253,7 @@ EOF
 #====== search source parameters
 cat <<EOF > $search_job
 #!/bin/bash
-#SBATCH -J ${event_id}.search
+#SBATCH -J ${event_id}.search.iter$iter_num
 #SBATCH -o $search_job.o%j
 #SBATCH -N 1
 #SBATCH -n 1

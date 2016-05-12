@@ -3812,12 +3812,14 @@ class Misfit(object):
         # skip bad window
         window_dict = station['window']
         window = window_dict[plot_window_id]
-        quality = window['quality']
-        cc = window['cc']
         if window['stat']['code'] <= 0:
           continue
+
+        quality = window['quality']
         if plot_SNR and quality['SNR']<np.min(plot_SNR):
           continue
+
+        cc = window['cc']
         if plot_CC0 and cc['CC0']<np.min(plot_CC0):
           continue
         if plot_CCmax and cc['CCmax']<np.min(plot_CCmax):

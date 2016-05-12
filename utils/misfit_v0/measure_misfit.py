@@ -34,7 +34,7 @@ print("\n====== initialize\n")
 misfit = Misfit()
 
 print("\n====== load data\n")
-misfit.load(misfit_file)
+misfit.load(filename=misfit_file)
 
 print("\n====== setup window\n")
 misfit.setup_window(
@@ -48,4 +48,4 @@ misfit.measure_adj(
     weight_param=weight_param)
 
 print("\n====== save data\n")
-misfit.save(misfit_file)
+misfit.save(filename=misfit_file)

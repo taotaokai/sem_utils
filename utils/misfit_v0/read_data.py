@@ -15,6 +15,7 @@ obs_dir = str(sys.argv[5])
 syn_band_code = "MX"
 syn_suffix = ".sem.sac"
 left_pad = 100.0
+right_pad = 0.0
 obs_preevent = 100.0
 
 print("\n====== initialize\n")
@@ -34,7 +35,7 @@ print("\n====== read seismogram: obs, grf\n")
 misfit.read_obs_grf(
   obs_dir=obs_dir,
   syn_dir=syn_dir, syn_band_code=syn_band_code, syn_suffix=syn_suffix,
-  left_pad=left_pad, obs_preevent=obs_preevent)
+  left_pad=left_pad, right_pad=right_pad, obs_preevent=obs_preevent)
 
 print("\n====== save data\n")
 misfit.save(filename=misfit_file)

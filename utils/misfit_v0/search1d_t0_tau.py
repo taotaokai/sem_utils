@@ -21,8 +21,8 @@ print("\n====== grid_cc \n")
 dm = {
     't0': [-5,5],
     'tau':[-5,5],
-    'xs': [-5,5],
-    'mt': [-5,5],
+#   'xs': [-5,5],
+#   'mt': [-5,5],
     }
 
 dm_opt = misfit.search1d_cc_perturbed_seismogram(

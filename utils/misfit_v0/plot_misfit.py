@@ -15,7 +15,7 @@ print("\n====== initialize\n")
 misfit = Misfit()
 
 print("\n====== load data\n")
-misfit.load(filename=misfit_file)
+misfit.load(misfit_file)
 
 print("\n====== plot P seismograms\n")
 for comp in ['Z', 'R']:

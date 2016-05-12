@@ -38,4 +38,4 @@ misfit.read_obs_grf(
   left_pad=left_pad, right_pad=right_pad, obs_preevent=obs_preevent)
 
 print("\n====== save data\n")
-misfit.save(filename=misfit_file)
+misfit.save(misfit_file)

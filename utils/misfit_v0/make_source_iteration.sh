@@ -70,7 +70,7 @@ sed -i "/^tau(s)/s/.*/tau(s):            +0.00000000E+00/" CMTSOLUTION
 
 cp $data_dir/$event_id/data/STATIONS .
 
-cp $mesh_dir/DATA/Par_file.
+cp $mesh_dir/DATA/Par_file .
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 
 rm -rf $event_dir/DATABASES_MPI
@@ -217,7 +217,7 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
-for tag in dxs dmt
+for tag in dxs #dmt
 do
   echo "====== \$tag"
   out_dir=output_\$tag
@@ -271,10 +271,10 @@ echo
 cd $event_dir 
 
 # read derivatives of green's fuction 
-$utils_dir/waveform_der.py $db_file
+$utils_dir/waveform_der_xs.py $db_file
 
 # grid search of source model
-srun $utils_dir/search1d.py \
+$utils_dir/search1d_t0_tau_xs.py \
   $db_file DATA/CMTSOLUTION.iter${iter_num} DATA/search.iter${iter_num}.log
 
 echo

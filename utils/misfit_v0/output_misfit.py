@@ -13,7 +13,7 @@ print("\n====== initialize\n")
 misfit = Misfit()
 
 print("\n====== load data\n")
-misfit.load(filename=misfit_file)
+misfit.load(misfit_file)
 
 print("\n====== output misfit measurments\n")
 misfit.output_misfit(out_file)

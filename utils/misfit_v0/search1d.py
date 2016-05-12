@@ -15,7 +15,7 @@ print("\n====== initialize\n")
 misfit = Misfit()
 
 print("\n====== load data\n")
-misfit.load(filename=misfit_file)
+misfit.load(misfit_file)
 
 print("\n====== grid_cc \n")
 dm = {

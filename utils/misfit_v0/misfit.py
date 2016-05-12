@@ -190,21 +190,22 @@ class Misfit(object):
 #======================================================
 #
 
-  def save(self, filename='misfit.pkl'):
+  def save(self, filename):
     """Save data
     """
     # use highest protocol available 
-    with open(filename, 'wb') as fp:
-      pickle.dump(self.data, fp, -1)
+    with open(filename, 'wb') as f:
+      pickle.dump(self.data, f)
+
 #
 #======================================================
 #
 
-  def load(self, filename='misfit.pkl'):
+  def load(self, filename):
     """Load data
     """
-    with open(filename, 'rb') as fp:
-      self.data = pickle.load(fp)
+    with open(filename, 'rb') as f:
+      self.data = pickle.load(f)
 #
 #======================================================
 #
@@ -892,9 +893,10 @@ class Misfit(object):
     """ read in observed seismograms and synthetic Green's functions.
     Note:
       1) left_pad: time length to pad before synthetics 
-        right_pad: time length to pad after synthetics 
         obs_pretime: pre-event time length of obs (for noise assessment)
       2) use delta STF in simulation to approximate green's function
+      3) ignore absolute time in syn files, use event['t0'] as the origin time
+        syn should be sac files and have sac header b and o set correctly.
     """
     syn_orientation_codes = ['E', 'N', 'Z']
 
@@ -905,8 +907,8 @@ class Misfit(object):
       warnings.warn("[arg] left_pad must g.e. 0, set to 0.0")
       left_pad = 0
     if right_pad < 0:
-      right_pad = 0
       warnings.warn("[arg] right_pad must g.e. 0, set to 0.0")
+      right_pad = 0
     if obs_preevent < 0:
       obs_preevent = 50.0
       warnings.warn("[arg] obs_preevent must g.e. 0, set to 50")
@@ -949,13 +951,14 @@ class Misfit(object):
       tr = syn_st[0]
       syn_delta = tr.stats.delta
       syn_npts = tr.stats.npts
-      # padding
+      # left padding
       nl = int(left_pad/syn_delta)
+      # right padding
       nr = int(right_pad/syn_delta)
       nt = syn_npts + nl + nr
       # ENZ_syn
-      syn_starttime = tr.stats.starttime - nl * syn_delta
-      syn_endtime = syn_starttime + (nt-1)*syn_delta
+      syn_starttime = event['t0'] \
+          + (tr.stats.sac['b'] - tr.stats.sac['o'] - nl*syn_delta)
       syn_times = np.arange(nt) * syn_delta
       syn_ENZ = np.zeros((3, nt))
       for i in range(3):
@@ -973,14 +976,16 @@ class Misfit(object):
         obs_endtime = tr.stats.endtime
         # check if obs has enough pre-event records
         first_arrtime = event['t0'] + meta['ttime'][0].time
-        obs_tmin = first_arrtime - obs_preevent
-        if obs_starttime > obs_tmin or obs_endtime < syn_endtime:
+        # required obs begin/end times
+        obs_t1 = first_arrtime - obs_preevent
+        obs_t2 = syn_starttime + (nt-nr)*syn_delta
+        if obs_starttime > obs_t1 or obs_endtime < obs_t2:
           flag = False
           warn_str = "%s: record not long enough, SKIP %s" \
               % (obs_files[i], station_id)
           warnings.warn(warn_str)
-          print(obs_starttime, obs_endtime)
-          print(obs_tmin, syn_endtime)
+          print("obs:", obs_starttime, obs_endtime)
+          print("required:", obs_t1, obs_t2)
           station['stat']['code'] = -1
           station['stat']['msg'] = "%s [%s]" \
               % (warn_str, UTCDateTime.now().isoformat())
@@ -1719,7 +1724,7 @@ class Misfit(object):
 #======================================================
 #
 
-  def make_cmt_dxs(self, out_file="CMTSOLUTION.dxs", norm=2500.0):
+  def make_cmt_dxs(self, out_file="CMTSOLUTION.dxs", norm=2000.0):
     """ Calculate derivative for source location along one direction
     """
     norm = float(norm)
@@ -1751,7 +1756,7 @@ class Misfit(object):
     lon, lat, alt = pyproj.transform(ecef, lla, xs1[0], xs1[1], xs1[2])
     depth = -alt
     if depth < 0.0:
-      raise Exception("new src depth %f < 0.0" % depth)
+      warnings.warn("perturbed src depth %f < 0.0" % (depth/1000.0))
 
     # record dxs
     if 'src_perturb' not in self.data:
@@ -1833,8 +1838,12 @@ class Misfit(object):
       tr = syn_st[0]
       if tr.stats.delta != dt:
         raise Exception("%s: not the same dt for diff-srcloc!" % (station_id))
-      if (tr.stats.starttime - nl*dt) != starttime:
+
+      tr_starttime = event['t0'] \
+          + (tr.stats.sac['b'] - tr.stats.sac['o'] - nl*dt)
+      if tr_starttime != starttime:
         raise Exception("%s: not the same origin time for diff-srcloc!" % (station_id))
+
       if tr.stats.npts != (nt-nl-nr):
         raise Exception("%s: not the same npts for diff-srcloc!" % (station_id))
 
@@ -2003,8 +2012,12 @@ class Misfit(object):
       tr = syn_st[0]
       if tr.stats.delta != dt:
         raise Exception("%s: not the same dt for diff-srcloc!" % (station_id))
-      if (tr.stats.starttime - nl*dt) != starttime:
+
+      tr_starttime = event['t0'] \
+          + (tr.stats.sac['b'] - tr.stats.sac['o'] - nl*dt)
+      if tr_starttime != starttime:
         raise Exception("%s: not the same origin time for diff-srcloc!" % (station_id))
+
       if tr.stats.npts != (nt-nl-nr):
         raise Exception("%s: not the same npts for diff-srcloc!" % (station_id))
 

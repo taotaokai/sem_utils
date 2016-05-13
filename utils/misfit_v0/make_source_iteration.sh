@@ -42,6 +42,14 @@ then
   exit -1
 fi
 
+# misfit par file
+misfit_par=$event_dir/DATA/misfit_par.py
+if [ ! -f "$misfit_par" ]
+then
+  echo "[ERROR] $misfit_par does NOT exist!"
+  exit -1
+fi
+
 #====== green's function
 cat <<EOF > $green_job
 #!/bin/bash
@@ -122,7 +130,7 @@ $utils_dir/read_data.py \
   $event_dir/output_green \
   $data_dir/$event_id/dis
 
-$utils_dir/measure_misfit.py $db_file
+$utils_dir/measure_misfit.py $db_file $misfit_par
 
 $utils_dir/output_misfit.py $db_file $misfit_dir/misfit.iter${iter_num}.txt
 
@@ -217,7 +225,7 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
-for tag in dxs #dmt
+for tag in dxs dmt
 do
   echo "====== \$tag"
   out_dir=output_\$tag
@@ -271,11 +279,12 @@ echo
 cd $event_dir 
 
 # read derivatives of green's fuction 
-$utils_dir/waveform_der_xs.py $db_file
+$utils_dir/waveform_der.py $db_file
 
 # grid search of source model
-$utils_dir/search1d_t0_tau_xs.py \
-  $db_file DATA/CMTSOLUTION.iter${iter_num} DATA/search.iter${iter_num}.log
+$utils_dir/search1d.py \
+  $db_file $misfit_par \
+  DATA/CMTSOLUTION.iter${iter_num} DATA/search.iter${iter_num}.log
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

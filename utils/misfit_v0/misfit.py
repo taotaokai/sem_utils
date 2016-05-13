@@ -39,15 +39,25 @@ def is_equal(lst):
   return not lst or [lst[0]]*len(lst) == lst
 
 def stf_gauss_spectrum(f, tau):
-  """ spectrum of the Gaussian STF of unit area: 
-      stf(t,tau) = 1/sqrt(PI)/tau * exp(-(t/tau)^2)
-      F_stf = exp(- pi^2 * f^2 * tau^2)
+  """ 
+  spectrum of the Gaussian STF of unit area: 
+    stf(t;t0,tau) = 1/sqrt(PI)/tau * exp(-((t-t0)/tau)^2)
+    here, we take t0 = 0, then
+    F_stf = exp(- pi^2 * f^2 * tau^2)
   """
   F_src = np.exp(-np.pi**2 * f**2 * tau**2)
 # F_ds_dt0 = -2.0j * np.pi * f * F_src
 # F_ds_dtau = -2.0 * (np.pi*f)**2 * tau * F_src
 # return F_src, F_ds_dt0, F_ds_dtau
   return F_src
+
+def stf_gauss_spectrum_der(f, tau):
+  """ 
+  spectrum of the derivatives of Gaussian STF
+  """
+  F_ds_dt0 = -2.0j * np.pi * f * F_src
+  F_ds_dtau = -2.0 * (np.pi*f)**2 * tau * F_src
+  return F_ds_dt0, F_ds_dtau
 
 #def stf_gauss(n, dt, tau):
 #  """ Gaussian source time function
@@ -1075,12 +1085,26 @@ class Misfit(object):
     event = self.data['event']
     station_dict = self.data['station']
 
+    # initiate taup
+    taup_model = TauPyModel(model="ak135")
+
+    phase_list = []
+    for win in window_list:
+      for phase in win[1].split(','):
+        phase_list.append(phase)
+
     # loop each station
     for station_id in station_dict:
       station = station_dict[station_id]
       meta = station['meta']
-      arrivals = meta['ttime']
       baz = meta['back_azimuth']
+
+      # get ak135 traveltimes
+      arrivals = taup_model.get_travel_times(
+          source_depth_in_km=event['depth'],
+          distance_in_degree=meta['dist_degree'],
+          phase_list=phase_list,
+          )
 
       # initialize window dict
       station['window'] = {}
@@ -1095,19 +1119,21 @@ class Misfit(object):
         window_id = "%s.%s" % (comp, phase)
 
         # window time range
-        phase_list = phase.split(',')
+        phase_names = phase.split(',')
         ref_time = event['t0']
         ttime = []
         for arr in arrivals:
-          if arr.name in phase_list:
+          if arr.name in phase_names:
             ttime.append(arr.time)
         if ttime:
           ref_time += min(ttime)
           #print("[INFO] phase %s: min(ttime)=%f, ref_time=%s" \
           #    % (phase, min(ttime), ref_time)
         else:
-          print("[INFO] phase %s not found, use event origin time=%s" \
-              % (phase, ref_time))
+          warn = "phase %s not found (dist=%f, evdp=%f), window not created" \
+              % (phase, meta['dist_degree'], event['depth'] )
+          warnings.warn(warn)
+          continue
         starttime = ref_time + signal_begin
         endtime = ref_time + signal_end
         taper_dict = {'type':taper_param[0], 'ratio':taper_param[1],
@@ -2065,13 +2091,20 @@ class Misfit(object):
 #======================================================
 #
 
-  def measure_hessian_src(self, update=False):
-    """ calculate hessian matrix for source parameters (dchi_du)
-        chi: misfit functional (normalized zero-lag correlation coef.)
-        u: synthetic waveform
+  def measure_hessian_src(self, 
+      src_param={'t0':0, 'tau':0, 'xs':0, 'mt':0},
+      update=True,
+      ):
+    """ 
+    Approximate Hessian matrix of source parameters based 
+    differential seismograms
+
+    Note
+    ----
+      1) 
     """
     event = self.data['event']
-    src_param = ('dt0','dtau','dxs','dmt')
+    #src_param = ('dt0','dtau','dxs','dmt')
     n_srcparam = len(src_param)
 
     #------ loop each station
@@ -2099,7 +2132,17 @@ class Misfit(object):
       # source spectrum (moment-rate function)
       syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
       F_src = stf_gauss_spectrum(syn_freq, event['tau'])
-
+      # spectrum of source derivatives
+      if 't0' in src_param or 'tau' in src_param:
+        F_ds_dt0, F_ds_dtau = stf_gauss_spectrum_der(syn_freq, event['tau'])
+        # convolve Ds(t)/Dt0,tau with Green's function
+        du_dt0 = np.fft.irfft(F_ds_dt0 * np.fft.rfft(grf), nt)
+        du_dtau = np.fft.irfft(F_ds_dtau * np.fft.rfft(grf), nt)
+        # zero records before origin time (wrap around from the end)
+        idx = t < -5.0*tau
+        du_dt0[:,idx] = 0.0
+        du_dtau[:,idx] = 0.0
+ 
       # waveform derivatives
       waveform_der = station['waveform_der']
 
@@ -2148,10 +2191,17 @@ class Misfit(object):
 
         #------ filter differential seismograms (w * F * du_dm)
         wFdu = {}
-        for param in src_param:
-          du = waveform_der[param]['du']
-          Fdu = signal.filtfilt(filter_b, filter_a, du)
-          wFdu[param] = np.dot(proj_matrix, Fdu) * win_func 
+        for par in src_param:
+          if par == 't0':
+            Fdu = signal.filtfilt(filter_b, filter_a, du_dt0)
+            wFdu[par] = np.dot(proj_matrix, Fdu) * win_func 
+          elif par == 'tau':
+            Fdu = signal.filtfilt(filter_b, filter_a, du_dtau)
+            wFdu[par] = np.dot(proj_matrix, Fdu) * win_func 
+          else:
+            du = waveform_der[param]['du']
+            Fdu = signal.filtfilt(filter_b, filter_a, du)
+            wFdu[param] = np.dot(proj_matrix, Fdu) * win_func 
 
         #------ hessian src
         # chi: zero-lag correlation coef. between wFu and wFd
@@ -2196,7 +2246,7 @@ class Misfit(object):
 #======================================================
 #
 
-# def update_source(self):
+# def update_source(self, src_param=):
 #   """ Update source parameters based on waveform derivatives and hessian
 #   """
 #   event = self.data['event']
@@ -3789,17 +3839,16 @@ class Misfit(object):
       azmin = az
       azmax = az + plot_azbin
 
-      print(azmin, azmax)
+      print("Azimuthal range: ", azmin, azmax)
 
       #---- gather data for the current azbin 
       data_azbin = {}
       for station_id in station_dict:
-        # skip bad station
         station = station_dict[station_id]
+        # skip bad station
         if station['stat']['code'] < 0:
           continue
-
-        # skip un-selected station 
+        # skip station not in the selection criteria 
         meta = station['meta']
         azimuth = meta['azimuth']
         dist_degree = meta['dist_degree']
@@ -3808,19 +3857,19 @@ class Misfit(object):
             continue
         if azimuth < azmin or azimuth >= azmax:
           continue
+
+        window_dict = station['window']
+        # check if required window exists
         if plot_window_id not in window_dict:
           continue
-
-        # skip bad window
-        window_dict = station['window']
         window = window_dict[plot_window_id]
+        # skip bad window
         if window['stat']['code'] <= 0:
           continue
-
+        # skip window which does not pass the selection criteria
         quality = window['quality']
         if plot_SNR and quality['SNR']<np.min(plot_SNR):
           continue
-
         cc = window['cc']
         if plot_CC0 and cc['CC0']<np.min(plot_CC0):
           continue

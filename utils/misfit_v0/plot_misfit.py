@@ -28,9 +28,31 @@ for comp in ['Z', 'R']:
       out_dir=figure_dir,
       plot_param=plot_param)
 
+print("\n====== plot sP seismograms\n")
+for comp in ['Z', 'R']:
+  window_id = "%s.sP" % (comp)
+  plot_param = {
+    'time':[-50,250], 'rayp':10., 'azbin':5, 'window_id':window_id,
+    'SNR':10, 'CC0':0.5, 'CCmax':0.6, 'dist':None }
+  misfit.plot_seismogram_1comp(
+      savefig=True,
+      out_dir=figure_dir,
+      plot_param=plot_param)
+
 print("\n====== plot S seismograms\n")
 for comp in ['Z', 'R', 'T']:
   window_id = "%s.s,S" % (comp)
+  plot_param = {
+    'time':[-50,450], 'rayp':18., 'azbin':5, 'window_id':window_id,
+    'SNR':10, 'CC0':0.5, 'CCmax':0.6, 'dist':None }
+  misfit.plot_seismogram_1comp(
+      savefig=True,
+      out_dir=figure_dir,
+      plot_param=plot_param)
+
+print("\n====== plot sS seismograms\n")
+for comp in ['Z', 'R', 'T']:
+  window_id = "%s.sS" % (comp)
   plot_param = {
     'time':[-50,450], 'rayp':18., 'azbin':5, 'window_id':window_id,
     'SNR':10, 'CC0':0.5, 'CCmax':0.6, 'dist':None }

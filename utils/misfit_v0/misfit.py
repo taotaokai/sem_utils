@@ -3769,7 +3769,7 @@ class Misfit(object):
     Mtp = mt[1][2]
     focmec = [Mrr, Mtt, Mpp, Mrt, Mrp, Mtp]
 
-    #------ station info
+    #------ get station info
     station_dict = self.data['station']
     stla_all = []
     stlo_all = []
@@ -3786,6 +3786,10 @@ class Misfit(object):
       stla_all.append(meta['latitude'])
       stlo_all.append(meta['longitude'])
       dist_all.append(meta['dist_degree'])
+    
+    if not dist_all:
+      warnings.warn("No data to plot!")
+      return
 
     #------ traveltime curve
     model = TauPyModel(model="ak135")

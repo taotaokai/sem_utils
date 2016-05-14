@@ -267,7 +267,7 @@ cat <<EOF > $search_job
 #SBATCH -n 1
 #SBATCH --cpus-per-task=24
 #SBATCH -p normal
-#SBATCH -t 00:40:00
+#SBATCH -t 00:50:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end

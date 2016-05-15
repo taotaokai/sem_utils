@@ -59,6 +59,36 @@ def stf_gauss_spectrum_der(f, tau):
   F_ds_dtau = -2.0 * (np.pi*f)**2 * tau * F_src
   return F_ds_dt0, F_ds_dtau
 
+def prime_factor(n):
+  """
+  Prime factorization
+  """
+  factor = []
+  d = 2
+  while True:
+    while n%d == 0:
+      factor.append(d)
+      n //= d
+    if n == 1:
+      return factor
+    d += 1
+    if d**2 > n:
+      factor.append(n)
+      return factor
+
+def optimal_fft_size(n, d):
+  """
+  Return closest upper integer of n whose largest-prime-factor is smaller than d
+  """
+  if d < 2:
+    raise ValueError("d should >= 2, while %d is used" % (d))
+  while True:
+    factor = prime_factor(n)
+    if max(factor) > d:
+      n += 1
+    else:
+      return n, factor
+
 #def stf_gauss(n, dt, tau):
 #  """ Gaussian source time function
 #    stf(t,tau) = 1/sqrt(PI)/tau * exp(-(t/tau)^2)
@@ -965,7 +995,9 @@ class Misfit(object):
       nl = int(left_pad/syn_delta)
       # right padding
       nr = int(right_pad/syn_delta)
-      nt = syn_npts + nl + nr
+      # right-padding zeros to optimal fft size
+      nt = optimal_fft_size(syn_npts+nl+nr, 10)
+      nr = nt - (syn_npts + nl)
       # ENZ_syn
       syn_starttime = event['t0'] \
           + (tr.stats.sac['b'] - tr.stats.sac['o'] - nl*syn_delta)

@@ -1120,22 +1120,23 @@ class Misfit(object):
 
         # window time range
         phase_names = phase.split(',')
-        ref_time = event['t0']
         ttime = []
         for arr in arrivals:
           if arr.name in phase_names:
             ttime.append(arr.time)
         if ttime:
-          ref_time += min(ttime)
-          #print("[INFO] phase %s: min(ttime)=%f, ref_time=%s" \
-          #    % (phase, min(ttime), ref_time)
+          # if more than one phase specified, 
+          # use a time window extended from the first to last arrivals
+          # with addition to begin and end length
+          min_ttime = min(ttime)
+          max_ttime = max(ttime)
         else:
           warn = "phase %s not found (dist=%f, evdp=%f), window not created" \
               % (phase, meta['dist_degree'], event['depth'] )
           warnings.warn(warn)
           continue
-        starttime = ref_time + signal_begin
-        endtime = ref_time + signal_end
+        starttime = event['t0'] + min_ttime + signal_begin
+        endtime = event['t0'] + max_ttime + signal_end
         taper_dict = {'type':taper_param[0], 'ratio':taper_param[1],
             'starttime':starttime, 'endtime':endtime}
 
@@ -3733,13 +3734,16 @@ class Misfit(object):
       out_dir='plot',
       plot_param={
         'time':[0,100], 'rayp':10., 'azbin':10, 'window_id':'Z.p,P',
-        'SNR':None, 'CC0':None, 'CCmax':None, 'dist':None }
+        'SNR':None, 'CC0':None, 'CCmax':None, 'dist':None,
+        'clip':1.5}
       ):
     """ 
     Plot record sections 
 
     azbin: azimuthal bin size
-    win: 
+    plto_param:
+      clip: do not plot waveform with amplitudes larger than 
+        <clip>*max_amplitude_in_select_time_window
     """
     comp_name = ['R', 'T', 'Z']
     #------ selection parameters
@@ -3752,6 +3756,10 @@ class Misfit(object):
     plot_CC0 = np.array(plot_param['CC0'])
     plot_CCmax = np.array(plot_param['CCmax'])
     plot_dist = np.array(plot_param['dist'])
+    plot_clip = np.array(plot_param['clip'])
+    if plot_clip < 1.0:
+      warnings.warn("plot_param['clip'] should be larger than 1.0")
+      plot_clip = 1.0
 
     #------ event info
     event = self.data['event']
@@ -4024,9 +4032,18 @@ class Misfit(object):
         # plot seismograms
         Amax_obs = np.sqrt(np.max(obs[win_idx]**2))
         Amax_syn = np.sqrt(np.max(syn[win_idx]**2))
-        ax_1comp.plot(t_plot, plot_dy*obs[plot_idx]/Amax_obs+dist_degree, \
+        
+        # clip large amplitudes
+        y = obs[plot_idx]/Amax_obs
+        idx = abs(y) > plot_clip+1.0e-3
+        y[idx] = np.nan
+        ax_1comp.plot(t_plot, plot_dy*y+dist_degree, \
             'k-', linewidth=0.5)
-        ax_1comp.plot(t_plot, plot_dy*syn[plot_idx]/Amax_syn+dist_degree, \
+
+        y = syn[plot_idx]/Amax_syn
+        idx = abs(y) > plot_clip+1.0e-3
+        y[idx] = np.nan
+        ax_1comp.plot(t_plot, plot_dy*y+dist_degree, \
             'r-', linewidth=0.5)
         # mark measure window range
         ax_1comp.plot(win_t0, dist_degree, 'k|', markersize=8)

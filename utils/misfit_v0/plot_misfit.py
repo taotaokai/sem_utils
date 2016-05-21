@@ -22,18 +22,18 @@ for comp in ['Z', 'R']:
   window_id = "%s.p,P" % (comp)
   plot_param = {
     'time':[-50,250], 'rayp':10., 'azbin':5, 'window_id':window_id,
-    'SNR':10, 'CC0':0.5, 'CCmax':0.6, 'dist':None }
+    'SNR':10, 'CC0':0.5, 'CCmax':0.6, 'dist':None, 'clip':1.5 }
   misfit.plot_seismogram_1comp(
       savefig=True,
       out_dir=figure_dir,
       plot_param=plot_param)
 
-print("\n====== plot sP seismograms\n")
+print("\n====== plot pP,sP,PP seismograms\n")
 for comp in ['Z', 'R']:
-  window_id = "%s.sP" % (comp)
+  window_id = "%s.pP,sP,PP" % (comp)
   plot_param = {
     'time':[-50,250], 'rayp':10., 'azbin':5, 'window_id':window_id,
-    'SNR':10, 'CC0':0.5, 'CCmax':0.6, 'dist':None }
+    'SNR':10, 'CC0':0.5, 'CCmax':0.6, 'dist':None, 'clip':1.5 }
   misfit.plot_seismogram_1comp(
       savefig=True,
       out_dir=figure_dir,
@@ -44,18 +44,18 @@ for comp in ['Z', 'R', 'T']:
   window_id = "%s.s,S" % (comp)
   plot_param = {
     'time':[-50,450], 'rayp':18., 'azbin':5, 'window_id':window_id,
-    'SNR':10, 'CC0':0.5, 'CCmax':0.6, 'dist':None }
+    'SNR':10, 'CC0':0.5, 'CCmax':0.6, 'dist':None, 'clip':1.5 }
   misfit.plot_seismogram_1comp(
       savefig=True,
       out_dir=figure_dir,
       plot_param=plot_param)
 
-print("\n====== plot sS seismograms\n")
+print("\n====== plot sS,SS seismograms\n")
 for comp in ['Z', 'R', 'T']:
-  window_id = "%s.sS" % (comp)
+  window_id = "%s.sS,SS" % (comp)
   plot_param = {
     'time':[-50,450], 'rayp':18., 'azbin':5, 'window_id':window_id,
-    'SNR':10, 'CC0':0.5, 'CCmax':0.6, 'dist':None }
+    'SNR':10, 'CC0':0.5, 'CCmax':0.6, 'dist':None, 'clip':1.5 }
   misfit.plot_seismogram_1comp(
       savefig=True,
       out_dir=figure_dir,

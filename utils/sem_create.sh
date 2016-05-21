@@ -3,11 +3,13 @@
 # create SEM build directory and compile the program
 
 sem_source_dir=${1:?[arg] need sem_source_dir}
-sem_config_dir=${2:-sem_config}
-sem_build_dir=${3:-specfem3d_globe}
+sem_setup_dir=${2:?[arg] need setup dir(for constants.h.in)}
+sem_data_dir=${3:?[arg] need DATA dir(for DATA/Par_file,STATIONS,CMTSOLUTION)}
+sem_build_dir=${4:?[arg] need build dir(e.g. specfem3d_globe)}
 
 sem_source_dir=$(readlink -f $sem_source_dir)
-sem_config_dir=$(readlink -f $sem_config_dir)
+sem_setup_dir=$(readlink -f $sem_setup_dir)
+sem_data_dir=$(readlink -f $sem_data_dir)
 sem_build_dir=$(readlink -f $sem_build_dir)
 
 if [ ! -d "$sem_source_dir" ]
@@ -15,9 +17,14 @@ then
   echo "[ERROR] sem_source_dir does not exits!"
   exit 1
 fi
-if [ ! -d "$sem_config_dir" ]
+if [ ! -d "$sem_setup_dir" ]
 then
-  echo "[ERROR] sem_config_dir does not exits!"
+  echo "[ERROR] sem_setup_dir does not exits!"
+  exit 1
+fi
+if [ ! -d "$sem_data_dir" ]
+then
+  echo "[ERROR] sem_data_dir does not exits!"
   exit 1
 fi
 
@@ -52,17 +59,19 @@ cp -r ${sem_source_dir}/setup ./
 
 #====== use sem_config_dir
 cd $sem_build_dir/DATA
-ln -sf $sem_config_dir/DATA/Par_file .
-ln -sf $sem_config_dir/DATA/CMTSOLUTION .
+rm Par_file CMTSOLUTION
+cp $sem_data_dir/Par_file .
+cp $sem_data_dir/CMTSOLUTION .
 
 cd $sem_build_dir/setup
-ln -sf $sem_config_dir/setup/*.h.in .
+rm constants.h.in
+cp $sem_setup_dir/constants.h.in .
 
 #====== build SEM 
 cd $sem_build_dir
 
 #./configure FC=mpif90 MPIFC=mpif90 FCFLAGS="-fc=ifort -O3"
-./configure FC=mpif90 MPIFC=mpif90 FCFLAGS=" -O3"
+./configure FC=mpif90 MPIFC=mpif90 FCFLAGS="-O3" CC=icc CFLAGS="-O3"
 
 make clean
 make xcreate_header_file xmeshfem3D xspecfem3D xcombine_vol_data_vtk \

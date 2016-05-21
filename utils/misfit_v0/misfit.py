@@ -87,7 +87,7 @@ def optimal_fft_size(n, d):
     if max(factor) > d:
       n += 1
     else:
-      return n, factor
+      return n
 
 #def stf_gauss(n, dt, tau):
 #  """ Gaussian source time function
@@ -996,6 +996,7 @@ class Misfit(object):
       # right padding
       nr = int(right_pad/syn_delta)
       # right-padding zeros to optimal fft size
+      # by making the largest-prime-factor samller than 10
       nt = optimal_fft_size(syn_npts+nl+nr, 10)
       nr = nt - (syn_npts + nl)
       # ENZ_syn
@@ -1877,6 +1878,7 @@ class Misfit(object):
       nt = time_sample['nt']
       nl = time_sample['nl'] # npts of left padding
       nr = time_sample['nr'] # npts of right padding
+      sem_nt = nt-nl-nr # number of time sample number in SEM simulation 
       t = np.arange(nt) * dt + (starttime - t0) #referred to t0
 
       #------ get file paths of syn seismograms
@@ -1903,13 +1905,13 @@ class Misfit(object):
       if tr_starttime != starttime:
         raise Exception("%s: not the same origin time for diff-srcloc!" % (station_id))
 
-      if tr.stats.npts != (nt-nl-nr):
+      if tr.stats.npts != sem_nt:
         raise Exception("%s: not the same npts for diff-srcloc!" % (station_id))
 
       #------ read syn seismograms from perturbed source location
       syn_ENZ = np.zeros((3, nt))
       for i in range(3):
-        syn_ENZ[i,nl:(nl+nt)] = syn_st[i].data
+        syn_ENZ[i,nl:(nl+sem_nt)] = syn_st[i].data
 
       # differential green's function 
       grf = waveform['grf']
@@ -2051,6 +2053,7 @@ class Misfit(object):
       nt = time_sample['nt']
       nl = time_sample['nl'] # npts of left padding
       nr = time_sample['nr'] # npts of right padding
+      sem_nt = nt-nl-nr # number of time samples in SEM simuation
       t = np.arange(nt) * dt + (starttime - t0) #referred to t0
 
       #------ get file paths of syn seismograms
@@ -2077,13 +2080,13 @@ class Misfit(object):
       if tr_starttime != starttime:
         raise Exception("%s: not the same origin time for diff-srcloc!" % (station_id))
 
-      if tr.stats.npts != (nt-nl-nr):
+      if tr.stats.npts != sem_nt:
         raise Exception("%s: not the same npts for diff-srcloc!" % (station_id))
 
       #------ read syn seismograms from perturbed source location
       dg = np.zeros((3, nt))
       for i in range(3):
-        dg[i,nl:(nl+nt)] = syn_st[i].data
+        dg[i,nl:(nl+sem_nt)] = syn_st[i].data
 
       ##source spectrum (moment-rate function)
       #syn_freq = np.fft.rfftfreq(nt, d=dt)
@@ -3834,29 +3837,23 @@ class Misfit(object):
     #------ traveltime curve
     model = TauPyModel(model="ak135")
     dist_ttcurve = np.arange(0.0,max(dist_all),0.5)
-    ttcurve_p = []
-    ttcurve_P = []
-    ttcurve_s = []
-    ttcurve_S = []
+    phase_names = plot_window_id.split('.')[1]
+    phase_list = [x for x in phase_names.split(',')]
+    ttcurve = {}
+    for phase_name in phase_list:
+      ttcurve[phase_name] = []
     for dist in dist_ttcurve:
       arrivals = model.get_travel_times(
           source_depth_in_km=evdp, 
           distance_in_degree=dist, 
-          phase_list=['p','P','s','S'])
+          phase_list=phase_list)
       for arr in arrivals:
-        if arr.name == 'p':
-          ttcurve_p.append((arr.distance, arr.time, arr.ray_param))
-        elif arr.name == 'P':
-          ttcurve_P.append((arr.distance, arr.time, arr.ray_param))
-        elif arr.name == 's':
-          ttcurve_s.append((arr.distance, arr.time, arr.ray_param))
-        elif arr.name == 'S':
-          ttcurve_S.append((arr.distance, arr.time, arr.ray_param))
-    # sort phases
-    ttcurve_p = sorted(ttcurve_p, key=lambda x: x[2])
-    ttcurve_P = sorted(ttcurve_P, key=lambda x: x[2])
-    ttcurve_s = sorted(ttcurve_s, key=lambda x: x[2])
-    ttcurve_S = sorted(ttcurve_S, key=lambda x: x[2])
+        for phase_name in phase_list:
+          if arr.name == phase_name:
+            ttcurve[phase_name].append((arr.distance, arr.time, arr.ray_param))
+    # sort phases based on traveltime 
+    for phase_name in phase_list:
+      ttcurve[phase_name] = sorted(ttcurve[phase_name], key=lambda x: x[2])
 
     #------ map configuration 
     min_lat = min(min(stla_all), evla)
@@ -4010,16 +4007,6 @@ class Misfit(object):
       ax_size = [0.43, 0.90]
       ax_1comp = fig.add_axes(ax_origin + ax_size)
 
-      #-- plot traveltime curves
-      ax_1comp.plot([x[1]-plot_rayp*x[0] for x in ttcurve_p], \
-          [x[0] for x in ttcurve_p], 'b-', linewidth=0.2)
-      ax_1comp.plot([x[1]-plot_rayp*x[0] for x in ttcurve_P], \
-          [x[0] for x in ttcurve_P], 'b-', linewidth=0.2)
-      ax_1comp.plot([x[1]-plot_rayp*x[0] for x in ttcurve_s], \
-          [x[0] for x in ttcurve_s], 'c-', linewidth=0.2)
-      ax_1comp.plot([x[1]-plot_rayp*x[0] for x in ttcurve_S], \
-          [x[0] for x in ttcurve_S], 'c-', linewidth=0.2)
-
       #-- ylim setting
       y = [ data_azbin[key]['meta']['dist_degree'] for key in data_azbin ]
       ny = len(y)
@@ -4030,6 +4017,31 @@ class Misfit(object):
       else:
         plot_ymax = max(y) + 2*plot_dy
         plot_ymin = min(y) - 2*plot_dy
+
+      #-- plot traveltime curves
+      for phase_name in phase_list:
+        # reduced time
+        phase_times = np.array([x[1]-plot_rayp*x[0] for x in ttcurve[phase_name]])
+        phase_distances = np.array([x[0] for x in ttcurve[phase_name]])
+
+        max_dist = np.max(phase_distances)
+        min_dist = np.min(phase_distances)
+        if max_dist < plot_ymin or min_dist > plot_ymax:
+          continue
+        ax_1comp.plot(phase_times, phase_distances, 'b-', linewidth=0.1)
+        #ax_1comp.plot(phase_times, phase_distances, 'b.', markersize=0.5)
+        # label phase names
+        if max_dist < plot_ymax:
+          y_str = max_dist
+          x_str = max(phase_times[phase_distances==max_dist])
+        else:
+          y_str = plot_ymax
+          max_dist = max(phase_distances[phase_distances<= plot_ymax])
+          x_str = max(phase_times[phase_distances==max_dist])
+        ax_1comp.text(x_str, y_str, phase_name,
+            verticalalignment='top',
+            horizontalalignment='center',
+            fontsize=11, color='blue')
 
       #-- plot each station
       for station_id in data_azbin:

@@ -4132,4 +4132,141 @@ class Misfit(object):
         plt.show()
       plt.close(fig)
 
+#
+#======================================================
+#
+
+  def output_adj_for_hessian(self, 
+      adj_type='dg',
+      out_dir='adj',
+      syn_band_code='MX'):
+    """
+    Output adjoint sources for approximated Hessian
+
+    H = - CC0 * norm(wFu)^(-2) * (wFdu1, wFdu2)
+    , where CC0 > 0 is the zero-lag correlation coefficient of (wFd, wFu)
+    and the corresponding adjoint source is
+
+    adj = sqrt(CC0) * norm(wFu) * wFr , where r is a radome time series 
+
+    H(x,y) = + CC0 * norm(wFu)^(-4) * (wFu, wFdu1) * (wFu, wFdu2)
+           = H1(x) * H2(y)
+    H1 = sqrt(CC0) * norm(wFu)^(-2) * (wFu, wFdu1)
+    , the cooresponding adjoint source is
+    adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(wwFu)
+
+    NOTE
+    ----
+      1) dg: use tau=0 in forward/adjoint simulation
+      1) du: use real tau in forward/adjoint simulation
+    """
+    syn_orientation_codes = ['E', 'N', 'Z']
+    event = self.data['event']
+
+    #------ loop each station
+    station_dict = self.data['station']
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected statations
+      if station['stat']['code'] < 0:
+        continue
+
+      # waveform
+      waveform = station['waveform']
+      time_sample = waveform['time_sample']
+      syn_starttime = time_sample['starttime']
+      syn_delta = time_sample['delta']
+      syn_nt = time_sample['nt']
+      syn_nl = time_sample['nl']
+      syn_nr = time_sample['nr']
+      # seismograms 
+      if adj_type == 'dg':
+        grf = waveform['grf']
+      elif adj_type == 'du':
+        syn = waveform['syn']
+      else:
+        raise Exception('unknown adj_type: %s (du or dg) ' % (adj_type))
+
+      # source spectrum (moment-rate function)
+      syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
+      F_src = stf_gauss_spectrum(syn_freq, event['tau'])
+
+      #------ loop each window
+      adj = np.zeros((3, syn_nt))
+      random = np.random.uniform(-1,1,(3, syn_nt))
+
+      window_dict = station['window']
+      for window_id in window_dict:
+        # window parameters
+        window = window_dict[window_id]
+        # skip bad windows
+        if window['stat']['code'] < 1:
+          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+          continue
+
+        #------ window parameters 
+        # filter
+        filter_dict = window['filter']
+        filter_a = filter_dict['a']
+        filter_b = filter_dict['b']
+        # taper
+        win_func = window['taper']['win']
+        # polarity projection 
+        proj_matrix = window['polarity']['proj_matrix']
+
+        #------ filter syn
+        # u = S * grf
+        if adj_type == 'dg':
+          syn = np.fft.irfft(F_src*np.fft.rfft(grf), syn_nt)
+        # F * u
+        syn_filt = signal.filtfilt(filter_b, filter_a, syn)
+        # apply window taper and polarity projection
+        # syn = w * F * u
+        wFu = np.dot(proj_matrix, syn_filt) * win_func 
+        # norm
+        norm_wFu = np.sqrt(np.sum(wFu**2))
+        # CCw
+        CC0 = window['cc']['CC0']
+
+        #------ filter random time series
+        random_filt = signal.filtfilt(filter_b, filter_a, random)
+        wFr = np.dot(proj_matrix, random_filt) * win_func 
+
+        #------ make adjoint source
+        adj_w = np.sqrt(CC0) * norm_wFu * wFr
+        if adj_type == 'dg':
+          adj_w = np.fft.irfft(F_src*np.fft.rfft(adj_w), syn_nt)
+        adj += adj_w
+
+      #endfor window_id in window_dict:
+
+      #------ output adjoint source
+      # without padding
+      npts = syn_nt - syn_nl - syn_nr
+      starttime = syn_starttime + syn_nl*syn_delta
+      # time samples for ascii output, referred to origin time
+      syn_times = np.arange(npts)*syn_delta
+      b = starttime - event['t0']
+      syn_times += b
+
+      # loop ENZ
+      for i in range(3):
+        tr.data = adj[i, syn_nl:(syn_nl+npts)]
+        tr.stats.starttime = starttime
+        tr.stats.delta = syn_delta
+
+        out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
+            out_dir, station_id, syn_band_code,
+            syn_orientation_codes[i])
+
+        # sac format
+        tr.write(out_file + '.adj.sac', 'sac')
+
+        # ascii format (needed by SEM)
+        # time is relative to event origin time: t0
+        with open(out_file+'.adj','w') as fp:
+          for j in range(npts):
+            fp.write("{:16.9e}  {:16.9e}\n".format(
+              syn_times[j], adj[i,syn_nl+j]))
+
 #END class misfit

@@ -8,8 +8,6 @@ import re
 import numpy as np
 import scipy.signal as signal
 #
-import pickle
-#
 from obspy import UTCDateTime, read, Trace, geodetics
 from obspy.taup import TauPyModel
 from obspy.imaging.beachball import Beach
@@ -59,7 +57,9 @@ class Misfit(object):
   stations[] (class Station) {
     status, history,
     network, station, location,
-    metadata, waveform,
+    metadata, 
+    waveform,
+    green, dgreen,
     windows[] (class Window),
   }
 
@@ -97,6 +97,24 @@ class Misfit(object):
     self.event = Event()
     self.stations = []
     self.misift_value = 0.0
+
+#======================================================
+  def save(self, out_file):
+    """
+    Use netCDF4 format for data persistency
+    """
+    from netCDF4 import Dataset
+    root = Dataset(out_file, 'w')
+
+    #------ event
+    event = root.createGroup("/event")
+
+    #------ station
+    stations = root.createGroup("/station")
+
+    for station in self.stations:
+      station.
+
 
 #======================================================
   def read_cmtsolution(self, cmt_file, isECEF=True):

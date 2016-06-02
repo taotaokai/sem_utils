@@ -71,7 +71,7 @@ cp $sem_setup_dir/constants.h.in .
 cd $sem_build_dir
 
 #./configure FC=mpif90 MPIFC=mpif90 FCFLAGS="-fc=ifort -O3"
-./configure FC=mpif90 MPIFC=mpif90 FCFLAGS="-O3" CC=icc CFLAGS="-O3"
+./configure FC=mpif90 MPIFC=mpif90 FCFLAGS="-O3" CC=mpicc CFLAGS="-O3"
 
 make clean
 make xcreate_header_file xmeshfem3D xspecfem3D xcombine_vol_data_vtk \

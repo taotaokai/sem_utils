@@ -145,9 +145,8 @@ class Misfit(object):
 
             'waveform': {
                 'time_sample': {starttime:, delta:, nt:, nl:, nr},
-                'obs': array([3,nt]), # observed seismograms
-                'grf': array([3,nt], # green's function
-                #'syn': 3 x nt (u), # synthetic seismograms (grf convolve stf)
+                'obs': (3,nt), # observed seismograms
+                'syn': (3,nt), # synthetic seismograms (grf convolve stf)
             },
 
             'window': {
@@ -182,12 +181,11 @@ class Misfit(object):
                 <window_id>...
             },
 
-            #'dchi_du': array([3,nt]), #chi: misfit function
-            'dchi_dg': array([3,nt]), #conj(stf)*dchi_du
+            'dchi_du': (3,nt) array, chi is the objective function
 
             'waveform_der': {
-               'xs': {'dm':array(3), 'dg':, }, #finite-difference
-               'mt': {'dm':array([3,3]), 'dg':,}, #linear in moment-tensor
+               'xs': {'dm':array(3), 'du':, }, #finite-difference
+               'mt': {'dm':array([3,3]), 'du':, }, #linear in moment-tensor
             },
 
         },
@@ -926,17 +924,31 @@ class Misfit(object):
 #======================================================
 #
 
-  def read_obs_grf(self,
+  def read_obs_syn(self,
       obs_dir='obs',
       syn_dir='syn', syn_band_code='MX', syn_suffix='.sem.sac',
       left_pad=100, right_pad=0, obs_preevent=100):
-    """ read in observed seismograms and synthetic Green's functions.
-    Note:
-      1) left_pad: time length to pad before synthetics 
-        obs_pretime: pre-event time length of obs (for noise assessment)
-      2) use delta STF in simulation to approximate green's function
-      3) ignore absolute time in syn files, use event['t0'] as the origin time
-        syn should be sac files and have sac header b and o set correctly.
+    """ 
+    Read in observed and synthetic seismograms.
+
+    Parameters
+    ----------
+    left_pad: 
+      time length to pad before synthetics 
+
+    obs_pretime: 
+      pre-event time length of obs (for noise assessment)
+
+    Note
+    ----
+    sac file naming rule: NET.STA.LOC.CHA
+      , where CHA consists of band_code(e.g. BH or MX) + orientation[E|N|Z]
+
+    #use delta STF in simulation to approximate green's function
+    #  ignore absolute time in syn files, use event['t0'] as the origin time
+
+    syn should be sac files and have sac header b and o set correctly.
+
     """
     syn_orientation_codes = ['E', 'N', 'Z']
 
@@ -1000,9 +1012,17 @@ class Misfit(object):
       nt = optimal_fft_size(syn_npts+nl+nr, 10)
       nr = nt - (syn_npts + nl)
       # ENZ_syn
-      syn_starttime = event['t0'] \
-          + (tr.stats.sac['b'] - tr.stats.sac['o'] - nl*syn_delta)
+      # check if the origin time in sac files are consistent with event['t0']
+      syn_origin_time = tr.stats.starttime + \
+          (tr.stats.sac['o'] - tr.stats.sac['b'])
+      if abs(syn_origin_time - event['t0']) > 1.0e-6:
+        err = "Inconsistent origin time between sac headers (%s) and event['t0'] (%s)" \
+            % (syn_origin_time, event['t0'])
+        raise Exception(err)
+      syn_starttime = tr.stats.starttime - nl*syn_delta
       syn_times = np.arange(nt) * syn_delta
+
+      # read synthetic seismograms
       syn_ENZ = np.zeros((3, nt))
       for i in range(3):
         syn_ENZ[i,nl:(nl+syn_npts)] = syn_st[i].data
@@ -1084,29 +1104,33 @@ class Misfit(object):
           'starttime': syn_starttime, 'delta': syn_delta,
           'nt': nt, 'nl': nl, 'nr': nr }
       waveform['obs'] = obs_ENZ
-      waveform['grf'] = syn_ENZ
+      waveform['syn'] = syn_ENZ
 
       station['stat']['code'] = 0
-      station['stat']['msg'] = "read_obs_grf OK [%s]" \
+      station['stat']['msg'] = "read_obs_syn OK [%s]" \
           % (UTCDateTime.now().isoformat())
 
     #endfor station_id in station_dict:
-  #enddef read_obs_grf
+  #enddef read_obs_syn
 
 #
-#======================================================
+#==============================================================================
 #
 
   def setup_window(self,
       window_list=[('F','p,P',[-30,50]), ('F','s,S',[-40,70])],
-      filter_param=('butter', 3, [0.01, 0.10]),
+      filter_param=('butter', 2, [0.01, 0.10]),
       taper_param=('cosine', 0.1)):
-    """ Setup data windows based on ray arrivals in 1D earth model.
+    """ 
+    Setup data windows based on ray arrivals in 1D earth model.
     
-      window_list: define data window
-      [ (component, phases, [begin, end]), ...]
+    Parameters
+    ----------
+    window_list : [ (component, phases, [begin, end]), ...]
+                  define data window
 
-      filter_param: (type, freqlims)
+    filter_param : (type, order, freqlims)
+                   define filter parameters 
     """
     # filter/taper parameters
     filter_dict = {'type': filter_param[0], 
@@ -1221,10 +1245,18 @@ class Misfit(object):
         'CCmax':None,
         'dist':None}
       ):
-    """ calculate adjoint sources (dchi_du)
-        chi: misfit functional (normalized zero-lag correlation coef.)
-        u: synthetic waveform
-        weight_param: SNR, CCmax, CC0
+    """ 
+    calculate adjoint sources (dchi_du)
+
+    Parameters
+    ----------
+    weight_param : SNR, CCmax, CC0
+
+    Notes
+    -----
+    chi : misfit functional (normalized zero-lag correlation coef.)
+    u : synthetic waveform
+
     """
     #------
     event = self.data['event']
@@ -1251,16 +1283,15 @@ class Misfit(object):
       syn_times = syn_delta * np.arange(syn_nt)
 
       obs = waveform['obs']
-      grf = waveform['grf']
+      syn = waveform['syn']
 
       # source spectrum (moment-rate function)
       syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
-      F_src = stf_gauss_spectrum(syn_freq, event['tau'])
+      #F_src = stf_gauss_spectrum(syn_freq, event['tau'])
 
       #------ loop each window
       # sum of adjoint sources from all windows
       dchi_du = np.zeros((3, syn_nt))
-      dchi_dg = np.zeros((3, syn_nt))
 
       for window_id in window_dict:
         # window parameters
@@ -1338,8 +1369,8 @@ class Misfit(object):
         #-- F * d
         obs_filt = signal.filtfilt(filter_b, filter_a, obs)
         #-- F * u (u = S*grf)
-        syn_filt = signal.filtfilt(filter_b, filter_a, grf)
-        syn_filt = np.fft.irfft(F_src*np.fft.rfft(syn_filt), syn_nt)
+        syn_filt = signal.filtfilt(filter_b, filter_a, syn)
+        #syn_filt = np.fft.irfft(F_src*np.fft.rfft(syn_filt), syn_nt)
         #DEBUG
         #for i in range(3):
         #  plt.subplot(311+i)
@@ -1468,9 +1499,9 @@ class Misfit(object):
         # add into total dchi_du
         dchi_du += weight * dchiw_du
         #-- dchiw_dg = conj(S) * dchiw_du
-        dchiw_dg = np.fft.irfft(np.conjugate(F_src) * np.fft.rfft(dchiw_du), syn_nt)
+        #dchiw_dg = np.fft.irfft(np.conjugate(F_src) * np.fft.rfft(dchiw_du), syn_nt)
         # add into total dchi_dg
-        dchi_dg += weight * dchiw_dg 
+        #dchi_dg += weight * dchiw_dg 
         #DEBUG
         #for i in range(3):
         #  plt.subplot(311+i)
@@ -1498,7 +1529,7 @@ class Misfit(object):
         if plot:
           syn_npts = syn_nt - syn_nl - syn_nr
           syn_orientation_codes = ['E', 'N', 'Z']
-          adj = dchiw_dg
+          adj = dchiw_du
           Amax_adj = np.sqrt(np.max(np.sum(adj**2, axis=0)))
           t = syn_times
           for i in range(3):
@@ -1529,7 +1560,6 @@ class Misfit(object):
 
       #------ store adjoint source for this station
       station['dchi_du'] = dchi_du
-      station['dchi_dg'] = dchi_dg
 
       #DEBUG
       #for i in range(3):
@@ -1588,13 +1618,11 @@ class Misfit(object):
 #
 
   def output_adj(self, 
-      adj_type='dchi_dg',
       out_dir='adj',
       syn_band_code='MX'):
-    """Output adjoint sources
-    NOTE:
-      1) dchi_dg: use tau=0 in forward/adjoint simulation
-      1) dchi_du: use real tau in forward/adjoint simulation
+    """
+    Output adjoint sources
+
     """
     syn_orientation_codes = ['E', 'N', 'Z']
     event = self.data['event']
@@ -1623,13 +1651,7 @@ class Misfit(object):
       syn_times += b
 
       # adjoint source
-      if adj_type == 'dchi_du':
-        adj = station['dchi_du']
-      elif adj_type == 'dchi_dg':
-        adj = station['dchi_dg']
-      else:
-        raise Exception('unknown adj_type: %s (dchi_du or dchi_dg) ' \
-            % (adj_type))
+      adj = station['dchi_du']
 
       # loop ENZ
       for i in range(3):
@@ -1848,11 +1870,14 @@ class Misfit(object):
       syn_band_code='MX',
       syn_suffix='.sem.sac',
       sac_dir=None):
-    """ Calculate derivative for source location along one direction
-    NOTE:
-      1) use finite difference to get waveform derivative
-      2) dxs: length 3 vector (unit: meter)
-      3) use green's function as input (i.e. set tau to zero in simulation)
+    """ 
+    Calculate derivative for source location along one direction
+
+    Notes
+    -----
+    use finite difference to get waveform derivative
+
+    dxs: length 3 vector (unit: meter)
     """
     syn_orientation_codes = ['E', 'N', 'Z']
 
@@ -1897,13 +1922,13 @@ class Misfit(object):
         raise Exception('%s: not equal time samples in'\
             ' synthetic seismograms.' % (station_id))
       tr = syn_st[0]
+
       if tr.stats.delta != dt:
         raise Exception("%s: not the same dt for diff-srcloc!" % (station_id))
 
-      tr_starttime = event['t0'] \
-          + (tr.stats.sac['b'] - tr.stats.sac['o'] - nl*dt)
+      tr_starttime =  tr.stats.starttime - nl*dt
       if tr_starttime != starttime:
-        raise Exception("%s: not the same origin time for diff-srcloc!" % (station_id))
+        raise Exception("%s: not the same starttime for diff-srcloc!" % (station_id))
 
       if tr.stats.npts != sem_nt:
         raise Exception("%s: not the same npts for diff-srcloc!" % (station_id))
@@ -1913,27 +1938,15 @@ class Misfit(object):
       for i in range(3):
         syn_ENZ[i,nl:(nl+sem_nt)] = syn_st[i].data
 
-      # differential green's function 
-      grf = waveform['grf']
-      dg = syn_ENZ - grf
-
-      ## diff synthetics
-      ## convlove source time function
-      #syn_freq = np.fft.rfftfreq(nt, d=dt)
-      #F_src = stf_gauss_spectrum(syn_freq, tau)
-      #du = np.fft.irfft(F_src * np.fft.rfft(dg), nt)
-      ##zero records before origin time (wrap around from the end)
-      #idx = t < -5.0*tau
-      #du[:,idx] = 0.0
-
-      ## diff Chi
-      #dchi = np.sum(station['dchi_dg'] * dg) * dt
+      # waveform partial derivatives 
+      u0 = waveform['syn']
+      du = syn_ENZ - u0
 
       #------ record derivatives
       if 'waveform_der' not in station:
         station['waveform_der'] = {}
       station['waveform_der']['xs'] = {
-          'dm':dxs, 'dg':dg }
+          'dm':dxs, 'du':du }
       #'dm':dxs, 'dg':dg, 'du':du, 'dchi':dchi }
 
       # DEBUG
@@ -2071,39 +2084,29 @@ class Misfit(object):
           for tr in syn_st ] ):
         raise Exception('%s: not equal time samples in'\
             ' synthetic seismograms.' % (station_id))
+
       tr = syn_st[0]
+
       if tr.stats.delta != dt:
         raise Exception("%s: not the same dt for diff-srcloc!" % (station_id))
 
-      tr_starttime = event['t0'] \
-          + (tr.stats.sac['b'] - tr.stats.sac['o'] - nl*dt)
+      tr_starttime = tr.stats.starttime - nl*dt
       if tr_starttime != starttime:
-        raise Exception("%s: not the same origin time for diff-srcloc!" % (station_id))
+        raise Exception("%s: not the same starttime for diff-srcloc!" % (station_id))
 
       if tr.stats.npts != sem_nt:
         raise Exception("%s: not the same npts for diff-srcloc!" % (station_id))
 
       #------ read syn seismograms from perturbed source location
-      dg = np.zeros((3, nt))
+      du = np.zeros((3, nt))
       for i in range(3):
-        dg[i,nl:(nl+sem_nt)] = syn_st[i].data
-
-      ##source spectrum (moment-rate function)
-      #syn_freq = np.fft.rfftfreq(nt, d=dt)
-      #F_src = stf_gauss_spectrum(syn_freq, tau)
-      #du = np.fft.irfft(F_src * np.fft.rfft(dg), nt)
-      ##zero records before origin time (wrap around from the end)
-      #idx = t < -5.0*tau
-      #du[:,idx] = 0.0
-
-      ## diff Chi
-      #dchi = np.sum(station['dchi_dg'] * dg)
+        du[i,nl:(nl+sem_nt)] = syn_st[i].data
 
       #------ record derivatives
       if 'waveform_der' not in station:
         station['waveform_der'] = {}
       station['waveform_der']['mt'] = {
-          'dm':np.array(dmt), 'dg':dg }
+          'dm':np.array(dmt), 'du':du }
       #'dm':np.array(dmt), 'dg':dg, 'du':du, 'dchi':dchi }
 
       # DEBUG
@@ -2137,7 +2140,6 @@ class Misfit(object):
 
     Note
     ----
-      1) 
     """
     event = self.data['event']
     #src_param = ('dt0','dtau','dxs','dmt')
@@ -2163,7 +2165,7 @@ class Misfit(object):
       syn_times = syn_delta * np.arange(syn_nt)
       # seismograms 
       obs = waveform['obs']
-      grf = waveform['grf']
+      syn = waveform['syn']
 
       # source spectrum (moment-rate function)
       syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
@@ -2392,769 +2394,769 @@ class Misfit(object):
 #======================================================
 #
 
-  def cc_perturbed_seismogram(self,
-      dm={'t0':None, 'xs':None},
-#     dist_min=0.0,
-#     dist_max=180.0,
-      plot=False
-      ):
-    """ calculate normalized zero-lag cc for perturbed seismograms from linear combination of waveform derivatives
-
-    dm={<model_name>:<model_vector>, ...}
-    model_name: ['dt0', 'dxs']
-    model_vector: ndarray of the same length
-
-    dist_range : array(2)
-      if set, use only stations within the specified distance range (degree)
-
-    return cc_sum, weight_sum
-    """
-    # check model vectors in dm have the same length
-    if (not dm) or len(dm) == 0:
-      error_str = "dm must not be empty"
-      raise Exception(error_str)
-    model_num = len(dm)
-
-    vector_size = []
-    for model_name in dm:
-      if dm[model_name].ndim != 1:
-        error_str = "dm[%s] must be vector" % model_name
-        raise Exception(error_str)
-      vector_size.append(np.size(dm[model_name]))
-    if not is_equal(vector_size) or vector_size[0] < 1:
-      error_str = "vectors in dm must have the same non-zero length"
-      raise Exception(error_str)
-    vector_size = vector_size[0]
-
-    # check parameters
-    event = self.data['event']
-    if 'tau' in dm:
-      tau = dm['tau'] + event['tau']
-      if any(tau <= 0):
-        error_str = "dm['dtau'] has invalid values (event['tau']=%f)!" \
-            % event['tau']
-        raise Exception(error_str)
-
-    #------ loop each station
-    # sum of weighted normalized zero-lag cc at each model grid
-    wcc_sum = np.zeros(vector_size)
-    # sum of all windows' weighting
-    weight_sum = 0.0
-
-    station_dict = self.data['station']
-    for station_id in station_dict:
-      station = station_dict[station_id]
-      # skip rejected stations
-      if station['stat']['code'] < 0:
-        continue
-
-      ## skip stations out of the selected distance range
-      #gcarc = station['meta']['dist_degree']
-      #if gcarc < dist_min or gcarc > dist_max:
-      #  #print("SKIP %s: gcarc=%f not in (%f, %f)" % (
-      #  #  station_id, gcarc, dist_min, dist_max))
-      #  continue
-
-      # check if model parameter included in waveform_der
-      waveform_der = station['waveform_der']
-      for model_name in dm:
-        if (model_name not in ['t0', 'tau']) and \
-           (model_name not in waveform_der):
-          error_str = "%s not in waveform_der of %s" % (model_name, station_id)
-          raise Exception(error_str)
-
-      #---- get seismograms: obs,grf 
-      waveform = station['waveform']
-      obs = waveform['obs']
-      grf = waveform['grf']
-      # time samples
-      time_sample = waveform['time_sample']
-      syn_starttime = time_sample['starttime']
-      syn_delta = time_sample['delta']
-      syn_nt = time_sample['nt']
-      syn_nl = time_sample['nl']
-      syn_nr = time_sample['nr']
-      syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
-
-      #---- measure misfit
-      window_dict = station['window']
-      for window_id in window_dict:
-        window = window_dict[window_id]
-        # skip bad windows
-        if window['stat']['code'] < 1:
-          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
-          continue
-        # window weight
-        weight = window['weight']
-        # skip window with zero weight
-        if np.isclose(weight, 0.0):
-          continue
-        weight_sum += weight
-        # filter
-        filter_dict = window['filter']
-        filter_a = filter_dict['a']
-        filter_b = filter_dict['b']
-        # taper
-        win_func = window['taper']['win']
-        win_starttime = window['taper']['starttime']
-        win_endtime = window['taper']['endtime']
-        if plot:
-          syn_times = np.arange(syn_nt) * syn_delta
-          plt.plot(syn_times, win_func)
-          plt.show()
-          plt.title("wind_func")
-        # polarity projection 
-        proj_matrix = window['polarity']['proj_matrix']
-        #-- filter,project,taper obs
-        # F * d
-        obs_filt = signal.filtfilt(filter_b, filter_a, obs)
-        # w * p * F * d (window,project,filter)
-        wpFd = np.dot(proj_matrix, obs_filt) * win_func 
-        norm_wpFd = np.sqrt(np.sum(wpFd**2))
-        #-- filter,project grf 
-        # F * g
-        grf_filt = signal.filtfilt(filter_b, filter_a, grf)
-        # p * F * g
-        pFg = np.dot(proj_matrix, grf_filt)
-        if plot:
-          F_src = stf_gauss_spectrum(syn_freq, event['tau'])
-          # S * F * g
-          syn_filt = np.fft.irfft(F_src*np.fft.rfft(grf_filt), syn_nt)
-          # w * p * S * F * g
-          wpFu = np.dot(proj_matrix, syn_filt) * win_func
-        #-- filter,project dg: pFdg
-        pFdg = {}
-        for model_name in dm:
-          # exclude source time function
-          if model_name not in ['t0', 'tau']:
-            dg = waveform_der[model_name]['dg']
-            dg_filt = signal.filtfilt(filter_b, filter_a, dg)
-            pFdg[model_name] = np.dot(proj_matrix, dg_filt)
-        #-- misfit function: zero-lag cc
-        for idx_model in range(vector_size):
-          # perturbed grf: pFg1
-          pFg1 = np.zeros((3,syn_nt))
-          pFg1 += pFg
-          for model_name in dm:
-            # exclude source time function
-            if model_name not in ['t0', 'tau']:
-              pFg1 += dm[model_name][idx_model] * pFdg[model_name]
-          # perturbed source time function
-          dt0 = 0.0
-          if 't0' in dm:
-            dt0 = dm['t0'][idx_model]
-          dtau = 0.0
-          if 'tau' in dm:
-            dtau = dm['tau'][idx_model]
-          F_src = stf_gauss_spectrum(syn_freq, event['tau']+dtau)
-          # perturbed syn: w * S * p * F * g1
-          phase_shift = np.exp(-2.0j * np.pi * syn_freq * dt0)
-          wpFu1 = np.fft.irfft(phase_shift*F_src*np.fft.rfft(pFg1), syn_nt) \
-              * win_func
-          norm_wpFu1 = np.sqrt(np.sum(wpFu1**2))
-          Nw = norm_wpFd * norm_wpFu1
-          #normalized cc between obs and perturbed syn
-          cc_wpFd_wpFu1 = np.sum(wpFd*wpFu1) / Nw
-          # weighted cc
-          wcc_sum[idx_model] += weight * cc_wpFd_wpFu1
-          #DEBUG
-          if plot:
-            syn_npts = syn_nt - syn_nl - syn_nr
-            syn_orientation_codes = ['E', 'N', 'Z']
-            syn_times = np.arange(syn_nt) * syn_delta
-            Amax_obs = np.max(np.sum(wpFd**2, axis=0))**0.5
-            Amax_syn = np.max(np.sum(wpFu**2, axis=0))**0.5
-            Amax_syn1 = np.max(np.sum(wpFu1**2, axis=0))**0.5
-            win_b = win_starttime - syn_starttime
-            win_e = win_endtime - syn_starttime
-            obs_filt_proj = np.dot(proj_matrix, obs_filt)
-            syn_filt_proj = np.dot(proj_matrix, syn_filt)
-            for i in range(3):
-              plt.subplot(311+i)
-              if i == 0:
-                title_str = "%s.%s " % (station_id, window_id)
-                for model_name in dm:
-                  title_str += "%s:%.2f " \
-                      % (model_name, dm[model_name][idx_model])
-                title_str += "NCCwin:%.2f" % (cc_wpFd_wpFu1)
-                plt.title(title_str)
-
-              idx_plt = range(syn_nl,(syn_nl+syn_npts))
-              # whole trace, projected
-              plt.plot(syn_times[idx_plt], obs_filt_proj[i,idx_plt]/Amax_obs, 
-                  'k', linewidth=0.2)
-              plt.plot(syn_times[idx_plt], syn_filt_proj[i,idx_plt]/Amax_syn,
-                  'b', linewidth=0.2)
-              # windowed trace
-              idx_plt = (win_b <= syn_times) & (syn_times <= win_e)
-              plt.plot(syn_times[idx_plt], wpFd[i,idx_plt]/Amax_obs,
-                  'k', linewidth=1.0)
-              plt.plot(syn_times[idx_plt], wpFu[i,idx_plt]/Amax_syn,
-                  'b', linewidth=1.0)
-              plt.plot(syn_times[idx_plt], wpFu1[i,idx_plt]/Amax_syn1,
-                  'r', linewidth=1.0)
-
-              plt.xlim((syn_times[syn_nl], syn_times[syn_nl+syn_npts-1]))
-              plt.ylim((-1.5, 1.5))
-              plt.ylabel(syn_orientation_codes[i])
-            plt.show()
-
-      #end for window_id in window_dict:
-    #end for station_id in station_dict:
-
-    return wcc_sum, weight_sum
+#  def cc_perturbed_seismogram(self,
+#      dm={'t0':None, 'xs':None},
+##     dist_min=0.0,
+##     dist_max=180.0,
+#      plot=False
+#      ):
+#    """ calculate normalized zero-lag cc for perturbed seismograms from linear combination of waveform derivatives
+#
+#    dm={<model_name>:<model_vector>, ...}
+#    model_name: ['dt0', 'dxs']
+#    model_vector: ndarray of the same length
+#
+#    dist_range : array(2)
+#      if set, use only stations within the specified distance range (degree)
+#
+#    return cc_sum, weight_sum
+#    """
+#    # check model vectors in dm have the same length
+#    if (not dm) or len(dm) == 0:
+#      error_str = "dm must not be empty"
+#      raise Exception(error_str)
+#    model_num = len(dm)
+#
+#    vector_size = []
+#    for model_name in dm:
+#      if dm[model_name].ndim != 1:
+#        error_str = "dm[%s] must be vector" % model_name
+#        raise Exception(error_str)
+#      vector_size.append(np.size(dm[model_name]))
+#    if not is_equal(vector_size) or vector_size[0] < 1:
+#      error_str = "vectors in dm must have the same non-zero length"
+#      raise Exception(error_str)
+#    vector_size = vector_size[0]
+#
+#    # check parameters
+#    event = self.data['event']
+#    if 'tau' in dm:
+#      tau = dm['tau'] + event['tau']
+#      if any(tau <= 0):
+#        error_str = "dm['dtau'] has invalid values (event['tau']=%f)!" \
+#            % event['tau']
+#        raise Exception(error_str)
+#
+#    #------ loop each station
+#    # sum of weighted normalized zero-lag cc at each model grid
+#    wcc_sum = np.zeros(vector_size)
+#    # sum of all windows' weighting
+#    weight_sum = 0.0
+#
+#    station_dict = self.data['station']
+#    for station_id in station_dict:
+#      station = station_dict[station_id]
+#      # skip rejected stations
+#      if station['stat']['code'] < 0:
+#        continue
+#
+#      ## skip stations out of the selected distance range
+#      #gcarc = station['meta']['dist_degree']
+#      #if gcarc < dist_min or gcarc > dist_max:
+#      #  #print("SKIP %s: gcarc=%f not in (%f, %f)" % (
+#      #  #  station_id, gcarc, dist_min, dist_max))
+#      #  continue
+#
+#      # check if model parameter included in waveform_der
+#      waveform_der = station['waveform_der']
+#      for model_name in dm:
+#        if (model_name not in ['t0', 'tau']) and \
+#           (model_name not in waveform_der):
+#          error_str = "%s not in waveform_der of %s" % (model_name, station_id)
+#          raise Exception(error_str)
+#
+#      #---- get seismograms: obs,grf 
+#      waveform = station['waveform']
+#      obs = waveform['obs']
+#      syn = waveform['syn']
+#      # time samples
+#      time_sample = waveform['time_sample']
+#      syn_starttime = time_sample['starttime']
+#      syn_delta = time_sample['delta']
+#      syn_nt = time_sample['nt']
+#      syn_nl = time_sample['nl']
+#      syn_nr = time_sample['nr']
+#      syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
+#
+#      #---- measure misfit
+#      window_dict = station['window']
+#      for window_id in window_dict:
+#        window = window_dict[window_id]
+#        # skip bad windows
+#        if window['stat']['code'] < 1:
+#          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+#          continue
+#        # window weight
+#        weight = window['weight']
+#        # skip window with zero weight
+#        if np.isclose(weight, 0.0):
+#          continue
+#        weight_sum += weight
+#        # filter
+#        filter_dict = window['filter']
+#        filter_a = filter_dict['a']
+#        filter_b = filter_dict['b']
+#        # taper
+#        win_func = window['taper']['win']
+#        win_starttime = window['taper']['starttime']
+#        win_endtime = window['taper']['endtime']
+#        if plot:
+#          syn_times = np.arange(syn_nt) * syn_delta
+#          plt.plot(syn_times, win_func)
+#          plt.show()
+#          plt.title("wind_func")
+#        # polarity projection 
+#        proj_matrix = window['polarity']['proj_matrix']
+#        #-- filter,project,taper obs
+#        # F * d
+#        obs_filt = signal.filtfilt(filter_b, filter_a, obs)
+#        # w * p * F * d (window,project,filter)
+#        wpFd = np.dot(proj_matrix, obs_filt) * win_func 
+#        norm_wpFd = np.sqrt(np.sum(wpFd**2))
+#        #-- filter,project grf 
+#        # F * u
+#        grf_filt = signal.filtfilt(filter_b, filter_a, grf)
+#        # p * F * g
+#        pFg = np.dot(proj_matrix, grf_filt)
+#        if plot:
+#          F_src = stf_gauss_spectrum(syn_freq, event['tau'])
+#          # S * F * g
+#          syn_filt = np.fft.irfft(F_src*np.fft.rfft(grf_filt), syn_nt)
+#          # w * p * S * F * g
+#          wpFu = np.dot(proj_matrix, syn_filt) * win_func
+#        #-- filter,project dg: pFdg
+#        pFdg = {}
+#        for model_name in dm:
+#          # exclude source time function
+#          if model_name not in ['t0', 'tau']:
+#            dg = waveform_der[model_name]['dg']
+#            dg_filt = signal.filtfilt(filter_b, filter_a, dg)
+#            pFdg[model_name] = np.dot(proj_matrix, dg_filt)
+#        #-- misfit function: zero-lag cc
+#        for idx_model in range(vector_size):
+#          # perturbed grf: pFg1
+#          pFg1 = np.zeros((3,syn_nt))
+#          pFg1 += pFg
+#          for model_name in dm:
+#            # exclude source time function
+#            if model_name not in ['t0', 'tau']:
+#              pFg1 += dm[model_name][idx_model] * pFdg[model_name]
+#          # perturbed source time function
+#          dt0 = 0.0
+#          if 't0' in dm:
+#            dt0 = dm['t0'][idx_model]
+#          dtau = 0.0
+#          if 'tau' in dm:
+#            dtau = dm['tau'][idx_model]
+#          F_src = stf_gauss_spectrum(syn_freq, event['tau']+dtau)
+#          # perturbed syn: w * S * p * F * g1
+#          phase_shift = np.exp(-2.0j * np.pi * syn_freq * dt0)
+#          wpFu1 = np.fft.irfft(phase_shift*F_src*np.fft.rfft(pFg1), syn_nt) \
+#              * win_func
+#          norm_wpFu1 = np.sqrt(np.sum(wpFu1**2))
+#          Nw = norm_wpFd * norm_wpFu1
+#          #normalized cc between obs and perturbed syn
+#          cc_wpFd_wpFu1 = np.sum(wpFd*wpFu1) / Nw
+#          # weighted cc
+#          wcc_sum[idx_model] += weight * cc_wpFd_wpFu1
+#          #DEBUG
+#          if plot:
+#            syn_npts = syn_nt - syn_nl - syn_nr
+#            syn_orientation_codes = ['E', 'N', 'Z']
+#            syn_times = np.arange(syn_nt) * syn_delta
+#            Amax_obs = np.max(np.sum(wpFd**2, axis=0))**0.5
+#            Amax_syn = np.max(np.sum(wpFu**2, axis=0))**0.5
+#            Amax_syn1 = np.max(np.sum(wpFu1**2, axis=0))**0.5
+#            win_b = win_starttime - syn_starttime
+#            win_e = win_endtime - syn_starttime
+#            obs_filt_proj = np.dot(proj_matrix, obs_filt)
+#            syn_filt_proj = np.dot(proj_matrix, syn_filt)
+#            for i in range(3):
+#              plt.subplot(311+i)
+#              if i == 0:
+#                title_str = "%s.%s " % (station_id, window_id)
+#                for model_name in dm:
+#                  title_str += "%s:%.2f " \
+#                      % (model_name, dm[model_name][idx_model])
+#                title_str += "NCCwin:%.2f" % (cc_wpFd_wpFu1)
+#                plt.title(title_str)
+#
+#              idx_plt = range(syn_nl,(syn_nl+syn_npts))
+#              # whole trace, projected
+#              plt.plot(syn_times[idx_plt], obs_filt_proj[i,idx_plt]/Amax_obs, 
+#                  'k', linewidth=0.2)
+#              plt.plot(syn_times[idx_plt], syn_filt_proj[i,idx_plt]/Amax_syn,
+#                  'b', linewidth=0.2)
+#              # windowed trace
+#              idx_plt = (win_b <= syn_times) & (syn_times <= win_e)
+#              plt.plot(syn_times[idx_plt], wpFd[i,idx_plt]/Amax_obs,
+#                  'k', linewidth=1.0)
+#              plt.plot(syn_times[idx_plt], wpFu[i,idx_plt]/Amax_syn,
+#                  'b', linewidth=1.0)
+#              plt.plot(syn_times[idx_plt], wpFu1[i,idx_plt]/Amax_syn1,
+#                  'r', linewidth=1.0)
+#
+#              plt.xlim((syn_times[syn_nl], syn_times[syn_nl+syn_npts-1]))
+#              plt.ylim((-1.5, 1.5))
+#              plt.ylabel(syn_orientation_codes[i])
+#            plt.show()
+#
+#      #end for window_id in window_dict:
+#    #end for station_id in station_dict:
+#
+#    return wcc_sum, weight_sum
 
 #
 #======================================================
 #
 
-  def search1d_cc_perturbed_seismogram(self,
-      dm_range = {
-        't0': [-5,5], 
-        'tau': [-5,5],
-        'xs': [-5,5],
-        'mt': [-5,5],
-        },
-#     dist_min=0.0,
-#     dist_max=180.0,
-      ngrid=4,
-      max_niter=5,
-      range_ratio=0.7,
-      plot_seism=False,
-      log_file="search1d_cc.log",
-      cmt_file="CMTSOLUTION.search1d",
-      ):
-    """ 
-    calculate misfit over 2D model grids based on perturbed seismograms 
-
-    Parameters
-    ----------
-    range_ratio : scalar
-      between (0, 1), used to shrink the search range to cc values above range_ratio
-      between cc_max and cc_min.
-
-    Return
-    ------
-    optimal dm
-
-    """
-    # check validity of dm_range
-    event = self.data['event']
-    tau = event['tau']
-    if 'tau' in dm_range:
-      tau_lim = dm_range['tau']
-      if (min(tau_lim) + tau) < 1.0:
-        warnings.warn("Too small dtau value, increase to avoid negative tau")
-        dm_range['tau'][0] = -0.95*event['tau']
-        print(dm_range)
-
-    # grid parameters
-    model_name = [x for x in dm_range]
-
-    range_ratio = float(range_ratio)
-    if range_ratio < 0.5 or range_ratio > 0.9:
-      raise ValueError("range_ratio should be within (0.5, 0.9)")
-
-    dm_opt = {}
-    for par in model_name:
-      dm_opt[par] = 0.0
-
-    # prepare log file
-    fid = open(log_file,"w")
-
-    niter = 0
-    while niter < max_niter:
-      fid.write("====== iteration: %d\n" % (niter))
-      fid.flush()
-
-      # loop each parameter
-      for par in model_name:
-        fid.write("------ %s\n" % (par))
-        fid.flush()
-        xlim = np.array(dm_range[par])
-
-        if xlim.size == 1:
-          dm_opt[par] = xlim[0]
-          fid.write("fixed at %.5e\n" % (dm_opt[par]))
-          fid.flush()
-          continue
-        else:
-          fid.write("range: %.5e, %.5e\n" % (np.min(xlim), np.max(xlim)))
-          fid.flush()
-          xx = np.linspace(np.min(xlim), np.max(xlim), ngrid)
-
-          # search
-          dm_grid = {}
-          dm_grid[par] = xx
-          for par_fix in model_name:
-            if par_fix != par:
-              dm_grid[par_fix] = np.ones(ngrid) * dm_opt[par_fix]
-          cc, weight = self.cc_perturbed_seismogram(
-              dm=dm_grid, 
-#             dist_min=dist_min, 
-#             dist_max=dist_max,
-              plot=plot_seism)
-          cc /= weight # weighted average of normalized zero-lag CC
-
-          # interpolation
-          x_i = np.linspace(np.min(xlim), np.max(xlim), 100)
-          interp = interpolate.interp1d(xx, cc, kind='cubic')
-          cc_i = interp(x_i)
-          imax = np.argmax(cc_i)
-          x_max = x_i[imax]
-          cc_max = cc_i[imax]
-
-          #change search range
-          imin = np.argmin(cc_i)
-          cc_min = cc_i[imin]
-          cc_thred = cc_min + (cc_max-cc_min)*range_ratio
-          x1 = x_i[cc_i>cc_thred]
-          dm_range[par] = [np.min(x1), np.max(x1)]
-
-          dm_opt[par] = x_max
-          fid.write("maximum at %.5e with cc %.5e\n" % (dm_opt[par], cc_max))
-          fid.flush()
-
-      # print(out optimal model
-      fid.write("------ optimal dm_alpha\n")
-      fid.flush()
-      for par in model_name:
-        fid.write("%s: %.5e\n" %(par, dm_opt[par]))
-        fid.flush()
-
-      niter += 1
-    #END while niter < 5:
-    fid.close()
-
-    # make new model
-    model = {}
-    event = self.data['event']
-    src_perturb = self.data['src_perturb']
-    for par in dm_opt:
-      m0 = event[par]
-      dm = src_perturb[par]
-      alpha = dm_opt[par]
-      model[par] = {
-          'm0':m0, 
-          'dm':dm,
-          'alpha':alpha,
-          'm1':m0+alpha*dm
-          }
-
-    # write out new CMTSOLUTION file
-    t0 = event['t0']
-    if 't0' in model: t0 = model['t0']['m1']
-    # modify origin time in header line to have centroid time 
-    header = event['header'].split()
-    header[1] = "{:04d}".format(t0.year)
-    header[2] = "{:02d}".format(t0.month)
-    header[3] = "{:02d}".format(t0.day)
-    header[4] = "{:02d}".format(t0.hour)
-    header[5] = "{:02d}".format(t0.minute)
-    header[6] = "{:07.4f}".format(t0.second + 1.0e-6*t0.microsecond)
-    
-    tau = event['tau']
-    if 'tau' in model: tau = model['tau']['m1']
-    xs = event['xs']
-    if 'xs' in model: xs = model['xs']['m1']
-    mt = event['mt']
-    m0 = (0.5*np.sum(mt**2))**0.5
-    if 'mt' in model: mt = model['mt']['m1']
-    # zero trace
-    mt = mt - np.identity(3)*np.trace(mt)/3.0
-    # scale to orignal moment
-    mt = mt/(0.5*np.sum(mt**2))**0.5
-    mt *= m0
-    
-    with open(cmt_file, 'w') as fp:
-      fp.write('%s \n' % (' '.join(header)))
-      fp.write('%-18s %s\n' % ('event name:', event['id']))
-      fp.write('%-18s %+15.8E\n' % ('t0(s):',    0.0))
-      fp.write('%-18s %+15.8E\n' % ('tau(s):',   tau))
-      fp.write('%-18s %+15.8E\n' % ('x(m):',     xs[0]))
-      fp.write('%-18s %+15.8E\n' % ('y(m):',     xs[1]))
-      fp.write('%-18s %+15.8E\n' % ('z(m):',     xs[2]))
-      fp.write('%-18s %+15.8E\n' % ('Mxx(N*m):', mt[0,0]))
-      fp.write('%-18s %+15.8E\n' % ('Myy(N*m):', mt[1,1]))
-      fp.write('%-18s %+15.8E\n' % ('Mzz(N*m):', mt[2,2]))
-      fp.write('%-18s %+15.8E\n' % ('Mxy(N*m):', mt[0,1]))
-      fp.write('%-18s %+15.8E\n' % ('Mxz(N*m):', mt[0,2]))
-      fp.write('%-18s %+15.8E\n' % ('Myz(N*m):', mt[1,2]))
+#  def search1d_cc_perturbed_seismogram(self,
+#      dm_range = {
+#        't0': [-5,5], 
+#        'tau': [-5,5],
+#        'xs': [-5,5],
+#        'mt': [-5,5],
+#        },
+##     dist_min=0.0,
+##     dist_max=180.0,
+#      ngrid=4,
+#      max_niter=5,
+#      range_ratio=0.7,
+#      plot_seism=False,
+#      log_file="search1d_cc.log",
+#      cmt_file="CMTSOLUTION.search1d",
+#      ):
+#    """ 
+#    calculate misfit over 2D model grids based on perturbed seismograms 
+#
+#    Parameters
+#    ----------
+#    range_ratio : scalar
+#      between (0, 1), used to shrink the search range to cc values above range_ratio
+#      between cc_max and cc_min.
+#
+#    Return
+#    ------
+#    optimal dm
+#
+#    """
+#    # check validity of dm_range
+#    event = self.data['event']
+#    tau = event['tau']
+#    if 'tau' in dm_range:
+#      tau_lim = dm_range['tau']
+#      if (min(tau_lim) + tau) < 1.0:
+#        warnings.warn("Too small dtau value, increase to avoid negative tau")
+#        dm_range['tau'][0] = -0.95*event['tau']
+#        print(dm_range)
+#
+#    # grid parameters
+#    model_name = [x for x in dm_range]
+#
+#    range_ratio = float(range_ratio)
+#    if range_ratio < 0.5 or range_ratio > 0.9:
+#      raise ValueError("range_ratio should be within (0.5, 0.9)")
+#
+#    dm_opt = {}
+#    for par in model_name:
+#      dm_opt[par] = 0.0
+#
+#    # prepare log file
+#    fid = open(log_file,"w")
+#
+#    niter = 0
+#    while niter < max_niter:
+#      fid.write("====== iteration: %d\n" % (niter))
+#      fid.flush()
+#
+#      # loop each parameter
+#      for par in model_name:
+#        fid.write("------ %s\n" % (par))
+#        fid.flush()
+#        xlim = np.array(dm_range[par])
+#
+#        if xlim.size == 1:
+#          dm_opt[par] = xlim[0]
+#          fid.write("fixed at %.5e\n" % (dm_opt[par]))
+#          fid.flush()
+#          continue
+#        else:
+#          fid.write("range: %.5e, %.5e\n" % (np.min(xlim), np.max(xlim)))
+#          fid.flush()
+#          xx = np.linspace(np.min(xlim), np.max(xlim), ngrid)
+#
+#          # search
+#          dm_grid = {}
+#          dm_grid[par] = xx
+#          for par_fix in model_name:
+#            if par_fix != par:
+#              dm_grid[par_fix] = np.ones(ngrid) * dm_opt[par_fix]
+#          cc, weight = self.cc_perturbed_seismogram(
+#              dm=dm_grid, 
+##             dist_min=dist_min, 
+##             dist_max=dist_max,
+#              plot=plot_seism)
+#          cc /= weight # weighted average of normalized zero-lag CC
+#
+#          # interpolation
+#          x_i = np.linspace(np.min(xlim), np.max(xlim), 100)
+#          interp = interpolate.interp1d(xx, cc, kind='cubic')
+#          cc_i = interp(x_i)
+#          imax = np.argmax(cc_i)
+#          x_max = x_i[imax]
+#          cc_max = cc_i[imax]
+#
+#          #change search range
+#          imin = np.argmin(cc_i)
+#          cc_min = cc_i[imin]
+#          cc_thred = cc_min + (cc_max-cc_min)*range_ratio
+#          x1 = x_i[cc_i>cc_thred]
+#          dm_range[par] = [np.min(x1), np.max(x1)]
+#
+#          dm_opt[par] = x_max
+#          fid.write("maximum at %.5e with cc %.5e\n" % (dm_opt[par], cc_max))
+#          fid.flush()
+#
+#      # print(out optimal model
+#      fid.write("------ optimal dm_alpha\n")
+#      fid.flush()
+#      for par in model_name:
+#        fid.write("%s: %.5e\n" %(par, dm_opt[par]))
+#        fid.flush()
+#
+#      niter += 1
+#    #END while niter < 5:
+#    fid.close()
+#
+#    # make new model
+#    model = {}
+#    event = self.data['event']
+#    src_perturb = self.data['src_perturb']
+#    for par in dm_opt:
+#      m0 = event[par]
+#      dm = src_perturb[par]
+#      alpha = dm_opt[par]
+#      model[par] = {
+#          'm0':m0, 
+#          'dm':dm,
+#          'alpha':alpha,
+#          'm1':m0+alpha*dm
+#          }
+#
+#    # write out new CMTSOLUTION file
+#    t0 = event['t0']
+#    if 't0' in model: t0 = model['t0']['m1']
+#    # modify origin time in header line to have centroid time 
+#    header = event['header'].split()
+#    header[1] = "{:04d}".format(t0.year)
+#    header[2] = "{:02d}".format(t0.month)
+#    header[3] = "{:02d}".format(t0.day)
+#    header[4] = "{:02d}".format(t0.hour)
+#    header[5] = "{:02d}".format(t0.minute)
+#    header[6] = "{:07.4f}".format(t0.second + 1.0e-6*t0.microsecond)
+#    
+#    tau = event['tau']
+#    if 'tau' in model: tau = model['tau']['m1']
+#    xs = event['xs']
+#    if 'xs' in model: xs = model['xs']['m1']
+#    mt = event['mt']
+#    m0 = (0.5*np.sum(mt**2))**0.5
+#    if 'mt' in model: mt = model['mt']['m1']
+#    # zero trace
+#    mt = mt - np.identity(3)*np.trace(mt)/3.0
+#    # scale to orignal moment
+#    mt = mt/(0.5*np.sum(mt**2))**0.5
+#    mt *= m0
+#    
+#    with open(cmt_file, 'w') as fp:
+#      fp.write('%s \n' % (' '.join(header)))
+#      fp.write('%-18s %s\n' % ('event name:', event['id']))
+#      fp.write('%-18s %+15.8E\n' % ('t0(s):',    0.0))
+#      fp.write('%-18s %+15.8E\n' % ('tau(s):',   tau))
+#      fp.write('%-18s %+15.8E\n' % ('x(m):',     xs[0]))
+#      fp.write('%-18s %+15.8E\n' % ('y(m):',     xs[1]))
+#      fp.write('%-18s %+15.8E\n' % ('z(m):',     xs[2]))
+#      fp.write('%-18s %+15.8E\n' % ('Mxx(N*m):', mt[0,0]))
+#      fp.write('%-18s %+15.8E\n' % ('Myy(N*m):', mt[1,1]))
+#      fp.write('%-18s %+15.8E\n' % ('Mzz(N*m):', mt[2,2]))
+#      fp.write('%-18s %+15.8E\n' % ('Mxy(N*m):', mt[0,1]))
+#      fp.write('%-18s %+15.8E\n' % ('Mxz(N*m):', mt[0,2]))
+#      fp.write('%-18s %+15.8E\n' % ('Myz(N*m):', mt[1,2]))
 
 #
 #======================================================
 #
 
-  def grid_cc_perturbed_seismogram(self,
-      dm = {
-        't0': np.linspace(-10,0,11), 
-        'xs': np.linspace(-5,5,11),
-        },
-      axes=[ ('t0','xs'), ('t0',), ('xs',) ],
-      outfig="grid_cc.pdf",
-      plot_seism=False,
-      cmt_file="CMTSOLUTION.grid_cc"
-      ):
-    """ calculate misfit over 2D model grids based on perturbed seismograms 
-    """
-    # grid parameters
-    model_num = len(dm)
-    model_name = [x for x in dm]
-
-    # check parameters 
-    for xy in axes:
-      if len(xy) < 1 or len(xy) > 2:
-        error_str = "axes should have one or two elements"
-        raise Exception(error_str)
-      for axis in xy:
-        if axis not in model_name:
-          error_str = "axis(%s) not in dm" % axis
-          raise Exception(error_str)
-
-    # model grid
-    x = [np.array(dm[s]) for s in model_name]
-    xx = np.meshgrid(*x, indexing='ij')
-    nn = xx[0].size
-
-    # calculate cc values over all grid points 
-    dm_grid = {}
-    for i in range(model_num):
-      par = model_name[i]
-      dm_grid[par] = xx[i].flatten()
-
-    zz, weight = self.cc_perturbed_seismogram(dm=dm_grid, plot=plot_seism)
-    zz /= weight # weighted average of normalized zero-lag CC
-    zz = zz.reshape(xx[0].shape)
-
-    # get maximum cc value 
-    imax = np.argmax(zz)
-    idx_max = np.unravel_index(imax, xx[0].shape)
-    zz_max = zz[idx_max]
-
-    zz_min = np.min(zz)
-
-    # plot out results
-    with PdfPages(outfig) as pdf:
-      for xy in axes:
-        # plot 1D section
-        if (len(xy) == 1) or (xy[0] == xy[1]):
-          ix = model_name.index(xy[0])
-          idx = [range(len(v)) for v in x]
-          for i in range(model_num):
-            if i != ix:
-              idx[i] = [idx_max[i],]
-          zz_1d = zz[np.ix_(*idx)].squeeze()
-
-          xx_1d = x[ix]
-          x_i = np.linspace(np.min(xx_1d), np.max(xx_1d), 100)
-
-          interp = interpolate.interp1d(xx_1d, zz_1d, kind='cubic')
-          zz_i = interp(x_i)
-          imax_i = np.argmax(zz_i)
-          x_i_max = x_i[imax_i]
-          zz_i_max = zz_i[imax_i]
-
-          # plot cross-sections through maximum point
-          #fig = plt.figure(figsize=(8.5,11))
-          fig = plt.figure()
-          plt.plot(xx_1d, zz_1d, 'ro', x_i, zz_i)
-
-          title_str = "Weighted average CC  (%.2e, %.2e)" % (x_i_max, zz_i_max)
-          plt.title(title_str)
-
-          xlabel_str = "alpha (* d%s)" % model_name[ix]
-          plt.xlabel(xlabel_str)
-          plt.ylabel("weighted avg. CC")
-
-          pdf.savefig()
-          plt.close()
-
-        # plot 2D cross section
-        else:
-          ix = model_name.index(xy[0])
-          iy = model_name.index(xy[1])
-          idx = [range(len(v)) for v in x]
-          for i in range(model_num):
-            if i != ix and i != iy:
-              idx[i] = [idx_max[i],]
-          idx = np.ix_(*idx)
-          zz_2d = zz[idx].squeeze()
-          xx_2d = xx[ix][idx].squeeze()
-          yy_2d = xx[iy][idx].squeeze()
-          print(xx_2d)
-          print(yy_2d)
-          print(zz_2d)
-          if ix > iy:
-            zz_2d = np.transpose(zz_2d)
-            xx_2d = np.transpose(xx_2d)
-            yy_2d = np.transpose(yy_2d)
-
-          # make interpolation grid
-          x_i = np.linspace(np.min(xx_2d), np.max(xx_2d), 100)
-          y_i = np.linspace(np.min(yy_2d), np.max(yy_2d), 100)
-          xx_i, yy_i = np.meshgrid(x_i, y_i)
-
-          interp = interpolate.interp2d(xx_2d, yy_2d, zz_2d, kind='cubic')
-          zz_i = interp(x_i, y_i)
-          imax_i = np.argmax(zz_i)
-          idx_max_i = np.unravel_index(imax_i, xx_i.shape)
-          zz_i_max = zz_i[idx_max_i]
-          x_i_max = xx_i[idx_max_i]
-          y_i_max = yy_i[idx_max_i]
-
-          # plot 2D surface through the maximum
-          #fig = plt.figure(figsize=(8.5, 11))
-          fig = plt.figure()
-
-          levels = zz_min + (zz_max-zz_min)*np.linspace(0.5, 1.0, 20)
-          #cs = plt.contour(xx_2d, yy_2d, zz_2d, levels, colors='k')
-          cs = plt.contour(xx_i, yy_i, zz_i, levels, colors='k')
-          plt.clabel(cs, fontsize=9, inline=1)
-
-          #x_max = xx[ix][idx_max]
-          #y_max = xx[iy][idx_max]
-          #text_str = "(%.1f,%.1f)" % (x_max, y_max)
-          #plt.text(x_max, y_max, text_str,
-          #    horizontalalignment="center", verticalalignment="top")
-          #plt.plot(x_max, y_max, 'ko')
-
-          #text_str = "%.2e,%.2e" % (x_i_max, y_i_max)
-          #plt.text(x_i_max, y_i_max, text_str,
-          #    horizontalalignment="center", verticalalignment="top")
-          plt.plot(x_i_max, y_i_max, 'k+')
-
-          title_str = "Weighted average CC (%.2e,%.2e)" % (x_i_max, y_i_max)
-          plt.title(title_str)
-
-          xlabel_str = "alpha (* d%s)" % model_name[ix]
-          plt.xlabel(xlabel_str)
-          ylabel_str = "alpha (* d%s)" % model_name[iy]
-          plt.ylabel(ylabel_str)
-
-          pdf.savefig()
-          plt.close()
-
-    # get best model
-    event = self.data['event']
-    src_perturb = self.data['src_perturb']
-    
-    model = {}
-    for par in dm:
-      m0 = event[par]
-      dm = src_perturb[par]
-      ix = model_name.index(par)
-      alpha = xx[ix][idx_max]
-      model[par] = {
-          'm0':m0, 
-          'dm':dm,
-          'alpha':alpha,
-          'm1':m0+alpha*dm
-          }
-
-    #------ write out new CMTSOLUTION file
-    t0 = event['t0']
-    if 't0' in model: t0 = model['t0']['m1']
-    # modify origin time in header line to have centroid time 
-    header = event['header'].split()
-    header[1] = str(t0.year)
-    header[2] = str(t0.month)
-    header[3] = str(t0.day)
-    header[4] = str(t0.hour)
-    header[5] = str(t0.minute)
-    header[6] = str(t0.second + 1.0e-6*t0.microsecond)
-
-    tau = event['tau']
-    if 'tau' in model: tau = model['tau']['m1']
-    xs = event['xs']
-    if 'xs' in model: xs = model['xs']['m1']
-    mt = event['mt']
-    if 'mt' in model: mt = model['mt']['m1']
-
-    with open(cmt_file, 'w') as fp:
-      fp.write('%s | wCCmax %f weight %f\n'
-          % (' '.join(header), zz_max, weight))
-      fp.write('%-18s %s\n' % ('event name:', "grid_cc"))
-      fp.write('%-18s %+15.8E\n' % ('t0(s):',    0.0))
-      fp.write('%-18s %+15.8E\n' % ('tau(s):',   tau))
-      fp.write('%-18s %+15.8E\n' % ('x(m):',     xs[0]))
-      fp.write('%-18s %+15.8E\n' % ('y(m):',     xs[1]))
-      fp.write('%-18s %+15.8E\n' % ('z(m):',     xs[2]))
-      fp.write('%-18s %+15.8E\n' % ('Mxx(N*m):', mt[0,0]))
-      fp.write('%-18s %+15.8E\n' % ('Myy(N*m):', mt[1,1]))
-      fp.write('%-18s %+15.8E\n' % ('Mzz(N*m):', mt[2,2]))
-      fp.write('%-18s %+15.8E\n' % ('Mxy(N*m):', mt[0,1]))
-      fp.write('%-18s %+15.8E\n' % ('Mxz(N*m):', mt[0,2]))
-      fp.write('%-18s %+15.8E\n' % ('Myz(N*m):', mt[1,2]))
-
-    return model, zz_max, weight
+#  def grid_cc_perturbed_seismogram(self,
+#      dm = {
+#        't0': np.linspace(-10,0,11), 
+#        'xs': np.linspace(-5,5,11),
+#        },
+#      axes=[ ('t0','xs'), ('t0',), ('xs',) ],
+#      outfig="grid_cc.pdf",
+#      plot_seism=False,
+#      cmt_file="CMTSOLUTION.grid_cc"
+#      ):
+#    """ calculate misfit over 2D model grids based on perturbed seismograms 
+#    """
+#    # grid parameters
+#    model_num = len(dm)
+#    model_name = [x for x in dm]
+#
+#    # check parameters 
+#    for xy in axes:
+#      if len(xy) < 1 or len(xy) > 2:
+#        error_str = "axes should have one or two elements"
+#        raise Exception(error_str)
+#      for axis in xy:
+#        if axis not in model_name:
+#          error_str = "axis(%s) not in dm" % axis
+#          raise Exception(error_str)
+#
+#    # model grid
+#    x = [np.array(dm[s]) for s in model_name]
+#    xx = np.meshgrid(*x, indexing='ij')
+#    nn = xx[0].size
+#
+#    # calculate cc values over all grid points 
+#    dm_grid = {}
+#    for i in range(model_num):
+#      par = model_name[i]
+#      dm_grid[par] = xx[i].flatten()
+#
+#    zz, weight = self.cc_perturbed_seismogram(dm=dm_grid, plot=plot_seism)
+#    zz /= weight # weighted average of normalized zero-lag CC
+#    zz = zz.reshape(xx[0].shape)
+#
+#    # get maximum cc value 
+#    imax = np.argmax(zz)
+#    idx_max = np.unravel_index(imax, xx[0].shape)
+#    zz_max = zz[idx_max]
+#
+#    zz_min = np.min(zz)
+#
+#    # plot out results
+#    with PdfPages(outfig) as pdf:
+#      for xy in axes:
+#        # plot 1D section
+#        if (len(xy) == 1) or (xy[0] == xy[1]):
+#          ix = model_name.index(xy[0])
+#          idx = [range(len(v)) for v in x]
+#          for i in range(model_num):
+#            if i != ix:
+#              idx[i] = [idx_max[i],]
+#          zz_1d = zz[np.ix_(*idx)].squeeze()
+#
+#          xx_1d = x[ix]
+#          x_i = np.linspace(np.min(xx_1d), np.max(xx_1d), 100)
+#
+#          interp = interpolate.interp1d(xx_1d, zz_1d, kind='cubic')
+#          zz_i = interp(x_i)
+#          imax_i = np.argmax(zz_i)
+#          x_i_max = x_i[imax_i]
+#          zz_i_max = zz_i[imax_i]
+#
+#          # plot cross-sections through maximum point
+#          #fig = plt.figure(figsize=(8.5,11))
+#          fig = plt.figure()
+#          plt.plot(xx_1d, zz_1d, 'ro', x_i, zz_i)
+#
+#          title_str = "Weighted average CC  (%.2e, %.2e)" % (x_i_max, zz_i_max)
+#          plt.title(title_str)
+#
+#          xlabel_str = "alpha (* d%s)" % model_name[ix]
+#          plt.xlabel(xlabel_str)
+#          plt.ylabel("weighted avg. CC")
+#
+#          pdf.savefig()
+#          plt.close()
+#
+#        # plot 2D cross section
+#        else:
+#          ix = model_name.index(xy[0])
+#          iy = model_name.index(xy[1])
+#          idx = [range(len(v)) for v in x]
+#          for i in range(model_num):
+#            if i != ix and i != iy:
+#              idx[i] = [idx_max[i],]
+#          idx = np.ix_(*idx)
+#          zz_2d = zz[idx].squeeze()
+#          xx_2d = xx[ix][idx].squeeze()
+#          yy_2d = xx[iy][idx].squeeze()
+#          print(xx_2d)
+#          print(yy_2d)
+#          print(zz_2d)
+#          if ix > iy:
+#            zz_2d = np.transpose(zz_2d)
+#            xx_2d = np.transpose(xx_2d)
+#            yy_2d = np.transpose(yy_2d)
+#
+#          # make interpolation grid
+#          x_i = np.linspace(np.min(xx_2d), np.max(xx_2d), 100)
+#          y_i = np.linspace(np.min(yy_2d), np.max(yy_2d), 100)
+#          xx_i, yy_i = np.meshgrid(x_i, y_i)
+#
+#          interp = interpolate.interp2d(xx_2d, yy_2d, zz_2d, kind='cubic')
+#          zz_i = interp(x_i, y_i)
+#          imax_i = np.argmax(zz_i)
+#          idx_max_i = np.unravel_index(imax_i, xx_i.shape)
+#          zz_i_max = zz_i[idx_max_i]
+#          x_i_max = xx_i[idx_max_i]
+#          y_i_max = yy_i[idx_max_i]
+#
+#          # plot 2D surface through the maximum
+#          #fig = plt.figure(figsize=(8.5, 11))
+#          fig = plt.figure()
+#
+#          levels = zz_min + (zz_max-zz_min)*np.linspace(0.5, 1.0, 20)
+#          #cs = plt.contour(xx_2d, yy_2d, zz_2d, levels, colors='k')
+#          cs = plt.contour(xx_i, yy_i, zz_i, levels, colors='k')
+#          plt.clabel(cs, fontsize=9, inline=1)
+#
+#          #x_max = xx[ix][idx_max]
+#          #y_max = xx[iy][idx_max]
+#          #text_str = "(%.1f,%.1f)" % (x_max, y_max)
+#          #plt.text(x_max, y_max, text_str,
+#          #    horizontalalignment="center", verticalalignment="top")
+#          #plt.plot(x_max, y_max, 'ko')
+#
+#          #text_str = "%.2e,%.2e" % (x_i_max, y_i_max)
+#          #plt.text(x_i_max, y_i_max, text_str,
+#          #    horizontalalignment="center", verticalalignment="top")
+#          plt.plot(x_i_max, y_i_max, 'k+')
+#
+#          title_str = "Weighted average CC (%.2e,%.2e)" % (x_i_max, y_i_max)
+#          plt.title(title_str)
+#
+#          xlabel_str = "alpha (* d%s)" % model_name[ix]
+#          plt.xlabel(xlabel_str)
+#          ylabel_str = "alpha (* d%s)" % model_name[iy]
+#          plt.ylabel(ylabel_str)
+#
+#          pdf.savefig()
+#          plt.close()
+#
+#    # get best model
+#    event = self.data['event']
+#    src_perturb = self.data['src_perturb']
+#    
+#    model = {}
+#    for par in dm:
+#      m0 = event[par]
+#      dm = src_perturb[par]
+#      ix = model_name.index(par)
+#      alpha = xx[ix][idx_max]
+#      model[par] = {
+#          'm0':m0, 
+#          'dm':dm,
+#          'alpha':alpha,
+#          'm1':m0+alpha*dm
+#          }
+#
+#    #------ write out new CMTSOLUTION file
+#    t0 = event['t0']
+#    if 't0' in model: t0 = model['t0']['m1']
+#    # modify origin time in header line to have centroid time 
+#    header = event['header'].split()
+#    header[1] = str(t0.year)
+#    header[2] = str(t0.month)
+#    header[3] = str(t0.day)
+#    header[4] = str(t0.hour)
+#    header[5] = str(t0.minute)
+#    header[6] = str(t0.second + 1.0e-6*t0.microsecond)
+#
+#    tau = event['tau']
+#    if 'tau' in model: tau = model['tau']['m1']
+#    xs = event['xs']
+#    if 'xs' in model: xs = model['xs']['m1']
+#    mt = event['mt']
+#    if 'mt' in model: mt = model['mt']['m1']
+#
+#    with open(cmt_file, 'w') as fp:
+#      fp.write('%s | wCCmax %f weight %f\n'
+#          % (' '.join(header), zz_max, weight))
+#      fp.write('%-18s %s\n' % ('event name:', "grid_cc"))
+#      fp.write('%-18s %+15.8E\n' % ('t0(s):',    0.0))
+#      fp.write('%-18s %+15.8E\n' % ('tau(s):',   tau))
+#      fp.write('%-18s %+15.8E\n' % ('x(m):',     xs[0]))
+#      fp.write('%-18s %+15.8E\n' % ('y(m):',     xs[1]))
+#      fp.write('%-18s %+15.8E\n' % ('z(m):',     xs[2]))
+#      fp.write('%-18s %+15.8E\n' % ('Mxx(N*m):', mt[0,0]))
+#      fp.write('%-18s %+15.8E\n' % ('Myy(N*m):', mt[1,1]))
+#      fp.write('%-18s %+15.8E\n' % ('Mzz(N*m):', mt[2,2]))
+#      fp.write('%-18s %+15.8E\n' % ('Mxy(N*m):', mt[0,1]))
+#      fp.write('%-18s %+15.8E\n' % ('Mxz(N*m):', mt[0,2]))
+#      fp.write('%-18s %+15.8E\n' % ('Myz(N*m):', mt[1,2]))
+#
+#    return model, zz_max, weight
 
 #
 #======================================================
 #
 
-  def relocate_1d(self, 
-      event_id,
-      window_id_list=['F.p,P', 'F.s,S'], 
-      fix_depth=False,
-      out_cmt_file=None):
-    """relocate event using ray path in reference earth model
-    """
-    # check inputs
-    events = self.data['events']
-    if event_id not in events:
-      print("[ERROR] %s does NOT exist. Exit" % (event_id))
-      sys.exit()
-
-    # select windows
-    sta_win_id_list = []
-    event = events[event_id]
-    stations = event['stations']
-    for station_id in stations:
-
-      station = stations[station_id]
-      if station['stat']['code'] < 0:
-        continue
-
-      windows = station['windows']
-      for window_id in window_id_list:
-        if window_id not in windows:
-          continue
-
-        window = windows[window_id]
-        if window['stat']['code'] != 1:
-          continue 
-
-        misfit = window['misfit']
-        #if window['quality']['SNR'] < min_SNR or \
-        #    misfit['CC0'] < min_CC0 or \
-        #    misfit['CCmax'] < min_CCmax or\
-        #    abs(misfit['CC_time_shift']) > max_CC_time_shift:
-        #  continue
-
-        sta_win_id = (station_id, window_id)
-        sta_win_id_list.append(sta_win_id)
-
-    # create sensitivity matrix G in local NED coordinate
-    # G * dm  = dt_cc
-    # G: [[-px_1, -py_1, -pz_1, 1.0], # ray1
-    #   [-px_2, -py_2, -pz_2, 1.0], # ray2
-    #   ...]
-    # dm: [dNorth(km), dEast, dDepth, dT(sec)]
-    # dt_cc: [dt1, dt2, ...]
-    n = len(sta_win_id_list)
-    G = np.zeros((n, 4))
-    dt_cc = np.zeros(n)
-    R_Earth_km = 6371.0
-    gcmt = event['gcmt']
-    evdp = gcmt['depth']
-    for i in range(n):
-      sta_win_id = sta_win_id_list[i]
-      station_id = sta_win_id[0]
-      window_id = sta_win_id[1]
-  
-      station = stations[station_id]
-      meta = station['meta']
-      window = station['windows'][window_id]
-      phase = window['phase']
-      misfit = window['misfit']
-      weight = window['weight']
-
-      azimuth = np.deg2rad(meta['azimuth'])
-      takeoff_angle = phase['takeoff_angle']
-      takeoff = np.deg2rad(takeoff_angle + 180.0*(takeoff_angle<0))
-      ray_param = phase['ray_param']
-      slowness = ray_param / (R_Earth_km - evdp) #unit: s/km
-      # local coordinate: NED
-      pd = np.cos(takeoff) * slowness
-      pn = np.cos(azimuth) * np.sin(takeoff) * slowness
-      pe = np.sin(azimuth) * np.sin(takeoff) * slowness
-      # create sensitivity matrix 
-      G[i,:] = weight * np.array([-pn, -pe, -pd, 1.0]) # -p: from receiver to source
-      dt_cc[i] = weight * misfit['CC_time_shift']
-
-    #linearized inversion (can be extended to second order using dynamic ray-tracing)
-    if fix_depth: 
-      G[:, 2] = 0.0
-    dm, residual, rank, sigval = np.linalg.lstsq(G, dt_cc)
-
-    # convert dm from NED to ECEF coordinate
-    evla = gcmt['latitude']
-    evlo = gcmt['longitude']
-
-    slat = np.sin(np.deg2rad(evla))
-    clat = np.cos(np.deg2rad(evla))
-    slon = np.sin(np.deg2rad(evlo))
-    clon = np.cos(np.deg2rad(evlo))
-
-    N = [-slat*clon, -slat*slon, clat]
-    E = [-slon, clon, 0.0]
-    D = [-clat*clon, -clat*slon, -slat]
-
-    ev_dx = N[0]*dm[0] + E[0]*dm[1] + D[0]*dm[2]
-    ev_dy = N[1]*dm[0] + E[1]*dm[1] + D[1]*dm[2]
-    ev_dz = N[2]*dm[0] + E[2]*dm[1] + D[2]*dm[2]
-    ev_dt = dm[3]
-
-    # initialize pyproj objects
-    geod = pyproj.Geod(ellps='WGS84')
-    ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
-    lla = pyproj.Proj(proj='latlong', ellps='WGS84', datum='WGS84')
-
-    # old location in ECEF (meters)
-    evx, evy, evz = pyproj.transform(lla, ecef, evlo, evla, -1000.0*evdp)
-
-    # new location in ECEF (meters)
-    evx1 = evx + ev_dx*1000.0
-    evy1 = evy + ev_dy*1000.0
-    evz1 = evz + ev_dz*1000.0
-    # in LLA
-    evlo1, evla1, evalt1 = pyproj.transform(ecef, lla, evx1, evy1, evz1)
-    evdp1 = -evalt1/1000.0
-
-    # residuals 
-    # linearized modelling
-    dt_syn = G.dot(dm)
-    dt_res = dt_cc - dt_syn
-
-    # make results
-    new_centroid_time = UTCDateTime(gcmt['centroid_time']) + ev_dt
-    reloc_dict = {
-        'window_id_list': window_id_list,
-        'singular_value': sigval.tolist(),
-        'dm': {'dNorth':dm[0], 'dEast':dm[1], 'dDepth':dm[2], 
-          'dT':dm[3]},
-        'latitude':evla1, 
-        'longitude':evlo1, 
-        'depth':evdp1,
-        'centroid_time': str(new_centroid_time),
-        'data': {'num':n, 'mean':np.mean(dt_cc), 'std':np.std(dt_cc)},
-        'residual': {'mean':np.mean(dt_res), 'std':np.std(dt_res)} }
-
-    event['relocate'] = reloc_dict
-
-    # make new CMTSOLUTION file
-    if out_cmt_file:
-      M = gcmt['moment_tensor']
-      with open(out_cmt_file, 'w') as fp:
-        # header line: 
-        #PDE 2003 09 25 19 50 08.93  41.78  144.08  18.0 7.9 8.0 Hokkaido, Japan
-        # which is: event_id, date,origin time,latitude,longitude,depth, mb, MS, region
-        fp.write(new_centroid_time.strftime(
-          'RELOC %Y %m %d %H %M %S.%f ') + \
-          '%.4f %.4f %.1f 0.0 0.0 END\n' % (evla1,evlo1,evdp1) )
-        fp.write('event name:    %s\n'   % (event_id))
-        fp.write('time shift:    0.0\n'        ) 
-        fp.write('tau:   %.1f\n'   % (gcmt['tau']))
-        #fp.write('half duration:   0.0\n'  % (gcmt['tau']))
-        fp.write('latitude:    %.4f\n'   % (evla1)   )
-        fp.write('longitude:     %.4f\n'   % (evlo1)   )
-        fp.write('depth:       %.4f\n'   % (evdp1)   )
-        fp.write('Mrr:       %12.4e\n' % (M[0][0]) )
-        fp.write('Mtt:       %12.4e\n' % (M[1][1]) )
-        fp.write('Mpp:       %12.4e\n' % (M[2][2]) )
-        fp.write('Mrt:       %12.4e\n' % (M[0][1]) )
-        fp.write('Mrp:       %12.4e\n' % (M[0][2]) )
-        fp.write('Mtp:       %12.4e\n' % (M[1][2]) )
+#  def relocate_1d(self, 
+#      event_id,
+#      window_id_list=['F.p,P', 'F.s,S'], 
+#      fix_depth=False,
+#      out_cmt_file=None):
+#    """relocate event using ray path in reference earth model
+#    """
+#    # check inputs
+#    events = self.data['events']
+#    if event_id not in events:
+#      print("[ERROR] %s does NOT exist. Exit" % (event_id))
+#      sys.exit()
+#
+#    # select windows
+#    sta_win_id_list = []
+#    event = events[event_id]
+#    stations = event['stations']
+#    for station_id in stations:
+#
+#      station = stations[station_id]
+#      if station['stat']['code'] < 0:
+#        continue
+#
+#      windows = station['windows']
+#      for window_id in window_id_list:
+#        if window_id not in windows:
+#          continue
+#
+#        window = windows[window_id]
+#        if window['stat']['code'] != 1:
+#          continue 
+#
+#        misfit = window['misfit']
+#        #if window['quality']['SNR'] < min_SNR or \
+#        #    misfit['CC0'] < min_CC0 or \
+#        #    misfit['CCmax'] < min_CCmax or\
+#        #    abs(misfit['CC_time_shift']) > max_CC_time_shift:
+#        #  continue
+#
+#        sta_win_id = (station_id, window_id)
+#        sta_win_id_list.append(sta_win_id)
+#
+#    # create sensitivity matrix G in local NED coordinate
+#    # G * dm  = dt_cc
+#    # G: [[-px_1, -py_1, -pz_1, 1.0], # ray1
+#    #   [-px_2, -py_2, -pz_2, 1.0], # ray2
+#    #   ...]
+#    # dm: [dNorth(km), dEast, dDepth, dT(sec)]
+#    # dt_cc: [dt1, dt2, ...]
+#    n = len(sta_win_id_list)
+#    G = np.zeros((n, 4))
+#    dt_cc = np.zeros(n)
+#    R_Earth_km = 6371.0
+#    gcmt = event['gcmt']
+#    evdp = gcmt['depth']
+#    for i in range(n):
+#      sta_win_id = sta_win_id_list[i]
+#      station_id = sta_win_id[0]
+#      window_id = sta_win_id[1]
+#  
+#      station = stations[station_id]
+#      meta = station['meta']
+#      window = station['windows'][window_id]
+#      phase = window['phase']
+#      misfit = window['misfit']
+#      weight = window['weight']
+#
+#      azimuth = np.deg2rad(meta['azimuth'])
+#      takeoff_angle = phase['takeoff_angle']
+#      takeoff = np.deg2rad(takeoff_angle + 180.0*(takeoff_angle<0))
+#      ray_param = phase['ray_param']
+#      slowness = ray_param / (R_Earth_km - evdp) #unit: s/km
+#      # local coordinate: NED
+#      pd = np.cos(takeoff) * slowness
+#      pn = np.cos(azimuth) * np.sin(takeoff) * slowness
+#      pe = np.sin(azimuth) * np.sin(takeoff) * slowness
+#      # create sensitivity matrix 
+#      G[i,:] = weight * np.array([-pn, -pe, -pd, 1.0]) # -p: from receiver to source
+#      dt_cc[i] = weight * misfit['CC_time_shift']
+#
+#    #linearized inversion (can be extended to second order using dynamic ray-tracing)
+#    if fix_depth: 
+#      G[:, 2] = 0.0
+#    dm, residual, rank, sigval = np.linalg.lstsq(G, dt_cc)
+#
+#    # convert dm from NED to ECEF coordinate
+#    evla = gcmt['latitude']
+#    evlo = gcmt['longitude']
+#
+#    slat = np.sin(np.deg2rad(evla))
+#    clat = np.cos(np.deg2rad(evla))
+#    slon = np.sin(np.deg2rad(evlo))
+#    clon = np.cos(np.deg2rad(evlo))
+#
+#    N = [-slat*clon, -slat*slon, clat]
+#    E = [-slon, clon, 0.0]
+#    D = [-clat*clon, -clat*slon, -slat]
+#
+#    ev_dx = N[0]*dm[0] + E[0]*dm[1] + D[0]*dm[2]
+#    ev_dy = N[1]*dm[0] + E[1]*dm[1] + D[1]*dm[2]
+#    ev_dz = N[2]*dm[0] + E[2]*dm[1] + D[2]*dm[2]
+#    ev_dt = dm[3]
+#
+#    # initialize pyproj objects
+#    geod = pyproj.Geod(ellps='WGS84')
+#    ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
+#    lla = pyproj.Proj(proj='latlong', ellps='WGS84', datum='WGS84')
+#
+#    # old location in ECEF (meters)
+#    evx, evy, evz = pyproj.transform(lla, ecef, evlo, evla, -1000.0*evdp)
+#
+#    # new location in ECEF (meters)
+#    evx1 = evx + ev_dx*1000.0
+#    evy1 = evy + ev_dy*1000.0
+#    evz1 = evz + ev_dz*1000.0
+#    # in LLA
+#    evlo1, evla1, evalt1 = pyproj.transform(ecef, lla, evx1, evy1, evz1)
+#    evdp1 = -evalt1/1000.0
+#
+#    # residuals 
+#    # linearized modelling
+#    dt_syn = G.dot(dm)
+#    dt_res = dt_cc - dt_syn
+#
+#    # make results
+#    new_centroid_time = UTCDateTime(gcmt['centroid_time']) + ev_dt
+#    reloc_dict = {
+#        'window_id_list': window_id_list,
+#        'singular_value': sigval.tolist(),
+#        'dm': {'dNorth':dm[0], 'dEast':dm[1], 'dDepth':dm[2], 
+#          'dT':dm[3]},
+#        'latitude':evla1, 
+#        'longitude':evlo1, 
+#        'depth':evdp1,
+#        'centroid_time': str(new_centroid_time),
+#        'data': {'num':n, 'mean':np.mean(dt_cc), 'std':np.std(dt_cc)},
+#        'residual': {'mean':np.mean(dt_res), 'std':np.std(dt_res)} }
+#
+#    event['relocate'] = reloc_dict
+#
+#    # make new CMTSOLUTION file
+#    if out_cmt_file:
+#      M = gcmt['moment_tensor']
+#      with open(out_cmt_file, 'w') as fp:
+#        # header line: 
+#        #PDE 2003 09 25 19 50 08.93  41.78  144.08  18.0 7.9 8.0 Hokkaido, Japan
+#        # which is: event_id, date,origin time,latitude,longitude,depth, mb, MS, region
+#        fp.write(new_centroid_time.strftime(
+#          'RELOC %Y %m %d %H %M %S.%f ') + \
+#          '%.4f %.4f %.1f 0.0 0.0 END\n' % (evla1,evlo1,evdp1) )
+#        fp.write('event name:    %s\n'   % (event_id))
+#        fp.write('time shift:    0.0\n'        ) 
+#        fp.write('tau:   %.1f\n'   % (gcmt['tau']))
+#        #fp.write('half duration:   0.0\n'  % (gcmt['tau']))
+#        fp.write('latitude:    %.4f\n'   % (evla1)   )
+#        fp.write('longitude:     %.4f\n'   % (evlo1)   )
+#        fp.write('depth:       %.4f\n'   % (evdp1)   )
+#        fp.write('Mrr:       %12.4e\n' % (M[0][0]) )
+#        fp.write('Mtt:       %12.4e\n' % (M[1][1]) )
+#        fp.write('Mpp:       %12.4e\n' % (M[2][2]) )
+#        fp.write('Mrt:       %12.4e\n' % (M[0][1]) )
+#        fp.write('Mrp:       %12.4e\n' % (M[0][2]) )
+#        fp.write('Mtp:       %12.4e\n' % (M[1][2]) )
 
 #
 #======================================================
@@ -4136,29 +4138,38 @@ class Misfit(object):
 #======================================================
 #
 
-  def output_adj_for_hessian(self, 
-      adj_type='dg',
+  def output_adj_for_cc_hessian_1(self,
       out_dir='adj',
       syn_band_code='MX'):
     """
-    Output adjoint sources for approximated Hessian
+    Output adjoint sources for the estimation of approximated Hessian diagonals
 
-    H = - CC0 * norm(wFu)^(-2) * (wFdu1, wFdu2)
-    , where CC0 > 0 is the zero-lag correlation coefficient of (wFd, wFu)
-    and the corresponding adjoint source is
+    This is for approximated Hessian part 1.
 
-    adj = sqrt(CC0) * norm(wFu) * wFr , where r is a radome time series 
+    Notes
+    -----
+    For the objective function as the normalized zero-lag correlation ceofficient, 
+    the approximated Hessian can be seperated into two parts:
 
-    H(x,y) = + CC0 * norm(wFu)^(-4) * (wFu, wFdu1) * (wFu, wFdu2)
-           = H1(x) * H2(y)
-    H1 = sqrt(CC0) * norm(wFu)^(-2) * (wFu, wFdu1)
-    , the cooresponding adjoint source is
-    adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(wwFu)
+    Part 1:
+        H = - CC0 * norm(wFu)^(-2) * (wFdu1, wFdu2)
+          = - Nw^-1 * Aw * (wFdu1, wFdu2)
+        , where CC0 > 0 is the zero-lag correlation coefficient of (wFd, wFu)
+        and the corresponding adjoint source is
 
-    NOTE
-    ----
-      1) dg: use tau=0 in forward/adjoint simulation
-      1) du: use real tau in forward/adjoint simulation
+        adj = sqrt(CC0) * norm(wFu)^(-1) * conj(F)(transpose(w)r) 
+        , where r is a radome time series such that E(r*transpose(r)) = i.d.
+        , for example, standard normal distribution N(0,1)
+
+        This follows the idea of random phase encoding method.
+
+    Part 2:
+        H(x,y) = + CC0 * norm(wFu)^(-4) * (wFu, wFdu1) * (wFu, wFdu2)
+               = H1(x) * H2(y)
+        H1 = sqrt(CC0) * norm(wFu)^(-2) * (wFu, wFdu1)
+        , the cooresponding adjoint source is
+
+        adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(transpose(w)wFu)
     """
     syn_orientation_codes = ['E', 'N', 'Z']
     event = self.data['event']
@@ -4179,21 +4190,11 @@ class Misfit(object):
       syn_nt = time_sample['nt']
       syn_nl = time_sample['nl']
       syn_nr = time_sample['nr']
-      # seismograms 
-      if adj_type == 'dg':
-        grf = waveform['grf']
-      elif adj_type == 'du':
-        syn = waveform['syn']
-      else:
-        raise Exception('unknown adj_type: %s (du or dg) ' % (adj_type))
-
-      # source spectrum (moment-rate function)
-      syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
-      F_src = stf_gauss_spectrum(syn_freq, event['tau'])
 
       #------ loop each window
       adj = np.zeros((3, syn_nt))
-      random = np.random.uniform(-1,1,(3, syn_nt))
+      # normal distribution
+      rand = np.random.randn(3, syn_nt)
 
       window_dict = station['window']
       for window_id in window_dict:
@@ -4214,30 +4215,22 @@ class Misfit(object):
         # polarity projection 
         proj_matrix = window['polarity']['proj_matrix']
 
-        #------ filter syn
-        # u = S * grf
-        if adj_type == 'dg':
-          syn = np.fft.irfft(F_src*np.fft.rfft(grf), syn_nt)
-        # F * u
-        syn_filt = signal.filtfilt(filter_b, filter_a, syn)
+        #------ filter random signal
         # apply window taper and polarity projection
-        # syn = w * F * u
-        wFu = np.dot(proj_matrix, syn_filt) * win_func 
-        # norm
-        norm_wFu = np.sqrt(np.sum(wFu**2))
-        # CCw
-        CC0 = window['cc']['CC0']
-
-        #------ filter random time series
-        random_filt = signal.filtfilt(filter_b, filter_a, random)
-        wFr = np.dot(proj_matrix, random_filt) * win_func 
+        wr = np.dot(proj_matrix, rand) * win_func 
+        # conj(F)(w * r)
+        Fwr = signal.filtfilt(filter_b, filter_a, rand[:,::-1])
+        Fwr = Fwr[:,::-1]
+        # Nw
+        Nw = window['cc']['Nw']
+        # Aw
+        Aw = window['cc']['Aw']
 
         #------ make adjoint source
-        adj_w = np.sqrt(CC0) * norm_wFu * wFr
-        if adj_type == 'dg':
-          adj_w = np.fft.irfft(F_src*np.fft.rfft(adj_w), syn_nt)
-        adj += adj_w
+        adj_w = np.sqrt(Aw/Nw) * Fwr
 
+        # add into adjoint source
+        adj += adj_w
       #endfor window_id in window_dict:
 
       #------ output adjoint source
@@ -4250,6 +4243,7 @@ class Misfit(object):
       syn_times += b
 
       # loop ENZ
+      tr = Trace()
       for i in range(3):
         tr.data = adj[i, syn_nl:(syn_nl+npts)]
         tr.stats.starttime = starttime
@@ -4268,5 +4262,8 @@ class Misfit(object):
           for j in range(npts):
             fp.write("{:16.9e}  {:16.9e}\n".format(
               syn_times[j], adj[i,syn_nl+j]))
+
+    #endfor station_id in station_dict:
+
 
 #END class misfit

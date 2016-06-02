@@ -147,16 +147,16 @@ end subroutine
 
 
 !//////////////////////////
-subroutine sem_io_read_cijkl_kernel(basedir, iproc, iregion, gll_cijkl)
+subroutine sem_io_read_cijkl_kernel(basedir, iproc, iregion, kernel_tag, gll_cijkl)
 !-read cijkl_kernel file into one array
 !
 !-inputs:
-! (string) basedir,iproc,iregion,model_names(nmodel): specify the GLL file
+! (string) basedir,iproc,iregion,kernel_tag: specify the GLL file
 !
 !-output:
 ! (real) model_gll(21,NGLLX,NGLLY,NGLLZ,NSPEC): GLL array
 
-  character(len=*), intent(in) :: basedir
+  character(len=*), intent(in) :: basedir, kernel_tag
   integer, intent(in) :: iproc, iregion
 
   real(dp), intent(out) :: gll_cijkl(:,:,:,:,:)
@@ -167,7 +167,7 @@ subroutine sem_io_read_cijkl_kernel(basedir, iproc, iregion, gll_cijkl)
   nspec = size(gll_cijkl, 5)
   allocate(dummy(21, NGLLX, NGLLY, NGLLZ, nspec))
 
-  call sem_io_open_file_for_read(basedir, iproc, iregion, 'cijkl_kernel', IIN)
+  call sem_io_open_file_for_read(basedir, iproc, iregion, kernel_tag, IIN)
 
   read(IIN, iostat=ier) dummy
 
@@ -241,22 +241,23 @@ end subroutine
 
 
 !//////////////////////////
-subroutine sem_io_write_cijkl_kernel(basedir, iproc, iregion, cijkl_gll)
+subroutine sem_io_write_cijkl_kernel(basedir, iproc, iregion, kernel_tag, cijkl_gll)
 !-write out GLL array of cijkl to one file
 !
 !-inputs:
 !
-! basedir,iproc,iregion: output file basedir/proc<iproc>_reg<iregion>_cijkl_kernel.bin
+! basedir,iproc,iregion,kernel_tag: 
+!   output file basedir/proc<iproc>_reg<iregion>_<kernel_tag>.bin
 !
 ! (real) cijkl_gll(21,:,:,:,:): GLL array
 
-  character(len=*), intent(in) :: basedir
+  character(len=*), intent(in) :: basedir, kernel_tag
   integer, intent(in) :: iproc, iregion
   real(dp), intent(in) :: cijkl_gll(:,:,:,:,:)
 
   integer :: ier
 
-  call sem_io_open_file_for_write(basedir, iproc, iregion, "cijkl_kernel", IOUT)
+  call sem_io_open_file_for_write(basedir, iproc, iregion, kernel_tag, IOUT)
 
   write(IOUT, iostat=ier) real(cijkl_gll, kind=CUSTOM_REAL)
 

@@ -926,7 +926,7 @@ class Misfit(object):
 
   def read_obs_syn(self,
       obs_dir='obs',
-      syn_dir='syn', syn_band_code='MX', syn_suffix='.sem.sac',
+      syn_dir='syn', syn_band_code='MX', syn_suffix='.sem.sac', syn_is_grn=False,
       left_pad=100, right_pad=0, obs_preevent=100):
     """ 
     Read in observed and synthetic seismograms.
@@ -939,16 +939,16 @@ class Misfit(object):
     obs_pretime: 
       pre-event time length of obs (for noise assessment)
 
+    syn_is_grn:
+      flag if synthetic seismograms are computed with zero half duration;
+      if true, ignore absolute time in syn files, use event['t0'] as the origin time
+
     Note
     ----
     sac file naming rule: NET.STA.LOC.CHA
       , where CHA consists of band_code(e.g. BH or MX) + orientation[E|N|Z]
 
-    #use delta STF in simulation to approximate green's function
-    #  ignore absolute time in syn files, use event['t0'] as the origin time
-
     syn should be sac files and have sac header b and o set correctly.
-
     """
     syn_orientation_codes = ['E', 'N', 'Z']
 
@@ -1104,7 +1104,11 @@ class Misfit(object):
           'starttime': syn_starttime, 'delta': syn_delta,
           'nt': nt, 'nl': nl, 'nr': nr }
       waveform['obs'] = obs_ENZ
-      waveform['syn'] = syn_ENZ
+
+      if syn_is_grn:
+        waveform['grn'] = syn_ENZ
+      else:
+        waveform['syn'] = syn_ENZ
 
       station['stat']['code'] = 0
       station['stat']['msg'] = "read_obs_syn OK [%s]" \
@@ -1595,10 +1599,11 @@ class Misfit(object):
       window_dict = station['window']
       for window_id in window_dict:
         window = window_dict[window_id]
-        # skip rejected windows 
-        if window['stat']['code'] < 0:
+        # skip rejected/un-measured windows 
+        if window['stat']['code'] < 1:
           continue
 
+        # skip bad windows 
         if window['weight'] < 1.0e-3:
           continue
 
@@ -4204,6 +4209,8 @@ class Misfit(object):
         if window['stat']['code'] < 1:
           warnings.warn("Window %s not measured for adj, SKIP" % window_id)
           continue
+        if window['weight'] < 1.0e-3:
+          continue
 
         #------ window parameters 
         # filter
@@ -4219,7 +4226,7 @@ class Misfit(object):
         # apply window taper and polarity projection
         wr = np.dot(proj_matrix, rand) * win_func 
         # conj(F)(w * r)
-        Fwr = signal.filtfilt(filter_b, filter_a, rand[:,::-1])
+        Fwr = signal.filtfilt(filter_b, filter_a, wr[:,::-1])
         Fwr = Fwr[:,::-1]
         # Nw
         Nw = window['cc']['Nw']

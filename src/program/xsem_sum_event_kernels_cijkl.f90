@@ -139,7 +139,7 @@ program xsem_sum_event_kernels_cijkl
     do iker = 1, nkernel
 
       ! read kernel gll
-      call sem_io_read_cijkl_kernel(kernel_dirs(iker), iproc, iregion, cijkl_kernel)
+      call sem_io_read_cijkl_kernel(kernel_dirs(iker), iproc, iregion, 'cijkl_kernel', cijkl_kernel)
 
       ! read mask
       if (use_mask) then
@@ -152,7 +152,7 @@ program xsem_sum_event_kernels_cijkl
     enddo ! iker
 
     ! write out cijkl kernel
-    call sem_io_write_cijkl_kernel(out_dir, iproc, iregion, cijkl_kernel_sum)
+    call sem_io_write_cijkl_kernel(out_dir, iproc, iregion, 'cijkl_kernel', cijkl_kernel_sum)
 
   enddo ! iproc
 

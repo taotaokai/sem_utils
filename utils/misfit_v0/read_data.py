@@ -31,8 +31,8 @@ misfit.setup_station(channel_file)
 
 #print([x for x in misfit.data['station']])
 
-print("\n====== read seismogram: obs, grf\n")
-misfit.read_obs_grf(
+print("\n====== read seismogram: obs, syn\n")
+misfit.read_obs_syn(
   obs_dir=obs_dir,
   syn_dir=syn_dir, syn_band_code=syn_band_code, syn_suffix=syn_suffix,
   left_pad=left_pad, right_pad=right_pad, obs_preevent=obs_preevent)

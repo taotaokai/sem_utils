@@ -147,7 +147,7 @@ program xsem_cijkl_over_rho_kernel
 
     ! read kernels
     call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'rho_kernel', rho_kernel)
-    call sem_io_read_cijkl_kernel(kernel_dir, iproc, iregion, cijkl_kernel)
+    call sem_io_read_cijkl_kernel(kernel_dir, iproc, iregion, 'cijkl_kernel', cijkl_kernel)
 
     ! calculate ratio = 1 + (cijkl_kernel*cijkl)/(rho_kernel*rho)
     ! rho_prime_kernel = ratio * rho_kernel

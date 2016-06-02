@@ -4233,11 +4233,13 @@ class Misfit(object):
         # Aw
         Aw = window['cc']['Aw']
 
-        #------ make adjoint source
+        #------ make adjoint source for the current window
         adj_w = np.sqrt(Aw/Nw) * Fwr
 
-        # add into adjoint source
-        adj += adj_w
+        #------ add into total adjoint source
+        # chi = sum(chi_w * window_weight, over all w[indow])
+        adj += np.sqrt(window['weight']) * adj_w
+
       #endfor window_id in window_dict:
 
       #------ output adjoint source

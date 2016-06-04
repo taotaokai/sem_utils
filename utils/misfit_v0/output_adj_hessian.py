@@ -18,6 +18,6 @@ print("\n====== load data\n")
 misfit.load(misfit_file)
 
 print("\n====== output adjoint source\n")
-misfit.output_adj(
+misfit.output_adj_for_cc_hessian_1(
     out_dir=adj_dir,
     syn_band_code=syn_band_code)

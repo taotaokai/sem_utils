@@ -8,8 +8,7 @@ nproc=${2:?[arg]need nproc}
 model_names=${3:?[arg] need model_name (e.g. mu_kernel,lamda_kernel,rho_kernel)}
 topo_dir=${4:?[arg] need topo_dir(for *_solver_data.bin)}
 model_dir=${5:?[arg] need model_dir(for *_<tag>.bin)}
-out_dir=${6:-vtk}
-
+out_dir=${6:?[arg]need out_dir}
 
 iresolution=0
 iregion=1

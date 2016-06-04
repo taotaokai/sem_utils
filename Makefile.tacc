@@ -59,7 +59,9 @@ program = xsem_slice_gcircle \
 	xsem_thresholding \
 	xsem_combine_solver_data_in_v5.1 \
 	xsem_cijkl_over_rho_kernel \
-	xsem_diff_relative
+	xsem_diff_relative \
+	xsem_random_adjoint_kernel_to_hess \
+	xsem_random_adjoint_kernel_to_hess_nompi 
 
 
 #------------------------------------------

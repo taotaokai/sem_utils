@@ -60,3 +60,25 @@ for comp in ['Z', 'R', 'T']:
       savefig=True,
       out_dir=figure_dir,
       plot_param=plot_param)
+
+print("\n====== plot Rayleigh seismograms\n")
+for comp in ['Z', 'R']:
+  window_id = "%s.R" % (comp)
+  plot_param = {
+    'time':[-100,500], 'rayp':25., 'azbin':5, 'window_id':window_id,
+    'SNR':10, 'CC0':0.5, 'CCmax':0.6, 'dist':None, 'clip':1.5 }
+  misfit.plot_seismogram_1comp(
+      savefig=True,
+      out_dir=figure_dir,
+      plot_param=plot_param)
+
+print("\n====== plot Love seismograms\n")
+for comp in ['T']:
+  window_id = "%s.L" % (comp)
+  plot_param = {
+    'time':[-100,500], 'rayp':25., 'azbin':5, 'window_id':window_id,
+    'SNR':10, 'CC0':0.5, 'CCmax':0.6, 'dist':None, 'clip':1.5 }
+  misfit.plot_seismogram_1comp(
+      savefig=True,
+      out_dir=figure_dir,
+      plot_param=plot_param)

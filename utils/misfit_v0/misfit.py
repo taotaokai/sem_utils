@@ -135,7 +135,7 @@ class Misfit(object):
     'station': {
 
         <station_id> : {
-            'stat': {code:, msg:},
+            'stat': {code:, msg:}, #0: created; 1: read_obs_syn;
             'meta': {
                 latitude:, longitude:, elevation:, depth:,
                 azimuth:, back_azimuth:, dist_degree:,
@@ -195,15 +195,16 @@ class Misfit(object):
   }
 
   Methods:
-    1. setup_event
-    2. setup_station
-    3. setup_window
-    4. measure_window
-    5. window_quality_control (determine bad/OK, and window weight)
-    6. output_adj
-    7. make_cmt_dxs/dmt
-    8. waveform_der_dxs/dmt
-    9. cc_perturbed_seisomgram
+    setup_event
+    setup_station
+    read_obs_syn
+    setup_window 
+    measure_adj
+    window_quality_control (determine bad/OK, and window weight)
+    output_adj
+    make_cmt_dxs/dmt
+    waveform_der_dxs/dmt
+    cc_perturbed_seisomgram
     10. grid_cc
 
   NOTE:
@@ -1110,7 +1111,7 @@ class Misfit(object):
       else:
         waveform['syn'] = syn_ENZ
 
-      station['stat']['code'] = 0
+      station['stat']['code'] = 1
       station['stat']['msg'] = "read_obs_syn OK [%s]" \
           % (UTCDateTime.now().isoformat())
 
@@ -1130,7 +1131,7 @@ class Misfit(object):
     
     Parameters
     ----------
-    window_list : [ (component, phases, [begin, end]), ...]
+    window_list : [ (component, phases, [begin, end], [min_slowneww, max_slowness]), ...]
                   define data window
 
     filter_param : (type, order, freqlims)
@@ -1142,14 +1143,18 @@ class Misfit(object):
     
     component: Z, R, T, H, F (vertical, radial, transverse, horizontal, all 3-comp)
     phases: any body-wave phases that can be handled by TauP
-            for surface waves, only R and L (Rayleigh, Love) are used,
-            in this case, [begin, end] would be [max_group_velocity, begin, end]
-            max_group_velocity is in unit s/deg (say, ~ 25 s/deg for 4 km/s)
+            for surface waves, only R and L (Rayleigh, Love) are allowed
+    time_range: 
+        for body-wave phases [begin, end] is specified;
+        for surface waves specify additional [min_slowness, max_slowness] 
+        in unit s/deg (say, [25, 30]s/deg for [4, 3]km/s)
 
     """
     # filter/taper parameters
     filter_dict = {'type': filter_param[0], 
         'order': filter_param[1], 'freqlim': filter_param[2]}
+    # half maximum period used to limit time window
+    half_period = 0.5/np.min(np.array(filter_param[2]))
 
     if not 0.0 < taper_param[1] < 0.5:
       raise ValueError("taper ratio must lie between 0 and 0.5.")
@@ -1167,12 +1172,29 @@ class Misfit(object):
         if phase not in ['R', 'L']:
           phase_list.append(phase)
 
-    # loop each station
+    #------ loop each station
     for station_id in station_dict:
       station = station_dict[station_id]
+
+      # skip station not processed by read_obs_syn()
+      if station['stat']['code'] < 1:
+        continue
+
       meta = station['meta']
       baz = meta['back_azimuth']
       gcarc = meta['dist_degree']
+
+      #--- get valid time range of waveforms
+      time_sample = station['waveform']['time_sample']
+      syn_starttime = time_sample['starttime']
+      syn_delta = time_sample['delta']
+      syn_nt = time_sample['nt']
+      # left/right zero padding length
+      syn_nl = time_sample['nl']
+      syn_nr = time_sample['nr']
+      # valid data time range
+      data_starttime = syn_starttime + syn_nl*syn_delta
+      data_endtime = syn_starttime + (syn_nt-syn_nr)*syn_delta
 
       # get ak135 traveltimes
       arrivals = taup_model.get_travel_times(
@@ -1189,25 +1211,23 @@ class Misfit(object):
       for win in window_list:
         comp = win[0]
         phase = win[1]
+        signal_begin = float(win[2][0])
+        signal_end = float(win[2][1])
 
+        # surface waves
         if phase in ['R', 'L']: 
-          # surface waves
-          max_group_velocity = float(win[2][0])
-          signal_begin = float(win[2][1])
-          signal_end = float(win[2][2])
-        else:
-          # body waves
-          signal_begin = float(win[2][0])
-          signal_end = float(win[2][1])
+          min_slowness = float(win[3][0])
+          max_slowness = float(win[3][1])
 
         window_id = "%s.%s" % (comp, phase)
 
-        # window time range
+        #--- window time range
         if phase in ['R', 'L']:
           # surface waves
-          ttime = gcarc * max_group_velocity
-          starttime = event['t0'] + ttime + signal_begin
-          endtime = event['t0'] + ttime + signal_end
+          min_ttime = gcarc * min_slowness
+          max_ttime = gcarc * max_slowness
+          starttime = event['t0'] + min_ttime + signal_begin
+          endtime = event['t0'] + max_ttime + signal_end
         else:
           # body waves
           phase_names = phase.split(',')
@@ -1229,13 +1249,30 @@ class Misfit(object):
           starttime = event['t0'] + min_ttime + signal_begin
           endtime = event['t0'] + max_ttime + signal_end
 
-        # window taper function specs
+        # check if time window lies out side of valid data time range
+        if endtime < (data_starttime + half_period) \
+            or starttime > (data_endtime - half_period):
+          warn = "Window(%s) lies outside of the data time window"
+          warnings.warn(warn)
+          continue
+        if starttime < data_starttime:
+          warn = "Window(%s) has an starttime(%s) smaller than data starttime(%s)" \
+              ", limited to data" % (window_id, starttime, data_starttime)
+          warnings.warn(warn)
+          starttime = data_starttime
+        if endtime > (data_endtime - half_period):
+          warn = "Window(%s) has an endtime(%s) larger than data endtime-half_period(%s - %f)" \
+              ", limited to data" % (window_id, endtime, data_endtime, half_period)
+          warnings.warn(warn)
+          endtime = data_endtime - half_period
+
+        #--- window taper function specs
         taper_dict = {'type':taper_param[0], 'ratio':taper_param[1],
             'starttime':starttime, 'endtime':endtime}
 
         # window polarity 
         if comp == 'Z': # vertcal component
-          cmpaz = 0.0 
+          cmpaz = 0.0
           cmpdip = -90.0
         elif comp == 'R': # radial component
           cmpaz = (baz + 180.0)%360.0
@@ -1302,7 +1339,7 @@ class Misfit(object):
     for station_id in station_dict:
       station = station_dict[station_id]
       # skip rejected statations
-      if station['stat']['code'] < 0:
+      if station['stat']['code'] < 1:
         continue
 
       meta = station['meta']
@@ -1625,7 +1662,7 @@ class Misfit(object):
     for station_id in station_dict:
       station = station_dict[station_id]
       # skip rejected stations
-      if station['stat']['code'] < 0:
+      if station['stat']['code'] < 1:
         continue
 
       window_dict = station['window']
@@ -1669,7 +1706,7 @@ class Misfit(object):
     for station_id in station_dict:
       station = station_dict[station_id]
       # skip rejected statations
-      if station['stat']['code'] < 0:
+      if station['stat']['code'] < 1:
         continue
       # time samples
       waveform = station['waveform']
@@ -1929,7 +1966,7 @@ class Misfit(object):
     for station_id in station_dict:
       station = station_dict[station_id]
       # skip rejected statations
-      if station['stat']['code'] < 0:
+      if station['stat']['code'] < 1:
         continue
 
       #------ time samples
@@ -2092,7 +2129,7 @@ class Misfit(object):
     for station_id in station_dict:
       station = station_dict[station_id]
       # skip rejected statations
-      if station['stat']['code'] < 0:
+      if station['stat']['code'] < 1:
         continue
 
       #------ time samples
@@ -2187,7 +2224,7 @@ class Misfit(object):
     for station_id in station_dict:
       station = station_dict[station_id]
       # skip rejected statations
-      if station['stat']['code'] < 0:
+      if station['stat']['code'] < 1:
         continue
 
       # waveform
@@ -3230,7 +3267,7 @@ class Misfit(object):
       windows = station['windows']
 
       # skip bad station 
-      if station['stat']['code'] < 0:
+      if station['stat']['code'] < 1:
         continue
 
       if window_id not in windows:
@@ -3500,7 +3537,7 @@ class Misfit(object):
       meta = station['meta']
       window_dict = station['window']
       # select data 
-      if station['stat']['code'] < 0:
+      if station['stat']['code'] < 1:
         continue
       if plot_window_id not in window_dict:
         continue
@@ -3567,7 +3604,7 @@ class Misfit(object):
       for station_id in station_dict:
         # skip bad station
         station = station_dict[station_id]
-        if station['stat']['code'] < 0:
+        if station['stat']['code'] < 1:
           continue
 
         # skip un-selected station 
@@ -3861,7 +3898,7 @@ class Misfit(object):
       meta = station['meta']
       window_dict = station['window']
       # select data 
-      if station['stat']['code'] < 0:
+      if station['stat']['code'] < 1:
         continue
       if plot_window_id not in window_dict:
         continue
@@ -3926,7 +3963,7 @@ class Misfit(object):
       for station_id in station_dict:
         station = station_dict[station_id]
         # skip bad station
-        if station['stat']['code'] < 0:
+        if station['stat']['code'] < 1:
           continue
         # skip station not in the selection criteria 
         meta = station['meta']
@@ -4222,7 +4259,7 @@ class Misfit(object):
     for station_id in station_dict:
       station = station_dict[station_id]
       # skip rejected statations
-      if station['stat']['code'] < 0:
+      if station['stat']['code'] < 1:
         continue
 
       # waveform

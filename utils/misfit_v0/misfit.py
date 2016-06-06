@@ -1135,6 +1135,17 @@ class Misfit(object):
 
     filter_param : (type, order, freqlims)
                    define filter parameters 
+
+    Notes
+    -----
+    window specs:
+    
+    component: Z, R, T, H, F (vertical, radial, transverse, horizontal, all 3-comp)
+    phases: any body-wave phases that can be handled by TauP
+            for surface waves, only R and L (Rayleigh, Love) are used,
+            in this case, [begin, end] would be [max_group_velocity, begin, end]
+            max_group_velocity is in unit s/deg (say, ~ 25 s/deg for 4 km/s)
+
     """
     # filter/taper parameters
     filter_dict = {'type': filter_param[0], 
@@ -1152,18 +1163,21 @@ class Misfit(object):
     phase_list = []
     for win in window_list:
       for phase in win[1].split(','):
-        phase_list.append(phase)
+        # add phase but not surface phases
+        if phase not in ['R', 'L']:
+          phase_list.append(phase)
 
     # loop each station
     for station_id in station_dict:
       station = station_dict[station_id]
       meta = station['meta']
       baz = meta['back_azimuth']
+      gcarc = meta['dist_degree']
 
       # get ak135 traveltimes
       arrivals = taup_model.get_travel_times(
           source_depth_in_km=event['depth'],
-          distance_in_degree=meta['dist_degree'],
+          distance_in_degree=gcarc,
           phase_list=phase_list,
           )
 
@@ -1175,29 +1189,47 @@ class Misfit(object):
       for win in window_list:
         comp = win[0]
         phase = win[1]
-        signal_begin = float(win[2][0])
-        signal_end = float(win[2][1])
+
+        if phase in ['R', 'L']: 
+          # surface waves
+          max_group_velocity = float(win[2][0])
+          signal_begin = float(win[2][1])
+          signal_end = float(win[2][2])
+        else:
+          # body waves
+          signal_begin = float(win[2][0])
+          signal_end = float(win[2][1])
+
         window_id = "%s.%s" % (comp, phase)
 
         # window time range
-        phase_names = phase.split(',')
-        ttime = []
-        for arr in arrivals:
-          if arr.name in phase_names:
-            ttime.append(arr.time)
-        if ttime:
-          # if more than one phase specified, 
-          # use a time window extended from the first to last arrivals
-          # with addition to begin and end length
-          min_ttime = min(ttime)
-          max_ttime = max(ttime)
+        if phase in ['R', 'L']:
+          # surface waves
+          ttime = gcarc * max_group_velocity
+          starttime = event['t0'] + ttime + signal_begin
+          endtime = event['t0'] + ttime + signal_end
         else:
-          warn = "phase %s not found (dist=%f, evdp=%f), window not created" \
-              % (phase, meta['dist_degree'], event['depth'] )
-          warnings.warn(warn)
-          continue
-        starttime = event['t0'] + min_ttime + signal_begin
-        endtime = event['t0'] + max_ttime + signal_end
+          # body waves
+          phase_names = phase.split(',')
+          ttime = []
+          for arr in arrivals:
+            if arr.name in phase_names:
+              ttime.append(arr.time)
+          if ttime:
+            # if more than one phase specified, 
+            # use a time window extended from the first to last arrivals
+            # with addition to begin and end length
+            min_ttime = min(ttime)
+            max_ttime = max(ttime)
+          else:
+            warn = "phase %s not found (dist=%f, evdp=%f), window not created" \
+                % (phase, meta['dist_degree'], event['depth'] )
+            warnings.warn(warn)
+            continue
+          starttime = event['t0'] + min_ttime + signal_begin
+          endtime = event['t0'] + max_ttime + signal_end
+
+        # window taper function specs
         taper_dict = {'type':taper_param[0], 'ratio':taper_param[1],
             'starttime':starttime, 'endtime':endtime}
 
@@ -4143,13 +4175,19 @@ class Misfit(object):
 #======================================================
 #
 
-  def output_adj_for_cc_hessian_1(self,
+  def output_adj_hess_part1(self,
       out_dir='adj',
       syn_band_code='MX'):
     """
-    Output adjoint sources for the estimation of approximated Hessian diagonals
+    Output adjoint sources for the estimation of approximated Hessian diagonals.
 
-    This is for approximated Hessian part 1.
+    This only output adjoint source of Part 1, that is, only the random part.
+
+    We need run adjoint simulations for Part 1 and 2 separately.
+
+    There are actually two more terms in the Hessian related to the recorded waveforms.
+    However if the recorded and modelled waveforms are similar (cc0 close to 1), then
+    the difference can be ignored (for hessian) and simplified to Part 2.
 
     Notes
     -----
@@ -4196,6 +4234,8 @@ class Misfit(object):
       syn_nl = time_sample['nl']
       syn_nr = time_sample['nr']
 
+      syn = waveform['syn']
+
       #------ loop each window
       adj = np.zeros((3, syn_nt))
       # normal distribution
@@ -4221,22 +4261,28 @@ class Misfit(object):
         win_func = window['taper']['win']
         # polarity projection 
         proj_matrix = window['polarity']['proj_matrix']
+        # CC0
+        cc0 = window['cc']['CC0']
 
-        #------ filter random signal
-        # apply window taper and polarity projection
-        wr = np.dot(proj_matrix, rand) * win_func 
-        # conj(F)(w * r)
+        #------ Part 1: random adjoint source
+        # adj = sqrt(CC0) * norm(wFu)^(-1) * conj(F)(transpose(w)r) 
+        wr = np.dot(np.transpose(proj_matrix), rand) * win_func
         Fwr = signal.filtfilt(filter_b, filter_a, wr[:,::-1])
         Fwr = Fwr[:,::-1]
-        # Nw
-        Nw = window['cc']['Nw']
-        # Aw
-        Aw = window['cc']['Aw']
 
-        #------ make adjoint source for the current window
-        adj_w = np.sqrt(Aw/Nw) * Fwr
+        #------ Part 2: synthetic related adjoint source
+        # adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(transpose(w)wFu)
+        Fu = signal.filtfilt(filter_b, filter_a, syn)
+        wFu = np.dot(proj_matrix, Fu) * win_func
+        norm_wFu = np.sqrt(np.sum(wFu**2))
+        #wwFu = np.dot(np.transpose(proj_matrix), wFu) * win_func 
+        #FwwFu = signal.filtfilt(filter_b, filter_a, wwFu[:,::-1])
+        #FwwFu = FwwFu[:,::-1]
 
-        #------ add into total adjoint source
+        #------ Part 1: make adjoint source for the current window
+        adj_w = np.sqrt(cc0)/norm_wFu * Fwr
+
+        #------ Part 1: add into total adjoint source
         # chi = sum(chi_w * window_weight, over all w[indow])
         adj += np.sqrt(window['weight']) * adj_w
 

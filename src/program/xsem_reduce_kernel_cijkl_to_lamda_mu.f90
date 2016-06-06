@@ -8,7 +8,7 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_cijkl_kernel_to_lamda_mu \"
-  print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <kernel_tag> <out_dir>"
+  print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <out_dir>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -20,7 +20,7 @@ subroutine selfdoc()
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (string) kernel_dir:  directory holds the kernels files"
-  print '(a)', "  (string) kernel_tag:  proc******_reg1_<kernel_tag>.bin"
+  print '(a)', "                        proc******_reg1_cijkl_kernel.bin"
   print '(a)', "  (string) out_dir:  output directory for lamda,mu_kerenl"
   print '(a)', ""
   print '(a)', "NOTE"
@@ -43,12 +43,11 @@ program xsem_reduce_kernel_cijkl_to_lamda_mu
 
   !===== declare variables
   ! command line args
-  integer, parameter :: nargs = 5
+  integer, parameter :: nargs = 4
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: kernel_dir
-  character(len=MAX_STRING_LEN) :: kernel_tag
   character(len=MAX_STRING_LEN) :: out_dir
 
   ! local variables
@@ -88,8 +87,7 @@ program xsem_reduce_kernel_cijkl_to_lamda_mu
   read(args(1), *) nproc
   read(args(2), '(a)') mesh_dir
   read(args(3), '(a)') kernel_dir
-  read(args(4), '(a)') kernel_tag
-  read(args(5), '(a)') out_dir 
+  read(args(4), '(a)') out_dir 
 
   !====== loop model slices 
 
@@ -113,7 +111,7 @@ program xsem_reduce_kernel_cijkl_to_lamda_mu
     print *, '# iproc=', iproc
 
     ! read cijkl kernel gll file
-    call sem_io_read_cijkl_kernel(kernel_dir, iproc, iregion, kernel_tag, cijkl_kernel)
+    call sem_io_read_cijkl_kernel(kernel_dir, iproc, iregion, 'cijkl_kernel', cijkl_kernel)
 
     ! reduce cijkl kernel to lamda,mu kernel 
     lamda_kernel = cijkl_kernel(1,:,:,:,:) + &

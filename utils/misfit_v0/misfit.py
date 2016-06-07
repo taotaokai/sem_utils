@@ -146,7 +146,8 @@ class Misfit(object):
             'waveform': {
                 'time_sample': {starttime:, delta:, nt:, nl:, nr},
                 'obs': (3,nt), # observed seismograms
-                'syn': (3,nt), # synthetic seismograms (grf convolve stf)
+                'syn': (3,nt), # synthetic seismograms (use stf in simulation)
+                'grn': (3,nt), # synthetic seismograms (use delta stf in simulation)
             },
 
             'window': {
@@ -1256,7 +1257,7 @@ class Misfit(object):
           warnings.warn(warn)
           continue
         if starttime < data_starttime:
-          warn = "Window(%s) has an starttime(%s) smaller than data starttime(%s)" \
+          warn = "Window(%s) has a starttime(%s) smaller than data starttime(%s)" \
               ", limited to data" % (window_id, starttime, data_starttime)
           warnings.warn(warn)
           starttime = data_starttime
@@ -1441,7 +1442,7 @@ class Misfit(object):
         # should not be affected by the relatively small peak shift.
         #-- F * d
         obs_filt = signal.filtfilt(filter_b, filter_a, obs)
-        #-- F * u (u = S*grf)
+        #-- F * u (u = S*grn)
         syn_filt = signal.filtfilt(filter_b, filter_a, syn)
         #syn_filt = np.fft.irfft(F_src*np.fft.rfft(syn_filt), syn_nt)
         #DEBUG
@@ -1843,10 +1844,10 @@ class Misfit(object):
 #
 #      #------ waveform derivative
 #      # green's function
-#      grf = waveform['grf']
+#      grn = waveform['grn']
 #      # convolve Ds(t)/Dt0,tau with Green's function
-#      du_dt0 = np.fft.irfft(F_ds_dt0 * np.fft.rfft(grf), nt)
-#      du_dtau = np.fft.irfft(F_ds_dtau * np.fft.rfft(grf), nt)
+#      du_dt0 = np.fft.irfft(F_ds_dt0 * np.fft.rfft(grn), nt)
+#      du_dtau = np.fft.irfft(F_ds_dtau * np.fft.rfft(grn), nt)
 #      # zero records before origin time (wrap around from the end)
 #      idx = t < -5.0*tau
 #      du_dt0[:,idx] = 0.0
@@ -2027,7 +2028,7 @@ class Misfit(object):
       #print(dchi
       #for i in range(3):
       #  plt.subplot(311+i)
-      #  #plt.plot(t,grf0[i,:],'k', t,syn_ENZ[i,:],'r', t,dg[i,:], 'b')
+      #  #plt.plot(t,grn0[i,:],'k', t,syn_ENZ[i,:],'r', t,dg[i,:], 'b')
       #  plt.plot(t, du[i,:], 'k')
       #plt.show()
       if sac_dir:
@@ -2248,8 +2249,8 @@ class Misfit(object):
       if 't0' in src_param or 'tau' in src_param:
         F_ds_dt0, F_ds_dtau = stf_gauss_spectrum_der(syn_freq, event['tau'])
         # convolve Ds(t)/Dt0,tau with Green's function
-        du_dt0 = np.fft.irfft(F_ds_dt0 * np.fft.rfft(grf), nt)
-        du_dtau = np.fft.irfft(F_ds_dtau * np.fft.rfft(grf), nt)
+        du_dt0 = np.fft.irfft(F_ds_dt0 * np.fft.rfft(grn), nt)
+        du_dtau = np.fft.irfft(F_ds_dtau * np.fft.rfft(grn), nt)
         # zero records before origin time (wrap around from the end)
         idx = t < -5.0*tau
         du_dt0[:,idx] = 0.0
@@ -2281,13 +2282,13 @@ class Misfit(object):
         #------ filter obs, syn
         # F * d
         obs_filt = signal.filtfilt(filter_b, filter_a, obs)
-        # F * u (u = S*grf)
-        syn_filt = signal.filtfilt(filter_b, filter_a, grf)
+        # F * u (u = S*grn)
+        syn_filt = signal.filtfilt(filter_b, filter_a, grn)
         syn_filt = np.fft.irfft(F_src*np.fft.rfft(syn_filt), syn_nt)
         # apply window taper and polarity projection
         # obs = w * F * d
         wFd = np.dot(proj_matrix, obs_filt) * win_func 
-        # syn = w * F * u (u = S*grf)
+        # syn = w * F * u (u = S*grn)
         wFu = np.dot(proj_matrix, syn_filt) * win_func 
         # norm
         norm_wFd = np.sqrt(np.sum(wFd**2))
@@ -2539,7 +2540,7 @@ class Misfit(object):
 #          error_str = "%s not in waveform_der of %s" % (model_name, station_id)
 #          raise Exception(error_str)
 #
-#      #---- get seismograms: obs,grf 
+#      #---- get seismograms: obs,grn 
 #      waveform = station['waveform']
 #      obs = waveform['obs']
 #      syn = waveform['syn']
@@ -2587,15 +2588,15 @@ class Misfit(object):
 #        # w * p * F * d (window,project,filter)
 #        wpFd = np.dot(proj_matrix, obs_filt) * win_func 
 #        norm_wpFd = np.sqrt(np.sum(wpFd**2))
-#        #-- filter,project grf 
+#        #-- filter,project grn 
 #        # F * u
-#        grf_filt = signal.filtfilt(filter_b, filter_a, grf)
+#        grn_filt = signal.filtfilt(filter_b, filter_a, grn)
 #        # p * F * g
-#        pFg = np.dot(proj_matrix, grf_filt)
+#        pFg = np.dot(proj_matrix, grn_filt)
 #        if plot:
 #          F_src = stf_gauss_spectrum(syn_freq, event['tau'])
 #          # S * F * g
-#          syn_filt = np.fft.irfft(F_src*np.fft.rfft(grf_filt), syn_nt)
+#          syn_filt = np.fft.irfft(F_src*np.fft.rfft(grn_filt), syn_nt)
 #          # w * p * S * F * g
 #          wpFu = np.dot(proj_matrix, syn_filt) * win_func
 #        #-- filter,project dg: pFdg
@@ -2608,7 +2609,7 @@ class Misfit(object):
 #            pFdg[model_name] = np.dot(proj_matrix, dg_filt)
 #        #-- misfit function: zero-lag cc
 #        for idx_model in range(vector_size):
-#          # perturbed grf: pFg1
+#          # perturbed grn: pFg1
 #          pFg1 = np.zeros((3,syn_nt))
 #          pFg1 += pFg
 #          for model_name in dm:
@@ -3643,18 +3644,18 @@ class Misfit(object):
         syn_delta = time_sample['delta']
         syn_nyq = 0.5/syn_delta
         obs = waveform['obs']
-        grf = waveform['grf']
+        grn = waveform['grn']
         # filter parameter
         filter_param = window['filter']
         filter_a = filter_param['a']
         filter_b = filter_param['b']
         # filter seismograms 
         obs = signal.filtfilt(filter_b, filter_a, obs)
-        grf = signal.filtfilt(filter_b, filter_a, grf)
-        # convolve stf on grf
+        grn = signal.filtfilt(filter_b, filter_a, grn)
+        # convolve stf on grn
         syn_freq = np.fft.rfftfreq(syn_npts, d=syn_delta)
         F_src = stf_gauss_spectrum(syn_freq, event['tau'])
-        syn = np.fft.irfft(F_src*np.fft.rfft(grf), syn_npts)
+        syn = np.fft.irfft(F_src*np.fft.rfft(grn), syn_npts)
         # project to polarity defined by the window
         proj_matrix = window['polarity']['proj_matrix']
         obs = np.dot(proj_matrix, obs)
@@ -4006,11 +4007,17 @@ class Misfit(object):
         filter_b = filter_param['b']
         # filter seismograms 
         obs = signal.filtfilt(filter_b, filter_a, waveform['obs'])
-        grf = signal.filtfilt(filter_b, filter_a, waveform['grf'])
-        # convolve stf on grf
-        syn_freq = np.fft.rfftfreq(syn_npts, d=syn_delta)
-        F_src = stf_gauss_spectrum(syn_freq, event['tau'])
-        syn = np.fft.irfft(F_src*np.fft.rfft(grf), syn_npts)
+        if 'syn' in waveform:
+          syn = signal.filtfilt(filter_b, filter_a, waveform['syn'])
+        elif 'grn' in waveform:
+          grn = signal.filtfilt(filter_b, filter_a, waveform['grn'])
+          # convolve stf with grn
+          syn_freq = np.fft.rfftfreq(syn_npts, d=syn_delta)
+          F_src = stf_gauss_spectrum(syn_freq, event['tau'])
+          syn = np.fft.irfft(F_src*np.fft.rfft(grn), syn_npts)
+        else:
+          err = "station(%s) has no syn or grn in waveform data." % (station_id)
+          raise Exception(err)
         # project to polarity defined by the window
         polarity = window['polarity']
         comp = polarity['component']

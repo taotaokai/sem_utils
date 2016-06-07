@@ -3,6 +3,7 @@
 """Process misfit
 """
 import sys
+import os
 import importlib.util
 from misfit import Misfit
 
@@ -11,9 +12,15 @@ misfit_file = str(sys.argv[1])
 par_file = str(sys.argv[2])
 
 # load parameter file
-spec = importlib.util.spec_from_file_location("misfit_par", par_file)
-par = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(par)
+if sys.version_info < (3, ):
+  raise Exception("need python3")
+elif sys.version_info < (3, 5):
+  spec =importlib.machinery.SourceFileLoader("misfit_par", par_file)
+  par = spec.load_module()
+else:
+  spec = importlib.util.spec_from_file_location("misfit_par", par_file)
+  par = importlib.util.module_from_spec(spec)
+  spec.loader.exec_module(par)
 
 #window_list = [
 #   ('Z','p,P', [-30,75]), 

@@ -3913,6 +3913,7 @@ class Misfit(object):
 
     #------ traveltime curve
     model = TauPyModel(model="ak135")
+    # distance samples
     dist_ttcurve = np.arange(0.0,max(dist_all),0.5)
     phase_names = plot_window_id.split('.')[1]
     phase_list = [x for x in phase_names.split(',')]
@@ -3920,17 +3921,25 @@ class Misfit(object):
     for phase_name in phase_list:
       ttcurve[phase_name] = []
     for dist in dist_ttcurve:
-      arrivals = model.get_travel_times(
-          source_depth_in_km=evdp, 
-          distance_in_degree=dist, 
-          phase_list=phase_list)
-      for arr in arrivals:
-        for phase_name in phase_list:
-          if arr.name == phase_name:
-            ttcurve[phase_name].append((arr.distance, arr.time, arr.ray_param))
-    # sort phases based on traveltime 
+      # for surface wave
+      if phase_name in ['R', 'L']:
+        ttime = 25 * dist # avg. slowness ~25 s/deg
+        ttcurve[phase_name].append((dist, ttime))
+      # for body wave
+      else:
+        arrivals = model.get_travel_times(
+            source_depth_in_km=evdp, 
+            distance_in_degree=dist, 
+            phase_list=phase_list)
+        for arr in arrivals:
+          for phase_name in phase_list:
+            if arr.name == phase_name:
+              ttcurve[phase_name].append((arr.distance, arr.time, arr.ray_param))
+    # sort (dist, ttime, rayp) points based on ray parameter
     for phase_name in phase_list:
-      ttcurve[phase_name] = sorted(ttcurve[phase_name], key=lambda x: x[2])
+      # only do this for body wave
+      if phase_name not in ['R', 'L']:
+        ttcurve[phase_name] = sorted(ttcurve[phase_name], key=lambda x: x[2])
 
     #------ map configuration 
     min_lat = min(min(stla_all), evla)

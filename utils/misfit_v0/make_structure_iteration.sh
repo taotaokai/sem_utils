@@ -114,9 +114,9 @@ cd $event_dir
 mkdir -p $misfit_dir
 $utils_dir/read_data.py \
   $db_file \
-  $cmt_file \
+  $event_dir/DATA/CMTSOLUTION \
   $data_dir/$event_id/data/channel.txt \
-  $event_dir/output_syn \
+  $event_dir/output_syn/sac \
   $data_dir/$event_id/dis
 
 $utils_dir/measure_misfit.py $db_file $misfit_par
@@ -135,19 +135,19 @@ $utils_dir/output_adj.py $db_file $event_dir/adj_kernel
 cd $event_dir/adj_kernel
 ls *Z.adj | sed 's/..Z\.adj$//' |\
   awk -F"." '{printf "%s[ ]*%s.%s[ ]\n",\$1,\$2,\$3}' > grep_pattern
-grep -f $event_dir/SEM/grep_pattern $event_dir/DATA/STATIONS \
+grep -f $event_dir/adj_kernel/grep_pattern $event_dir/DATA/STATIONS \
   > $event_dir/adj_kernel/STATIONS_ADJOINT
 
 #------ adjoint source for hessian simulation
 rm -rf $event_dir/adj_hess
 mkdir -p $event_dir/adj_hess
-$utils_dir/output_adj_hessian.py $db_file $event_dir/adj_hess
+$utils_dir/output_adj_hess.py $db_file $event_dir/adj_hess
 
 # make STATIONS_ADJOINT
 cd $event_dir/adj_hess
 ls *Z.adj | sed 's/..Z\.adj$//' |\
   awk -F"." '{printf "%s[ ]*%s.%s[ ]\n",\$1,\$2,\$3}' > grep_pattern
-grep -f $event_dir/SEM/grep_pattern $event_dir/DATA/STATIONS \
+grep -f $event_dir/adj_hess/grep_pattern $event_dir/DATA/STATIONS \
   > $event_dir/adj_hess/STATIONS_ADJOINT
 
 echo

@@ -156,15 +156,18 @@ class Misfit(object):
                     #bad:<0, ok:0, measured adj:1, and hessian_src:2
 
                     'filter': {'type':,'order':,'freqlim':,'a':,'b':},
+
                     'taper': {
                         'starttime':, 'endtime':,
                         'type':, 'ratio':, 'win':array(nt) }, 
+
                     'polarity': {
                         'component':, 'azimuth':, 'dip':,
                         'proj_matrix':array([3,3]) },
 
                     'quality': {
                         'Amax_obs':, 'Amax_noise':, 'Amax_syn':, 'SNR':, },
+
                     'cc': {'time':, 'cc':, 'cc_tshift': 
                         'CC0':, 'CCmax':, 'AR0':, 'ARmax':},
                     'weight':,
@@ -199,14 +202,16 @@ class Misfit(object):
     setup_event
     setup_station
     read_obs_syn
-    setup_window 
+    delete_window
+    add_window_body_wave
+    add_window_surface_wave
     measure_adj
     window_quality_control (determine bad/OK, and window weight)
     output_adj
     make_cmt_dxs/dmt
     waveform_der_dxs/dmt
     cc_perturbed_seisomgram
-    10. grid_cc
+    grid_cc
 
   NOTE:
     1. 1D Earth model: ak135
@@ -1123,42 +1128,71 @@ class Misfit(object):
 #==============================================================================
 #
 
-  def setup_window(self,
-      window_list=[('F','p,P',[-30,50]), ('F','s,S',[-40,70])],
-      filter_param=('butter', 2, [0.01, 0.10]),
-      taper_param=('cosine', 0.1)):
+  def delete_window(self, ):
     """ 
-    Setup data windows based on ray arrivals in 1D earth model.
+    Delete all misfit windows
     
     Parameters
     ----------
-    window_list : [ (component, phases, [begin, end], [min_slowneww, max_slowness]), ...]
-                  define data window
-
-    filter_param : (type, order, freqlims)
-                   define filter parameters 
 
     Notes
     -----
-    window specs:
+    """
+    station_dict = self.data['station']
+
+    #------ loop each station
+    for station_id in station_dict:
+      station = station_dict[station_id]
+
+      # skip station not processed by read_obs_syn()
+      if station['stat']['code'] < 1:
+        continue
+
+      # delete element 'window' from station
+      if 'window' in station:
+        del station['window']
+
+#
+#==============================================================================
+#
+
+  def add_window_body_wave(self,
+      component='Z',
+      phase='p,P',
+      taper_percentage=0.1,
+      begin_time=-50,
+      end_time=50,
+      filter_type='butter',
+      filter_order=2,
+      min_frequency=0.01,
+      max_frequency=0.1,
+      min_dist=0.0,
+      max_dist=180.0,
+      ):
+    """ 
+    Add misfit window for all stations
     
-    component: Z, R, T, H, F (vertical, radial, transverse, horizontal, all 3-comp)
-    phases: any body-wave phases that can be handled by TauP
-            for surface waves, only R and L (Rayleigh, Love) are allowed
-    time_range: 
-        for body-wave phases [begin, end] is specified;
-        for surface waves specify additional [min_slowness, max_slowness] 
-        in unit s/deg (say, [25, 30]s/deg for [4, 3]km/s)
+    Parameters
+    ----------
+
+    Notes
+    -----
+      taper_type only supports cosine window now.
+      
+      all phases in phase_list are contained in one time window.
 
     """
     # filter/taper parameters
-    filter_dict = {'type': filter_param[0], 
-        'order': filter_param[1], 'freqlim': filter_param[2]}
-    # half maximum period used to limit time window
-    half_period = 0.5/np.min(np.array(filter_param[2]))
+    filter_dict = {
+        'type': filter_type, 
+        'order': filter_order, 
+        'freqlim': np.array([min_frequency, max_frequency])}
 
-    if not 0.0 < taper_param[1] < 0.5:
-      raise ValueError("taper ratio must lie between 0 and 0.5.")
+    # half maximum period used to limit time window
+    half_period = 0.5/np.min(filter_dict['freqlim'])
+
+    if not 0.0 < taper_percentage < 0.5:
+      raise ValueError("taper_percentage must be between 0 and 0.5.")
 
     event = self.data['event']
     station_dict = self.data['station']
@@ -1166,12 +1200,165 @@ class Misfit(object):
     # initiate taup
     taup_model = TauPyModel(model="ak135")
 
-    phase_list = []
-    for win in window_list:
-      for phase in win[1].split(','):
-        # add phase but not surface phases
-        if phase not in ['R', 'L']:
-          phase_list.append(phase)
+    #------ loop each station
+    for station_id in station_dict:
+      station = station_dict[station_id]
+
+      # skip station not processed by read_obs_syn()
+      if station['stat']['code'] < 1:
+        continue
+
+      meta = station['meta']
+      baz = meta['back_azimuth']
+      gcarc = meta['dist_degree']
+
+      #--- skip if outside the required distance range
+      if gcarc < min_dist or gcarc > max_dist:
+        continue
+
+      #--- get valid time range of waveforms
+      time_sample = station['waveform']['time_sample']
+      syn_starttime = time_sample['starttime']
+      syn_delta = time_sample['delta']
+      syn_nt = time_sample['nt']
+      # left/right zero padding length
+      syn_nl = time_sample['nl']
+      syn_nr = time_sample['nr']
+      # valid data time range
+      data_starttime = syn_starttime + syn_nl*syn_delta
+      data_endtime = syn_starttime + (syn_nt-syn_nr)*syn_delta
+
+      # get ak135 traveltimes
+      phase_list = phase.split(',')
+      arrivals = taup_model.get_travel_times(
+          source_depth_in_km=event['depth'],
+          distance_in_degree=gcarc,
+          phase_list=phase_list,
+          )
+
+      # initialize window dict
+      if 'window' not in station:
+        station['window'] = {}
+      window = station['window']
+
+      window_id = "%s_%s" % (phase, component)
+
+      # get time window
+      if arrivals:
+        # if more than one phase specified,
+        # use a time window extended from the first to last arrivals
+        # with addition to begin and end length
+        ttime = np.array([arr.time for arr in arrivals])
+        min_ttime = np.min(ttime)
+        max_ttime = np.max(ttime)
+      else:
+        warn = "phase %s not found (dist=%f, evdp=%f), window not created" \
+            % (phase, meta['dist_degree'], event['depth'] )
+        warnings.warn(warn)
+        continue
+      win_starttime = event['t0'] + min_ttime + begin_time
+      win_endtime = event['t0'] + max_ttime + end_time
+
+      # check if time window lies out side of valid data time range
+      if win_endtime < (data_starttime + half_period) \
+          or win_starttime > (data_endtime - half_period):
+        warn = "Window(%s) lies outside of the data time window"
+        warnings.warn(warn)
+        continue
+      if win_starttime < data_starttime:
+        warn = "Window(%s) has a starttime(%s) smaller than data starttime(%s)" \
+            ", limited to data" % (window_id, win_starttime, data_starttime)
+        warnings.warn(warn)
+        win_starttime = data_starttime
+      if win_endtime > (data_endtime - half_period):
+        warn = "Window(%s) has an endtime(%s) larger than data endtime-half_period(%s - %f)" \
+            ", limited to data" % (window_id, win_endtime, data_endtime, half_period)
+        warnings.warn(warn)
+        win_endtime = data_endtime - half_period
+
+      # window taper
+      taper_dict = { 'type':'cosine', 'ratio':taper_percentage,
+          'starttime':win_starttime, 'endtime':win_endtime}
+
+      # window component 
+      if component == 'Z': # vertcal component
+        cmpaz = 0.0
+        cmpdip = -90.0
+      elif component == 'R': # radial component
+        cmpaz = (baz + 180.0)%360.0
+        cmpdip = 0.0
+      elif component == 'T': # tangential component (TRZ: right-hand convention)
+        cmpaz = (baz - 90.0)%360.0
+        cmpdip = 0.0
+      elif component == 'H': # horizontal particle motion 
+        cmpaz = float('nan')
+        cmpdip = 0.0
+      elif component == 'F': # 3-d particle motion 
+        cmpaz = float('nan')
+        cmpdip = float('nan')
+      else:
+        print("[WARN] %s: unrecognized component, SKIP." % (comp))
+        continue
+      polarity_dict = {'component':component, 'azimuth': cmpaz, 'dip': cmpdip }
+
+      # add window
+      window[window_id] = {
+        'stat': {
+          'code': 0,
+          'msg': "created on "+UTCDateTime.now().isoformat() },
+        'filter': filter_dict,
+        'taper': taper_dict,
+        'polarity': polarity_dict }
+
+    #endfor station_id, station in station_dict.iteritems():
+  #enddef add_window_body_wave
+
+#
+#==============================================================================
+#
+
+  def add_window_surface_wave(self,
+      component='T',
+      phase='Love',
+      min_slowness=25,
+      max_slowness=40,
+      taper_percentage=0.1,
+      begin_time=-50,
+      end_time=50,
+      filter_type='butter',
+      filter_order=2,
+      min_frequency=0.01,
+      max_frequency=0.05,
+      ):
+    """ 
+    Add misfit window for all stations
+    
+    Parameters
+    ----------
+    phase: surface wave name
+
+    min_/max_slowness: in s/deg
+        e.g. Rayleigh: 25 ~ 40, Love: 25 ~ 35
+
+    Notes
+    -----
+      taper_type only supports cosine window now.
+      
+    """
+    # filter/taper parameters
+    filter_dict = {
+        'type': filter_type, 
+        'order': filter_order, 
+        'freqlim': np.array([min_frequency, max_frequency])}
+
+    # half maximum period used to limit time window
+    half_period = 0.5/np.min(filter_dict['freqlim'])
+
+    if not 0.0 < taper_percentage < 0.5:
+      raise ValueError("taper_percentage must be between 0 and 0.5.")
+
+    event = self.data['event']
+    station_dict = self.data['station']
 
     #------ loop each station
     for station_id in station_dict:
@@ -1197,114 +1384,257 @@ class Misfit(object):
       data_starttime = syn_starttime + syn_nl*syn_delta
       data_endtime = syn_starttime + (syn_nt-syn_nr)*syn_delta
 
-      # get ak135 traveltimes
-      arrivals = taup_model.get_travel_times(
-          source_depth_in_km=event['depth'],
-          distance_in_degree=gcarc,
-          phase_list=phase_list,
-          )
-
       # initialize window dict
-      station['window'] = {}
+      if 'window' not in station:
+        station['window'] = {}
       window = station['window']
 
-      # loop each window
-      for win in window_list:
-        comp = win[0]
-        phase = win[1]
-        signal_begin = float(win[2][0])
-        signal_end = float(win[2][1])
+      window_id = "%s_%s" % (phase, component)
 
-        # surface waves
-        if phase in ['R', 'L']: 
-          min_slowness = float(win[3][0])
-          max_slowness = float(win[3][1])
+      # get time window
+      win_starttime = event['t0'] + gcarc*min_slowness + begin_time
+      win_endtime = event['t0'] + gcarc*max_slowness + end_time
 
-        window_id = "%s.%s" % (comp, phase)
+      # check if time window lies out side of valid data time range
+      if win_endtime < (data_starttime + half_period) \
+          or win_starttime > (data_endtime - half_period):
+        warn = "Window(%s) lies outside of the data time window"
+        warnings.warn(warn)
+        continue
+      if win_starttime < data_starttime:
+        warn = "Window(%s) has a starttime(%s) smaller than data starttime(%s)" \
+            ", limited to data" % (window_id, win_starttime, data_starttime)
+        warnings.warn(warn)
+        win_starttime = data_starttime
+      if win_endtime > (data_endtime - half_period):
+        warn = "Window(%s) has an endtime(%s) larger than data endtime-half_period(%s - %f)" \
+            ", limited to data" % (window_id, win_endtime, data_endtime, half_period)
+        warnings.warn(warn)
+        win_endtime = data_endtime - half_period
 
-        #--- window time range
-        if phase in ['R', 'L']:
-          # surface waves
-          min_ttime = gcarc * min_slowness
-          max_ttime = gcarc * max_slowness
-          starttime = event['t0'] + min_ttime + signal_begin
-          endtime = event['t0'] + max_ttime + signal_end
-        else:
-          # body waves
-          phase_names = phase.split(',')
-          ttime = []
-          for arr in arrivals:
-            if arr.name in phase_names:
-              ttime.append(arr.time)
-          if ttime:
-            # if more than one phase specified, 
-            # use a time window extended from the first to last arrivals
-            # with addition to begin and end length
-            min_ttime = min(ttime)
-            max_ttime = max(ttime)
-          else:
-            warn = "phase %s not found (dist=%f, evdp=%f), window not created" \
-                % (phase, meta['dist_degree'], event['depth'] )
-            warnings.warn(warn)
-            continue
-          starttime = event['t0'] + min_ttime + signal_begin
-          endtime = event['t0'] + max_ttime + signal_end
+      # window taper
+      taper_dict = { 'type':'cosine', 'ratio':taper_percentage,
+          'starttime':win_starttime, 'endtime':win_endtime}
 
-        # check if time window lies out side of valid data time range
-        if endtime < (data_starttime + half_period) \
-            or starttime > (data_endtime - half_period):
-          warn = "Window(%s) lies outside of the data time window"
-          warnings.warn(warn)
-          continue
-        if starttime < data_starttime:
-          warn = "Window(%s) has a starttime(%s) smaller than data starttime(%s)" \
-              ", limited to data" % (window_id, starttime, data_starttime)
-          warnings.warn(warn)
-          starttime = data_starttime
-        if endtime > (data_endtime - half_period):
-          warn = "Window(%s) has an endtime(%s) larger than data endtime-half_period(%s - %f)" \
-              ", limited to data" % (window_id, endtime, data_endtime, half_period)
-          warnings.warn(warn)
-          endtime = data_endtime - half_period
+      # window component 
+      if component == 'Z': # vertcal component
+        cmpaz = 0.0
+        cmpdip = -90.0
+      elif component == 'R': # radial component
+        cmpaz = (baz + 180.0)%360.0
+        cmpdip = 0.0
+      elif component == 'T': # tangential component (TRZ: right-hand convention)
+        cmpaz = (baz - 90.0)%360.0
+        cmpdip = 0.0
+      elif component == 'H': # horizontal particle motion 
+        cmpaz = float('nan')
+        cmpdip = 0.0
+      elif component == 'F': # 3-d particle motion 
+        cmpaz = float('nan')
+        cmpdip = float('nan')
+      else:
+        print("[WARN] %s: unrecognized component, SKIP." % (comp))
+        continue
+      polarity_dict = {'component':component, 'azimuth': cmpaz, 'dip': cmpdip }
 
-        #--- window taper function specs
-        taper_dict = {'type':taper_param[0], 'ratio':taper_param[1],
-            'starttime':starttime, 'endtime':endtime}
+      # add window
+      window[window_id] = {
+        'stat': {
+          'code': 0,
+          'msg': "created on "+UTCDateTime.now().isoformat() },
+        'filter': filter_dict,
+        'taper': taper_dict,
+        'polarity': polarity_dict }
 
-        # window polarity 
-        if comp == 'Z': # vertcal component
-          cmpaz = 0.0
-          cmpdip = -90.0
-        elif comp == 'R': # radial component
-          cmpaz = (baz + 180.0)%360.0
-          cmpdip = 0.0
-        elif comp == 'T': # tangential component (TRZ: right-hand convention)
-          cmpaz = (baz - 90.0)%360.0
-          cmpdip = 0.0
-        elif comp == 'H': # horizontal particle motion 
-          cmpaz = float('nan')
-          cmpdip = 0.0
-        elif comp == 'F': # 3-d particle motion 
-          cmpaz = float('nan')
-          cmpdip = float('nan')
-        else:
-          print("[WARN] %s: unrecognized component, SKIP." % (comp))
-          continue
-        polarity_dict = {'component':comp, 'azimuth': cmpaz, 'dip': cmpdip }
-
-        # add window
-        window[window_id] = {
-          'stat': {
-            'code': 0, 
-            'msg': "created on "+UTCDateTime.now().isoformat() },
-          'filter': filter_dict,
-          'taper': taper_dict,
-          'polarity': polarity_dict }
-
-      #endfor win in window_list:
     #endfor station_id, station in station_dict.iteritems():
+  #enddef add_window_surface_wave
 
-  #enddef setup_windows
+#
+#==============================================================================
+#
+
+#  def setup_window(self,
+#      window_list=[('F','p,P',[-30,50]), ('F','s,S',[-40,70])],
+#      filter_param=('butter', 2, [0.01, 0.10]),
+#      taper_param=('cosine', 0.1)):
+#    """ 
+#    Setup data windows based on ray arrivals in 1D earth model.
+#    
+#    Parameters
+#    ----------
+#    window_list : [ (component, phases, [begin, end], [min_slowneww, max_slowness]), ...]
+#                  define data window
+#
+#    filter_param : (type, order, freqlims)
+#                   define filter parameters 
+#
+#    Notes
+#    -----
+#    window specs:
+#    
+#    component: Z, R, T, H, F (vertical, radial, transverse, horizontal, all 3-comp)
+#    phases: any body-wave phases that can be handled by TauP
+#            for surface waves, only R and L (Rayleigh, Love) are allowed
+#    time_range: 
+#        for body-wave phases [begin, end] is specified;
+#        for surface waves specify additional [min_slowness, max_slowness] 
+#        in unit s/deg (say, [25, 30]s/deg for [4, 3]km/s)
+#
+#    """
+#    # filter/taper parameters
+#    filter_dict = {'type': filter_param[0], 
+#        'order': filter_param[1], 'freqlim': filter_param[2]}
+#    # half maximum period used to limit time window
+#    half_period = 0.5/np.min(np.array(filter_param[2]))
+#
+#    if not 0.0 < taper_param[1] < 0.5:
+#      raise ValueError("taper ratio must lie between 0 and 0.5.")
+#
+#    event = self.data['event']
+#    station_dict = self.data['station']
+#
+#    # initiate taup
+#    taup_model = TauPyModel(model="ak135")
+#
+#    phase_list = []
+#    for win in window_list:
+#      for phase in win[1].split(','):
+#        # add phase but not surface phases
+#        if phase not in ['R', 'L']:
+#          phase_list.append(phase)
+#
+#    #------ loop each station
+#    for station_id in station_dict:
+#      station = station_dict[station_id]
+#
+#      # skip station not processed by read_obs_syn()
+#      if station['stat']['code'] < 1:
+#        continue
+#
+#      meta = station['meta']
+#      baz = meta['back_azimuth']
+#      gcarc = meta['dist_degree']
+#
+#      #--- get valid time range of waveforms
+#      time_sample = station['waveform']['time_sample']
+#      syn_starttime = time_sample['starttime']
+#      syn_delta = time_sample['delta']
+#      syn_nt = time_sample['nt']
+#      # left/right zero padding length
+#      syn_nl = time_sample['nl']
+#      syn_nr = time_sample['nr']
+#      # valid data time range
+#      data_starttime = syn_starttime + syn_nl*syn_delta
+#      data_endtime = syn_starttime + (syn_nt-syn_nr)*syn_delta
+#
+#      # get ak135 traveltimes
+#      arrivals = taup_model.get_travel_times(
+#          source_depth_in_km=event['depth'],
+#          distance_in_degree=gcarc,
+#          phase_list=phase_list,
+#          )
+#
+#      # initialize window dict
+#      station['window'] = {}
+#      window = station['window']
+#
+#      # loop each window
+#      for win in window_list:
+#        comp = win[0]
+#        phase = win[1]
+#        signal_begin = float(win[2][0])
+#        signal_end = float(win[2][1])
+#
+#        # surface waves
+#        if phase in ['R', 'L']: 
+#          min_slowness = float(win[3][0])
+#          max_slowness = float(win[3][1])
+#
+#        window_id = "%s.%s" % (comp, phase)
+#
+#        #--- window time range
+#        if phase in ['R', 'L']:
+#          # surface waves
+#          min_ttime = gcarc * min_slowness
+#          max_ttime = gcarc * max_slowness
+#          starttime = event['t0'] + min_ttime + signal_begin
+#          endtime = event['t0'] + max_ttime + signal_end
+#        else:
+#          # body waves
+#          phase_names = phase.split(',')
+#          ttime = []
+#          for arr in arrivals:
+#            if arr.name in phase_names:
+#              ttime.append(arr.time)
+#          if ttime:
+#            # if more than one phase specified, 
+#            # use a time window extended from the first to last arrivals
+#            # with addition to begin and end length
+#            min_ttime = min(ttime)
+#            max_ttime = max(ttime)
+#          else:
+#            warn = "phase %s not found (dist=%f, evdp=%f), window not created" \
+#                % (phase, meta['dist_degree'], event['depth'] )
+#            warnings.warn(warn)
+#            continue
+#          starttime = event['t0'] + min_ttime + signal_begin
+#          endtime = event['t0'] + max_ttime + signal_end
+#
+#        # check if time window lies out side of valid data time range
+#        if endtime < (data_starttime + half_period) \
+#            or starttime > (data_endtime - half_period):
+#          warn = "Window(%s) lies outside of the data time window"
+#          warnings.warn(warn)
+#          continue
+#        if starttime < data_starttime:
+#          warn = "Window(%s) has a starttime(%s) smaller than data starttime(%s)" \
+#              ", limited to data" % (window_id, starttime, data_starttime)
+#          warnings.warn(warn)
+#          starttime = data_starttime
+#        if endtime > (data_endtime - half_period):
+#          warn = "Window(%s) has an endtime(%s) larger than data endtime-half_period(%s - %f)" \
+#              ", limited to data" % (window_id, endtime, data_endtime, half_period)
+#          warnings.warn(warn)
+#          endtime = data_endtime - half_period
+#
+#        #--- window taper function specs
+#        taper_dict = {'type':taper_param[0], 'ratio':taper_param[1],
+#            'starttime':starttime, 'endtime':endtime}
+#
+#        # window polarity 
+#        if comp == 'Z': # vertcal component
+#          cmpaz = 0.0
+#          cmpdip = -90.0
+#        elif comp == 'R': # radial component
+#          cmpaz = (baz + 180.0)%360.0
+#          cmpdip = 0.0
+#        elif comp == 'T': # tangential component (TRZ: right-hand convention)
+#          cmpaz = (baz - 90.0)%360.0
+#          cmpdip = 0.0
+#        elif comp == 'H': # horizontal particle motion 
+#          cmpaz = float('nan')
+#          cmpdip = 0.0
+#        elif comp == 'F': # 3-d particle motion 
+#          cmpaz = float('nan')
+#          cmpdip = float('nan')
+#        else:
+#          print("[WARN] %s: unrecognized component, SKIP." % (comp))
+#          continue
+#        polarity_dict = {'component':comp, 'azimuth': cmpaz, 'dip': cmpdip }
+#
+#        # add window
+#        window[window_id] = {
+#          'stat': {
+#            'code': 0, 
+#            'msg': "created on "+UTCDateTime.now().isoformat() },
+#          'filter': filter_dict,
+#          'taper': taper_dict,
+#          'polarity': polarity_dict }
+#
+#      #endfor win in window_list:
+#    #endfor station_id, station in station_dict.iteritems():
+#
+#  #enddef setup_windows
 
 #
 #======================================================
@@ -1588,7 +1918,7 @@ class Misfit(object):
             'Amax_obs': Amax_obs, 'Amax_syn': Amax_syn, 
             'Amax_noise': Amax_noise, 'SNR': snr}
         cc_dict = {
-            'time': cc_times, 'cc': cci,
+            #'time': cc_times, 'cc': cci,
             'cc_tshift': CC_time_shift,
             'CC0': CC0, 'CCmax': CCmax,
             'AR0': AR0, 'ARmax': ARmax,
@@ -1680,7 +2010,7 @@ class Misfit(object):
         cc = window['cc']
         quality = window['quality']
 
-        fp.write("{:15s} {:10s} {:7.5f}  {:7.5f}  {:7.5f}  {:+7.3f}" \
+        fp.write("{:15s} {:15s} {:7.5f}  {:7.5f}  {:7.5f}  {:+7.3f}" \
             "  {:7.3f}  {:12.5e}  {:12.5e}\n".format(
           station_id, window_id, window['weight'], 
           cc['CC0'], cc['CCmax'], cc['cc_tshift'], 
@@ -3844,34 +4174,54 @@ class Misfit(object):
   def plot_seismogram_1comp(self,
       savefig=False, 
       out_dir='plot',
-      plot_param={
-        'time':[0,100], 'rayp':10., 'azbin':10, 'window_id':'Z.p,P',
-        'SNR':None, 'CC0':None, 'CCmax':None, 'dist':None,
-        'clip':1.5}
+      window_id='p,P_Z',
+      azbin=10,
+      begin_time=0,
+      end_time=0,
+      clip_ratio=1.5,
+      min_CC0=None,
+      min_CCmax=None,
+      min_SNR=None,
+      min_dist=None,
       ):
     """ 
-    Plot record sections 
+    Plot record section in azimuthal bins
 
+    Parameters
+    ----------
     azbin: azimuthal bin size
-    plto_param:
-      clip: do not plot waveform with amplitudes larger than 
-        <clip>*max_amplitude_in_select_time_window
-    """
-    comp_name = ['R', 'T', 'Z']
-    #------ selection parameters
-    plot_time = plot_param['time']
-    plot_azbin = plot_param['azbin']
-    plot_rayp = plot_param['rayp']
-    plot_window_id = plot_param['window_id']
 
-    plot_SNR = np.array(plot_param['SNR'])
-    plot_CC0 = np.array(plot_param['CC0'])
-    plot_CCmax = np.array(plot_param['CCmax'])
-    plot_dist = np.array(plot_param['dist'])
-    plot_clip = np.array(plot_param['clip'])
+    begin/end_time: time range that is added to the automatically determined
+      plot time range. See below.
+
+    clip: do not plot waveform with amplitudes larger than 
+      <clip>*max_amplitude_in_select_time_window
+
+    Notes
+    -----
+      The time for plot is reduced time relative to origin time + rayp*dist
+
+      linear regression is done to find the average rayp of misfit windows
+      and the plot begin/end time is found that can include all misfit windows
+      in the plot.
+
+    """
+    #------ check parameters
+    plot_time = np.array([begin_time, end_time])
+
+    plot_azbin = float(azbin)
+    if plot_azbin <= 0:
+      raise Exception("plot_azbin(%f) should be larger than 0.0" % (plot_azbin))
+
+    plot_window_id = window_id
+    plot_SNR = np.array(min_SNR)
+    plot_CC0 = np.array(min_CC0)
+    plot_CCmax = np.array(min_CCmax)
+    plot_dist = np.array(min_dist)
+
+    plot_clip = float(clip_ratio)
     if plot_clip < 1.0:
-      warnings.warn("plot_param['clip'] should be larger than 1.0")
-      plot_clip = 1.0
+      raise Exception("clip_ratio(%f) should be larger than 1.0" % (plot_clip))
 
     #------ event info
     event = self.data['event']
@@ -3894,6 +4244,8 @@ class Misfit(object):
     stla_all = []
     stlo_all = []
     dist_all = []
+    winb_all = []
+    wine_all = []
     for station_id in station_dict:
       station = station_dict[station_id]
       meta = station['meta']
@@ -3906,27 +4258,42 @@ class Misfit(object):
       stla_all.append(meta['latitude'])
       stlo_all.append(meta['longitude'])
       dist_all.append(meta['dist_degree'])
+      taper = window_dict[plot_window_id]['taper']
+      winb_all.append(taper['starttime'] - event['t0'])
+      wine_all.append(taper['endtime'] - event['t0'])
     
     if not dist_all:
       warnings.warn("No data to plot!")
       return
 
-    #------ traveltime curve
-    model = TauPyModel(model="ak135")
-    # distance samples
-    dist_ttcurve = np.arange(0.0,max(dist_all),0.5)
-    phase_names = plot_window_id.split('.')[1]
-    phase_list = [x for x in phase_names.split(',')]
-    ttcurve = {}
-    for phase_name in phase_list:
-      ttcurve[phase_name] = []
-    for dist in dist_ttcurve:
-      # for surface wave
-      if phase_name in ['R', 'L']:
-        ttime = 25 * dist # avg. slowness ~25 s/deg
-        ttcurve[phase_name].append((dist, ttime))
-      # for body wave
-      else:
+    # get average moveout of the window center 
+    dist_all = np.array(dist_all)
+    winb_all = np.array(winb_all)
+    wine_all = np.array(wine_all)
+    winc_all = (winb_all + wine_all)/2.0
+    # linear regression tc = dist*rayp + tb
+    A = np.vstack([dist_all, np.ones(len(dist_all))]).T
+    plot_rayp, plot_c = np.linalg.lstsq(A, winc_all)[0]
+    # round to the integer
+    plot_rayp = np.round(plot_rayp)
+    # get time window relative to the regressed window central time
+    plot_t0 = np.min(winb_all - plot_rayp*dist_all - plot_c)
+    plot_t1 = np.max(wine_all - plot_rayp*dist_all - plot_c)
+    # modify the plot time rage
+    plot_time[0] += plot_t0
+    plot_time[1] += plot_t1
+
+    #------ calculate traveltime curves (only for body wave)
+    phase_names = plot_window_id.split('_')[0]
+    if phase_names not in ['Rayleigh', 'Love']:
+      model = TauPyModel(model="ak135")
+      # distance samples
+      dist_ttcurve = np.arange(0.0,max(dist_all),0.5)
+      phase_list = [x for x in phase_names.split(',')]
+      ttcurve = {}
+      for phase_name in phase_list:
+        ttcurve[phase_name] = []
+      for dist in dist_ttcurve:
         arrivals = model.get_travel_times(
             source_depth_in_km=evdp, 
             distance_in_degree=dist, 
@@ -3935,10 +4302,8 @@ class Misfit(object):
           for phase_name in phase_list:
             if arr.name == phase_name:
               ttcurve[phase_name].append((arr.distance, arr.time, arr.ray_param))
-    # sort (dist, ttime, rayp) points based on ray parameter
-    for phase_name in phase_list:
-      # only do this for body wave
-      if phase_name not in ['R', 'L']:
+      # sort (dist, ttime, rayp) points based on ray parameter
+      for phase_name in phase_list:
         ttcurve[phase_name] = sorted(ttcurve[phase_name], key=lambda x: x[2])
 
     #------ map configuration 
@@ -4111,29 +4476,30 @@ class Misfit(object):
         plot_ymin = min(y) - 2*plot_dy
 
       #-- plot traveltime curves
-      for phase_name in phase_list:
-        # reduced time
-        phase_times = np.array([x[1]-plot_rayp*x[0] for x in ttcurve[phase_name]])
-        phase_distances = np.array([x[0] for x in ttcurve[phase_name]])
+      if phase_names not in ['Rayleigh', 'Love']:
+        for phase_name in phase_list:
+          # reduced time
+          phase_times = np.array([x[1]-plot_rayp*x[0] for x in ttcurve[phase_name]])
+          phase_distances = np.array([x[0] for x in ttcurve[phase_name]])
 
-        max_dist = np.max(phase_distances)
-        min_dist = np.min(phase_distances)
-        if max_dist < plot_ymin or min_dist > plot_ymax:
-          continue
-        ax_1comp.plot(phase_times, phase_distances, 'b-', linewidth=0.1)
-        #ax_1comp.plot(phase_times, phase_distances, 'b.', markersize=0.5)
-        # label phase names
-        if max_dist < plot_ymax:
-          y_str = max_dist
-          x_str = max(phase_times[phase_distances==max_dist])
-        else:
-          y_str = plot_ymax
-          max_dist = max(phase_distances[phase_distances<= plot_ymax])
-          x_str = max(phase_times[phase_distances==max_dist])
-        ax_1comp.text(x_str, y_str, phase_name,
-            verticalalignment='top',
-            horizontalalignment='center',
-            fontsize=11, color='blue')
+          max_dist = np.max(phase_distances)
+          min_dist = np.min(phase_distances)
+          if max_dist < plot_ymin or min_dist > plot_ymax:
+            continue
+          ax_1comp.plot(phase_times, phase_distances, 'b-', linewidth=0.1)
+          #ax_1comp.plot(phase_times, phase_distances, 'b.', markersize=0.5)
+          # label phase names
+          if max_dist < plot_ymax:
+            y_str = max_dist
+            x_str = max(phase_times[phase_distances==max_dist])
+          else:
+            y_str = plot_ymax
+            max_dist = max(phase_distances[phase_distances<= plot_ymax])
+            x_str = max(phase_times[phase_distances==max_dist])
+          ax_1comp.text(x_str, y_str, phase_name,
+              verticalalignment='top',
+              horizontalalignment='center',
+              fontsize=11, color='blue')
 
       #-- plot each station
       for station_id in data_azbin:

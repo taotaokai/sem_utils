@@ -22,40 +22,67 @@ else:
   par = importlib.util.module_from_spec(spec)
   spec.loader.exec_module(par)
 
-#window_list = [
-#   ('Z','p,P', [-30,75]), 
-#   ('R','p,P', [-30,75]), 
-#   ('Z','pP', [-30,75]), 
-#   ('R','pP', [-30,75]), 
-#   ('Z','s,S', [-30,80]),
-#   ('R','s,S', [-30,80]),
-#   ('T','s,S', [-30,80]),
-#   ]
-##window_list = [
-##    ('F','p,P', [-30,75]),
-##    ('F','s,S', [-30,80]),
-##    ]
-#
-#filter_param=('butter', 2, [0.01, 0.08])
-#taper_param=('cosine', 0.1)
-#weight_param={
-#  'SNR':[10, 15],
-#  'CCmax':[0.6,0.8],
-#  'CC0':[0.5,0.7],
-## 'dist':[25,26],
-#    }
-
 print("\n====== initialize\n")
 misfit = Misfit()
 
 print("\n====== load data\n")
 misfit.load(misfit_file)
 
-print("\n====== setup window\n")
-misfit.setup_window(
-    window_list=par.window_list,
-    filter_param=par.filter_param,
-    taper_param=par.taper_param)
+print("\n====== delete all misfit windows\n")
+misfit.delete_window()
+
+print("\n====== add P wave windows\n")
+evdp_km = misfit.data['event']['depth']
+print("evdp_km = %f" % (evdp_km))
+
+window_list_P_wave = par.make_window_list_P_wave(evdp_km)
+print(window_list_P_wave)
+
+for win in window_list_P_wave:
+  misfit.add_window_body_wave(
+      component=win['component'],
+      phase=win['phase'],
+      begin_time=win['time'][0],
+      end_time=win['time'][1],
+      min_frequency=win['filter'][0],
+      max_frequency=win['filter'][1],
+      filter_order=win['filter'][2],
+      min_dist=win['dist'][0],
+      max_dist=win['dist'][1],
+      )
+
+print("\n====== add S wave windows\n")
+window_list_S_wave = par.make_window_list_S_wave(evdp_km)
+print(window_list_S_wave)
+
+for win in window_list_S_wave:
+  misfit.add_window_body_wave(
+      component=win['component'],
+      phase=win['phase'],
+      begin_time=win['time'][0],
+      end_time=win['time'][1],
+      min_frequency=win['filter'][0],
+      max_frequency=win['filter'][1],
+      filter_order=win['filter'][2],
+      min_dist=win['dist'][0],
+      max_dist=win['dist'][1],
+      )
+
+print("\n====== add surface wave windows\n")
+print(par.window_list_surface_wave)
+
+for win in par.window_list_surface_wave:
+  misfit.add_window_surface_wave(
+      phase=win['phase'],
+      component=win['component'],
+      begin_time=win['time'][0],
+      end_time=win['time'][1],
+      min_slowness=win['slowness'][0],
+      max_slowness=win['slowness'][1],
+      min_frequency=win['filter'][0],
+      max_frequency=win['filter'][1],
+      filter_order=win['filter'][2],
+      )
 
 print("\n====== measure window\n")
 misfit.measure_adj(

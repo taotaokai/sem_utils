@@ -184,6 +184,8 @@ sed -i "/^SAVE_TRANSVERSE_KL_ONLY/s/=.*/= .false./" Par_file
 sed -i "/^APPROXIMATE_HESS_KL/s/=.*/= .false./" Par_file
 
 cp $event_dir/adj_kernel/STATIONS_ADJOINT $event_dir/DATA/
+rm -rf $event_dir/SEM
+ln -s $event_dir/adj_kernel $event_dir/SEM
 
 cd $event_dir
 

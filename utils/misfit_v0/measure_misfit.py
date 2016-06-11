@@ -8,8 +8,8 @@ import importlib.util
 from misfit import Misfit
 
 # read command line args
-misfit_file = str(sys.argv[1])
-par_file = str(sys.argv[2])
+par_file = str(sys.argv[1])
+misfit_file = str(sys.argv[2])
 
 # load parameter file
 if sys.version_info < (3, ):
@@ -69,9 +69,10 @@ for win in window_list_S_wave:
       )
 
 print("\n====== add surface wave windows\n")
-print(par.window_list_surface_wave)
+window_list_surface_wave = par.make_window_list_surface_wave(evdp_km)
+print(window_list_surface_wave)
 
-for win in par.window_list_surface_wave:
+for win in window_list_surface_wave:
   misfit.add_window_surface_wave(
       phase=win['phase'],
       component=win['component'],

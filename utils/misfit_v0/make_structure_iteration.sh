@@ -111,6 +111,7 @@ echo
 
 cd $event_dir
 
+rm -rf $misfit_dir
 mkdir -p $misfit_dir
 $utils_dir/read_data.py \
   $db_file \
@@ -119,12 +120,13 @@ $utils_dir/read_data.py \
   $event_dir/output_syn/sac \
   $data_dir/$event_id/dis
 
-$utils_dir/measure_misfit.py $db_file $misfit_par
+$utils_dir/measure_misfit.py $misfit_par $db_file
 
 $utils_dir/output_misfit.py $db_file $misfit_dir/misfit.txt
 
+rm -rf $figure_dir
 mkdir -p $figure_dir
-$utils_dir/plot_misfit.py $db_file $figure_dir
+$utils_dir/plot_misfit.py $misfit_par $db_file $figure_dir
 
 #------ adjoint source for kernel simulation
 rm -rf $event_dir/adj_kernel
@@ -241,6 +243,8 @@ sed -i "/^SAVE_TRANSVERSE_KL_ONLY/s/=.*/= .false./" Par_file
 sed -i "/^APPROXIMATE_HESS_KL/s/=.*/= .false./" Par_file
 
 cp $event_dir/adj_hess/STATIONS_ADJOINT $event_dir/DATA/
+rm -rf $event_dir/SEM
+ln -s $event_dir/adj_hess $event_dir/SEM
 
 cd $event_dir
 
@@ -262,6 +266,10 @@ mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 mkdir $event_dir/\$out_dir/kernel
 mv $event_dir/DATABASES_MPI/*reg1_cijkl_kernel.bin $event_dir/\$out_dir/kernel/
 mv $event_dir/DATABASES_MPI/*reg1_rho_kernel.bin $event_dir/\$out_dir/kernel/
+
+echo "====== sum up hess_kernel"
+ibrun /home1/03244/ktao/seiscode/sem_utils/bin/xsem_random_adjoint_kernel_to_hess \
+  256 $mesh_dir/DATABASES_MPI $event_dir/\$out_dir/kernel $event_dir/\$out_dir/kernel
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

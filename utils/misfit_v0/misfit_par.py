@@ -12,23 +12,80 @@ right_pad = 0.0
 obs_preevent = 100.0
 
 #====== measure_misfit
-window_list = [
-   ('Z','p,P', [-30,40]),
-   ('R','p,P', [-30,40]),
-   ('Z','sP', [-40,50]),
-   ('R','sP', [-40,50]),
-   ('Z','s,S', [-40,60]),
-   ('R','s,S', [-40,60]),
-   ('T','s,S', [-40,60]),
-   ('Z','sS', [-40,80]),
-   ('R','sS', [-40,80]),
-   ('T','sS', [-40,80]),
-   ]
+# misfit window specfications
+def make_window_list_P_wave(evdp_km):
+  if evdp_km <= 150:
+    window_list_P_wave = [
+        {'phase':'p,P,pP,sP', 'component':'Z', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'p,P,pP,sP', 'component':'R', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'PP',        'component':'Z', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[25,180]},
+        {'phase':'PP',        'component':'R', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[25,180]},
+        ]
+  elif evdp_km > 150 and evdp_km <=400:
+    window_list_P_wave = [
+        {'phase':'p,P',      'component':'Z', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'p,P',      'component':'R', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'pP,sP,PP', 'component':'Z', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'pP,sP,PP', 'component':'R', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        ]
+  else: # evdp_km > 400:
+    window_list_P_wave = [
+        {'phase':'p,P',   'component':'Z', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'p,P',   'component':'R', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'pP,PP', 'component':'Z', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'pP,PP', 'component':'R', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'sP',    'component':'Z', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'sP',    'component':'R', 'time':[-30,50], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        ]
+  return window_list_P_wave
 
-filter_param=('butter', 2, [0.01, 0.08])
+def make_window_list_S_wave(evdp_km):
+  if evdp_km <= 150:
+    window_list_S_wave = [
+        {'phase':'s,S,sS', 'component':'Z', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'s,S,sS', 'component':'R', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'s,S,sS', 'component':'T', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'SS',     'component':'Z', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[28,180]},
+        {'phase':'SS',     'component':'R', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[28,180]},
+        {'phase':'SS',     'component':'T', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[28,180]},
+        ]
+  elif evdp_km > 150 and evdp_km <=300:
+    window_list_S_wave = [
+        {'phase':'s,S', 'component':'Z', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'s,S', 'component':'R', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'s,S', 'component':'T', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'SS',  'component':'Z', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[30,180]},
+        {'phase':'SS',  'component':'R', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[30,180]},
+        {'phase':'SS',  'component':'T', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[30,180]},
+        {'phase':'sS',  'component':'Z', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'sS',  'component':'R', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'sS',  'component':'T', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        ] 
+  else:
+    window_list_S_wave = [
+        {'phase':'s,S',   'component':'Z', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'s,S',   'component':'R', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'s,S',   'component':'T', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'sS,SS', 'component':'Z', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'sS,SS', 'component':'R', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        {'phase':'sS,SS', 'component':'T', 'time':[-40,60], 'filter':[0.01, 0.085, 2], 'dist':[0,180]},
+        ]
+  return window_list_S_wave
 
-taper_param=('cosine', 0.1)
+def make_window_list_surface_wave(evdp_km):
+  # for 50s period, the phase velocity sensitivity kernel can only reach to about 200/150 km depth for fundamental Rayleigh/Love waves, respectively  
+  if evdp_km <= 150:
+    window_list_surface_wave = [
+       {'phase':'Love',     'component':'T', 'time':[-50,50], 'slowness':[25,35], 'filter':[0.01, 0.05, 2]},
+       {'phase':'Rayleigh', 'component':'R', 'time':[-50,50], 'slowness':[25,40], 'filter':[0.01, 0.05, 2]},
+       {'phase':'Rayleigh', 'component':'Z', 'time':[-50,50], 'slowness':[25,40], 'filter':[0.01, 0.05, 2]},
+       ]
+  else:
+    window_list_surface_wave = []
 
+  return window_list_surface_wave
+
+# misfit window weight scheme
 weight_param={
   'SNR':[10, 15],
   'CCmax':[0.6,0.8],
@@ -36,17 +93,18 @@ weight_param={
 # 'dist':[25,26],
     }
 
-#====== make_cmt_der
+#====== source inversion
+# make_cmt_der
 norm_dxs = 2000.0
 ratio_M0 = 0.1
 fix_M0 = False
 zerotrace = True
 
-#====== waveform_der
+# waveform_der
 outdir_dxs = "output_dxs"
 outdir_dmt = "output_dmt"
 
-#====== search 
+# search 
 dm = {
     't0': [-5,5],
     'tau':[-5,5],
@@ -56,3 +114,6 @@ dm = {
 ngrid = 4
 max_niter = 5
 range_ratio = 0.8
+
+#====== structure inversion
+

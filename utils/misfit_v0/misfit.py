@@ -4277,8 +4277,8 @@ class Misfit(object):
     # round to the integer
     plot_rayp = np.round(plot_rayp)
     # get time window relative to the regressed window central time
-    plot_t0 = np.min(winb_all - plot_rayp*dist_all - plot_c)
-    plot_t1 = np.max(wine_all - plot_rayp*dist_all - plot_c)
+    plot_t0 = np.min(winb_all - plot_rayp*dist_all)
+    plot_t1 = np.max(wine_all - plot_rayp*dist_all)
     # modify the plot time rage
     plot_time[0] += plot_t0
     plot_time[1] += plot_t1

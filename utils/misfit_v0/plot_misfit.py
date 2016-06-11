@@ -73,7 +73,10 @@ for win in window_list_S_wave:
       min_SNR=min(par.weight_param['SNR']),
       )
 
-for win in par.window_list_surface_wave:
+window_list_surface_wave = par.make_window_list_surface_wave(evdp_km)
+print(window_list_surface_wave)
+
+for win in window_list_surface_wave:
   window_id = "%s_%s" % (win['phase'], win['component'])
   print("\n------ %s\n" % (window_id))
   misfit.plot_seismogram_1comp(

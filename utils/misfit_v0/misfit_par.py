@@ -76,9 +76,9 @@ def make_window_list_surface_wave(evdp_km):
   # for 50s period, the phase velocity sensitivity kernel can only reach to about 200/150 km depth for fundamental Rayleigh/Love waves, respectively  
   if evdp_km <= 150:
     window_list_surface_wave = [
-       {'phase':'Love',     'component':'T', 'time':[-50,50], 'slowness':[25,35], 'filter':[0.01, 0.05, 2]},
-       {'phase':'Rayleigh', 'component':'R', 'time':[-50,50], 'slowness':[25,40], 'filter':[0.01, 0.05, 2]},
-       {'phase':'Rayleigh', 'component':'Z', 'time':[-50,50], 'slowness':[25,40], 'filter':[0.01, 0.05, 2]},
+       {'phase':'surface', 'component':'Z', 'time':[-50,50], 'slowness':[25,40], 'filter':[0.01, 0.05, 2]},
+       {'phase':'surface', 'component':'R', 'time':[-50,50], 'slowness':[25,40], 'filter':[0.01, 0.05, 2]},
+       {'phase':'surface', 'component':'T', 'time':[-50,50], 'slowness':[25,40], 'filter':[0.01, 0.05, 2]},
        ]
   else:
     window_list_surface_wave = []

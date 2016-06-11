@@ -62,7 +62,8 @@ program = xsem_slice_gcircle \
 	xsem_diff_relative \
 	xsem_random_adjoint_kernel_to_hess \
 	xsem_random_adjoint_kernel_to_hess_nompi \
-	xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso
+	xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
+	xsem_kernel_aijkl_to_iso
 
 
 #------------------------------------------

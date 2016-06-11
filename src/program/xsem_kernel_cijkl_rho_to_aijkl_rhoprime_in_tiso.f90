@@ -67,7 +67,7 @@ program xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso
   type(sem_mesh_data) :: mesh_data
   integer :: nspec
 
-  ! tiso model gll
+  ! model gll
   real(dp), allocatable :: cijkl(:,:,:,:,:)
   real(dp), dimension(:,:,:,:), allocatable :: rho, gll1
 
@@ -133,7 +133,6 @@ program xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vph', gll1)
     cijkl(1,:,:,:,:) = gll1**2 * rho
     cijkl(7,:,:,:,:) = cijkl(1,:,:,:,:)
-
     ! C = vpv**2 * rho;
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', gll1)
     cijkl(12,:,:,:,:) = gll1**2 * rho
@@ -156,17 +155,20 @@ program xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso
     call sem_io_read_cijkl_kernel(kernel_dir, iproc, iregion, 'cijkl_kernel', cijkl_kernel)
 
     !--- transform to aijkl,rhoprime kernel
+    ! aijkl_kernel = cijkl_kernel * rho
     cijkl_kernel = cijkl_kernel * spread(rho, 1, 21)
+    ! rhoprime_kernel = rho_kernel + sum(aijkl_kernel*cijkl, over ijkl)/rho**2
+    ! note: in SEM the kernel includes the factor in reduction from ijkl to 21 indices  
     rho_kernel = rho_kernel + sum(cijkl*cijkl_kernel, dim=1)/rho**2
 
     print *, "aijkl: min/max=", minval(cijkl_kernel), maxval(cijkl_kernel)
     print *, "rhoprime: min/max=", minval(rho_kernel), maxval(rho_kernel)
 
     !--- write out aijkl,rhoprime kernel
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
-        'rhoprime_kernel', rho_kernel)
     call sem_io_write_cijkl_kernel(out_dir, iproc, iregion, &
         'aijkl_kernel', cijkl_kernel)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
+        'rhoprime_kernel', rho_kernel)
 
   enddo ! iproc
 

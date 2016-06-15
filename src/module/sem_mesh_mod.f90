@@ -29,13 +29,13 @@ module sem_mesh
       xix,xiy,xiz,etax,etay,etaz,gammax,gammay,gammaz
   end type sem_mesh_data
 
-  ! data type for location results inside sem mesh
+  ! data type of location of one spatial point in the mesh
   type :: sem_mesh_location
-    integer :: stat
-    integer :: eid
-    real(dp) :: uvw(3)
-    real(dp) :: misloc
-    real(dp) :: lagrange(NGLLX, NGLLY, NGLLZ)
+    integer :: stat ! -1: not inside the mesh; 0: close to the mesh within the given max_misloc; 1: inside one element of the mesh
+    integer :: eid ! element no. contains the target point
+    real(dp) :: uvw(3) ! local coordinate of the point
+    real(dp) :: misloc ! difference between predicted and true point locations
+    real(dp) :: lagrange(NGLLX, NGLLY, NGLLZ) ! interpolation weights
   end type sem_mesh_location
 
   ! public data types

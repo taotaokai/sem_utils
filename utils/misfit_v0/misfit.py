@@ -540,10 +540,13 @@ class Misfit(object):
           channel[0]['latitude'], channel[0]['longitude'])
       dist_degree = kilometer2degrees(dist/1000.0)
 
+      evdp_km = event['depth']
+      if evdp_km < 0.0:
+        evdp_km = 0.0
       arrivals = taup_model.get_travel_times(
-          source_depth_in_km=event['depth'],
+          source_depth_in_km=evdp_km,
           distance_in_degree=dist_degree,
-          phase_list=['ttp','tts'],
+          phase_list=['ttp'],
           )
 
       # make station metadata 
@@ -590,6 +593,8 @@ class Misfit(object):
     evla = event['latitude']
     evlo = event['longitude']
     evdp = event['depth']
+    if evdp < 0.0:
+      evdp = 0.0
     mt_rtp = event['mt_rtp']
 
     # locat ENU coord
@@ -1230,8 +1235,11 @@ class Misfit(object):
 
       # get ak135 traveltimes
       phase_list = phase.split(',')
+      evdp_km = event['depth']
+      if evdp_km < 0.0:
+        evdp_km = 0.0
       arrivals = taup_model.get_travel_times(
-          source_depth_in_km=event['depth'],
+          source_depth_in_km=evdp_km,
           distance_in_degree=gcarc,
           phase_list=phase_list,
           )

@@ -17,7 +17,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
-  print '(a)', "  (string) source_xyz_list: list of source locations(x,y,z) in SEM (normalized)"
+  print '(a)', "  (string) source_xyz_list: list of source locations(x,y,z) in SEM (normalized by R_EARTH)"
   print '(a)', "  (float) source_gaussa: Gaussian width (one sigma) in km"
   print '(a)', "  (string) out_tag: tag in file name proc*_reg1_<out_tag>.bin"
   print '(a)', "  (string) out_dir: out_dir/proc*_reg1_<out_tag>.bin"

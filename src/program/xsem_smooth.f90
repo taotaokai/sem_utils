@@ -7,13 +7,14 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xsem_smooth \ "
-  print '(a)', "    <nproc> <mesh_dir> <model_dir> <model_tags> <output_dir> "
+  print '(a)', "  xsem_smooth \"
+  print '(a)', "    <nproc> <mesh_dir> <model_dir> <model_tags> \"
+  print '(a)', "    <sigma_h> <sigma_v> <output_dir> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
-  print '(a)', "  interpolate GLL model given on one SEM mesh onto  another SEM mesh"
-  print '(a)', "    the GLL interpolation is used, which is the SEM basis function."
+  print '(a)', "  Smoothing SEM model convolving with a Gaussian kernel: "
+  print '(a)', "    ker(x) ~ exp(- (|x_h|^2/(2*sigma_h^2) - |x_v|^2/(2*sigma_v^2)))"
   print '(a)', ""
   print '(a)', "PARAMETERS"
   print '(a)', ""
@@ -21,8 +22,8 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir: mesh topology file proc*_reg1_solver_data.bin"
   print '(a)', "  (string) model_dir: model file proc*_reg1_<model_tags>.bin"
   print '(a)', "  (string) model_tags: comma delimited string, e.g. vsv,vsh,rho "
-  print '(a)', "  (float) sigma_h: horizontal "
-  print '(a)', "  (float) sigma_v: vertical "
+  print '(a)', "  (float) sigma_h: horizontal smoothing length in km (1 std dev.)"
+  print '(a)', "  (float) sigma_v: vertical smoothing length in km (1 std dev.)"
   print '(a)', "  (string) output_dir: proc*_reg1_<model_tags>_smooth.bin"
   print '(a)', ""
   print '(a)', "NOTES"
@@ -36,7 +37,7 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-program xsem_interp_mesh
+program xsem_smooth
   
   use sem_constants
   use sem_io
@@ -65,6 +66,7 @@ program xsem_interp_mesh
 
   !-- local variables
   integer :: i, ier, iglob, ispec
+  integer :: igllx, iglly, igllz
 
   !-- mpi
   integer :: myrank, nrank
@@ -73,35 +75,41 @@ program xsem_interp_mesh
   integer :: imodel, nmodel
   character(len=MAX_STRING_LEN), allocatable :: model_names(:)
 
-  !-- mesh
-  type(sem_mesh_data) :: mesh
-  integer :: iproc, nspec
-  real(dp), allocatable :: xyz_center(:,:)
-  ! model
-  real(dp), allocatable :: model_gll(:,:,:,:,:)
+  !-- target mesh slice 
+  ! of which the smoothed model values are calculated by averaging over the 
+  ! neighbouring gll points (either in the same slice or in surrounding slices)
+  type(sem_mesh_data) :: mesh_target
+  integer :: iproc_target, ispec_target, nspec_target
+  real(dp), allocatable :: xyz_gll_target(:,:,:,:,:) ! target gll points
+  real(dp), allocatable :: xyz_elem_target(:,:) ! target element centers 
+  real(dp), allocatable :: model_gll_target(:,:,:,:,:) ! model gll points
+  real(dp), allocatable :: weight_gll_target(:,:,:,:) ! weight gll points
 
-  !-- smoothing point
-  real(dp), allocatable :: xyz_new(:,:)
-  integer, allocatable :: idoubling_new(:)
-  real(dp), parameter :: FILLVALUE_dp = huge(1.0_dp)
-  integer :: igll, igllx, iglly, igllz, ngll_new
-  real(dp), allocatable :: model_interp(:,:)
+  !-- contrbuting mesh slice
+  ! whose model values contribute to the target mesh model points weighted
+  ! by the distance
+  type(sem_mesh_data) :: mesh_contrib
+  integer :: iproc_contrib, ispec_contrib, nspec_contrib
+  real(dp), allocatable :: xyz_contrib(:,:,:,:,:) ! contributing points
+  real(dp), allocatable :: xyz_gll_contrib(:,:,:,:,:)
+  real(dp), allocatable :: xyz_elem_contrib(:,:)
+  real(dp), allocatable :: volume_gll_contrib(:,:,:,:)
+  real(dp), allocatable :: model_gll_contrib(:,:,:,:,:)
+  real(dp), allocatable :: weight_gll_contrib(:,:,:,:)
 
-  !-- sem location
-  type(sem_mesh_location), allocatable :: location_1slice(:)
-  integer, parameter :: nnearest = 10
-  real(dp) :: typical_size, max_search_dist, max_misloc, min_dist
-  real(dp), allocatable :: misloc_final(:)
-  integer, allocatable :: stat_final(:)
+  !-- search parameters
+  real(dp) :: sigma2_h, sigma2_v
+  real(dp) :: elem_size, max_search_dist2, dist2
+  real(dp) :: r_unit_target(3)
+  real(dp), dimension(3,NGLLX,NGLLY,NGLLZ) :: xyz_gll
+  real(dp), dimension(NGLLX,NGLLY,NGLLZ) :: dist2_v_gll, dist2_h_gll, gauss_weight_gll
 
   !===== start MPI
-
   call init_mpi()
   call world_size(nrank)
   call world_rank(myrank)
 
   !===== read command line arguments
-
   if (command_argument_count() /= nargs) then
     if (myrank == 0) then
       call selfdoc()
@@ -118,8 +126,8 @@ program xsem_interp_mesh
   read(args(2), '(a)') mesh_dir
   read(args(3), '(a)') model_dir
   read(args(4), '(a)') model_tags
-  read(args(5), '(a)') sigma_h 
-  read(args(6), '(a)') sigma_v 
+  read(args(5), '(a)') sigma_h
+  read(args(6), '(a)') sigma_v
   read(args(7), '(a)') output_dir
 
   !===== parse model tags
@@ -130,192 +138,185 @@ program xsem_interp_mesh
     print *, '# model_names=', (trim(model_names(i))//" ", i=1,nmodel)
   endif
 
-  !===== interpolate old mesh/model onto new mesh
+  !====== smoothing parameters 
+  ! non-dimensionalize smoothing scales 
+  ! get sigma squared
+  sigma2_h = (sigma_h / R_EARTH_KM)**2
+  sigma2_v = (sigma_v / R_EARTH_KM)**2
 
-  ! typical element size at surface for old mesh
-  ! read from values_from_mesher.h for old mesh
-  typical_size = max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
+  ! typical element size at surface
+  ! read from values_from_mesher.h
+  elem_size = max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
                      ANGULAR_WIDTH_ETA_IN_DEGREES_VAL/ NEX_ETA_VAL) &
                  * DEGREES_TO_RADIANS * R_UNIT_SPHERE
 
-  max_search_dist = 10.0 * typical_size
+  ! maximum distance square between the contributing element center and target element center
+  max_search_dist2 = (7.0*sqrt(max(sigma2_h, sigma2_v)) + 3.0*elem_size)**2
+  ! d**2 = 14*sigma**2 corresponds to exp(-14/2) = 0.0009
 
-  max_misloc = typical_size / 4.0
+  !====== loop each target mesh slice
+  do iproc_target = myrank, (nproc - 1), nrank
 
-  !-- loop each mesh slice
+    print *, "# iproc_target=", iproc_target
 
-  do iproc = myrank, (nproc - 1), nrank
+    !------ read in target mesh slice
+    call sem_mesh_read(mesh_dir, iproc_target, iregion, mesh_target)
 
-    print *, "# iproc_new=", iproc_new
+    nspec_target = mesh_target%nspec
 
-    !-- read new mesh slice
-    call sem_mesh_read(new_mesh_dir, iproc_new, iregion, mesh_new)
-
-    !-- make arrays of xyz points
-    !TODO use global points with different idoubling values instead of 
-    ! all GLL points, as many GLL points are shared on the element faces
-    nspec_new = mesh_new%nspec
-    ngll_new = NGLLX * NGLLY * NGLLZ * nspec_new
-
-    if (allocated(xyz_new)) then
-      deallocate(xyz_new, idoubling_new, xyz_center_new)
+    if (allocated(xyz_elem_target)) then
+      deallocate(xyz_elem_target, xyz_gll_target)
     endif
-    allocate(xyz_new(3, ngll_new), idoubling_new(ngll_new))
-    allocate(xyz_center_new(3, nspec_new))
+    allocate(xyz_elem_target(3,nspec_target))
+    allocate(xyz_gll_target(3,NGLLX,NGLLY,NGLLZ,nspec_target))
+    allocate(model_gll_target(3,NGLLX,NGLLY,NGLLZ,nspec_target))
+    allocate(weight_gll_target(NGLLX,NGLLY,NGLLZ,nspec_target))
 
-    do ispec = 1, nspec_new
-
-      iglob = mesh_new%ibool(MIDX, MIDY, MIDZ, ispec)
-      xyz_center_new(:, ispec) = mesh_new%xyz_glob(:, iglob)
-
+    !------ get target xyz_gll and xyz_elem arrays
+    do ispec = 1, nspec_target
       do igllz = 1, NGLLZ
         do iglly = 1, NGLLY
           do igllx = 1, NGLLX
-            igll = igllx + &
-                   NGLLX * ( (iglly-1) + &
-                   NGLLY * ( (igllz-1) + &
-                   NGLLZ * ( (ispec-1))))
-            iglob = mesh_new%ibool(igllx, iglly, igllz, ispec)
-            xyz_new(:, igll) = mesh_new%xyz_glob(:, iglob)
-            idoubling_new(igll) = mesh_new%idoubling(ispec)
+            ! central points of all elements 
+            iglob = mesh_target%ibool(MIDX, MIDY, MIDZ, ispec)
+            xyz_elem_target(:,ispec) = mesh_target%xyz_glob(:, iglob)
+            ! gll points of all elements
+            iglob = mesh_target%ibool(igllx, iglly, igllz, ispec)
+            xyz_gll_target(:,igllx,iglly,igllz,ispec) = mesh_target%xyz_glob(:, iglob)
+          enddo
+        enddo
+      enddo
+    enddo
+
+    !------ loop each contributing slices
+    model_gll_target = 0.0_dp
+    weight_gll_target = 0.0_dp
+
+    do iproc_contrib = 0, (nproc - 1)
+
+      print *, "# iproc_contrib=", iproc_contrib
+
+      !-- read contributing mesh slice
+      call sem_mesh_read(mesh_dir, iproc_contrib, iregion, mesh_contrib)
+
+      !-- get xyz_gll and xyz_elem arrays of the contributing slice
+      nspec_contrib = mesh_contrib%nspec
+
+      if (allocated(xyz_elem_contrib)) then
+        deallocate(xyz_elem_contrib, xyz_gll_contrib)
+      endif
+      allocate(xyz_elem_contrib(3,nspec_contrib))
+      allocate(xyz_gll_contrib(3,NGLLX,NGLLY,NGLLZ,nspec_contrib))
+
+      do ispec = 1, nspec_contrib
+        do igllz = 1, NGLLZ
+          do iglly = 1, NGLLY
+            do igllx = 1, NGLLX
+              ! central points of all elements 
+              iglob = mesh_contrib%ibool(MIDX, MIDY, MIDZ, ispec)
+              xyz_elem_contrib(:,ispec) = mesh_contrib%xyz_glob(:, iglob)
+              ! gll points of all elements
+              iglob = mesh_contrib%ibool(igllx, iglly, igllz, ispec)
+              xyz_gll_contrib(:,igllx,iglly,igllz,ispec) = mesh_contrib%xyz_glob(:, iglob)
+            enddo
           enddo
         enddo
       enddo
 
-    enddo
-
-    !-- initialize variables for interpolation
-    if (allocated(location_1slice)) then
-      deallocate(location_1slice)
-    endif
-    allocate(location_1slice(ngll_new))
-
-    if (allocated(stat_final)) then
-      deallocate(stat_final, misloc_final)
-    endif
-    allocate(stat_final(ngll_new), misloc_final(ngll_new))
-    stat_final = -1
-    misloc_final = huge(1.0_dp)
-
-    if (allocated(model_interp)) then
-      deallocate(model_interp, model_gll_new)
-    endif
-    allocate(model_interp(nmodel, ngll_new))
-    allocate(model_gll_new(nmodel, NGLLX, NGLLY, NGLLZ, nspec_new))
-    model_interp = FILLVALUE_dp
-
-    !-- read in the new model as the background model
-!   call sem_io_read_gll_file_n(new_model_dir, iproc_new, iregion, &
-!     model_names, nmodel, model_gll_new)
-!   model_gll_new = FILLVALUE_dp
-    model_gll_new = -1000.0_dp
-
-    !-- loop each slices of the old mesh
-
-    do iproc_old = 0, (nproc_old - 1)
-
-      print *, "# iproc_old=", iproc_old
-
-      ! read old mesh slice
-      call sem_mesh_read(old_mesh_dir, iproc_old, iregion, mesh_old)
-
-      nspec_old = mesh_old%nspec
-
-      ! test if the new and old mesh slices are separated apart
-      min_dist = huge(0.0_dp)
-      do ispec = 1, nspec_old
-        iglob = mesh_old%ibool(MIDX, MIDY, MIDZ, ispec)
-        min_dist = min(min_dist, sqrt( minval( &
-          (xyz_center_new(1,:) - mesh_old%xyz_glob(1,iglob))**2 + &
-          (xyz_center_new(2,:) - mesh_old%xyz_glob(2,iglob))**2 + &
-          (xyz_center_new(3,:) - mesh_old%xyz_glob(3,iglob))**2)))
+      !-- test if the distance between the contributing and target slices are more than 
+      ! max_search_dist2
+      dist2 = huge(0.0_dp)
+      do ispec = 1, nspec_target
+        dist2 = min(dist2, &
+          minval( (xyz_elem_contrib(1,:) - xyz_elem_target(1,ispec))**2 &
+                + (xyz_elem_contrib(2,:) - xyz_elem_target(2,ispec))**2 &
+                + (xyz_elem_contrib(3,:) - xyz_elem_target(3,ispec))**2))
       enddo
-      if (min_dist > max_search_dist) then
+      if (dist2 > max_search_dist2) then
+        print *, "# [INFO] contributing and target slices are too far away, skip."
         cycle
       endif
 
-      ! read old model
-      if (allocated(model_gll_old)) then
-        deallocate(model_gll_old)
+      !-- get model_gll of the contributing slice
+      if (allocated(model_gll_contrib)) then
+        deallocate(model_gll_contrib)
       endif
-      allocate(model_gll_old(nmodel, NGLLX, NGLLY, NGLLZ, nspec_old))
+      allocate(model_gll_contrib(nmodel, NGLLX, NGLLY, NGLLZ, nspec_contrib))
+      call sem_io_read_gll_file_n(model_dir, iproc_contrib, iregion, &
+        model_names, nmodel, model_gll_contrib)
 
-      call sem_io_read_gll_file_n(old_model_dir, iproc_old, iregion, &
-        model_names, nmodel, model_gll_old)
+      !-- calculate volume weights of each gll points for the contributing slice 
+      if (allocated(volume_gll_contrib)) then
+        deallocate(volume_gll_contrib)
+      endif
+      allocate(volume_gll_contrib(NGLLX, NGLLY, NGLLZ, nspec_contrib))
+      call sem_mesh_gll_volume(mesh_contrib, volume_gll_contrib)
 
-      ! locate points in this mesh slice
-      call sem_mesh_locate_kdtree2(mesh_old, ngll_new, xyz_new, idoubling_new, &
-        nnearest, max_search_dist, max_misloc, location_1slice)
+      !-- calculate volume weighted gaussian window average for each target element
+      ! over all contributing elements
+      do ispec_target = 1, nspec_target
+        do ispec_contrib = 1, nspec_contrib
 
-      ! interpolate model only on points located inside an element
-      do igll = 1, ngll_new
+          ! calculate squared distances between the target and contrbuting elements
+          dist2 = sum(xyz_elem_contrib(:,ispec_contrib) - xyz_elem_target(:,ispec_target)**2)
 
-        ! skip points located inside more than one element 
-        ! this would occur if the point lies exactly on the faces between two
-        ! elements
-        if (stat_final(igll)==1 .and. location_1slice(igll)%stat==1) then
-!         print *, "[WARN] iproc_new=", iproc_new, &
-!                  " iproc_old=", iproc_old, &
-!                  " igll=", igll, &
-!                  " this point is located inside more than one element!", &
-!                  " some problem may occur.", &
-!                  " only use the first located element."
-          print *, "# multi-located ", xyz_new(:,igll)
-          cycle
-        endif
+          ! skip if the contributing element are distant from the target element
+          ! by more than max_search_dist2
+          if (dist2 > max_search_dist2) then
+            cycle
+          endif
 
-        ! for point located inside one element in the first time
-        ! or closer to one element than located before
-        if ( location_1slice(igll)%stat == 1 .or. &
-            (location_1slice(igll)%stat == 0 .and. &
-             location_1slice(igll)%misloc < misloc_final(igll)) ) &
-        then
-
-          ! interpolate model
-          do imodel = 1, nmodel
-            model_interp(imodel,igll) = &
-              sum(location_1slice(igll)%lagrange * &
-                model_gll_old(imodel, :, :, :, location_1slice(igll)%eid))
+          ! loop each gll point in target element
+          do igllz = 1, NGLLZ
+            do iglly = 1, NGLLY
+              do igllx = 1, NGLLX
+                ! unit vertical(radial) vector through the target gll point  
+                r_unit_target = xyz_gll_target(:,igllx,iglly,igllz,ispec_target)
+                r_unit_target = r_unit_target/sqrt(sum(r_unit_target**2))
+                ! horizontal and vertical distance squared from contributing gll points to the target gll point
+                xyz_gll(1,:,:,:) = xyz_gll_contrib(1,:,:,:,ispec_contrib) - xyz_gll_target(1,igllx,iglly,igllz,ispec_target)
+                xyz_gll(2,:,:,:) = xyz_gll_contrib(2,:,:,:,ispec_contrib) - xyz_gll_target(2,igllx,iglly,igllz,ispec_target)
+                xyz_gll(3,:,:,:) = xyz_gll_contrib(3,:,:,:,ispec_contrib) - xyz_gll_target(3,igllx,iglly,igllz,ispec_target)
+                dist2_v_gll = (  xyz_gll(1,:,:,:)*r_unit_target(1) &
+                               + xyz_gll(2,:,:,:)*r_unit_target(2) &
+                               + xyz_gll(3,:,:,:)*r_unit_target(3) )**2
+                dist2_h_gll = sum(xyz_gll**2, dim=1) - dist2_v_gll
+                ! calcuate the smoothing weight on each contributing gll points
+                gauss_weight_gll = exp(-0.5*dist2_v_gll/sigma2_v - 0.5*dist2_h_gll/sigma2_h)
+                ! add to target model gll point
+                do imodel = 1, nmodel
+                  model_gll_target(imodel,igllx,iglly,igllz,ispec_target) = &
+                    model_gll_target(imodel,igllx,iglly,igllz,ispec_target) &
+                    + sum(model_gll_contrib(imodel,:,:,:,ispec_contrib) &
+                         * volume_gll_contrib(:,:,:,ispec_contrib) &
+                         * gauss_weight_gll)
+                  weight_gll_target(igllx,iglly,igllz,ispec_target) = &
+                    sum(volume_gll_contrib(:,:,:,ispec_contrib) * gauss_weight_gll)
+                enddo
+              enddo
+            enddo
           enddo
 
-          stat_final(igll)   = location_1slice(igll)%stat
-          misloc_final(igll) = location_1slice(igll)%misloc
+        enddo !do ispec_contrib = 1, nspec_contrib
+      enddo !do ispec_target = 1, nspec_target
 
-        endif
+    enddo ! iproc_contrib
 
-      enddo ! igll = 1, ngll_new
-
-    enddo ! iproc_old
-
-    !-- write out gll files for this new mesh slice
-
-    ! reshape model_interp to model_gll
-    do ispec = 1, nspec_new
-      do igllz = 1, NGLLZ
-        do iglly = 1, NGLLY
-          do igllx = 1, NGLLX
-
-            igll = igllx + &
-                   NGLLX * ( (iglly-1) + & 
-                   NGLLY * ( (igllz-1) + & 
-                   NGLLZ * ( (ispec-1))))
-
-            if (stat_final(igll) /= -1) then
-              model_gll_new(:, igllx, iglly, igllz, ispec) = &
-                model_interp(:, igll)
-            endif
-
-          enddo
-        enddo
-      enddo
+    !-- get the smoothed model for the target slice
+    do imodel = 1, nmodel
+      model_gll_target(imodel,:,:,:,:) =  model_gll_target(imodel,:,:,:,:) / weight_gll_target
     enddo
 
-    call sem_io_write_gll_file_n(output_dir, iproc_new, iregion, &
-      model_names, nmodel, model_gll_new)
+    !-- write out smoothed target model gll
+    do imodel = 1, nmodel
+      model_names(imodel) = trim(model_names(imodel))//'_smooth'
+    enddo
+    call sem_io_write_gll_file_n(output_dir, iproc_target, iregion, &
+      model_names, nmodel, model_gll_target)
 
-  enddo ! iproc_new
+  enddo ! iproc_target
 
-  !===== exit MPI
+  !====== exit MPI
   call synchronize_all()
   call finalize_mpi()
 

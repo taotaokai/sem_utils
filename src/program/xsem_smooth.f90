@@ -29,9 +29,6 @@ subroutine selfdoc()
   print '(a)', "NOTES"
   print '(a)', ""
   print '(a)', "  1) This program must run in parallel, e.g. mpirun -n <nproc> ..."
-  print '(a)', "  2) use values_from_mesher.h created for the old mesh to compile"
-! print '(a)', "  2) max_misloc ~ 0.25 * typical element size of old mesh "
-! print '(a)', "  3) max_search_dist ~ 5.0 * typical element size of old mesh"
 
 end subroutine
 
@@ -99,7 +96,8 @@ program xsem_smooth
 
   !-- search parameters
   real(dp) :: sigma2_h, sigma2_v
-  real(dp) :: elem_size, max_search_dist2, dist2
+  !real(dp) :: elem_size, max_search_dist2, dist2
+  real(dp) :: max_search_dist2, dist2
   real(dp) :: r_unit_target(3)
   real(dp), dimension(3,NGLLX,NGLLY,NGLLZ) :: xyz_gll
   real(dp), dimension(NGLLX,NGLLY,NGLLZ) :: dist2_v_gll, dist2_h_gll, gauss_weight_gll
@@ -146,12 +144,13 @@ program xsem_smooth
 
   ! typical element size at surface
   ! read from values_from_mesher.h
-  elem_size = max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
-                     ANGULAR_WIDTH_ETA_IN_DEGREES_VAL/ NEX_ETA_VAL) &
-                 * DEGREES_TO_RADIANS * R_UNIT_SPHERE
+  !elem_size = max(ANGULAR_WIDTH_XI_IN_DEGREES_VAL / NEX_XI_VAL, &
+  !                   ANGULAR_WIDTH_ETA_IN_DEGREES_VAL/ NEX_ETA_VAL) &
+  !               * DEGREES_TO_RADIANS * R_UNIT_SPHERE
 
   ! maximum distance square between the contributing element center and target element center
-  max_search_dist2 = (7.0*sqrt(max(sigma2_h, sigma2_v)) + 3.0*elem_size)**2
+  !max_search_dist2 = (7.0*sqrt(max(sigma2_h, sigma2_v)) + 3.0*elem_size)**2
+  max_search_dist2 = 10.0*max(sigma2_h, sigma2_v)
   ! d**2 = 14*sigma**2 corresponds to exp(-14/2) = 0.0009
 
   !====== loop each target mesh slice
@@ -166,6 +165,7 @@ program xsem_smooth
 
     if (allocated(xyz_elem_target)) then
       deallocate(xyz_elem_target, xyz_gll_target)
+      deallocate(model_gll_target, weight_gll_target)
     endif
     allocate(xyz_elem_target(3,nspec_target))
     allocate(xyz_gll_target(3,NGLLX,NGLLY,NGLLZ,nspec_target))

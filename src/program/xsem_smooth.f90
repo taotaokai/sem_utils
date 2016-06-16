@@ -291,7 +291,8 @@ program xsem_smooth
                          * volume_gll_contrib(:,:,:,ispec_contrib) &
                          * gauss_weight_gll)
                   weight_gll_target(igllx,iglly,igllz,ispec_target) = &
-                    sum(volume_gll_contrib(:,:,:,ispec_contrib) * gauss_weight_gll)
+                    weight_gll_target(igllx,iglly,igllz,ispec_target) &
+                    + sum(volume_gll_contrib(:,:,:,ispec_contrib) * gauss_weight_gll)
                 enddo
               enddo
             enddo

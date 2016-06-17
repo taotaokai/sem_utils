@@ -266,7 +266,7 @@
 ! use this t0 as earliest starting time rather than the automatically calculated one
 ! (must be positive and bigger than the automatically one to be effective;
 !  simulation will start at t = - t0)
-  double precision, parameter :: USER_T0 = 0.0d0
+  double precision, parameter :: USER_T0 = 10.0d0
 
 ! distance threshold (in km) above which we consider that a receiver
 ! is located outside the mesh and therefore excluded from the station list
@@ -275,6 +275,26 @@
 ! This parameter flags whether or not we will use an external source
 ! time function. Set to false by default.
   logical, parameter :: EXTERNAL_SOURCE_TIME_FUNCTION = .false.
+
+! ktao: flag if CMTSOLUTION is in ECEF coordinate
+! this is used with source derivative to update source model
+! source time function is stf(t;t0,tau) = erf((t-t0)/tau)
+!``` 
+!PDE 1994  6  9  0 33 16.40 -13.8300  -67.5600 637.0 6.9 6.8 NORTHERN BOLIVIA                        
+!event name:        060994A        
+!tshift(s):        29.0000
+!tau(s):           20.0000
+!x(m):            -13.8200
+!y(m):            -67.2500
+!z(m):            647.1000
+!Mxx(N*m):         -7.590000e+27
+!Myy(N*m):          7.750000e+27
+!Mzz(N*m):         -1.600000e+26
+!Mxy(N*m):         -2.503000e+28
+!Mxz(N*m):          4.200000e+26
+!Myz(N*m):         -2.480000e+27
+!```
+  logical, parameter :: USE_ECEF_CMTSOLUTION = .true.
 
 !!-----------------------------------------------------------
 !!
@@ -807,19 +827,19 @@
 ! (values are chosen for 3D models to have RMOHO_FICTICIOUS at 35 km
 !  and RMIDDLE_CRUST to become 15 km with stretching function stretch_tab)
   double precision, parameter :: MAX_RATIO_CRUST_STRETCHING = 0.75d0
-! double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = 5000.d0 ! moho up to 35km
+  double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = 5000.d0 ! moho up to 35km
   double precision, parameter :: R80_STRETCH_ADJUSTMENT = -40000.d0 ! r80 down to 120km
 
 ! adapted regional moho stretching
 ! 1 chunk simulations, 3-layer crust
-  logical, parameter :: REGIONAL_MOHO_MESH = .true.
+  logical, parameter :: REGIONAL_MOHO_MESH = .false.
   logical, parameter :: REGIONAL_MOHO_MESH_EUROPE = .false. ! used only for fixing time step
   logical, parameter :: REGIONAL_MOHO_MESH_ASIA = .false.   ! used only for fixing time step
   logical, parameter :: HONOR_DEEP_MOHO = .false.
 !!-- uncomment for e.g. Europe case, where deep moho is rare
-  double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = -15000.d0  ! moho mesh boundary down to 55km
+!  double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = -15000.d0  ! moho mesh boundary down to 55km
 !!-- uncomment for deep moho cases, e.g. Asia case (Himalayan moho)
-! double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = -20000.d0  ! moho mesh boundary down to 60km
+!  double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = -20000.d0  ! moho mesh boundary down to 60km
 
 !!-----------------------------------------------------------
 !!
@@ -829,7 +849,7 @@
 
 ! to suppress the crustal layers
 ! (replaced by an extension of the mantle: R_EARTH is not modified, but no more crustal doubling)
-  logical, parameter :: SUPPRESS_CRUSTAL_MESH = .false.
+  logical, parameter :: SUPPRESS_CRUSTAL_MESH = .true.
 
 ! to inflate the central cube (set to 0.d0 for a non-inflated cube)
   double precision, parameter :: CENTRAL_CUBE_INFLATE_FACTOR = 0.41d0

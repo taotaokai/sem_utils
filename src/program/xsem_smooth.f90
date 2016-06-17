@@ -88,7 +88,6 @@ program xsem_smooth
   ! by the distance
   type(sem_mesh_data) :: mesh_contrib
   integer :: iproc_contrib, ispec_contrib, nspec_contrib
-  real(dp), allocatable :: xyz_contrib(:,:,:,:,:) ! contributing points
   real(dp), allocatable :: xyz_gll_contrib(:,:,:,:,:)
   real(dp), allocatable :: xyz_elem_contrib(:,:)
   real(dp), allocatable :: volume_gll_contrib(:,:,:,:)
@@ -125,8 +124,8 @@ program xsem_smooth
   read(args(2), '(a)') mesh_dir
   read(args(3), '(a)') model_dir
   read(args(4), '(a)') model_tags
-  read(args(5), '(a)') sigma_h
-  read(args(6), '(a)') sigma_v
+  read(args(5), *) sigma_h
+  read(args(6), *) sigma_v
   read(args(7), '(a)') output_dir
 
   !===== parse model tags
@@ -157,7 +156,7 @@ program xsem_smooth
 
   ! maximum distance square between the contributing element center and target element center
   !max_search_dist2 = (7.0*sqrt(max(sigma2_h, sigma2_v)) + 3.0*elem_size)**2
-  max_search_dist2 = 20.0*max(sigma2_h, sigma2_v)
+  max_search_dist2 = 10.0*max(sigma2_h, sigma2_v)
   ! d**2 = 14*sigma**2 corresponds to exp(-14/2) = 0.0009
 
   !====== loop each target mesh slice
@@ -204,7 +203,11 @@ program xsem_smooth
       print *, "# iproc_contrib=", iproc_contrib
 
       !-- read contributing mesh slice
-      call sem_mesh_read(mesh_dir, iproc_contrib, iregion, mesh_contrib)
+      if (iproc_contrib == iproc_target) then
+        mesh_contrib = mesh_target
+      else
+        call sem_mesh_read(mesh_dir, iproc_contrib, iregion, mesh_contrib)
+      endif
 
       !-- get xyz_gll and xyz_elem arrays of the contributing slice
       nspec_contrib = mesh_contrib%nspec
@@ -215,32 +218,40 @@ program xsem_smooth
       allocate(xyz_elem_contrib(3,nspec_contrib))
       allocate(xyz_gll_contrib(3,NGLLX,NGLLY,NGLLZ,nspec_contrib))
 
-      do ispec = 1, nspec_contrib
-        ! central points of all elements 
-        iglob = mesh_contrib%ibool(MIDX, MIDY, MIDZ, ispec)
-        xyz_elem_contrib(:,ispec) = mesh_contrib%xyz_glob(:, iglob)
-        ! gll points of all elements
-        do igllz = 1, NGLLZ
-          do iglly = 1, NGLLY
-            do igllx = 1, NGLLX
-              iglob = mesh_contrib%ibool(igllx, iglly, igllz, ispec)
-              xyz_gll_contrib(:,igllx,iglly,igllz,ispec) = mesh_contrib%xyz_glob(:, iglob)
+      if (iproc_contrib == iproc_target) then
+        xyz_elem_contrib = xyz_elem_target
+        xyz_gll_contrib = xyz_gll_target
+      else
+        do ispec = 1, nspec_contrib
+          ! central points of all elements 
+          iglob = mesh_contrib%ibool(MIDX, MIDY, MIDZ, ispec)
+          xyz_elem_contrib(:,ispec) = mesh_contrib%xyz_glob(:, iglob)
+          ! gll points of all elements
+          do igllz = 1, NGLLZ
+            do iglly = 1, NGLLY
+              do igllx = 1, NGLLX
+                iglob = mesh_contrib%ibool(igllx, iglly, igllz, ispec)
+                xyz_gll_contrib(:,igllx,iglly,igllz,ispec) = mesh_contrib%xyz_glob(:, iglob)
+              enddo
             enddo
           enddo
         enddo
-      enddo
+      endif
 
       !-- test if the distance between the contributing and target slices are more than max_search_dist2
-      dist2 = huge(0.0_dp)
-      do ispec_target = 1, nspec_target
-        dist2 = min(dist2, minval( &
-             (xyz_elem_contrib(1,:)-xyz_elem_target(1,ispec_target))**2 &
-           + (xyz_elem_contrib(2,:)-xyz_elem_target(2,ispec_target))**2 &
-           + (xyz_elem_contrib(3,:)-xyz_elem_target(3,ispec_target))**2))
-      enddo
-      if (dist2 > max_search_dist2) then
-        write(*, "(A, I4, I4, A)") "iproc_contrib/target ", iproc_contrib, iproc_target, " are far away, SKIP."
-        cycle
+      if (iproc_contrib /= iproc_target) then
+        dist2 = huge(0.0_dp)
+        do ispec_target = 1, nspec_target
+          dist2 = min(dist2, minval( &
+               (xyz_elem_contrib(1,:)-xyz_elem_target(1,ispec_target))**2 &
+             + (xyz_elem_contrib(2,:)-xyz_elem_target(2,ispec_target))**2 &
+             + (xyz_elem_contrib(3,:)-xyz_elem_target(3,ispec_target))**2))
+        enddo
+        if (dist2 > max_search_dist2) then
+          write(*,"(A, E12.4, A, E12.4)") "dist2= ", dist2, " is larger than max_search_dist2= ", max_search_dist2
+          write(*, "(A, I4, I4, A)") "iproc_contrib/target ", iproc_contrib, iproc_target, " are far away, SKIP."
+          cycle
+        endif
       endif
 
       !-- get model_gll of the contributing slice
@@ -318,6 +329,7 @@ program xsem_smooth
     call sem_io_write_gll_file_n(output_dir, iproc_target, iregion, &
       output_model_names, nmodel, model_gll_target)
 
+    stop "TEST"
   enddo ! iproc_target
 
   !====== exit MPI

@@ -71,6 +71,7 @@ program xsem_smooth
   !-- model names
   integer :: imodel, nmodel
   character(len=MAX_STRING_LEN), allocatable :: model_names(:)
+  character(len=MAX_STRING_LEN), allocatable :: output_model_names(:)
 
   !-- target mesh slice 
   ! of which the smoothed model values are calculated by averaging over the 
@@ -80,7 +81,7 @@ program xsem_smooth
   real(dp), allocatable :: xyz_gll_target(:,:,:,:,:) ! target gll points
   real(dp), allocatable :: xyz_elem_target(:,:) ! target element centers 
   real(dp), allocatable :: model_gll_target(:,:,:,:,:) ! model gll points
-  real(dp), allocatable :: weight_gll_target(:,:,:,:) ! weight gll points
+  real(dp), allocatable :: weight_gll_target(:,:,:,:) ! weights on gll points
 
   !-- contrbuting mesh slice
   ! whose model values contribute to the target mesh model points weighted
@@ -92,15 +93,15 @@ program xsem_smooth
   real(dp), allocatable :: xyz_elem_contrib(:,:)
   real(dp), allocatable :: volume_gll_contrib(:,:,:,:)
   real(dp), allocatable :: model_gll_contrib(:,:,:,:,:)
-  real(dp), allocatable :: weight_gll_contrib(:,:,:,:)
 
   !-- search parameters
   real(dp) :: sigma2_h, sigma2_v
   !real(dp) :: elem_size, max_search_dist2, dist2
   real(dp) :: max_search_dist2, dist2
   real(dp) :: r_unit_target(3)
+  ! gll points in one element
   real(dp), dimension(3,NGLLX,NGLLY,NGLLZ) :: xyz_gll
-  real(dp), dimension(NGLLX,NGLLY,NGLLZ) :: dist2_v_gll, dist2_h_gll, gauss_weight_gll
+  real(dp), dimension(NGLLX,NGLLY,NGLLZ) :: dist2_v_gll, dist2_h_gll, weight_gll
 
   !===== start MPI
   call init_mpi()
@@ -136,6 +137,12 @@ program xsem_smooth
     print *, '# model_names=', (trim(model_names(i))//" ", i=1,nmodel)
   endif
 
+  ! generate output model names
+  allocate(output_model_names(nmodel))
+  do imodel = 1, nmodel
+    output_model_names(imodel) = trim(model_names(imodel))//'_smooth'
+  enddo
+
   !====== smoothing parameters 
   ! non-dimensionalize smoothing scales 
   ! get sigma squared
@@ -150,7 +157,7 @@ program xsem_smooth
 
   ! maximum distance square between the contributing element center and target element center
   !max_search_dist2 = (7.0*sqrt(max(sigma2_h, sigma2_v)) + 3.0*elem_size)**2
-  max_search_dist2 = 10.0*max(sigma2_h, sigma2_v)
+  max_search_dist2 = 20.0*max(sigma2_h, sigma2_v)
   ! d**2 = 14*sigma**2 corresponds to exp(-14/2) = 0.0009
 
   !====== loop each target mesh slice
@@ -169,18 +176,18 @@ program xsem_smooth
     endif
     allocate(xyz_elem_target(3,nspec_target))
     allocate(xyz_gll_target(3,NGLLX,NGLLY,NGLLZ,nspec_target))
-    allocate(model_gll_target(3,NGLLX,NGLLY,NGLLZ,nspec_target))
+    allocate(model_gll_target(nmodel,NGLLX,NGLLY,NGLLZ,nspec_target))
     allocate(weight_gll_target(NGLLX,NGLLY,NGLLZ,nspec_target))
 
     !------ get target xyz_gll and xyz_elem arrays
     do ispec = 1, nspec_target
+      ! central points of all elements 
+      iglob = mesh_target%ibool(MIDX, MIDY, MIDZ, ispec)
+      xyz_elem_target(:,ispec) = mesh_target%xyz_glob(:, iglob)
+      ! gll points of all elements
       do igllz = 1, NGLLZ
         do iglly = 1, NGLLY
           do igllx = 1, NGLLX
-            ! central points of all elements 
-            iglob = mesh_target%ibool(MIDX, MIDY, MIDZ, ispec)
-            xyz_elem_target(:,ispec) = mesh_target%xyz_glob(:, iglob)
-            ! gll points of all elements
             iglob = mesh_target%ibool(igllx, iglly, igllz, ispec)
             xyz_gll_target(:,igllx,iglly,igllz,ispec) = mesh_target%xyz_glob(:, iglob)
           enddo
@@ -188,7 +195,7 @@ program xsem_smooth
       enddo
     enddo
 
-    !------ loop each contributing slices
+    !------ collect neighbouring model values from each contributing slices
     model_gll_target = 0.0_dp
     weight_gll_target = 0.0_dp
 
@@ -209,13 +216,13 @@ program xsem_smooth
       allocate(xyz_gll_contrib(3,NGLLX,NGLLY,NGLLZ,nspec_contrib))
 
       do ispec = 1, nspec_contrib
+        ! central points of all elements 
+        iglob = mesh_contrib%ibool(MIDX, MIDY, MIDZ, ispec)
+        xyz_elem_contrib(:,ispec) = mesh_contrib%xyz_glob(:, iglob)
+        ! gll points of all elements
         do igllz = 1, NGLLZ
           do iglly = 1, NGLLY
             do igllx = 1, NGLLX
-              ! central points of all elements 
-              iglob = mesh_contrib%ibool(MIDX, MIDY, MIDZ, ispec)
-              xyz_elem_contrib(:,ispec) = mesh_contrib%xyz_glob(:, iglob)
-              ! gll points of all elements
               iglob = mesh_contrib%ibool(igllx, iglly, igllz, ispec)
               xyz_gll_contrib(:,igllx,iglly,igllz,ispec) = mesh_contrib%xyz_glob(:, iglob)
             enddo
@@ -223,17 +230,16 @@ program xsem_smooth
         enddo
       enddo
 
-      !-- test if the distance between the contributing and target slices are more than 
-      ! max_search_dist2
+      !-- test if the distance between the contributing and target slices are more than max_search_dist2
       dist2 = huge(0.0_dp)
-      do ispec = 1, nspec_target
-        dist2 = min(dist2, &
-          minval( (xyz_elem_contrib(1,:) - xyz_elem_target(1,ispec))**2 &
-                + (xyz_elem_contrib(2,:) - xyz_elem_target(2,ispec))**2 &
-                + (xyz_elem_contrib(3,:) - xyz_elem_target(3,ispec))**2))
+      do ispec_target = 1, nspec_target
+        dist2 = min(dist2, minval( &
+             (xyz_elem_contrib(1,:)-xyz_elem_target(1,ispec_target))**2 &
+           + (xyz_elem_contrib(2,:)-xyz_elem_target(2,ispec_target))**2 &
+           + (xyz_elem_contrib(3,:)-xyz_elem_target(3,ispec_target))**2))
       enddo
       if (dist2 > max_search_dist2) then
-        print *, "# [INFO] contributing and target slices are too far away, skip."
+        write(*, "(A, I4, I4, A)") "iproc_contrib/target ", iproc_contrib, iproc_target, " are far away, SKIP."
         cycle
       endif
 
@@ -245,7 +251,7 @@ program xsem_smooth
       call sem_io_read_gll_file_n(model_dir, iproc_contrib, iregion, &
         model_names, nmodel, model_gll_contrib)
 
-      !-- calculate volume weights of each gll points for the contributing slice 
+      !-- calculate volume weights of each gll points in the contributing slice 
       if (allocated(volume_gll_contrib)) then
         deallocate(volume_gll_contrib)
       endif
@@ -258,7 +264,7 @@ program xsem_smooth
         do ispec_contrib = 1, nspec_contrib
 
           ! calculate squared distances between the target and contrbuting elements
-          dist2 = sum(xyz_elem_contrib(:,ispec_contrib) - xyz_elem_target(:,ispec_target)**2)
+          dist2 = sum((xyz_elem_contrib(:,ispec_contrib)-xyz_elem_target(:,ispec_target))**2)
 
           ! skip if the contributing element are distant from the target element
           ! by more than max_search_dist2
@@ -266,14 +272,14 @@ program xsem_smooth
             cycle
           endif
 
-          ! loop each gll point in target element
+          ! collet model values from the contributing element on each gll point in target element
           do igllz = 1, NGLLZ
             do iglly = 1, NGLLY
               do igllx = 1, NGLLX
                 ! unit vertical(radial) vector through the target gll point  
                 r_unit_target = xyz_gll_target(:,igllx,iglly,igllz,ispec_target)
                 r_unit_target = r_unit_target/sqrt(sum(r_unit_target**2))
-                ! horizontal and vertical distance squared from contributing gll points to the target gll point
+                ! horizontal and vertical distance squared from the target gll point to all contributing gll points
                 xyz_gll(1,:,:,:) = xyz_gll_contrib(1,:,:,:,ispec_contrib) - xyz_gll_target(1,igllx,iglly,igllz,ispec_target)
                 xyz_gll(2,:,:,:) = xyz_gll_contrib(2,:,:,:,ispec_contrib) - xyz_gll_target(2,igllx,iglly,igllz,ispec_target)
                 xyz_gll(3,:,:,:) = xyz_gll_contrib(3,:,:,:,ispec_contrib) - xyz_gll_target(3,igllx,iglly,igllz,ispec_target)
@@ -282,17 +288,17 @@ program xsem_smooth
                                + xyz_gll(3,:,:,:)*r_unit_target(3) )**2
                 dist2_h_gll = sum(xyz_gll**2, dim=1) - dist2_v_gll
                 ! calcuate the smoothing weight on each contributing gll points
-                gauss_weight_gll = exp(-0.5*dist2_v_gll/sigma2_v - 0.5*dist2_h_gll/sigma2_h)
+                ! here, it is the product of gaussian weight and the gll volume
+                weight_gll = exp(-0.5*dist2_v_gll/sigma2_v - 0.5*dist2_h_gll/sigma2_h) * volume_gll_contrib(:,:,:,ispec_contrib)
                 ! add to target model gll point
                 do imodel = 1, nmodel
+                  ! product of weights and model values
                   model_gll_target(imodel,igllx,iglly,igllz,ispec_target) = &
                     model_gll_target(imodel,igllx,iglly,igllz,ispec_target) &
-                    + sum(model_gll_contrib(imodel,:,:,:,ispec_contrib) &
-                         * volume_gll_contrib(:,:,:,ispec_contrib) &
-                         * gauss_weight_gll)
+                    + sum(model_gll_contrib(imodel,:,:,:,ispec_contrib)*weight_gll)
+                  ! sum of weights
                   weight_gll_target(igllx,iglly,igllz,ispec_target) = &
-                    weight_gll_target(igllx,iglly,igllz,ispec_target) &
-                    + sum(volume_gll_contrib(:,:,:,ispec_contrib) * gauss_weight_gll)
+                    weight_gll_target(igllx,iglly,igllz,ispec_target) + sum(weight_gll)
                 enddo
               enddo
             enddo
@@ -303,17 +309,14 @@ program xsem_smooth
 
     enddo ! iproc_contrib
 
-    !-- get the smoothed model for the target slice
+    !-- calculate the weighted average to get the smoothed model for the target slice
     do imodel = 1, nmodel
-      model_gll_target(imodel,:,:,:,:) =  model_gll_target(imodel,:,:,:,:) / weight_gll_target
+      model_gll_target(imodel,:,:,:,:) =  model_gll_target(imodel,:,:,:,:)/weight_gll_target
     enddo
 
     !-- write out smoothed target model gll
-    do imodel = 1, nmodel
-      model_names(imodel) = trim(model_names(imodel))//'_smooth'
-    enddo
     call sem_io_write_gll_file_n(output_dir, iproc_target, iregion, &
-      model_names, nmodel, model_gll_target)
+      output_model_names, nmodel, model_gll_target)
 
   enddo ! iproc_target
 

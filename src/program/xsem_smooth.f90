@@ -249,7 +249,7 @@ program xsem_smooth
         enddo
         if (dist2 > max_search_dist2) then
           !write(*,"(A, E12.4, A, E12.4)") "dist2= ", dist2, " is larger than max_search_dist2= ", max_search_dist2
-          write(*, "(A, I4, I4, A)") "iproc_contrib/target ", iproc_contrib, iproc_target, " are far away, SKIP."
+          write(*, "(A, I4, I4, A)") "iproc_target/contrib ", iproc_target, iproc_contrib, " are far away, SKIP."
           cycle
         endif
       endif

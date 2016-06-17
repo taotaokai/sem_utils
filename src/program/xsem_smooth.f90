@@ -248,7 +248,7 @@ program xsem_smooth
              + (xyz_elem_contrib(3,:)-xyz_elem_target(3,ispec_target))**2))
         enddo
         if (dist2 > max_search_dist2) then
-          write(*,"(A, E12.4, A, E12.4)") "dist2= ", dist2, " is larger than max_search_dist2= ", max_search_dist2
+          !write(*,"(A, E12.4, A, E12.4)") "dist2= ", dist2, " is larger than max_search_dist2= ", max_search_dist2
           write(*, "(A, I4, I4, A)") "iproc_contrib/target ", iproc_contrib, iproc_target, " are far away, SKIP."
           cycle
         endif
@@ -272,7 +272,9 @@ program xsem_smooth
       !-- calculate volume weighted gaussian window average for each target element
       ! over all contributing elements
       do ispec_target = 1, nspec_target
+        !write(*,"(A, I4)") "ispec_target=", ispec_target
         do ispec_contrib = 1, nspec_contrib
+          !write(*,"(A, I4)") "ispec_contrib=", ispec_target
 
           ! calculate squared distances between the target and contrbuting elements
           dist2 = sum((xyz_elem_contrib(:,ispec_contrib)-xyz_elem_target(:,ispec_target))**2)
@@ -280,6 +282,7 @@ program xsem_smooth
           ! skip if the contributing element are distant from the target element
           ! by more than max_search_dist2
           if (dist2 > max_search_dist2) then
+            !write(*,"(A, E12.4, A, E12.4)") "dist2= ", dist2, " is larger than max_search_dist2= ", max_search_dist2
             cycle
           endif
 
@@ -329,7 +332,6 @@ program xsem_smooth
     call sem_io_write_gll_file_n(output_dir, iproc_target, iregion, &
       output_model_names, nmodel, model_gll_target)
 
-    stop "TEST"
   enddo ! iproc_target
 
   !====== exit MPI

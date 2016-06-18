@@ -4293,7 +4293,7 @@ class Misfit(object):
 
     #------ calculate traveltime curves (only for body wave)
     phase_names = plot_window_id.split('_')[0]
-    if phase_names not in ['Rayleigh', 'Love']:
+    if phase_names not in ['surface', 'Rayleigh', 'Love']:
       model = TauPyModel(model="ak135")
       # distance samples
       dist_ttcurve = np.arange(0.0,max(dist_all),0.5)
@@ -4484,7 +4484,7 @@ class Misfit(object):
         plot_ymin = min(y) - 2*plot_dy
 
       #-- plot traveltime curves
-      if phase_names not in ['Rayleigh', 'Love']:
+      if phase_names not in ['surface', 'Rayleigh', 'Love']:
         for phase_name in phase_list:
           # reduced time
           phase_times = np.array([x[1]-plot_rayp*x[0] for x in ttcurve[phase_name]])

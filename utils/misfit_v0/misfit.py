@@ -1652,8 +1652,9 @@ class Misfit(object):
       plot=False,
       cc_delta=0.01, 
       weight_param={
+        'cc_tshift':[-10,-8, 8,10],
         'SNR':[10,15], 
-        'CC0':[0.5,0.7], 
+        'CC0':[0.5,0.7],
         'CCmax':None,
         'dist':None}
       ):
@@ -1662,7 +1663,7 @@ class Misfit(object):
 
     Parameters
     ----------
-    weight_param : SNR, CCmax, CC0
+    weight_param : SNR, CCmax, CC0, cc_tshift
 
     Notes
     -----
@@ -1673,6 +1674,11 @@ class Misfit(object):
     #------
     event = self.data['event']
     station_dict = self.data['station']
+
+    #------ check weight_param
+    if 'cc_tshift' in weight_param:
+      if len(weight_param['cc_tshift']) != 4:
+        raise Exception("weight_param['cc_tshift'] must have 4 corner values e.g. [-10,-8,8,10]!")
 
     # loop each station
     for station_id in station_dict:
@@ -1889,6 +1895,8 @@ class Misfit(object):
           dist = meta['dist_degree']
           dist_range = np.array(weight_param['dist'])
           weight *= cosine_taper(dist, dist_range)
+        if 'cc_shift' in weight_param:
+          weight *= cosine_taper(CC_time_shift, weight_param['cc_tshift'])
 
         #------ measure adjoint source
         # adjoint source: dchiw_du (misfit functional: zero-lag cc coef.)
@@ -2025,6 +2033,148 @@ class Misfit(object):
           quality['SNR'], cc['AR0'], cc['ARmax']))
 
     fp.close()
+
+#
+#======================================================
+#
+
+  def plot_histogram_all(self, 
+      max_dt=10,
+      nbins=100,
+      out_file='./histogram_dt_cc.pdf',
+      ):
+    """
+    Plot histograms of measured cc time shifts for all windows
+
+    Parameters
+    ---------
+    (string) window_type: type of windows to plot
+        only surface or body are supported
+
+    (float) max_dt: maximum abs(dt) to use
+
+    """
+    event = self.data['event']
+    station_dict = self.data['station']
+
+    # get measurement results
+    data = {}
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected stations
+      if station['stat']['code'] < 1:
+        continue
+      window_dict = station['window']
+      # loop all windows
+      for window_id in window_dict:
+        window = window_dict[window_id]
+        # skip rejected/un-measured windows 
+        if window['stat']['code'] < 1:
+          continue
+        # skip bad windows
+        if window['weight'] < 1.0e-3:
+          continue
+        # append info to list
+        if window_id not in data:
+          data[window_id] = []
+        #weight = window['weight']
+        #cc_dict = window['cc']
+        #cc0.append(cc_dict['CC0'])
+        data[window_id].append(cc_dict['cc_tshift'])
+
+    # plot
+    handles = []
+    for window_id in data:
+      dt_cc = np.array(data[window_id])
+      idx = np.abs(dt_cc)<=max_dt
+      label_str = "%s %f$\pm$%f" % (window_id, np.mean(dt_cc[idx]), np.std(dt_cc[idx]))
+      h = plt.hist(dt_cc[idx], nbins=nbins, histtype='step', label=label_str)
+      handles.append(h)
+
+    plt.legend(handles=handles)
+
+    title_str = "%s %f$\pm$%f" % (event['id'], dt_mean, dt_std)
+    plt.title(title_str)
+
+    plt.xlabel("dt_cc [obs-syn] (second)")
+    plt.ylabel("Event number")
+    plt.savefig(out_file, format='pdf')
+
+#
+#======================================================
+#
+
+  def plot_histogram_1(self, 
+      window_type='surface', 
+      max_dt=10,
+      nbins=100,
+      out_file='./histogram_dt_cc.pdf',
+      ):
+    """
+    Plot histograms of measured cc time shifts for one specified window type
+
+    Parameters
+    ---------
+    (string) window_type: type of windows to plot
+        only surface or body are supported
+
+    (float) max_dt: maximum abs(dt) to use
+
+    """
+    event = self.data['event']
+    station_dict = self.data['station']
+
+    # get measurement results
+    weight = []
+    cc0 = []
+    dt_cc = []
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected stations
+      if station['stat']['code'] < 1:
+        continue
+      window_dict = station['window']
+      # loop all windows
+      for window_id in window_dict:
+        window = window_dict[window_id]
+        # skip rejected/un-measured windows 
+        if window['stat']['code'] < 1:
+          continue
+        # check window type
+        if window_type == 'surface':
+          if 'surface' not in window_id:
+            continue
+        elif window_type == 'body':
+          if 'surface' in window_id:
+            continue
+        else:
+          raise Exception('window_type should be either surface or body !')
+        # skip bad windows
+        if window['weight'] < 1.0e-3:
+          continue
+        # append info to list
+        weight = window['weight']
+        cc_dict = window['cc']
+        cc0.append(cc_dict['CC0'])
+        dt_cc.append(cc_dict['cc_tshift'])
+
+    # plot
+    weight = np.array(weight)
+    cc0 = np.array(cc0)
+    dt_cc = np.array(dt_cc)
+
+    idx = np.abs(dt_cc)<=max_dt
+    
+    dt_mean = np.mean(dt_cc)
+    dt_std = np.std(dt_cc)
+
+    plt.hist(dt_cc[idx], nbins=nbins)
+    title_str = "%s %s_wave mean(std)=%f(%f)" % (event['id'], window_type, dt_mean, dt_std)
+    plt.title(title_str)
+    plt.xlabel("dt_cc [obs-syn] (second)")
+    plt.ylabel("Event number")
+    plt.savefig(out_file, format='pdf')
+
 
 #
 #======================================================

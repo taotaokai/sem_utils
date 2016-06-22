@@ -2077,9 +2077,7 @@ class Misfit(object):
         # append info to list
         if window_id not in data:
           data[window_id] = []
-        #weight = window['weight']
-        #cc_dict = window['cc']
-        #cc0.append(cc_dict['CC0'])
+        cc_dict = window['cc']
         data[window_id].append(cc_dict['cc_tshift'])
 
     # plot
@@ -2088,7 +2086,7 @@ class Misfit(object):
       dt_cc = np.array(data[window_id])
       idx = np.abs(dt_cc)<=max_dt
       label_str = "%s %f$\pm$%f" % (window_id, np.mean(dt_cc[idx]), np.std(dt_cc[idx]))
-      h = plt.hist(dt_cc[idx], nbins=nbins, histtype='step', label=label_str)
+      h = plt.hist(dt_cc[idx], nbins, histtype='step', label=label_str)
       handles.append(h)
 
     plt.legend(handles=handles)
@@ -2097,7 +2095,7 @@ class Misfit(object):
     plt.title(title_str)
 
     plt.xlabel("dt_cc [obs-syn] (second)")
-    plt.ylabel("Event number")
+    plt.ylabel("Window number")
     plt.savefig(out_file, format='pdf')
 
 #

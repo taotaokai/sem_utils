@@ -87,6 +87,7 @@ def make_window_list_surface_wave(evdp_km):
 
 # misfit window weight scheme
 weight_param={
+  'cc_tshift':[-10,-8,8,10],
   'SNR':[10, 15],
   'CCmax':[0.6,0.8],
   'CC0':[0.5,0.7],

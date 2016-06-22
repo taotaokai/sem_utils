@@ -3,39 +3,51 @@
 """Process misfit
 """
 import sys
+import os
+import importlib.util
 from misfit import Misfit
 
 # read command line args
-misfit_file = str(sys.argv[1])
-cmt_file = str(sys.argv[2])
-channel_file = str(sys.argv[3])
-syn_dir = str(sys.argv[4])
-obs_dir = str(sys.argv[5])
+par_file = str(sys.argv[1])
+misfit_file = str(sys.argv[2])
+cmt_file = str(sys.argv[3])
+channel_file = str(sys.argv[4])
+syn_dir = str(sys.argv[5])
+obs_dir = str(sys.argv[6])
 
-syn_band_code = "MX"
-syn_suffix = ".sem.sac"
-left_pad = 100.0
-right_pad = 0.0
-obs_preevent = 100.0
+# load parameter file
+if sys.version_info < (3, ):
+  raise Exception("need python3")
+elif sys.version_info < (3, 5):
+  spec =importlib.machinery.SourceFileLoader("misfit_par", par_file)
+  par = spec.load_module()
+else:
+  spec = importlib.util.spec_from_file_location("misfit_par", par_file)
+  par = importlib.util.module_from_spec(spec)
+  spec.loader.exec_module(par)
 
 print("\n====== initialize\n")
 misfit = Misfit()
 
 print("\n====== setup event\n")
-misfit.setup_event(cmt_file, ECEF=True)
+misfit.setup_event(cmt_file, ECEF=par.cmt_is_ECEF)
 
 print(misfit.data['event'])
 
 print("\n====== setup station\n")
 misfit.setup_station(channel_file)
 
-#print([x for x in misfit.data['station']])
-
 print("\n====== read seismogram: obs, syn\n")
 misfit.read_obs_syn(
   obs_dir=obs_dir,
-  syn_dir=syn_dir, syn_band_code=syn_band_code, syn_suffix=syn_suffix,
-  left_pad=left_pad, right_pad=right_pad, obs_preevent=obs_preevent)
+  syn_dir=syn_dir, 
+  syn_band_code=par.syn_band_code, 
+  syn_suffix=par.syn_suffix,
+  left_pad=par.left_pad, 
+  right_pad=par.right_pad, 
+  obs_preevent=par.obs_preevent,
+  syn_is_grn=par.syn_is_grn, 
+  )
 
 print("\n====== save data\n")
 misfit.save(misfit_file)

@@ -4478,7 +4478,7 @@ class Misfit(object):
     lat_0 = np.mean(stla_all)
     lon_0 = np.mean(stlo_all)
     #
-    parallels = np.arange(0.,81,10.)
+    parallels = np.arange(-90.,89.,10.)
     meridians = np.arange(0.,351,10.)
 
     #------ plot azimuthal bins (one figure per azbin)

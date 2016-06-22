@@ -10,6 +10,8 @@ syn_suffix = ".sem.sac"
 left_pad = 100.0
 right_pad = 0.0
 obs_preevent = 100.0
+syn_is_grn = False
+cmt_is_ECEF = True
 
 #====== measure_misfit
 # misfit window specfications
@@ -93,6 +95,14 @@ weight_param={
   'CC0':[0.5,0.7],
 # 'dist':[25,26],
     }
+
+#====== plot configurations
+
+# plot_seismogram_1comp
+plot_azbin_size = 10
+plot_begin_time = -50
+plot_end_time = 50
+plot_clip_ratio = 2.0
 
 #====== source inversion
 # make_cmt_der

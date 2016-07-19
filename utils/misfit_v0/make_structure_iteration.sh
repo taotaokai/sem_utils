@@ -114,6 +114,7 @@ cd $event_dir
 rm -rf $misfit_dir
 mkdir -p $misfit_dir
 $utils_dir/read_data.py \
+  $misfit_par \
   $db_file \
   $event_dir/DATA/CMTSOLUTION \
   $data_dir/$event_id/data/channel.txt \

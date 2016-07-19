@@ -64,7 +64,10 @@ program = xsem_slice_gcircle \
 	xsem_random_adjoint_kernel_to_hess_nompi \
 	xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
 	xsem_kernel_aijkl_to_iso \
-	xsem_smooth
+	xsem_kernel_aijkl_to_vti \
+	xsem_smooth \
+	xsem_kernel_divide_hess_water_level \
+	xsem_add_vti_kernel
 
 
 #------------------------------------------

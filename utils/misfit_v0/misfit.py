@@ -2038,13 +2038,13 @@ class Misfit(object):
 #======================================================
 #
 
-  def plot_histogram_all(self, 
+  def plot_histogram(self, 
       max_dt=10,
       nbins=100,
-      out_file='./histogram_dt_cc.pdf',
+      outfig='cc_tshift_histogram.pdf',
       ):
     """
-    Plot histograms of measured cc time shifts for all windows
+    Plot histograms of measured cc time shifts for each windows
 
     Parameters
     ---------
@@ -2052,7 +2052,6 @@ class Misfit(object):
         only surface or body are supported
 
     (float) max_dt: maximum abs(dt) to use
-
     """
     event = self.data['event']
     station_dict = self.data['station']
@@ -2080,36 +2079,60 @@ class Misfit(object):
         cc_dict = window['cc']
         data[window_id].append(cc_dict['cc_tshift'])
 
-    # plot
-    handles = []
-    for window_id in data:
-      dt_cc = np.array(data[window_id])
+    #------ plot
+    with PdfPages(outfig) as pdf:
+      # individual windows
+      for window_id in data:
+        dt_cc = np.array(data[window_id])
+        idx = np.abs(dt_cc)<=max_dt
+        plt.hist(dt_cc[idx], nbins, histtype='step')
+        title_str = "%s %s %f$\pm$%f" % (event['id'], window_id, np.mean(dt_cc[idx]), np.std(dt_cc[idx]))
+        plt.title(title_str)
+        plt.xlabel("dt_cc [obs-syn] (second)")
+        plt.ylabel("Window number")
+        pdf.savefig()
+        plt.close()
+      # body-wave windows
+      dt_cc = []
+      for window_id in data:
+        if 'surface_' not in window_id:
+          dt_cc += data[window_id]
+      dt_cc = np.array(dt_cc)
       idx = np.abs(dt_cc)<=max_dt
-      label_str = "%s %f$\pm$%f" % (window_id, np.mean(dt_cc[idx]), np.std(dt_cc[idx]))
-      h = plt.hist(dt_cc[idx], nbins, histtype='step', label=label_str)
-      handles.append(h)
-
-    plt.legend(handles=handles)
-
-    title_str = "%s %f$\pm$%f" % (event['id'], dt_mean, dt_std)
-    plt.title(title_str)
-
-    plt.xlabel("dt_cc [obs-syn] (second)")
-    plt.ylabel("Window number")
-    plt.savefig(out_file, format='pdf')
+      plt.hist(dt_cc[idx], nbins, histtype='step')
+      title_str = "%s body-wave %f$\pm$%f" % (event['id'], np.mean(dt_cc[idx]), np.std(dt_cc[idx]))
+      plt.title(title_str)
+      plt.xlabel("dt_cc [obs-syn] (second)")
+      plt.ylabel("Window number")
+      pdf.savefig()
+      plt.close()
+      # surface_RZ 
+      dt_cc = []
+      for window_id in data:
+        if ('surface_R' in window_id) or ('surface_Z' in window_id):
+          dt_cc += data[window_id]
+      dt_cc = np.array(dt_cc)
+      idx = np.abs(dt_cc)<=max_dt
+      plt.hist(dt_cc[idx], nbins, histtype='step')
+      title_str = "%s surface_RZ %f$\pm$%f" % (event['id'], np.mean(dt_cc[idx]), np.std(dt_cc[idx]))
+      plt.title(title_str)
+      plt.xlabel("dt_cc [obs-syn] (second)")
+      plt.ylabel("Window number")
+      pdf.savefig()
+      plt.close()
 
 #
 #======================================================
 #
 
-  def plot_histogram_1(self, 
-      window_type='surface', 
+  def plot_histogram_combine(self,
+      window_type='surface',
       max_dt=10,
       nbins=100,
       out_file='./histogram_dt_cc.pdf',
       ):
     """
-    Plot histograms of measured cc time shifts for one specified window type
+    Plot histograms of measured cc time shifts for combined window type
 
     Parameters
     ---------
@@ -4386,6 +4409,10 @@ class Misfit(object):
     evla = event['latitude']
     evlo = event['longitude']
     evdp = event['depth']
+    # evdp has to be >=0 otherwise taup would crash
+    if evdp < 0.0:
+      evdp = 0.0
+
     mt = event['mt_rtp']
     Mrr = mt[0][0]
     Mtt = mt[1][1]
@@ -4634,10 +4661,13 @@ class Misfit(object):
       #-- plot traveltime curves
       if phase_names not in ['surface', 'Rayleigh', 'Love']:
         for phase_name in phase_list:
+          # skip if no tt curves for this phase_names
+          if not ttcurve[phase_name]:
+            continue
           # reduced time
           phase_times = np.array([x[1]-plot_rayp*x[0] for x in ttcurve[phase_name]])
           phase_distances = np.array([x[0] for x in ttcurve[phase_name]])
-
+          # skip if not in plot range
           max_dist = np.max(phase_distances)
           min_dist = np.min(phase_distances)
           if max_dist < plot_ymin or min_dist > plot_ymax:

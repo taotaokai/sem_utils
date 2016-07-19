@@ -2,12 +2,12 @@ subroutine selfdoc()
 
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_kernel_aijkl_to_iso"
-  print '(a)', "    - reduce aijkl kernel to isotropic (vp2, vs2) kernel"
+  print '(a)', "  xsem_kernel_aijkl_to_vti"
+  print '(a)', "    - reduce aijkl kernel to VTI (vphi2, vsv2, vsh2, vf2) kernel"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xsem_kernel_aijkl_to_iso \"
+  print '(a)', "  xsem_kernel_aijkl_to_vti \"
   print '(a)', "    <nproc> <mesh_dir> <kernel_dir> <out_dir>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
@@ -21,18 +21,20 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (string) kernel_dir:  directory holds the aijkl_kernel files"
   print '(a)', "                        proc******_reg1_aijkl_kernel.bin"
-  print '(a)', "  (string) out_dir:  output directory for vp2,vs2_kernel"
+  print '(a)', "  (string) out_dir:  output directory for vphi2,vsv2,vsh2,F_kernel"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
   print '(a)', "  1. can be run in parallel"
-  print '(a)', "  2. vp2 = vp**2 = (lamda + 2*mu)/rho, vs2 = vs**2 = mu/rho"
+  print '(a)', "  2. aijkl = cijkl/rho"
+  print '(a)', "  3. Vf2 = C13/rho = C23/rho (Voigt notation), "
+  print '(a)', "  4. Vphi2 is the square of bulk sound velocity and Vph2 = Vphi2 + 4/3*Vsh2, Vpv2 = Vphi2 + 4/3*Vsv2"
 
 end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-program xsem_kernel_aijkl_to_iso
+program xsem_kernel_aijkl_to_vti
 
   use sem_constants
   use sem_io
@@ -64,7 +66,10 @@ program xsem_kernel_aijkl_to_iso
 
   ! kernel gll 
   real(dp), allocatable :: aijkl_kernel(:,:,:,:,:)
-  real(dp), allocatable :: vp2_kernel(:,:,:,:), vs2_kernel(:,:,:,:)
+  real(dp), allocatable :: vphi2_kernel(:,:,:,:)
+  real(dp), allocatable :: vsv2_kernel(:,:,:,:)
+  real(dp), allocatable :: vsh2_kernel(:,:,:,:)
+  real(dp), allocatable :: vf2_kernel(:,:,:,:)
 
   !===== start MPI
 
@@ -76,7 +81,7 @@ program xsem_kernel_aijkl_to_iso
   if (command_argument_count() /= nargs) then
     if (myrank == 0) then
       call selfdoc()
-      print *, "[ERROR] xsem_kernel_aijkl_to_iso: check your inputs."
+      print *, "[ERROR] xsem_kernel_aijkl_to_vti: check your inputs."
       call abort_mpi()
     endif 
   endif
@@ -103,39 +108,52 @@ program xsem_kernel_aijkl_to_iso
 
   ! initialize gll arrays 
   allocate(aijkl_kernel(21,NGLLX,NGLLY,NGLLZ,nspec))
-  allocate(vp2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
-  allocate(vs2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(vphi2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(vsv2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(vsh2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(vf2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
 
-  ! reduce cijkl kernels
+  ! reduce aijkl kernels
   do iproc = myrank, (nproc-1), nrank
 
     print *, '# iproc=', iproc
 
-    ! read cijkl kernel gll file
+    ! read aijkl_kernel files
     call sem_io_read_cijkl_kernel(kernel_dir, iproc, iregion, 'aijkl_kernel', aijkl_kernel)
 
-    ! reduce cijkl kernel to a,b kernel 
-    vp2_kernel = aijkl_kernel(1,:,:,:,:)  &
-               + aijkl_kernel(7,:,:,:,:)  &
-               + aijkl_kernel(12,:,:,:,:) &
-               + aijkl_kernel(2,:,:,:,:)  &
-               + aijkl_kernel(3,:,:,:,:)  &
+    ! reduce aijkl_kernel to vphi2_kernel 
+    vphi2_kernel = aijkl_kernel(1,:,:,:,:) &
+                 + aijkl_kernel(2,:,:,:,:) &
+                 + aijkl_kernel(7,:,:,:,:) &
+                 + aijkl_kernel(12,:,:,:,:)
+
+    vsv2_kernel = aijkl_kernel(12,:,:,:,:)*4.d0/3.d0 &
+                + aijkl_kernel(16,:,:,:,:)  &
+                + aijkl_kernel(19,:,:,:,:)
+
+    vsh2_kernel = aijkl_kernel(1,:,:,:,:)*4.d0/3.d0 &
+                + aijkl_kernel(7,:,:,:,:)*4.d0/3.d0 &
+                - aijkl_kernel(2,:,:,:,:)*2.d0/3.d0 &
+                + aijkl_kernel(21,:,:,:,:)
+
+    vf2_kernel = aijkl_kernel(3,:,:,:,:) &
                + aijkl_kernel(8,:,:,:,:)
 
-    vs2_kernel = -2.d0*aijkl_kernel(2,:,:,:,:) &
-               - 2.d0*aijkl_kernel(3,:,:,:,:)  &
-               - 2.d0*aijkl_kernel(8,:,:,:,:)  &
-               + aijkl_kernel(16,:,:,:,:)      &
-               + aijkl_kernel(19,:,:,:,:)      &
-               + aijkl_kernel(21,:,:,:,:)
-
     print *, "aijkl_kernel: min/max=", minval(aijkl_kernel), maxval(aijkl_kernel)
-    print *, "vp2_kernel: min/max=", minval(vp2_kernel), maxval(vp2_kernel)
-    print *, "vs2_kernel: min/max=", minval(vs2_kernel), maxval(vs2_kernel)
+    print *, "vphi2_kernel: min/max=", minval(vphi2_kernel), maxval(vphi2_kernel)
+    print *, "vsv2_kernel: min/max=", minval(vsv2_kernel), maxval(vsv2_kernel)
+    print *, "vsh2_kernel: min/max=", minval(vsh2_kernel), maxval(vsh2_kernel)
+    print *, "vf2_kernel: min/max=", minval(vf2_kernel), maxval(vf2_kernel)
 
-    ! write out a,b kernel
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vp2_kernel', vp2_kernel)
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vs2_kernel', vs2_kernel)
+    ! write out kernel files
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
+        'vphi2_kernel', vphi2_kernel)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
+        'vsv2_kernel', vsv2_kernel)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
+        'vsh2_kernel', vsh2_kernel)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
+        'vf2_kernel', vf2_kernel)
 
   enddo ! iproc
 

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://earth.google.com/kml/2.2">
+<Document>
+<name>title</name>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Elbrus</name>
+<Point><coordinates>42.442000,43.351000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Udokan Plateau</name>
+<Point><coordinates>117.770000,56.280000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Vitim Plateau</name>
+<Point><coordinates>113.300000,53.700000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Tunkin Depression</name>
+<Point><coordinates>102.500000,51.500000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Jom-Bolok</name>
+<Point><coordinates>98.980000,52.700000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Azas Plateau</name>
+<Point><coordinates>98.600000,52.520000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Hainan Dao</name>
+<Point><coordinates>110.100000,19.700000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Leizhou Bandao</name>
+<Point><coordinates>110.170000,20.780000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Tengchong</name>
+<Point><coordinates>98.500000,25.230000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Tianshan Volcanic Group</name>
+<Point><coordinates>82.500000,42.500000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Kunlun Volcanic Group</name>
+<Point><coordinates>80.200000,35.520000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Honggeertu</name>
+<Point><coordinates>113.000000,41.470000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Arshan</name>
+<Point><coordinates>120.700000,47.500000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Keluo Group</name>
+<Point><coordinates>125.920000,49.370000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Wudalianchi</name>
+<Point><coordinates>126.120000,48.720000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Jingbo</name>
+<Point><coordinates>128.830000,44.080000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Longgang Group</name>
+<Point><coordinates>126.500000,42.330000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Changbaishan</name>
+<Point><coordinates>128.080000,41.980000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Taryatu-Chulutu</name>
+<Point><coordinates>99.700000,48.170000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Khanuy Gol</name>
+<Point><coordinates>102.750000,48.670000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Bus-Obo</name>
+<Point><coordinates>109.080000,47.120000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Dariganga Volcanic Field</name>
+<Point><coordinates>114.000000,45.330000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Middle Gobi</name>
+<Point><coordinates>106.700000,45.280000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Changbaishan</name>
+<Point><coordinates>128.080000,41.980000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Xianjindao</name>
+<Point><coordinates>128.000000,41.330000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Ch'uga-ryong</name>
+<Point><coordinates>127.330000,38.330000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Ulreung</name>
+<Point><coordinates>130.870000,37.500000,0</coordinates></Point>
+</Placemark>
+<Placemark>
+<Style><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon></IconStyle></Style>
+<name>Halla</name>
+<Point><coordinates>126.530000,33.361000,0</coordinates></Point>
+</Placemark>
+</Document>
+</kml>

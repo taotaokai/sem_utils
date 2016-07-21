@@ -150,6 +150,11 @@ class Misfit(object):
                 'grn': (3,nt), # synthetic seismograms (use delta stf in simulation)
             },
 
+            'waveform_der': {
+               'xs': {'dm':array(3), 'du':, }, #finite-difference
+               'mt': {'dm':array([3,3]), 'du':, }, #linear in moment-tensor
+            },
+
             'window': {
                 <window_id>: {
                     'stat': {code:, msg:}, 
@@ -185,12 +190,8 @@ class Misfit(object):
                 <window_id>...
             },
 
+            # adjoint source as a sum from all windows
             'dchi_du': (3,nt) array, chi is the objective function
-
-            'waveform_der': {
-               'xs': {'dm':array(3), 'du':, }, #finite-difference
-               'mt': {'dm':array([3,3]), 'du':, }, #linear in moment-tensor
-            },
 
         },
 

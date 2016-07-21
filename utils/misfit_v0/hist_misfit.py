@@ -37,6 +37,7 @@ ax_size_subplot = np.array([0.7, 0.7])
 # hist parameters
 nbins = 50
 max_dt = 10 
+#min_weight = 0.1
 
 #----- surface RZ: CC
 nrow = 1

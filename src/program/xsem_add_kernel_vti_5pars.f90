@@ -1,8 +1,8 @@
 subroutine selfdoc()
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_add_vti_kernel"
-  print '(a)', "    - add vti (precondioned-)kernel (vphi2, vsv2, vsh2, vf2)"
+  print '(a)', "  xsem_add_kernel_vti_5pars"
+  print '(a)', "    - add vti (precondioned-)kernel (vph2, vpv2, vsv2, vsh2, vf2)"
   print '(a)', "      into vti model file (vpv,vph,vsv,vsh,eta,rho)"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
@@ -21,8 +21,8 @@ subroutine selfdoc()
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) model_dir:  directory holds proc*_reg1_[vpv,vph,vsv,vsh,eta,rho].bin"
-  print '(a)', "  (string) kernel_dir:  directory holds proc*_reg1_[vphi2,vsv2,vsh2,vf2]_kernel.bin"
-  print '(a)', "  (string) kernel_suffix:  proc*_reg1_[vphi2,vsv2,vsh2,vf2]_kernel<kernel_suffix>.bin"
+  print '(a)', "  (string) kernel_dir:  directory holds proc*_reg1_[vph2,vpv2,vsv2,vsh2,vf2]_kernel.bin"
+  print '(a)', "  (string) kernel_suffix:  proc*_reg1_[vph2,vpv2,vsv2,vsh2,vf2]_kernel<kernel_suffix>.bin"
   print '(a)', "  (float) max_dlnv_allow:  maximum velocity perturbation ratio allowed"
   print '(a)', "  (int) force_max_dlnv_allowed:  flag whether max velocity perturbation should be enforced"
   print '(a)', "  (float) ratio_rho:  dln(rho) = ratio_rho * dln(vs_avg)"
@@ -77,9 +77,9 @@ program xsem_add_vti_kernel
   type(sem_mesh_data) :: mesh_data
   integer :: nspec
   ! model
-  real(dp), dimension(:,:,:,:), allocatable :: vphi2, vpv2, vph2, vsv2, vsh2, vf2, rho
+  real(dp), dimension(:,:,:,:), allocatable :: vph2, vpv2, vsv2, vsh2, vf2, rho
   ! kernel
-  real(dp), dimension(:,:,:,:), allocatable :: vphi2_kernel, vsv2_kernel, vsh2_kernel, vf2_kernel
+  real(dp), dimension(:,:,:,:), allocatable :: vph2_kernel, vpv2_kernel, vsv2_kernel, vsh2_kernel, vf2_kernel
   ! step length
   real(dp), dimension(:,:,:,:), allocatable :: dln_rho
   real(dp) :: max_dlnv, max_dlnv_all
@@ -152,7 +152,6 @@ program xsem_add_vti_kernel
   call bcast_all_singlei(nspec)
 
   ! intialize arrays 
-  allocate(vphi2(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(vph2(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(vpv2(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(vsv2(NGLLX,NGLLY,NGLLZ,nspec))
@@ -160,7 +159,8 @@ program xsem_add_vti_kernel
   allocate(vf2(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(rho(NGLLX,NGLLY,NGLLZ,nspec))
 
-  allocate(vphi2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(vph2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(vpv2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(vsv2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(vsh2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(vf2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
@@ -242,10 +242,10 @@ program xsem_add_vti_kernel
     vsv2 = vsv2**2
     vsh2 = vsh2**2
     vf2 = vf2*(vph2 - 2.0*vsv2)
-    vphi2 = (vph2 + vpv2 - 4.0/3.0*(vsh2+vsv2))/2.0
 
     ! read kernels
-    call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vphi2_kernel'//kernel_suffix, vphi2_kernel)
+    call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vph2_kernel'//kernel_suffix, vph2_kernel)
+    call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vpv2_kernel'//kernel_suffix, vpv2_kernel)
     call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vsv2_kernel'//kernel_suffix, vsv2_kernel)
     call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vsh2_kernel'//kernel_suffix, vsh2_kernel)
     call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vf2_kernel'//kernel_suffix, vf2_kernel)
@@ -254,17 +254,18 @@ program xsem_add_vti_kernel
     dln_rho = ratio_rho*step_length*0.25*(vsv2_kernel/vsv2 + vsh2_kernel/vsh2)
     rho = rho*(1.0 + dln_rho)
     print *, "dln_rho: min/max = ", minval(dln_rho), maxval(dln_rho)
-    vphi2 = vphi2 + step_length*vphi2_kernel
+    vph2 = vph2 + step_length*vph2_kernel
+    vpv2 = vpv2 + step_length*vpv2_kernel
     vsv2 = vsv2 + step_length*vsv2_kernel
     vsh2 = vsh2 + step_length*vsh2_kernel
     vf2 = vf2 + step_length*vf2_kernel
 
     ! write new models
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vph', sqrt(vphi2 + 4.0/3.0*vsh2))
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vpv', sqrt(vphi2 + 4.0/3.0*vsv2))
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vph', sqrt(vph2))
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vpv', sqrt(vpv2))
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vsv', sqrt(vsv2))
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vsh', sqrt(vsh2))
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'eta', vf2/(vphi2+4.0/3.0*vsh2-2.0*vsv2))
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'eta', vf2/(vph2-2.0*vsv2))
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'rho', rho)
 
   enddo

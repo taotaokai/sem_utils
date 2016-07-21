@@ -68,7 +68,8 @@ program = xsem_slice_gcircle \
 	xsem_kernel_aijkl_to_vti_5pars \
 	xsem_smooth \
 	xsem_kernel_divide_hess_water_level \
-	xsem_add_vti_kernel
+	xsem_add_kernel_vti_4pars \
+	xsem_add_kernel_vti_5pars
 
 
 #------------------------------------------

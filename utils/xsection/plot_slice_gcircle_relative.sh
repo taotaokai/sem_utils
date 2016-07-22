@@ -6,14 +6,11 @@
 # A4 paper: H29.7cm x W21cm
 
 #====== command line args
-control_file=${1:?[arg] need control_file}
-event_id=${2:?[arg] need event_id}
-slice_list=${3:?[arg] need slice_list}
-model_names=${4:-vsv,vsh,vpv,vph}
-ref_dir=${5:-sem_config/1D_REF} # reference model
-
-# load parameters in control_file
-source ${control_file}
+slice_list=${1:?[arg]need slice_list}
+nc_dir=${2:?[arg]need model nc_dir}
+ref_nc_dir=${3:?[arg]need REF model nc_dir}
+model_names=${4:?[arg]need model names e.g. vsv,vsh,vpv,vph}
+out_dir=${5:?[arg]need figures out_dir}
 
 # get full path
 slice_list=$(readlink -f $slice_list)
@@ -44,8 +41,8 @@ do
     echo
 
     # input data files
-    nc_file=$iter_dir/$event_id/xsection/${fname}.nc
-    ref_nc_file=$base_dir/${ref_dir}/xsection/${fname}.nc
+    nc_file=$nc_dir/${fname}.nc
+    ref_nc_file=$ref_nc_dir/${fname}.nc
     # output figure
     ps=$iter_dir/$event_id/xsection/${fname}_STW105.ps
 

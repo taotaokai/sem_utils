@@ -3,64 +3,74 @@
 # interpolate SEM gll models to create spherical slices
 
 #====== command line args
-control_file=${1:?must provide control_file}
-event_id=${2:?must provide event_id}
-slice_list=${3:?must provide slice_list}
-mpi_exec=${4:?must provide mpi_exec}
-model_names=${5:-vsv,vsh,vpv,vph,rho,eta}
+sem_utils=${1:?[arg]need sem_utils dir for bin/xsem_slice_gcircle}
+mesh_dir=${2:?[arg]need mesh_dir for proc*_reg1_solver_data.bin}
+model_dir=${3:?[arg]need model_dir for proc*_reg1_<model_name>.bin}
+slice_list=${4:?[arg]need slice_list}
+model_names=${5:?[arg]need model names, e.g. vsv,vsh,vpv,vph,rho,eta}
+nc_dir=${6:?[arg]need output directory for .nc files}
+job_file=${7:?[arg]need output job_file}
+#mpi_exec=${6:?[arg]need mpi_exec, e.g. ibrun or mpirun}
 
-# check inputs
-if [ ! -f "$control_file" ]
+# on TACC:lonestar5
+mpi_exec=ibrun
+
+# check input parameters
+sem_utils=$(readlink -f $sem_utils)
+if [ ! -d "$sem_utils" ]
 then
-    echo "[ERROR] invalid control_file: "  $control_file
-    exit -1
+  echo "[ERROR] sem_utils not found: " $sem_utils
+  exit -1
 fi
-control_file=$(readlink -f $control_file)
-# load parameters in control_file
-source ${control_file}
 
+mesh_dir=$(readlink -f $mesh_dir)
+if [ ! -d "$mesh_dir" ]
+then
+  echo "[ERROR] mesh_dir not found: " $mesh_dir
+  exit -1
+fi
+
+model_dir=$(readlink -f $model_dir)
+if [ ! -d "$model_dir" ]
+then
+  echo "[ERROR] model_dir not found: " $model_dir
+  exit -1
+fi
+
+slice_list=$(readlink -f $slice_list)
 if [ ! -f "$slice_list" ]
 then
-    echo "[ERROR] invalid slice_list: "  $slice_list
-    exit -1
-fi
-slice_list=$(readlink -f $slice_list)
-
-event_dir=${iter_dir}/${event_id}
-if [ ! -d "${event_dir}" ]
-then
-    echo "[ERROR] <event_id> directory deos not exist: "  $event_id
-    exit -1
+  echo "[ERROR] slice_list not found: " $slice_list
+  exit -1
 fi
 
-#====== interpolate SEM gll models
+# get some mesh info
+nproc=$(ls $mesh_dir/proc*_reg1_solver_data.bin | wc -l)
 
-mkdir -p $event_dir/xsection
-
-#-- create job script
-job_file=${event_dir}/slice_sphere.job
-
-# create job script
-cat<<EOF > $job_file
+#====== create job script
+cat <<EOF > $job_file
 #!/bin/bash
-#$ -V                              # Inherit the submission environment 
-#$ -cwd                            # Start job in submission directory
-#$ -N slice_sphere.${iter}             # Job Name
-#$ -j y                            # combine stderr & stdout into stdout  
-#$ -o ${event_dir}/slice_sphere.${iter}.o\$JOB_ID    # Name of the output file (eg. myMPI.oJobID)
-#$ -pe 12way 12                    # Requests 12 cores/node, 24 cores total: 12way 24
-#$ -q normal                       # Queue name
-#$ -l h_rt=03:00:00                # Run time (hh:mm:ss) - 1.5 hours
-#$ -M kai.tao@utexas.edu           # email 
-#$ -m bea                          # email info: begin/end/abort
-#$ -hold_jid -1                    # dependent job id
+#SBATCH -J slice_sphere
+#SBATCH -o ${job_file}.o%j
+#SBATCH -N 1
+#SBATCH -n 24
+#SBATCH -p normal
+#SBATCH -t 01:30:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+
+mkdir $nc_dir
 
 EOF
 
 grep -v "^#" $slice_list |\
 while read lat0 lat1 nlat lon0 lon1 nlon depth fname
 do
-    out_file=${fname}.nc
 
 cat<<EOF >> $job_file
 echo
@@ -70,14 +80,20 @@ echo
 ${mpi_exec} \
     $sem_utils/bin/xsem_slice_sphere \
     $nproc \
-    $mesh_dir/DATABASES_MPI \
-    $event_dir/DATABASES_MPI \
+    $mesh_dir \
+    $model_dir \
     $model_names \
     $lat0 $lat1 $nlat \
     $lon0 $lon1 $nlon \
     $depth \
-    $event_dir/xsection/$out_file
+    $nc_dir/${fname}.nc
 
+EOF
+
+cat<<EOF >> $job_file
+echo
+echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
 EOF
 
 done

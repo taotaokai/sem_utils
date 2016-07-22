@@ -3,7 +3,8 @@
 # get center points for x-sections in great circles
 
 #---- 
-sem_utils=./sem_utils
+sem_utils=${1:?[arg]need sem_utils directory for bin/xmap_gcircle}
+out_file=${2:?[arg]need output file (e.g. slice_gcircle.list)}
 
 #---- mesh center
 mesh_lat0=38.5
@@ -18,7 +19,7 @@ r1=6371
 nr=101
 
 #----
-out_file="slice_gcircle.list"
+#out_file="slice_gcircle.list"
 
 #====== create lists of profile centers
 

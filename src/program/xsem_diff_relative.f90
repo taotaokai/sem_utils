@@ -137,7 +137,7 @@ program xsem_vertical_slice
                                 model_names_2, nmodel, gll_model_2)
 
     ! relative difference
-    gll_model_1 = (gll_model_1 - gll_model_2) / gll_model_1
+    gll_model_1 = gll_model_1/gll_model_2 - 1.0_dp
 
     ! write out result
     print '("rank= ",I3," min_dlnV= ",E10.3," max_dlnV= ",E10.3)', iproc, &

@@ -23,13 +23,14 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) model_dir_1/2:  directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (string) model_tags_1/2:  comma delimited string, e.g. vsv,vsh,rho "
-  print '(a)', "  (string) math_op:  math operations, e.g. add, sub, mul, div"
+  print '(a)', "  (string) math_op:  math operations, e.g. add, sub, mul, div, rdiff"
   print '(a)', "  (string) out_dir:  output directory"
   print '(a)', "  (string) model_tags:  comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
   print '(a)', "  1. can be run in parallel"
+  print '(a)', "  2. rdiff: relative difference (V1-V2)/V2 = V1/V2 - 1"
 
 end subroutine
 
@@ -161,6 +162,8 @@ program xsem_vertical_slice
         gll_model_1 = gll_model_1 * gll_model_2
       case ('div')
         gll_model_1 = gll_model_1 / gll_model_2
+      case ('rdiff')
+        gll_model_1 = gll_model_1/gll_model_2 - 1.0_dp
       case default
         print *, "[ERROR] unrecognized operation: ", trim(math_op)
         stop

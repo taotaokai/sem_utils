@@ -60,8 +60,6 @@ program = xsem_slice_gcircle \
 	xsem_combine_solver_data_in_v5.1 \
 	xsem_cijkl_over_rho_kernel \
 	xsem_diff_relative \
-	xsem_random_adjoint_kernel_to_hess \
-	xsem_random_adjoint_kernel_to_hess_nompi \
 	xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
 	xsem_kernel_aijkl_to_iso \
 	xsem_kernel_aijkl_to_vti_4pars \
@@ -69,7 +67,8 @@ program = xsem_slice_gcircle \
 	xsem_smooth \
 	xsem_kernel_divide_hess_water_level \
 	xsem_add_kernel_vti_4pars \
-	xsem_add_kernel_vti_5pars
+	xsem_add_kernel_vti_5pars \
+	xsem_hessian_diag_random_adjoint_kernel
 
 
 #------------------------------------------

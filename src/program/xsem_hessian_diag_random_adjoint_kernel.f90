@@ -2,8 +2,8 @@ subroutine selfdoc()
 
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_random_adjoint_kernel_to_hess"
-  print '(a)', "    - use random adjoint cijkl/rho kernels to approximate hessian diagonals"
+  print '(a)', "  xsem_hessian_diag_random_adjoint_kernel"
+  print '(a)', "    - use random adjoint cijkl kernels to approximate hessian diagonals"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
@@ -19,11 +19,11 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
-  print '(a)', "  (string) kernel_dir:  directory holds the kernels files (cijkl_/rho_kernel)"
+  print '(a)', "  (string) kernel_dir:  directory holds the kernels files (cijkl_kernel)"
   print '(a)', "  (string) out_dir:  output directory for hess_kernel"
   print '(a)', ""
   print '(a)', "NOTE"
-  print '(a)', "  1. hess_diag ~ sum(K_cijkl,rho**2, for all cijkl,rho)"
+  print '(a)', "  1. hess_diag ~ sum(K_cijkl**2), ijkl is chosen for P, S and PS, see code"
   print '(a)', "  2. can be run in parallel"
 
 end subroutine
@@ -62,8 +62,9 @@ program xsem_random_adjoint_kernel_to_hess
 
   ! kernel gll 
   real(dp), allocatable :: cijkl_kernel(:,:,:,:,:)
-  real(dp), allocatable :: rho_kernel(:,:,:,:)
-  real(dp), allocatable :: hess_kernel(:,:,:,:)
+  real(dp), allocatable :: hess_p(:,:,:,:)
+  real(dp), allocatable :: hess_s(:,:,:,:)
+  real(dp), allocatable :: hess_ps(:,:,:,:)
 
   !===== start MPI
 
@@ -102,8 +103,9 @@ program xsem_random_adjoint_kernel_to_hess
 
   ! initialize gll arrays 
   allocate(cijkl_kernel(21,NGLLX,NGLLY,NGLLZ,nspec))
-  allocate(rho_kernel(NGLLX,NGLLY,NGLLZ,nspec))
-  allocate(hess_kernel(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(hess_p(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(hess_s(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(hess_ps(NGLLX,NGLLY,NGLLZ,nspec))
 
   ! reduce cijkl kernels
   do iproc = myrank, (nproc-1), nrank
@@ -112,17 +114,44 @@ program xsem_random_adjoint_kernel_to_hess
 
     ! read kernel gll file
     call sem_io_read_cijkl_kernel(kernel_dir, iproc, iregion, 'cijkl_kernel', cijkl_kernel)
-    call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'rho_kernel', rho_kernel)
+    !call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'rho_kernel', rho_kernel)
 
     ! approximate hessian diagonal by summing up squares of all random adjoint kernels
-    hess_kernel = sum(cijkl_kernel**2, dim=1) + rho_kernel**2
+    hess_p = cijkl_kernel(1,:,:,:,:)**2  &
+           + cijkl_kernel(2,:,:,:,:)**2  &
+           + cijkl_kernel(3,:,:,:,:)**2  &
+           + cijkl_kernel(7,:,:,:,:)**2  &
+           + cijkl_kernel(8,:,:,:,:)**2  &
+           + cijkl_kernel(12,:,:,:,:)**2
+
+    hess_s = cijkl_kernel(16,:,:,:,:)**2 &
+           + cijkl_kernel(17,:,:,:,:)**2 &
+           + cijkl_kernel(18,:,:,:,:)**2 &
+           + cijkl_kernel(19,:,:,:,:)**2 &
+           + cijkl_kernel(20,:,:,:,:)**2 &
+           + cijkl_kernel(21,:,:,:,:)**2
+
+    hess_ps = cijkl_kernel(4,:,:,:,:)**2  &
+            + cijkl_kernel(5,:,:,:,:)**2  &
+            + cijkl_kernel(6,:,:,:,:)**2  &
+            + cijkl_kernel(9,:,:,:,:)**2  &
+            + cijkl_kernel(10,:,:,:,:)**2 &
+            + cijkl_kernel(11,:,:,:,:)**2 &
+            + cijkl_kernel(13,:,:,:,:)**2 &
+            + cijkl_kernel(14,:,:,:,:)**2 &
+            + cijkl_kernel(15,:,:,:,:)**2
 
     print *, "cijkl: min/max=", minval(cijkl_kernel), maxval(cijkl_kernel)
-    print *, "rho: min/max=", minval(rho_kernel), maxval(rho_kernel)
-    print *, "hess: min/max=", minval(hess_kernel), maxval(hess_kernel)
+    print *, "hess_p: min/max=", minval(hess_p), maxval(hess_p)
+    print *, "hess_s: min/max=", minval(hess_s), maxval(hess_s)
+    print *, "hess_ps: min/max=", minval(hess_ps), maxval(hess_ps)
 
-    ! write out lamda,mu kernel
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'hess_kernel', hess_kernel)
+    ! write out diagonal hessian 
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'hess_p', hess_p)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'hess_s', hess_s)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'hess_ps', hess_ps)
+    ! sum of all hess
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'hess', hess_p+hess_s+hess_ps)
 
   enddo ! iproc
 

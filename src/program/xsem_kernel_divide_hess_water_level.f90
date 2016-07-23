@@ -162,7 +162,7 @@ program xsem_kernel_divide_hess_water_level
       ! water level division 
       kernel_gll = kernel_gll / (hess_gll + eps)
       ! write out
-      call sem_io_write_gll_file_1(out_dir, iproc, iregion, trim(kernel_names(iker))//"_"//out_suffix, kernel_gll)
+      call sem_io_write_gll_file_1(out_dir, iproc, iregion, trim(kernel_names(iker))//trim(out_suffix), kernel_gll)
     enddo
 
   enddo

@@ -164,6 +164,8 @@ program xsem_vertical_slice
         gll_model_1 = gll_model_1 / gll_model_2
       case ('rdiff')
         gll_model_1 = gll_model_1/gll_model_2 - 1.0_dp
+      case ('radd')
+        gll_model_1 = (gll_model_1 + 1.0_dp) * gll_model_2
       case default
         print *, "[ERROR] unrecognized operation: ", trim(math_op)
         stop

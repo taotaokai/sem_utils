@@ -310,10 +310,10 @@ program xsem_smooth
                   model_gll_target(imodel,igllx,iglly,igllz,ispec_target) = &
                     model_gll_target(imodel,igllx,iglly,igllz,ispec_target) &
                     + sum(model_gll_contrib(imodel,:,:,:,ispec_contrib)*weight_gll)
-                  ! sum of weights
-                  weight_gll_target(igllx,iglly,igllz,ispec_target) = &
-                    weight_gll_target(igllx,iglly,igllz,ispec_target) + sum(weight_gll)
                 enddo
+                ! sum of weights
+                weight_gll_target(igllx,iglly,igllz,ispec_target) = &
+                  weight_gll_target(igllx,iglly,igllz,ispec_target) + sum(weight_gll)
               enddo
             enddo
           enddo

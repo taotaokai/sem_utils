@@ -57,4 +57,20 @@ cp -L $par_dir/CMTSOLUTION .
 # backup Par_file into OUTPUT_FILES/
 cp -L Par_file CMTSOLUTION $run_dir/OUTPUT_FILES/
 
+# generate sbatch job file
+cat <<EOF > $run_dir/mesh.job
+#!/bin/bash
+#SBATCH -J mesh
+#SBATCH -o mesh.job.o%j
+#SBATCH -N 11
+#SBATCH -n 256
+#SBATCH -p normal
+#SBATCH -t 00:10:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+ibrun $sem_dir/bin/xmeshfem3D
+
+EOF
 #END

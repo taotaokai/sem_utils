@@ -5,18 +5,30 @@
 
 # A4 paper: H29.7cm x W21cm
 
+wkdir=$(pwd)
+
 #====== command line args
-slice_list=${1:?[arg]need slice_list}
-nc_dir=${2:?[arg]need model nc_dir}
-ref_nc_dir=${3:?[arg]need REF model nc_dir}
-model_names=${4:?[arg]need model names e.g. vsv,vsh,vpv,vph}
-out_dir=${5:?[arg]need figures out_dir}
+sem_utils=${1:?[arg]need sem_utils for bin/xmap_gcircle}
+slice_list=${2:?[arg]need slice_list}
+nc_dir=${3:?[arg]need model nc_dir}
+ref_nc_dir=${4:?[arg]need REF model nc_dir}
+model_names=${5:?[arg]need model names e.g. vsv,vsh,vpv,vph}
+topo_grd=${6:?[arg]need topo grd file}
+title=${7:?[arg]need title string e.g. iteration 01}
+out_dir=${8:?[arg]need figures out_dir}
 
 # get full path
+sem_utils=$(readlink -f $sem_utils)
 slice_list=$(readlink -f $slice_list)
+nc_dir=$(readlink -f $nc_dir)
+ref_nc_dir=$(readlink -f $ref_nc_dir)
+out_dir=$wkdir/$out_dir
 
 # etopo1
-etopo1_grd=$base_dir/topo/ETOPO1_Bed_c_gmt4.grd
+#etopo1_grd=$base_dir/topo/ETOPO1_Bed_c_gmt4.grd
+
+# color limit for perturbation
+max_percent=10
 
 #====== plot each xsection
 
@@ -33,7 +45,7 @@ xsection_height=$(echo "scale=4; ${xsection_yshift} * 0.8" | bc -l)
 cbar_length=$(echo "scale=4; ${xsection_height} * 0.7" | bc -l)
 cbar_ypos=$(echo "scale=4; ${xsection_height} * 0.5" | bc -l)
 
-grep -v "^#" $slice_list |\
+awk 'NF&&$1!~/#/' $slice_list |\
 while read lat0 lon0 azimuth theta0 theta1 ntheta r0 r1 nr fname
 do
     echo
@@ -44,7 +56,7 @@ do
     nc_file=$nc_dir/${fname}.nc
     ref_nc_file=$ref_nc_dir/${fname}.nc
     # output figure
-    ps=$iter_dir/$event_id/xsection/${fname}_STW105.ps
+    ps=$out_dir/${fname}_REF.ps
 
     gmt set \
         FONT_ANNOT_PRIMARY +12p,Times-Roman \
@@ -73,18 +85,23 @@ do
          NR>2 {printf "%s %s\n", $3, $2}' > xsection_marker.xy
 
     # make basemap 
-    gmt psbasemap -Yf22.5c -Xc -R$R -J$J -BWSne+t"iteration: $iter" -Bag -K > $ps
+    gmt psbasemap -Yf22.5c -Xc -R$R -J$J -BWSne+t"iteration 01" -Bag -K > $ps
     gmt makecpt -Cglobe > cpt
-    gmt grdimage $etopo1_grd -R -J -Ccpt -O -K >> $ps
-    gmt pscoast -R -J -Dl -A250 -N1/thinnest -O -K >> $ps
+    #gmt grdimage $etopo1_grd -R -J -Ccpt -O -K >> $ps
+    gmt pscoast -R -J -Dl -A250 -W1/thinnest -N1/thinnest -O -K >> $ps
     # plot Holocene intraplate volcanoes
-    awk -F"|" '{printf "%f %f\n",$6,$5}' \
-        $sem_config_dir/xsection/Holocene_volcanoes/volcanoes.list |\
-        gmt psxy -Skvolcano/0.25 -Gdeeppink -R -J -O -K >> $ps
+    #awk -F"|" '{printf "%f %f\n",$6,$5}' \
+    #    $sem_config_dir/xsection/Holocene_volcanoes/volcanoes.list |\
+    #    gmt psxy -Skvolcano/0.25 -Gdeeppink -R -J -O -K >> $ps
     # gcircle
     awk '{print $3, $2}' gcircle.list | gmt psxy -R -J -Wthin -O -K >> $ps
     # xsection marker
     gmt psxy xsection_marker.xy -Sp -N -R -J -O -K >> $ps
+
+    # title annotation
+    echo "${title}" | gmt pstext \
+        -Xf1c -Yf24c -R-2/2/-2/2 -JX4 \
+        -F+cCM+f17,Times-Bold,+jCM -P -O -K >> $ps
 
     #------ plot cross-sections of vpv,vph,vsv,vsh
     echo "#-- plot xsection"
@@ -111,24 +128,24 @@ do
     do
         echo "# $model_tag"
         # calculate relative perturbation referred to 1D_REF
-        gmt grdreformat $nc_file?$model_tag grd
-        gmt grdreformat $ref_nc_file?$model_tag ref_grd
+        gmt grdconvert $nc_file?$model_tag grd
+        gmt grdconvert $ref_nc_file?$model_tag ref_grd
         gmt grdmath grd ref_grd SUB ref_grd DIV 100.0 MUL = dgrd
         # plot cross-section
-        gmt makecpt -Cjet -D -T-6/6/0.1 -Z -I > cpt
+        gmt makecpt -Cjet -D -T-${max_percent}/${max_percent}/0.1 -Z -I > my.cpt
         #gmt makecpt -Cseis -D -T-5/5/0.1 -Z > cpt
         #gmt grd2cpt dgrd -Cjet -R$R -Z -D -I -L-6/6> cpt
         #gmt grd2cpt dgrd -Cseis -R$R -Z -T= -D > cpt
-        gmt grdimage dgrd -Yf${Y}c -Xc -R$R -J$J -Ccpt -nb \
+        gmt grdimage dgrd -Yf${Y}c -Xc -R$R -J$J -Cmy.cpt -nb \
             -BWSne -Bxa10f5 -Bya200f100 -O -K >> $ps
         # xsection marker 
         gmt psxy xsection_marker.xy -Sp -N -R -J -O -K >> $ps
         # plot 410/660-km
         gmt grdcontour rr.nc -J$J -Cc.txt -O -K >> $ps
         # plot colorbar
-        gmt psscale -D19c/${cbar_ypos}c/${cbar_length}c/0.15c -Ccpt \
+        gmt psscale -Dx19c/0c+w${cbar_length}c/0.15c+e -Cmy.cpt \
             -Yf${Y}c -Xf0c \
-            -Bxaf -By+l"d${model_tag}(%)" -E -O -K >> $ps
+            -Bxaf -By+l"d${model_tag}(%)" -O -K >> $ps
         #echo "d${model_tag}" | gmt pstext \
         #    -Xf1c -Yf${Y}c -R-2/2/-2/2 -JX4 \
         #    -F+cCM+f17,Times-Bold,+jCM -P -O -K >> $ps
@@ -139,8 +156,8 @@ do
     done
 
     #------ covert .ps to .pdf file
-    echo "#-- convert ps to pdf"
-    ps2pdf $ps $iter_dir/$event_id/xsection/${fname}_STW105.pdf
+    #echo "#-- convert ps to pdf"
+    #ps2pdf $ps $out_dir/${fname}_REF.pdf
 
 done # xsection_list
 

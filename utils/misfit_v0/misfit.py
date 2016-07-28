@@ -2715,6 +2715,109 @@ class Misfit(object):
 #======================================================
 #
 
+  def waveform_der_dmodel(self,
+      syn_dir='output_dmodel',
+      syn_band_code='MX',
+      syn_suffix='.sem.sac',
+      sac_dir=None):
+    """ 
+    Get partial derivative seismograms from synthetics of perturbed model 
+    along the model update direction
+
+    Notes
+    -----
+    use finite difference to get waveform derivative
+
+    must keep all source parameter the same as used in the forward simulation. 
+    
+    """
+    syn_orientation_codes = ['E', 'N', 'Z']
+
+    event = self.data['event']
+    t0 = event['t0']
+
+    station_dict = self.data['station']
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected statations
+      if station['stat']['code'] < 1:
+        continue
+
+      #------ time samples
+      waveform = station['waveform']
+      time_sample = waveform['time_sample']
+      starttime = time_sample['starttime']
+      dt = time_sample['delta']
+      nt = time_sample['nt']
+      nl = time_sample['nl'] # npts of left padding
+      nr = time_sample['nr'] # npts of right padding
+      sem_nt = nt-nl-nr # number of time sample number in SEM simulation 
+      t = np.arange(nt) * dt + (starttime - t0) #referred to t0
+
+      #------ get file paths of syn seismograms
+      syn_files = [ '{:s}/{:s}.{:2s}{:1s}{:s}'.format(
+        syn_dir, station_id, syn_band_code, x, syn_suffix)
+        for x in syn_orientation_codes ]
+
+      #------ read in obs, syn seismograms
+      syn_st  = read(syn_files[0])
+      syn_st += read(syn_files[1])
+      syn_st += read(syn_files[2])
+
+      #------ check the same time samples as original syn
+      if not is_equal( [ (tr.stats.starttime, tr.stats.delta, tr.stats.npts) \
+          for tr in syn_st ] ):
+        raise Exception('%s: not equal time samples in'\
+            ' synthetic seismograms.' % (station_id))
+      tr = syn_st[0]
+
+      if tr.stats.delta != dt:
+        raise Exception("%s: not the same dt for diff-srcloc!" % (station_id))
+
+      tr_starttime =  tr.stats.starttime - nl*dt
+      if tr_starttime != starttime:
+        raise Exception("%s: not the same starttime for diff-srcloc!" % (station_id))
+
+      if tr.stats.npts != sem_nt:
+        raise Exception("%s: not the same npts for diff-srcloc!" % (station_id))
+
+      #------ read syn seismograms from perturbed source location
+      syn_ENZ = np.zeros((3, nt))
+      for i in range(3):
+        syn_ENZ[i,nl:(nl+sem_nt)] = syn_st[i].data
+
+      # waveform partial derivatives 
+      u0 = waveform['syn']
+      du = syn_ENZ - u0
+
+      #------ record derivatives
+      if 'waveform_der' not in station:
+        station['waveform_der'] = {}
+      station['waveform_der']['model'] = {
+          'du':du }
+
+      # DEBUG: check du
+      #print(dchi
+      #for i in range(3):
+      #  plt.subplot(311+i)
+      #  #plt.plot(t,grn0[i,:],'k', t,syn_ENZ[i,:],'r', t,dg[i,:], 'b')
+      #  plt.plot(t, du[i,:], 'k')
+      #plt.show()
+      if sac_dir:
+        for i in range(3):
+          tr.data = du[i,:]
+          tr.stats.starttime = starttime
+          tr.stats.delta = dt
+          tr.stats.npts = nt
+          out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
+              sac_dir, station_id, syn_band_code,
+              syn_orientation_codes[i])
+          tr.write(out_file, 'sac')
+
+#
+#======================================================
+#
+
   def measure_hessian_src(self, 
       src_param={'t0':0, 'tau':0, 'xs':0, 'mt':0},
       update=True,
@@ -3742,6 +3845,150 @@ class Misfit(object):
 #        fp.write('Mrt:       %12.4e\n' % (M[0][1]) )
 #        fp.write('Mrp:       %12.4e\n' % (M[0][2]) )
 #        fp.write('Mtp:       %12.4e\n' % (M[1][2]) )
+
+#
+#======================================================
+#
+
+  def cc_linearized_seismogram_for_dmodel(self,
+      step_size=np.arange(-10,10,1),
+      plot=False
+      ):
+    """ 
+    Calculate normalized zero-lag cc between observed and linearized seismograms with waveform_der_dmodel
+    for different step size.
+
+    return weighted_cc_sum, weight_sum
+    """
+    step_size = np.array(step_size)
+    event = self.data['event']
+
+    #------ loop each station
+    # sum of weighted normalized zero-lag cc at each model grid
+    wcc_sum = np.zeros(np.shape(step_size))
+    # sum of all windows' weighting
+    weight_sum = 0.0
+
+    station_dict = self.data['station']
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected stations
+      if station['stat']['code'] < 0:
+        continue
+
+      # check if model parameter included in waveform_der
+      waveform_der = station['waveform_der']
+      if 'model' not in waveform_der:
+        error_str = "waveform_der['model'] does not exist." % (station_id)
+        raise Exception(error_str)
+
+      #---- get seismograms: obs,grn 
+      waveform = station['waveform']
+      obs = waveform['obs']
+      syn = waveform['syn']
+      # time samples
+      time_sample = waveform['time_sample']
+      syn_starttime = time_sample['starttime']
+      syn_delta = time_sample['delta']
+      syn_nt = time_sample['nt']
+      syn_nl = time_sample['nl']
+      syn_nr = time_sample['nr']
+      syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
+
+      #---- measure misfit
+      window_dict = station['window']
+      for window_id in window_dict:
+        window = window_dict[window_id]
+        # skip bad windows
+        if window['stat']['code'] < 1:
+          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+          continue
+        # window weight
+        weight = window['weight']
+        # skip window with zero weight
+        if np.isclose(weight, 0.0):
+          continue
+        weight_sum += weight
+        # taper
+        win_func = window['taper']['win']
+        win_starttime = window['taper']['starttime']
+        win_endtime = window['taper']['endtime']
+        if plot:
+          syn_times = np.arange(syn_nt) * syn_delta
+          plt.plot(syn_times, win_func)
+          plt.show()
+          plt.title("wind_func")
+        # polarity projection 
+        proj_matrix = window['polarity']['proj_matrix']
+        #-- filter,project,taper obs
+        # F * d
+        obs_filt = signal.filtfilt(filter_b, filter_a, obs)
+        # w * p * F * d (window,project,filter)
+        wpFd = np.dot(proj_matrix, obs_filt) * win_func 
+        norm_wpFd = np.sqrt(np.sum(wpFd**2))
+        #-- filter,project,taper syn
+        # F * u
+        syn_filt = signal.filtfilt(filter_b, filter_a, syn)
+        # w * p * F * u
+        wpFu = np.dot(proj_matrix, syn_filt) * win_func 
+        #-- filter,project,taper du: wpFdu
+        du = waveform_der['model']['du']
+        du_filt = signal.filtfilt(filter_b, filter_a, du)
+        # w * p * F * du
+        wpFdu = np.dot(proj_matrix, du_filt) * win_func
+        #-- misfit function: zero-lag cc
+        for idx_model in range(step_size):
+          wpFu1 = wpFu + step_size[idx_model]*wpFdu
+          norm_wpFu1 = np.sqrt(np.sum(wpFu1**2))
+          Nw = norm_wpFd * norm_wpFu1
+          #normalized cc between obs and perturbed syn
+          cc_wpFd_wpFu1 = np.sum(wpFd*wpFu1) / Nw
+          # weighted cc
+          wcc_sum[idx_model] += weight * cc_wpFd_wpFu1
+          #DEBUG
+          if plot:
+            syn_npts = syn_nt - syn_nl - syn_nr
+            syn_orientation_codes = ['E', 'N', 'Z']
+            syn_times = np.arange(syn_nt) * syn_delta
+            Amax_obs = np.max(np.sum(wpFd**2, axis=0))**0.5
+            Amax_syn = np.max(np.sum(wpFu**2, axis=0))**0.5
+            Amax_syn1 = np.max(np.sum(wpFu1**2, axis=0))**0.5
+            win_b = win_starttime - syn_starttime
+            win_e = win_endtime - syn_starttime
+            obs_filt_proj = np.dot(proj_matrix, obs_filt)
+            syn_filt_proj = np.dot(proj_matrix, syn_filt)
+            for i in range(3):
+              plt.subplot(311+i)
+              if i == 0:
+                title_str = "%s.%s " % (station_id, window_id)
+                title_str += "step_size:%.2f " % (step_size[idx_model])
+                title_str += "NCCwin:%.2f" % (cc_wpFd_wpFu1)
+                plt.title(title_str)
+
+              idx_plt = range(syn_nl,(syn_nl+syn_npts))
+              # whole trace, projected
+              plt.plot(syn_times[idx_plt], obs_filt_proj[i,idx_plt]/Amax_obs, 
+                  'k', linewidth=0.2)
+              plt.plot(syn_times[idx_plt], syn_filt_proj[i,idx_plt]/Amax_syn,
+                  'b', linewidth=0.2)
+              # windowed trace
+              idx_plt = (win_b <= syn_times) & (syn_times <= win_e)
+              plt.plot(syn_times[idx_plt], wpFd[i,idx_plt]/Amax_obs,
+                  'k', linewidth=1.0)
+              plt.plot(syn_times[idx_plt], wpFu[i,idx_plt]/Amax_syn,
+                  'b', linewidth=1.0)
+              plt.plot(syn_times[idx_plt], wpFu1[i,idx_plt]/Amax_syn1,
+                  'r', linewidth=1.0)
+
+              plt.xlim((syn_times[syn_nl], syn_times[syn_nl+syn_npts-1]))
+              plt.ylim((-1.5, 1.5))
+              plt.ylabel(syn_orientation_codes[i])
+            plt.show()
+      #end for window_id in window_dict:
+    #end for station_id in station_dict:
+
+    return wcc_sum, weight_sum
+
 
 #
 #======================================================

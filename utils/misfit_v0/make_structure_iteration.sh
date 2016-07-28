@@ -13,13 +13,15 @@ event_id=${1:?[arg]need event_id}
 # link the required directories to your wkdir
 specfem_dir=$wkdir/specfem3d_globe # bin/x...
 mesh_dir=$wkdir/mesh # DATABASES_MPI/proc*_reg1_solver_data.bin
-model_dir=$wkdir/model # proc*_reg1_vph,vpv,vsv,vsh,eta.bin
+mesh_perturb_dir=$wkdir/mesh_perturb # DATABASES_MPI/proc*_reg1_solver_data.bin
+model_dir=$wkdir/model # proc*_reg1_vph,vpv,vsv,vsh,eta,rho.bin
 data_dir=$wkdir/events # <event_id>/data,dis
 utils_dir=$wkdir/utils # sem_utils/utils/misfit_v0
 
 # get the full path
 specfem_dir=$(readlink -f $specfem_dir)
 mesh_dir=$(readlink -f $mesh_dir)
+mesh_perturb_dir=$(readlink -f $mesh_perturb_dir)
 model_dir=$(readlink -f $model_dir)
 data_dir=$(readlink -f $data_dir)
 utils_dir=$(readlink -f $utils_dir)
@@ -37,6 +39,7 @@ misfit_job=$slurm_dir/misfit.job
 kernel_job=$slurm_dir/kernel.job
 hess_job=$slurm_dir/hess.job
 precond_job=$slurm_dir/precond.job
+perturb_job=$slurm_dir/perturb.job
 # database file
 mkdir -p $misfit_dir
 db_file=$misfit_dir/misfit.pkl
@@ -172,7 +175,7 @@ cat <<EOF > $kernel_job
 #SBATCH -N 11
 #SBATCH -n 256
 #SBATCH -p normal
-#SBATCH -t 01:30:00
+#SBATCH -t 01:40:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -278,13 +281,13 @@ echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 EOF
 
-#====== preconditioned kernels
+#====== kernel preconditioning
 cat <<EOF > $precond_job
 #!/bin/bash
 #SBATCH -J ${event_id}.precond
 #SBATCH -o ${precond_job}.o%j
-#SBATCH -N 11
-#SBATCH -n 256
+#SBATCH -N 5
+#SBATCH -n 120
 #SBATCH -p normal
 #SBATCH -t 00:30:00
 #SBATCH --mail-user=kai.tao@utexas.edu
@@ -301,14 +304,14 @@ ibrun $sem_utils/bin/xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
   $event_dir/output_kernel/kernel \
   $event_dir/output_kernel/kernel
 
-ibrun $sem_utils/bin/xsem_kernel_aijkl_to_vti_5pars \
+ibrun $sem_utils/bin/xsem_kernel_aijkl_to_vti_3pars \
   $nproc $mesh_dir/DATABASES_MPI \
   $event_dir/output_kernel/kernel \
   $event_dir/output_kernel/kernel
 
 echo "====== sum up hessian [\$(date)]"
 ibrun $sem_utils/bin/xsem_hessian_diag_random_adjoint_kernel \
-  $nproc $mesh_dir/DATABASES_MPI \
+  $nproc $mesh_dir/DATABASES_MPI $model_dir\
   $event_dir/output_hess/kernel $event_dir/output_hess/kernel
 
 echo "====== smooth hess and kernel [\$(date)]"
@@ -321,7 +324,8 @@ ln -sf $event_dir/output_kernel/kernel/*2_kernel.bin \$out_dir/
 
 sigma_h=30
 sigma_v=10
-model_tags=hess,vph2_kernel,vpv2_kernel,vsv2_kernel,vsh2_kernel,vf2_kernel #,rhoprime_kernel
+#model_tags=hess,vph2_kernel,vpv2_kernel,vsv2_kernel,vsh2_kernel,vf2_kernel #,rhoprime_kernel
+model_tags=hess,vp2_kernel,vsv2_kernel,vsh2_kernel #,rhoprime_kernel
 
 ibrun $sem_utils/bin/xsem_smooth \
   $nproc $mesh_dir/DATABASES_MPI \$out_dir \
@@ -329,14 +333,67 @@ ibrun $sem_utils/bin/xsem_smooth \
 
 echo "====== precondition kernel [\$(date)]"
 hess_tag="hess_smooth"
-kernel_tags=vph2_kernel_smooth,vpv2_kernel_smooth,vsv2_kernel_smooth,vsh2_kernel_smooth,vf2_kernel_smooth
-eps=0.01
-out_suffix="_precond"\${eps}
+#kernel_tags=vph2_kernel_smooth,vpv2_kernel_smooth,vsv2_kernel_smooth,vsh2_kernel_smooth,vf2_kernel_smooth
+kernel_tags=vp2_kernel_smooth,vsv2_kernel_smooth,vsh2_kernel_smooth
+eps=0.001
+out_suffix="_precond"
 
 ibrun $sem_utils/bin/xsem_kernel_divide_hess_water_level \
   $nproc $mesh_dir/DATABASES_MPI \$out_dir \
   \$kernel_tags \$out_dir \$hess_tag \
   \$eps \$out_dir \$out_suffix
+
+echo
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+EOF
+
+#====== perturb: forward simulation of perturbed model
+cat <<EOF > $perturb_job
+#!/bin/bash
+#SBATCH -J ${event_id}.perturb
+#SBATCH -o $perturb_job.o%j
+#SBATCH -N 11
+#SBATCH -n 256
+#SBATCH -p normal
+#SBATCH -t 00:50:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+
+out_dir=output_perturb
+
+mkdir -p $event_dir/DATA
+cd $event_dir/DATA
+
+cp $data_dir/$event_id/data/STATIONS .
+
+cp $mesh_perturb_dir/DATA/Par_file .
+sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
+sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
+
+rm -rf $event_dir/DATABASES_MPI
+mkdir $event_dir/DATABASES_MPI
+ln -s $mesh_perturb_dir/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
+
+cd $event_dir
+rm -rf \$out_dir OUTPUT_FILES
+mkdir \$out_dir
+ln -sf \$out_dir OUTPUT_FILES
+
+cp $mesh_perturb_dir/OUTPUT_FILES/addressing.txt OUTPUT_FILES
+cp -L DATA/Par_file OUTPUT_FILES
+cp -L DATA/STATIONS OUTPUT_FILES
+cp -L DATA/CMTSOLUTION OUTPUT_FILES
+
+ibrun $specfem_dir/bin/xspecfem3D
+
+mkdir $event_dir/\$out_dir/sac
+mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

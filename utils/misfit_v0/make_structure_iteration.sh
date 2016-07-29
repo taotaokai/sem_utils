@@ -40,6 +40,7 @@ kernel_job=$slurm_dir/kernel.job
 hess_job=$slurm_dir/hess.job
 precond_job=$slurm_dir/precond.job
 perturb_job=$slurm_dir/perturb.job
+search_job=$slurm_dir/search.job
 # database file
 mkdir -p $misfit_dir
 db_file=$misfit_dir/misfit.pkl
@@ -398,4 +399,32 @@ mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
+EOF
+
+#====== search: cc linearized seismograms for chosen step sizes
+cat <<EOF > $search_job
+#!/bin/bash
+#SBATCH -J ${event_id}.search
+#SBATCH -o $search_job.o%j
+#SBATCH -N 1
+#SBATCH -n 1
+#SBATCH --cpus-per-task=24
+#SBATCH -p normal
+#SBATCH -t 00:10:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+
+#$utils_dir/waveform_der_dmodel_read.py $misfit_par $db_file $event_dir/output_perturb/sac
+
+$utils_dir/cc_dmodel_step_size.py $misfit_par $db_file $misfit_dir/cc_dmodel_step_size.txt
+
+echo
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+
 EOF

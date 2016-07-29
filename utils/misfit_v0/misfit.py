@@ -2716,7 +2716,7 @@ class Misfit(object):
 #
 
   def waveform_der_dmodel(self,
-      syn_dir='output_dmodel',
+      syn_dir='output_perturb/sac',
       syn_band_code='MX',
       syn_suffix='.sem.sac',
       sac_dir=None):
@@ -3909,6 +3909,10 @@ class Misfit(object):
         if np.isclose(weight, 0.0):
           continue
         weight_sum += weight
+        # filter
+        filter_dict = window['filter']
+        filter_a = filter_dict['a']
+        filter_b = filter_dict['b']
         # taper
         win_func = window['taper']['win']
         win_starttime = window['taper']['starttime']
@@ -3937,7 +3941,7 @@ class Misfit(object):
         # w * p * F * du
         wpFdu = np.dot(proj_matrix, du_filt) * win_func
         #-- misfit function: zero-lag cc
-        for idx_model in range(step_size):
+        for idx_model in range(len(step_size)):
           wpFu1 = wpFu + step_size[idx_model]*wpFdu
           norm_wpFu1 = np.sqrt(np.sum(wpFu1**2))
           Nw = norm_wpFd * norm_wpFu1

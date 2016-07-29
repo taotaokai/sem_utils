@@ -48,12 +48,13 @@ ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
 # get arrays of CC
-cc = [ float(x[3]) for x in lines if (x[1]=='surface_R' or x[1]=='surface_Z') ]
+cc = np.array([ float(x[3]) for x in lines if (x[1]=='surface_R' or x[1]=='surface_Z') ])
+weight = np.array([ float(x[2]) for x in lines if (x[1]=='surface_R' or x[1]=='surface_Z') ])
 ax.hist(cc, nbins, histtype='step')
 ax.set_xlabel('cc0')
 ax.set_ylabel('No. of window')
 ax.set_xlim([0.5, 1])
-title_str = "surface_RZ %.3f$\pm$%.3f" % (np.mean(cc), np.std(cc))
+title_str = "surface_RZ %.3f(%.2f)" % (np.sum(cc*weight)/np.sum(weight), np.sum(weight))
 ax.set_title(title_str)
 
 #----- surface RZ: dt
@@ -82,12 +83,13 @@ ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
 # get arrays of CC
-cc = [ float(x[3]) for x in lines if (x[1]=='surface_T') ]
+cc = np.array([ float(x[3]) for x in lines if (x[1]=='surface_T') ])
+weight = np.array([ float(x[2]) for x in lines if (x[1]=='surface_T') ])
 ax.hist(cc, nbins, histtype='step')
 ax.set_xlabel('cc0')
 ax.set_ylabel('No. of window')
 ax.set_xlim([0.5, 1])
-title_str = "surface_T %.3f$\pm$%.3f" % (np.mean(cc), np.std(cc))
+title_str = "surface_T %.3f(%.2f)" % (np.sum(cc*weight)/np.sum(weight), np.sum(weight))
 ax.set_title(title_str)
 
 #----- surface T: dt
@@ -116,12 +118,13 @@ ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
 # get arrays of CC
-cc = [ float(x[3]) for x in lines if ('surface' not in x[1]) ]
+cc = np.array([ float(x[3]) for x in lines if ('surface' not in x[1]) ])
+weight = np.array([ float(x[2]) for x in lines if ('surface' not in x[1]) ])
 ax.hist(cc, nbins, histtype='step')
 ax.set_xlabel('cc0')
 ax.set_ylabel('No. of window')
 ax.set_xlim([0.5, 1])
-title_str = "body waves %.3f$\pm$%.3f" % (np.mean(cc), np.std(cc))
+title_str = "body wave %.3f(%.2f)" % (np.sum(cc*weight)/np.sum(weight), np.sum(weight))
 ax.set_title(title_str)
 
 #----- body waves: dt
@@ -150,12 +153,13 @@ ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
 # get arrays of CC
-cc = [ float(x[3]) for x in lines ]
+cc = np.array([ float(x[3]) for x in lines ])
+weight = np.array([ float(x[2]) for x in lines ])
 ax.hist(cc, nbins, histtype='step')
 ax.set_xlabel('cc0')
 ax.set_ylabel('No. of window')
 ax.set_xlim([0.5, 1])
-title_str = "All %.3f$\pm$%.3f" % (np.mean(cc), np.std(cc))
+title_str = "All %.3f(%.2f)" % (np.sum(cc*weight)/np.sum(weight), np.sum(weight))
 ax.set_title(title_str)
 
 #----- all: dt

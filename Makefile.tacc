@@ -72,7 +72,12 @@ program = xsem_slice_gcircle \
 	xsem_add_kernel_vti_5pars \
 	xsem_hessian_diag_random_adjoint_kernel \
 	xsem_threshold_percentage \
-	xsem_model_tiso_to_thomsen
+	xsem_model_tiso_to_thomsen \
+	xsem_kernel_ijkl_covariance_matrix \
+	xsem_model_tiso_enforce_iso_elem \
+	xsem_model_tiso_enforce_iso_iflag \
+	xsem_mesh_get_idoubling_gll \
+	xsem_mesh_get_ispec_is_tiso_gll
 
 
 #------------------------------------------

@@ -26,13 +26,10 @@ from matplotlib import colors, ticker, cm
 from matplotlib.backends.backend_pdf import PdfPages 
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
-#
-from taper import *
 
 #NOTE
 # 1. spectrum relation between DFT and FT
 #   x(n*dt): DFT[x]*dt ~ FT[x], IDFT[FT[x]]/dt ~ x
-
 
 #====== utility functions
 def is_equal(lst):
@@ -102,6 +99,60 @@ def optimal_fft_size(n, d):
 #  ds_dt0 = 2.0/tau * t * stf
 #  ds_dtau = 2.0/tau * (t**2 - 0.5) * stf 
 #  return stf, ds_dt0, ds_dtau
+
+
+def cosine_taper(x, xc):
+    """cosine taper at two ends stop,pass, pass,stop
+        xc: (array-like)
+            stop,pass[,pass,stop]
+        x: scalar or array-like
+            sample points
+    """
+    nc = len(xc)
+    if np.isscalar(x):
+        x = np.array([x, ])
+    else:
+        x = np.array(x)
+    y = np.ones(len(x))
+
+    if nc == 2: # one-side taper
+        l = xc[1] - xc[0] # taper width
+        if l == 0:
+            raise ValueError('pass and stop values cannot be the same.')
+        elif l > 0: # tapered at left side
+            idx = x < xc[0]; y[idx] = 0.0
+            idx = (xc[0] <= x) & (x <= xc[1])
+            y[idx] = 0.5 - 0.5*np.cos(np.pi*(x[idx] - xc[0])/l)
+            idx = x > xc[1]; y[idx] = 1.0
+        else: # tapered at right side
+            idx = x > xc[0]; y[idx] = 0.0
+            idx = (xc[1] <= x) & (x <= xc[0])
+            y[idx] = 0.5 + 0.5*np.cos(np.pi*(x[idx] - xc[1])/l)
+            idx = x < xc[1]; y[idx] = 1.0
+    elif nc == 4: # two side taper
+        if not (xc[0]<xc[1]<xc[2]<xc[3]):
+            raise ValueError('4 cutoff values must be in increasing order.')
+        else:
+            idx = x <= xc[0]; y[idx] = 0.0
+
+            idx = (xc[0] < x) & (x < xc[1])
+            y[idx] = 0.5 - 0.5*np.cos(np.pi*(x[idx] - xc[0])/(xc[1]-xc[0]))
+            
+            idx = (xc[1] <= x) & (x <= xc[2]); y[idx] = 1.0
+
+            idx = (xc[2] < x) & (x < xc[3])
+            y[idx] = 0.5 + 0.5*np.cos(np.pi*(x[idx] - xc[2])/(xc[3]-xc[2]))
+
+            idx = x > xc[3]; y[idx] = 0.0
+    else:
+        raise ValueError('number of cutoff values must be either 2 or 4.')
+
+    # restore return value to scalar when input x is a scalar
+    if len(y) == 1: y = y[0]
+
+    return y
+# enddef cosine_taper(x, xc):
+
 
 #======
 class Misfit(object):
@@ -1896,7 +1947,7 @@ class Misfit(object):
           dist = meta['dist_degree']
           dist_range = np.array(weight_param['dist'])
           weight *= cosine_taper(dist, dist_range)
-        if 'cc_shift' in weight_param:
+        if 'cc_tshift' in weight_param:
           weight *= cosine_taper(CC_time_shift, weight_param['cc_tshift'])
 
         #------ measure adjoint source

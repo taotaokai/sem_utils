@@ -39,6 +39,7 @@ subroutine selfdoc()
   print '(a)', "     flag_force_max_dlnv = 0: only effective when max velocity perturbation is larger than max_dlnv_allowed"
   print '(a)', "  4. thomsen's anisotropic parameters: eps = delta = 0 => C11 = C33, C13 = C11 - 2*C44"
   print '(a)', "     vp2_kernel -> C11,C33, vsv2_kernel -> C44, vsh2_kernel -> C66"
+  print '(a)', "  5. For isotropic element the program will reduce the vti kernel to isotropic kernel and alos enforce the output be isotropic."
 
 end subroutine
 
@@ -76,7 +77,7 @@ program xsem_add_kernel_vti_3pars
   integer :: myrank, nrank
   ! mesh
   type(sem_mesh_data) :: mesh_data
-  integer :: nspec
+  integer :: ispec, nspec
   ! model
   real(dp), dimension(:,:,:,:), allocatable :: vph2, vpv2, vsv2, vsh2, vf2, rho
   ! kernel
@@ -95,7 +96,7 @@ program xsem_add_kernel_vti_3pars
   if (command_argument_count() /= nargs) then
     if (myrank == 0) then
       call selfdoc()
-      print *, "[ERROR] xsem_add_vti_kernel: check your inputs."
+      print *, "[ERROR] check your inputs."
       call abort_mpi()
     endif
   endif
@@ -118,7 +119,7 @@ program xsem_add_kernel_vti_3pars
       flag_force_max_dlnv = .true.
     case default
       if (myrank==0) then
-        print *, '[ERROR]: flag_force_max_dlnv must be 0 or 1'
+        print *, '[ERROR] flag_force_max_dlnv must be 0 or 1'
         call abort_mpi()
       endif
   end select
@@ -135,11 +136,11 @@ program xsem_add_kernel_vti_3pars
       form='formatted', action='write', iostat=ier)
 
     if (ier /= 0) then
-      write(*,*) '[ERROR] xsem_add_dmodel_lamda_mu_to_tiso: failed to open file ', trim(log_file)
+      write(*,*) '[ERROR] failed to open file ', trim(log_file)
       call abort_mpi()
     endif
 
-    write(IOUT, '(a)') '#[LOG] xsem_add_dmodel_lamda_mu_to_tiso'
+    write(IOUT, '(a)') '#[LOG] xsem_add_kernel_vti_3pars'
 
   endif
 
@@ -174,6 +175,9 @@ program xsem_add_kernel_vti_3pars
 
   do iproc = myrank, (nproc-1), nrank
 
+    ! read in mesh 
+    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+
     ! read models
     !call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vph', vph2)
     !call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', vpv2)
@@ -193,6 +197,17 @@ program xsem_add_kernel_vti_3pars
     call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vsv2_kernel'//kernel_suffix, vsv2_kernel)
     call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vsh2_kernel'//kernel_suffix, vsh2_kernel)
     !call sem_io_read_gll_file_1(dmodel_dir, iproc, iregion, 'vf2_kernel'//kernel_suffix, vphi2_kernel)
+
+    ! check if element is isotropic
+    do ispec = 1, nspec
+      if (.not. mesh_data%ispec_is_tiso(ispec)) then
+        ! enforce model to be isotropic
+        vsh2(:,:,:,ispec) = vsv2(:,:,:,ispec)
+        ! reduce vti kernel to iso kernel
+        vsv2_kernel(:,:,:,ispec) = vsv2_kernel(:,:,:,ispec) + vsh2_kernel(:,:,:,ispec)
+        vsh2_kernel(:,:,:,ispec) = vsv2_kernel(:,:,:,ispec)
+      endif
+    enddo
 
     ! calculate maximum absolute relative perturbation of velocities, only use vsv and vsh
     max_dlnv = max(max_dlnv, 0.5*maxval(abs(vsv2_kernel)/vsv2), 0.5*maxval(abs(vsh2_kernel)/vsh2))
@@ -228,6 +243,9 @@ program xsem_add_kernel_vti_3pars
   
     print *, "iproc = ", iproc
 
+    ! read in mesh 
+    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+
     ! read models
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vph', vph2)
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', vpv2)
@@ -246,6 +264,19 @@ program xsem_add_kernel_vti_3pars
     call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vp2_kernel'//kernel_suffix, vp2_kernel)
     call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vsv2_kernel'//kernel_suffix, vsv2_kernel)
     call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vsh2_kernel'//kernel_suffix, vsh2_kernel)
+
+    ! check if element is isotropic
+    do ispec = 1, nspec
+      if (.not. mesh_data%ispec_is_tiso(ispec)) then
+        ! enforce model to be isotropic
+        vph2(:,:,:,ispec) = vpv2(:,:,:,ispec)
+        vsh2(:,:,:,ispec) = vsv2(:,:,:,ispec)
+        vf2(:,:,:,ispec) = vpv2(:,:,:,ispec) - 2.0*vsv2(:,:,:,ispec)
+        ! reduce vti kernel to iso kernel
+        vsv2_kernel(:,:,:,ispec) = vsv2_kernel(:,:,:,ispec) + vsh2_kernel(:,:,:,ispec)
+        vsh2_kernel(:,:,:,ispec) = vsv2_kernel(:,:,:,ispec)
+      endif
+    enddo
 
     ! scale
     ! G = (2*C44 + C66)/3

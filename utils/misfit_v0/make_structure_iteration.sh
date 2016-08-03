@@ -14,7 +14,8 @@ event_id=${1:?[arg]need event_id}
 specfem_dir=$wkdir/specfem3d_globe # bin/x...
 mesh_dir=$wkdir/mesh # DATABASES_MPI/proc*_reg1_solver_data.bin
 mesh_perturb_dir=$wkdir/mesh_perturb # DATABASES_MPI/proc*_reg1_solver_data.bin
-model_dir=$wkdir/model # proc*_reg1_vph,vpv,vsv,vsh,eta,rho.bin
+#model_dir=$wkdir/mesh/DATABASES_MPI # proc*_reg1_vph,vpv,vsv,vsh,eta,rho.bin
+#!!! model files should reside in mesh_dir/DATABASES_MPI
 data_dir=$wkdir/events # <event_id>/data,dis
 utils_dir=$wkdir/utils # sem_utils/utils/misfit_v0
 
@@ -22,7 +23,7 @@ utils_dir=$wkdir/utils # sem_utils/utils/misfit_v0
 specfem_dir=$(readlink -f $specfem_dir)
 mesh_dir=$(readlink -f $mesh_dir)
 mesh_perturb_dir=$(readlink -f $mesh_perturb_dir)
-model_dir=$(readlink -f $model_dir)
+#model_dir=$(readlink -f $model_dir)
 data_dir=$(readlink -f $data_dir)
 utils_dir=$(readlink -f $utils_dir)
 
@@ -56,7 +57,7 @@ cat <<EOF > $syn_job
 #SBATCH -N 11
 #SBATCH -n 256
 #SBATCH -p normal
-#SBATCH -t 00:50:00
+#SBATCH -t 01:00:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -176,7 +177,7 @@ cat <<EOF > $kernel_job
 #SBATCH -N 11
 #SBATCH -n 256
 #SBATCH -p normal
-#SBATCH -t 01:40:00
+#SBATCH -t 02:00:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -233,7 +234,7 @@ cat <<EOF > $hess_job
 #SBATCH -N 11
 #SBATCH -n 256
 #SBATCH -p normal
-#SBATCH -t 01:30:00
+#SBATCH -t 02:00:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -290,7 +291,7 @@ cat <<EOF > $precond_job
 #SBATCH -N 5
 #SBATCH -n 120
 #SBATCH -p normal
-#SBATCH -t 00:30:00
+#SBATCH -t 01:00:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -301,7 +302,7 @@ echo
 
 echo "====== reduce kernel [\$(date)]"
 ibrun $sem_utils/bin/xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
-  $nproc $mesh_dir/DATABASES_MPI $model_dir \
+  $nproc $mesh_dir/DATABASES_MPI $mesh_dir/DATABASES_MPI \
   $event_dir/output_kernel/kernel \
   $event_dir/output_kernel/kernel
 
@@ -312,21 +313,22 @@ ibrun $sem_utils/bin/xsem_kernel_aijkl_to_vti_3pars \
 
 echo "====== sum up hessian [\$(date)]"
 ibrun $sem_utils/bin/xsem_hessian_diag_random_adjoint_kernel \
-  $nproc $mesh_dir/DATABASES_MPI $model_dir\
+  $nproc $mesh_dir/DATABASES_MPI $mesh_dir/DATABASES_MPI \
   $event_dir/output_hess/kernel $event_dir/output_hess/kernel
 
-echo "====== smooth hess and kernel [\$(date)]"
-out_dir=$event_dir/kernel_smooth_precond
+echo "====== smooth hess [\$(date)]"
+out_dir=$event_dir/kernel_precond
 mkdir \$out_dir
 
 ln -sf $event_dir/output_hess/kernel/*_hess.bin \$out_dir/
-ln -sf $event_dir/output_kernel/kernel/*2_kernel.bin \$out_dir/
+ln -sf $event_dir/output_kernel/kernel/*_kernel.bin \$out_dir/
 #ln -sf $event_dir/output_kernel/kernel/*_rhoprime_kernel.bin \$out_dir/
 
-sigma_h=30
-sigma_v=10
+sigma_h=50
+sigma_v=20
 #model_tags=hess,vph2_kernel,vpv2_kernel,vsv2_kernel,vsh2_kernel,vf2_kernel #,rhoprime_kernel
-model_tags=hess,vp2_kernel,vsv2_kernel,vsh2_kernel #,rhoprime_kernel
+#model_tags=hess,vp2_kernel,vsv2_kernel,vsh2_kernel #,rhoprime_kernel
+model_tags=hess
 
 ibrun $sem_utils/bin/xsem_smooth \
   $nproc $mesh_dir/DATABASES_MPI \$out_dir \
@@ -335,8 +337,9 @@ ibrun $sem_utils/bin/xsem_smooth \
 echo "====== precondition kernel [\$(date)]"
 hess_tag="hess_smooth"
 #kernel_tags=vph2_kernel_smooth,vpv2_kernel_smooth,vsv2_kernel_smooth,vsh2_kernel_smooth,vf2_kernel_smooth
-kernel_tags=vp2_kernel_smooth,vsv2_kernel_smooth,vsh2_kernel_smooth
-eps=0.001
+#kernel_tags=vp2_kernel_smooth,vsv2_kernel_smooth,vsh2_kernel_smooth
+kernel_tags=vp2_kernel,vsv2_kernel,vsh2_kernel
+eps=0.01
 out_suffix="_precond"
 
 ibrun $sem_utils/bin/xsem_kernel_divide_hess_water_level \
@@ -357,7 +360,7 @@ cat <<EOF > $perturb_job
 #SBATCH -N 11
 #SBATCH -n 256
 #SBATCH -p normal
-#SBATCH -t 00:50:00
+#SBATCH -t 01:00:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -368,12 +371,10 @@ echo
 
 out_dir=output_perturb
 
-mkdir -p $event_dir/DATA
+#mkdir -p $event_dir/DATA
 cd $event_dir/DATA
-
-cp $data_dir/$event_id/data/STATIONS .
-
-cp $mesh_perturb_dir/DATA/Par_file .
+#cp $data_dir/$event_id/data/STATIONS .
+#cp $mesh_perturb_dir/DATA/Par_file .
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
 
@@ -419,7 +420,7 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
-#$utils_dir/waveform_der_dmodel_read.py $misfit_par $db_file $event_dir/output_perturb/sac
+$utils_dir/waveform_der_dmodel_read.py $misfit_par $db_file $event_dir/output_perturb/sac
 
 $utils_dir/cc_dmodel_step_size.py $misfit_par $db_file $misfit_dir/cc_dmodel_step_size.txt
 

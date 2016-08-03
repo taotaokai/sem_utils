@@ -193,7 +193,7 @@ subroutine sem_mesh_read(basedir, iproc, iregion, mesh_data)
       xyz_center = mesh_data%xyz_glob(:,iglob)
       depth = (1.0 - sqrt(sum(mesh_data%xyz_glob(:,iglob)**2))) * R_EARTH_KM
 
-      !this is dangerous since 410 can have undulations
+      ! this is dangerous due to 410 undulation
       if (depth < 410) then
         mesh_data%idoubling(ispec) = 10 * IFLAG_670_220
       else ! below 410-km

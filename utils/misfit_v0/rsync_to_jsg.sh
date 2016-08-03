@@ -12,8 +12,8 @@ event_list=${1:?[arg]need event_list}
 
 #====== <event_id>/
 cat<<EOF > $wkdir/rsync_exclude.list
-output_kernel/sac
-output_hess/sac
+output_kernel
+output_hess
 DATABASES_MPI
 misfit.pkl
 adj_hess

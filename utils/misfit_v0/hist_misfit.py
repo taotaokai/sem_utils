@@ -11,6 +11,7 @@ import sys
 
 import numpy as np
 import matplotlib
+matplotlib.use("pdf")
 import matplotlib.pyplot as plt
 
 # read command line args
@@ -39,145 +40,181 @@ nbins = 50
 max_dt = 10 
 #min_weight = 0.1
 
-#----- surface RZ: CC
+#----- surface RZ
+
+# get arrays of dt(syn-obs), cc 
+data_type = "surface_RZ"
+data = [ [ float(x[2]), float(x[3]), -1.0*float(x[5]) ] for x in lines if (x[1]=='surface_R' or x[1]=='surface_Z') ]
+
+weight = np.array([ x[0] for x in data ])
+cc = np.array([ x[1] for x in data ])
+dt = np.array([ x[2] for x in data ])
+
+idx = np.abs(dt) <= max_dt
+dt = dt[idx]
+weight = weight[idx]
+cc = cc[idx]
+
+# plot CC
 nrow = 1
 ncol = 1
-# create axis
 subplot_origin = [ncol-1, nrow-1]*subplot_size
 ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
-# get arrays of CC
-cc = np.array([ float(x[3]) for x in lines if (x[1]=='surface_R' or x[1]=='surface_Z') ])
-weight = np.array([ float(x[2]) for x in lines if (x[1]=='surface_R' or x[1]=='surface_Z') ])
 ax.hist(cc, nbins, histtype='step')
 ax.set_xlabel('cc0')
-ax.set_ylabel('No. of window')
+ax.set_ylabel('No. of windows')
 ax.set_xlim([0.5, 1])
-title_str = "surface_RZ %.3f(%.2f)" % (np.sum(cc*weight)/np.sum(weight), np.sum(weight))
+title_str = "%s %.3f(%.2f)" % (data_type, np.sum(cc*weight)/np.sum(weight), np.sum(weight))
 ax.set_title(title_str)
 
-#----- surface RZ: dt
+# plot dt
 nrow = 1
 ncol = 2
-# create axis
 subplot_origin = [ncol-1, nrow-1]*subplot_size
 ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
-# get arrays of dt_cc
-dt = np.array([ -1.0*float(x[5]) for x in lines if (x[1]=='surface_R' or x[1]=='surface_Z') ])
-ax.hist(dt[abs(dt)<=max_dt], nbins, histtype='step')
+ax.hist(dt, nbins, histtype='step')
 ax.set_xlabel('dt_cc (s): syn-obs')
-ax.set_ylabel('No. of window')
+ax.set_ylabel('No. of windows')
 ax.set_xlim([-max_dt, max_dt])
-title_str = "surface_RZ %.3f$\pm$%.3f" % (np.mean(dt), np.std(dt))
+title_str = "%s %.3f$\pm$%.3f" % (data_type, np.mean(dt), np.std(dt))
 ax.set_title(title_str)
 
-#----- surface T: CC
+
+#----- surface T
+
+# get arrays of dt(syn-obs), cc 
+data_type = "surface_T"
+data = [ [ float(x[2]), float(x[3]), -1.0*float(x[5]) ] for x in lines if x[1]=='surface_T' ]
+
+weight = np.array([ x[0] for x in data ])
+cc = np.array([ x[1] for x in data ])
+dt = np.array([ x[2] for x in data ])
+
+idx = np.abs(dt) <= max_dt
+dt = dt[idx]
+weight = weight[idx]
+cc = cc[idx]
+
+# plot CC
 nrow = 2
 ncol = 1
-# create axis
 subplot_origin = [ncol-1, nrow-1]*subplot_size
 ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
-# get arrays of CC
-cc = np.array([ float(x[3]) for x in lines if (x[1]=='surface_T') ])
-weight = np.array([ float(x[2]) for x in lines if (x[1]=='surface_T') ])
 ax.hist(cc, nbins, histtype='step')
 ax.set_xlabel('cc0')
-ax.set_ylabel('No. of window')
+ax.set_ylabel('No. of windows')
 ax.set_xlim([0.5, 1])
-title_str = "surface_T %.3f(%.2f)" % (np.sum(cc*weight)/np.sum(weight), np.sum(weight))
+title_str = "%s %.3f(%.2f)" % (data_type, np.sum(cc*weight)/np.sum(weight), np.sum(weight))
 ax.set_title(title_str)
 
-#----- surface T: dt
+# plot dt
 nrow = 2
 ncol = 2
-# create axis
 subplot_origin = [ncol-1, nrow-1]*subplot_size
 ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
-# get arrays of dt_cc
-dt = np.array([ -1.0*float(x[5]) for x in lines if (x[1]=='surface_T') ])
-ax.hist(dt[abs(dt)<=max_dt], nbins, histtype='step')
+ax.hist(dt, nbins, histtype='step')
 ax.set_xlabel('dt_cc (s): syn-obs')
-ax.set_ylabel('No. of window')
+ax.set_ylabel('No. of windows')
 ax.set_xlim([-max_dt, max_dt])
-title_str = "surface_T %.3f$\pm$%.3f" % (np.mean(dt), np.std(dt))
+title_str = "%s %.3f$\pm$%.3f" % (data_type, np.mean(dt), np.std(dt))
 ax.set_title(title_str)
 
-#----- body waves: CC
+
+#----- body wave
+
+# get arrays of dt(syn-obs), cc 
+data_type = "body wave"
+data = [ [ float(x[2]), float(x[3]), -1.0*float(x[5]) ] for x in lines if 'surface' not in x[1] ]
+
+weight = np.array([ x[0] for x in data ])
+cc = np.array([ x[1] for x in data ])
+dt = np.array([ x[2] for x in data ])
+
+idx = np.abs(dt) <= max_dt
+dt = dt[idx]
+weight = weight[idx]
+cc = cc[idx]
+
+# plot CC
 nrow = 3
 ncol = 1
-# create axis
 subplot_origin = [ncol-1, nrow-1]*subplot_size
 ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
-# get arrays of CC
-cc = np.array([ float(x[3]) for x in lines if ('surface' not in x[1]) ])
-weight = np.array([ float(x[2]) for x in lines if ('surface' not in x[1]) ])
 ax.hist(cc, nbins, histtype='step')
 ax.set_xlabel('cc0')
-ax.set_ylabel('No. of window')
+ax.set_ylabel('No. of windows')
 ax.set_xlim([0.5, 1])
-title_str = "body wave %.3f(%.2f)" % (np.sum(cc*weight)/np.sum(weight), np.sum(weight))
+title_str = "%s %.3f(%.2f)" % (data_type, np.sum(cc*weight)/np.sum(weight), np.sum(weight))
 ax.set_title(title_str)
 
-#----- body waves: dt
+# plot dt
 nrow = 3
 ncol = 2
-# create axis
 subplot_origin = [ncol-1, nrow-1]*subplot_size
 ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
-# get arrays of dt_cc
-dt = np.array([ -1.0*float(x[5]) for x in lines if ('surface' not in x[1]) ])
-ax.hist(dt[abs(dt)<=max_dt], nbins, histtype='step')
+ax.hist(dt, nbins, histtype='step')
 ax.set_xlabel('dt_cc (s): syn-obs')
-ax.set_ylabel('No. of window')
+ax.set_ylabel('No. of windows')
 ax.set_xlim([-max_dt, max_dt])
-title_str = "body waves %.3f$\pm$%.3f" % (np.mean(dt), np.std(dt))
+title_str = "%s %.3f$\pm$%.3f" % (data_type, np.mean(dt), np.std(dt))
 ax.set_title(title_str)
 
-#----- all: CC
+
+#----- All
+
+# get arrays of dt(syn-obs), cc 
+data_type = "all"
+data = [ [ float(x[2]), float(x[3]), -1.0*float(x[5]) ] for x in lines ]
+
+weight = np.array([ x[0] for x in data ])
+cc = np.array([ x[1] for x in data ])
+dt = np.array([ x[2] for x in data ])
+
+idx = np.abs(dt) <= max_dt
+dt = dt[idx]
+weight = weight[idx]
+cc = cc[idx]
+
+# plot CC
 nrow = 4
 ncol = 1
-# create axis
 subplot_origin = [ncol-1, nrow-1]*subplot_size
 ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
-# get arrays of CC
-cc = np.array([ float(x[3]) for x in lines ])
-weight = np.array([ float(x[2]) for x in lines ])
 ax.hist(cc, nbins, histtype='step')
 ax.set_xlabel('cc0')
-ax.set_ylabel('No. of window')
+ax.set_ylabel('No. of windows')
 ax.set_xlim([0.5, 1])
-title_str = "All %.3f(%.2f)" % (np.sum(cc*weight)/np.sum(weight), np.sum(weight))
+title_str = "%s %.3f(%.2f)" % (data_type, np.sum(cc*weight)/np.sum(weight), np.sum(weight))
 ax.set_title(title_str)
 
-#----- all: dt
+# plot dt
 nrow = 4
 ncol = 2
-# create axis
 subplot_origin = [ncol-1, nrow-1]*subplot_size
 ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
-# get arrays of dt_cc
-dt = np.array([ -1.0*float(x[5]) for x in lines ])
-ax.hist(dt[abs(dt)<=max_dt], nbins, histtype='step')
+ax.hist(dt, nbins, histtype='step')
 ax.set_xlabel('dt_cc (s): syn-obs')
-ax.set_ylabel('No. of window')
+ax.set_ylabel('No. of windows')
 ax.set_xlim([-max_dt, max_dt])
-title_str = "All %.3f$\pm$%.3f" % (np.mean(dt), np.std(dt))
+title_str = "%s %.3f$\pm$%.3f" % (data_type, np.mean(dt), np.std(dt))
 ax.set_title(title_str)
+
 
 #------ save figure
 plt.savefig(out_file, format='pdf')

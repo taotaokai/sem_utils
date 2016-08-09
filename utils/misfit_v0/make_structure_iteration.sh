@@ -418,9 +418,13 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
-$utils_dir/waveform_der_dmodel_read.py $misfit_par $db_file $event_dir/output_perturb/sac
+#$utils_dir/waveform_der_dmodel_read.py $misfit_par $db_file $event_dir/output_perturb/sac
 
-$utils_dir/cc_dmodel_step_size.py $misfit_par $db_file $misfit_dir/cc_dmodel_step_size.txt
+$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsv/sac vsv
+$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsh/sac vsh
+
+#$utils_dir/cc_dmodel_step_size.py $misfit_par $db_file $misfit_dir/cc_dmodel_step_size.txt
+$utils_dir/grid2d_cc_dmodel_vsv_vsh.py $misfit_par $db_file $misfit_dir/cc_dmodel_vsv_vsh.txt
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

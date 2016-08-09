@@ -2770,7 +2770,7 @@ class Misfit(object):
       syn_dir='output_perturb/sac',
       syn_band_code='MX',
       syn_suffix='.sem.sac',
-      model_name='dvsv',
+      model_name='vsv',
       sac_dir=None):
     """ 
     Get partial derivative seismograms from synthetics of perturbed model 

@@ -1,15 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""calculate cc for step sizes
+"""
 import sys
 import importlib.util
 from misfit import Misfit
 
-# read command line args
+#------ read command line args
 par_file = str(sys.argv[1])
 misfit_file = str(sys.argv[2])
-syn_dir = str(sys.argv[3])
+out_file = str(sys.argv[3])
 
-# load parameter file
+#------ load parameter file
 if sys.version_info < (3, ):
   raise Exception("need python3")
 elif sys.version_info < (3, 5):
@@ -27,12 +29,14 @@ misfit = Misfit()
 print("\n====== load data\n")
 misfit.load(misfit_file)
 
-print("\n====== waveform_der_dmodel\n")
-misfit.waveform_der_dmodel(
-    syn_dir=syn_dir,
-    syn_band_code=par.syn_band_code, 
-    syn_suffix=par.syn_suffix)
-#   sac_dir='du_dxs')
- 
-print("\n====== save data\n")
-misfit.save(misfit_file)
+print("\n====== grid_cc \n")
+wcc_sum, weight_sum = \
+    misfit.cc_linearized_seismogram_for_dmodel(
+        dm=par.dm_vsv_vsh, 
+        plot=False)
+
+with open(out_file, 'w') as f:
+  f.write("#weight_sum = {:12.5e}\n".format(weight_sum))
+  f.write("#step_size wcc_sum/weight_sum\n")
+  for idx in range(len(wcc_sum)):
+    f.write("{:12.5e}  {:15.8e}\n".format(par.dmodel_step_size[idx], wcc_sum[idx]/weight_sum))

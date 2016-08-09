@@ -1,0 +1,3 @@
+This folder contains some data that is required for some programs
+
+SEMCUB-WM1: whole mantle S wave model, need by program/src/xsem_add_model_semcub_wm1.f90

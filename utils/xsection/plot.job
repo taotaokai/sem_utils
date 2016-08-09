@@ -1,0 +1,23 @@
+#!/bin/bash
+#SBATCH -J plot
+#SBATCH -o plot.job.o%j
+#SBATCH -N 1
+#SBATCH -n 24
+#SBATCH -p normal
+#SBATCH -t 01:30:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+sem_utils=~/seiscode/sem_utils
+
+#rm -rf figure/*
+mkdir figure
+
+title=iter00
+
+srun -n1 $sem_utils/utils/xsection/plot_slice_gcircle_rdiff.sh model_REF nc slice_gcircle.list ${title} figure &
+
+srun -n1 $sem_utils/utils/xsection/plot_slice_sphere.sh nc slice_sphere.list ${title} figure
+
+wait

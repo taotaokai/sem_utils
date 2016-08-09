@@ -409,7 +409,7 @@ cat <<EOF > $search_job
 #SBATCH -n 1
 #SBATCH --cpus-per-task=24
 #SBATCH -p normal
-#SBATCH -t 00:30:00
+#SBATCH -t 01:30:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -424,7 +424,7 @@ $utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsv/sa
 $utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsh/sac vsh
 
 #$utils_dir/cc_dmodel_step_size.py $misfit_par $db_file $misfit_dir/cc_dmodel_step_size.txt
-$utils_dir/grid2d_cc_dmodel_vsv_vsh.py $misfit_par $db_file $misfit_dir/cc_dmodel_vsv_vsh.txt
+$utils_dir/grid_search_dvsv_dvsh.py $misfit_par $db_file $misfit_dir/grid_search_dvsv_dvsh.txt
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

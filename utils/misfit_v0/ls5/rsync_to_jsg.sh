@@ -21,6 +21,7 @@ cat<<EOF > $wkdir/rsync_exclude.list
 output_kernel
 output_hess
 output_perturb
+output_d*
 DATABASES_MPI
 misfit.pkl
 adj_hess
@@ -42,7 +43,7 @@ do
 done
 
 #====== kernel
-for folder in misfit model_searched wcc_sum_step_size xsection
+for folder in misfit model_searched grid_search_vsv_vsh wcc_sum_step_size xsection
 do
   echo "====== $folder"
   rsync -auvz $folder ${jsg_host}/${iter_dir} --exclude-from $wkdir/rsync_exclude.list

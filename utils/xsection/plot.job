@@ -14,7 +14,7 @@ sem_utils=~/seiscode/sem_utils
 #rm -rf figure/*
 mkdir figure
 
-title=iter00
+title=iter05
 
 srun -n1 $sem_utils/utils/xsection/plot_slice_gcircle_rdiff.sh model_REF nc slice_gcircle.list ${title} figure &
 

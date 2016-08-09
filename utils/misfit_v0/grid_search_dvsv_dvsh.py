@@ -37,6 +37,8 @@ wcc_sum, weight_sum = \
 
 with open(out_file, 'w') as f:
   f.write("#weight_sum = {:12.5e}\n".format(weight_sum))
-  f.write("#step_size wcc_sum/weight_sum\n")
+  f.write("#vsv_step vsh_step step_size wcc_sum/weight_sum\n")
   for idx in range(len(wcc_sum)):
-    f.write("{:12.5e}  {:15.8e}\n".format(par.dmodel_step_size[idx], wcc_sum[idx]/weight_sum))
+    f.write("{:12.5e}  {:12.5e}  {:15.8e}\n".format(
+      par.dm_vsv_vsh['vsv'][idx], par.dm_vsv_vsh['vsh'][idx],
+      wcc_sum[idx]/weight_sum))

@@ -7,3 +7,7 @@ these header files are from specfem3d_globe/
 setup/constants.h
 setup/precision.h
 OUTPUT_FILES/values_from_mesher.h
+
+# some utility header files not related to SEM
+ucb_A3d.h: 
+  program/shared/ucb_A3d.c

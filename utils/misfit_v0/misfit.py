@@ -2770,11 +2770,12 @@ class Misfit(object):
       syn_dir='output_perturb/sac',
       syn_band_code='MX',
       syn_suffix='.sem.sac',
+      model_name='dvsv',
       sac_dir=None):
     """ 
     Get partial derivative seismograms from synthetics of perturbed model 
     along the model update direction
-
+    
     Notes
     -----
     use finite difference to get waveform derivative
@@ -2844,7 +2845,7 @@ class Misfit(object):
       #------ record derivatives
       if 'waveform_der' not in station:
         station['waveform_der'] = {}
-      station['waveform_der']['model'] = {
+      station['waveform_der'][model_name] = {
           'du':du }
 
       # DEBUG: check du
@@ -3902,21 +3903,37 @@ class Misfit(object):
 #
 
   def cc_linearized_seismogram_for_dmodel(self,
-      step_size=np.arange(-10,10,1),
+      dm={'vsv':None, 'vsh':None},
       plot=False
       ):
     """ 
     Calculate normalized zero-lag cc between observed and linearized seismograms with waveform_der_dmodel
     for different step size.
 
-    return weighted_cc_sum, weight_sum
+    return weighted_cc_sum[:], weight_sum
     """
-    step_size = np.array(step_size)
-    event = self.data['event']
+    #------ validate inputs 
+    # check step length arrays in dm have the same length
+    if (not dm) or len(dm) == 0:
+      error_str = "dm must not be empty"
+      raise Exception(error_str)
+    model_num = len(dm)
+
+    nstep = []
+    for model_name in dm:
+      if dm[model_name].ndim != 1:
+        error_str = "dm[%s] must be vector" % model_name
+        raise Exception(error_str)
+      nstep.append(np.size(dm[model_name]))
+    if not is_equal(nstep) or nstep[0] < 1:
+      error_str = "vectors in dm must have the same non-zero length"
+      raise Exception(error_str)
+    nstep = nstep[0]
 
     #------ loop each station
+    event = self.data['event']
     # sum of weighted normalized zero-lag cc at each model grid
-    wcc_sum = np.zeros(np.shape(step_size))
+    wcc_sum = np.zeros(nstep)
     # sum of all windows' weighting
     weight_sum = 0.0
 
@@ -3929,9 +3946,11 @@ class Misfit(object):
 
       # check if model parameter included in waveform_der
       waveform_der = station['waveform_der']
-      if 'model' not in waveform_der:
-        error_str = "waveform_der['model'] does not exist." % (station_id)
-        raise Exception(error_str)
+      for model_name in dm:
+        if model_name not in waveform_der:
+          error_str = "%s: waveform_der['%s'] does not exist." % (
+              station_id, model_name)
+          raise Exception(error_str)
 
       #---- get seismograms: obs,grn 
       waveform = station['waveform']
@@ -3987,19 +4006,24 @@ class Misfit(object):
         # w * p * F * u
         wpFu = np.dot(proj_matrix, syn_filt) * win_func 
         #-- filter,project,taper du: wpFdu
-        du = waveform_der['model']['du']
-        du_filt = signal.filtfilt(filter_b, filter_a, du)
-        # w * p * F * du
-        wpFdu = np.dot(proj_matrix, du_filt) * win_func
+        wpFdu = {}
+        for model_name in dm:
+          du = waveform_der[model_name]['du']
+          du_filt = signal.filtfilt(filter_b, filter_a, du)
+          # w * p * F * du
+          wpFdu[model_name] = np.dot(proj_matrix, du_filt) * win_func
         #-- misfit function: zero-lag cc
-        for idx_model in range(len(step_size)):
-          wpFu1 = wpFu + step_size[idx_model]*wpFdu
+        for istep in range(nstep):
+          wpFu1 = np.zeros((3,syn_nt))
+          wpFu1 += wpFu
+          for model_name in dm:
+            wpFu1 += dm[model_name][istep] * wpFdu[model_name]
           norm_wpFu1 = np.sqrt(np.sum(wpFu1**2))
           Nw = norm_wpFd * norm_wpFu1
           #normalized cc between obs and perturbed syn
           cc_wpFd_wpFu1 = np.sum(wpFd*wpFu1) / Nw
           # weighted cc
-          wcc_sum[idx_model] += weight * cc_wpFd_wpFu1
+          wcc_sum[istep] += weight * cc_wpFd_wpFu1
           #DEBUG
           if plot:
             syn_npts = syn_nt - syn_nl - syn_nr
@@ -4016,7 +4040,7 @@ class Misfit(object):
               plt.subplot(311+i)
               if i == 0:
                 title_str = "%s.%s " % (station_id, window_id)
-                title_str += "step_size:%.2f " % (step_size[idx_model])
+                title_str += "step_size:%.2f " % (step_size[istep])
                 title_str += "NCCwin:%.2f" % (cc_wpFd_wpFu1)
                 plt.title(title_str)
 
@@ -4043,7 +4067,6 @@ class Misfit(object):
     #end for station_id in station_dict:
 
     return wcc_sum, weight_sum
-
 
 #
 #======================================================

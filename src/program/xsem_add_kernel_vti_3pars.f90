@@ -279,7 +279,7 @@ program xsem_add_kernel_vti_3pars
     enddo
 
     ! scale
-    ! G = (2*C44 + C66)/3
+    ! voigt_G = (2*C44 + C66)/3
     dln_rho = ratio_rho*step_length*(2.0*vsv2_kernel + vsh2_kernel)/(2.0*vsv2 + vsh2)/2.0
     rho = rho*(1.0 + dln_rho)
     print *, "dln_rho: min/max = ", minval(dln_rho), maxval(dln_rho)

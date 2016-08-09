@@ -12,9 +12,13 @@ matplotlib.use("pdf")
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 
+#====== utility functions
+def round_to_1(x):
+  return round(x, -int(np.floor(np.log10(np.abs(x)))))
+
 #------ user inputs
 model_dir = sys.argv[1]
-nc_tag = sys.argv[2]
+nc_tag = sys.argv[2] # to find file <model_dir>/<nc_tag>.nc
 title = sys.argv[3]
 out_dir = sys.argv[4]
 
@@ -84,16 +88,18 @@ for irow in range(nrow):
   # contourf model
   xx, yy = m(lons2, lats2)
   vmean = np.mean(model[model_tag])
-  dlnv = (np.transpose(model[model_tag])/vmean - 1.0)*100.0
-  #dlnvamp = np.max(abs(dlnv))
-  dlnvamp = 15.0
-  levels = np.linspace(-1.0*dlnvamp, dlnvamp, 21)
-  cs = m.contourf(xx, yy, dlnv, cmap=cmap, levels=levels) 
+  dlnv = (model[model_tag]/vmean - 1.0)*100.0
+  dlnv_std = np.std(dlnv)
+  dlnv_max = 2.5*dlnv_std
+  levels = np.linspace(-dlnv_max, dlnv_max, 21)
+  cs = m.contourf(xx, yy, np.transpose(dlnv), cmap=cmap, levels=levels, extend="both")
+  cs.cmap.set_over('black')
+  cs.cmap.set_under('purple')
 
   # colorbar for contourfill
-  cb = m.colorbar(cs,location='right',pad="5%", format="%.1f")
+  cb = m.colorbar(cs,location='right',pad="5%", format="%.2f")
   cb.set_label('% mean')
-  ax.set_title("{:s} ({:.2f} km/s)".format(model_tag, vmean))
+  ax.set_title("{:s} (mean={:.2f} km/s)".format(model_tag, vmean))
 
 #------ save figure
 #plt.show()

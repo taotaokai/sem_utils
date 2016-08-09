@@ -13,13 +13,12 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 
 #------ user inputs
-model0_dir = sys.argv[1]
-model1_dir = sys.argv[2]
-nc_tag = sys.argv[3]
+model0_dir = sys.argv[1] # dir of reference model nc file
+model1_dir = sys.argv[2] # dir of updated model nc file
+nc_tag = sys.argv[3] # to find file <model_dir>/<nc_tag>.nc
 title = sys.argv[4]
 out_dir = sys.argv[5]
 
-#title = "iter00"
 model_names = ['vph', 'vpv', 'vsv', 'vsh']
 
 #-- plot controls

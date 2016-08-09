@@ -2875,7 +2875,7 @@ class Misfit(object):
       ):
     """ 
     Approximate Hessian matrix of source parameters based 
-    differential seismograms
+    partial derivative waveforms
 
     Note
     ----

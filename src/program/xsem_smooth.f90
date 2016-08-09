@@ -9,7 +9,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  xsem_smooth \"
   print '(a)', "    <nproc> <mesh_dir> <model_dir> <model_tags> \"
-  print '(a)', "    <sigma_h> <sigma_v> <output_dir> "
+  print '(a)', "    <sigma_h> <sigma_v> <output_dir> <out_suffix>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -24,7 +24,8 @@ subroutine selfdoc()
   print '(a)', "  (string) model_tags: comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', "  (float) sigma_h: horizontal smoothing length in km (1 std dev.)"
   print '(a)', "  (float) sigma_v: vertical smoothing length in km (1 std dev.)"
-  print '(a)', "  (string) output_dir: proc*_reg1_<model_tags>_smooth.bin"
+  print '(a)', "  (string) output_dir: output directory of smoothed gll files"
+  print '(a)', "  (string) out_suffix: proc*_reg1_<model_tags><out_suffix>.bin"
   print '(a)', ""
   print '(a)', "NOTES"
   print '(a)', ""
@@ -47,7 +48,7 @@ program xsem_smooth
   !===== declare variables
 
   !-- command line args
-  integer, parameter :: nargs = 7
+  integer, parameter :: nargs = 8
   character(len=MAX_STRING_LEN) :: args(nargs)
 
   integer :: nproc
@@ -57,6 +58,7 @@ program xsem_smooth
   real(dp) :: sigma_h, sigma_v 
 
   character(len=MAX_STRING_LEN) :: output_dir
+  character(len=MAX_STRING_LEN) :: out_suffix
 
   !-- region id
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
@@ -127,6 +129,7 @@ program xsem_smooth
   read(args(5), *) sigma_h
   read(args(6), *) sigma_v
   read(args(7), '(a)') output_dir
+  read(args(8), '(a)') out_suffix
 
   !===== parse model tags
   call sem_utils_delimit_string(model_tags, ',', model_names, nmodel)
@@ -139,7 +142,7 @@ program xsem_smooth
   ! generate output model names
   allocate(output_model_names(nmodel))
   do imodel = 1, nmodel
-    output_model_names(imodel) = trim(model_names(imodel))//'_smooth'
+    output_model_names(imodel) = trim(model_names(imodel))//trim(out_suffix)
   enddo
 
   !====== smoothing parameters 

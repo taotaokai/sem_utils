@@ -29,7 +29,7 @@ subroutine selfdoc()
   print '(a)', "NOTE"
   print '(a)', ""
   print '(a)', "  1. can be run in parallel"
-  print '(a)', "  2. out = kernel / (diag_hess_normalized + eps)"
+  print '(a)', "  2. out = kernel * eps / (diag_hess_normalized + eps)"
   print '(a)', "  3. diag_hess is normalized to maximum amplitude of 1, eps can be chosen by trial and error (e.g. ~ 0.001)"
   print '(a)', "  4. it's better to smooth the hessian before use in order to have smoothed hess inverse"
 
@@ -160,7 +160,7 @@ program xsem_kernel_divide_hess_water_level
       ! read kernel
       call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, kernel_names(iker), kernel_gll)
       ! water level division 
-      kernel_gll = kernel_gll / (hess_gll + eps)
+      kernel_gll = kernel_gll * eps / (hess_gll + eps)
       ! write out
       call sem_io_write_gll_file_1(out_dir, iproc, iregion, trim(kernel_names(iker))//trim(out_suffix), kernel_gll)
     enddo

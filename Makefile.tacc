@@ -70,14 +70,18 @@ program = xsem_slice_gcircle \
 	xsem_add_kernel_vti_3pars \
 	xsem_add_kernel_vti_4pars \
 	xsem_add_kernel_vti_5pars \
-	xsem_hessian_diag_random_adjoint_kernel \
 	xsem_threshold_percentage \
 	xsem_model_tiso_to_thomsen \
 	xsem_kernel_ijkl_covariance_matrix \
 	xsem_model_tiso_enforce_iso_elem \
 	xsem_model_tiso_enforce_iso_iflag \
 	xsem_mesh_get_idoubling_gll \
-	xsem_mesh_get_ispec_is_tiso_gll
+	xsem_mesh_get_ispec_is_tiso_gll \
+	xsem_hess_diag_sum_random_adjoint_kernel \
+	xsem_hess_diag_vti_3pars_random_adjoint_kernel \
+	xsem_kernel_vti_3pars_scale_max_dlnvs \
+	xsem_kernel_vti_3pars_divide_hess_diag \
+	xsem_kernel_vti_3pars_update_model
 
 
 #------------------------------------------

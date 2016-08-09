@@ -300,52 +300,48 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
-echo "====== reduce kernel [\$(date)]"
-ibrun $sem_utils/bin/xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
-  $nproc $mesh_dir/DATABASES_MPI $mesh_dir/DATABASES_MPI \
-  $event_dir/output_kernel/kernel \
-  $event_dir/output_kernel/kernel
-
-ibrun $sem_utils/bin/xsem_kernel_aijkl_to_vti_3pars \
-  $nproc $mesh_dir/DATABASES_MPI \
-  $event_dir/output_kernel/kernel \
-  $event_dir/output_kernel/kernel
-
-echo "====== sum up hessian [\$(date)]"
-ibrun $sem_utils/bin/xsem_hessian_diag_random_adjoint_kernel \
-  $nproc $mesh_dir/DATABASES_MPI $mesh_dir/DATABASES_MPI \
-  $event_dir/output_hess/kernel $event_dir/output_hess/kernel
-
-echo "====== smooth hess [\$(date)]"
 out_dir=$event_dir/kernel_precond
 mkdir \$out_dir
 
-ln -sf $event_dir/output_hess/kernel/*_hess.bin \$out_dir/
-ln -sf $event_dir/output_kernel/kernel/*_kernel.bin \$out_dir/
-#ln -sf $event_dir/output_kernel/kernel/*_rhoprime_kernel.bin \$out_dir/
+echo "====== convert cijkl to aijkl kernel [\$(date)]"
+ibrun $sem_utils/bin/xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
+  $nproc $mesh_dir/DATABASES_MPI $mesh_dir/DATABASES_MPI \
+  $event_dir/output_kernel/kernel \
+  \$out_dir
 
+echo "====== reduce aijkl kernel [\$(date)]"
+ibrun $sem_utils/bin/xsem_kernel_aijkl_to_vti_3pars \
+  $nproc $mesh_dir/DATABASES_MPI \
+  \$out_dir \
+  \$out_dir
+
+echo "====== random kernel to hessian diagonal [\$(date)]"
+ibrun $sem_utils/bin/xsem_hess_diag_sum_random_adjoint_kernel \
+  $nproc $mesh_dir/DATABASES_MPI \
+  $mesh_dir/DATABASES_MPI \
+  $event_dir/output_hess/kernel \
+  \$out_dir
+
+echo "====== smooth hess diagonal [\$(date)]"
 sigma_h=50
 sigma_v=20
-#model_tags=hess,vph2_kernel,vpv2_kernel,vsv2_kernel,vsh2_kernel,vf2_kernel #,rhoprime_kernel
-#model_tags=hess,vp2_kernel,vsv2_kernel,vsh2_kernel #,rhoprime_kernel
-model_tags=hess
+
+model_tags=sum_hess_diag
 
 ibrun $sem_utils/bin/xsem_smooth \
   $nproc $mesh_dir/DATABASES_MPI \$out_dir \
-  \$model_tags \$sigma_h \$sigma_v \$out_dir
+  \$model_tags \$sigma_h \$sigma_v \$out_dir "_smooth"
 
-echo "====== precondition kernel [\$(date)]"
-hess_tag="hess_smooth"
-#kernel_tags=vph2_kernel_smooth,vpv2_kernel_smooth,vsv2_kernel_smooth,vsh2_kernel_smooth,vf2_kernel_smooth
-#kernel_tags=vp2_kernel_smooth,vsv2_kernel_smooth,vsh2_kernel_smooth
-kernel_tags=vp2_kernel,vsv2_kernel,vsh2_kernel
+echo "====== kernel precondition [\$(date)]"
 eps=0.01
-out_suffix="_precond"
+
+kernel_tags=vp2_kernel,vsv2_kernel,vsh2_kernel
+hess_tag=sum_hess_diag_smooth
 
 ibrun $sem_utils/bin/xsem_kernel_divide_hess_water_level \
   $nproc $mesh_dir/DATABASES_MPI \$out_dir \
   \$kernel_tags \$out_dir \$hess_tag \
-  \$eps \$out_dir \$out_suffix
+  \$eps \$out_dir "_precond"
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -360,7 +356,7 @@ cat <<EOF > $perturb_job
 #SBATCH -N 11
 #SBATCH -n 256
 #SBATCH -p normal
-#SBATCH -t 01:00:00
+#SBATCH -t 02:00:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -369,33 +365,35 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
-out_dir=output_perturb
-
-#mkdir -p $event_dir/DATA
 cd $event_dir/DATA
-#cp $data_dir/$event_id/data/STATIONS .
-#cp $mesh_perturb_dir/DATA/Par_file .
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
+ 
+for dmodel in dvsv dvsh #perturb
+do
 
-rm -rf $event_dir/DATABASES_MPI
-mkdir $event_dir/DATABASES_MPI
-ln -s $mesh_perturb_dir/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
+  out_dir=output_\${dmodel}
+ 
+  rm -rf $event_dir/DATABASES_MPI
+  mkdir $event_dir/DATABASES_MPI
+  ln -s $wkdir/mesh_\${dmodel}/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
+  
+  cd $event_dir
+  rm -rf \$out_dir OUTPUT_FILES
+  mkdir \$out_dir
+  ln -sf \$out_dir OUTPUT_FILES
+  
+  cp $wkdir/mesh_\${dmodel}/OUTPUT_FILES/addressing.txt OUTPUT_FILES
+  cp -L DATA/Par_file OUTPUT_FILES
+  cp -L DATA/STATIONS OUTPUT_FILES
+  cp -L DATA/CMTSOLUTION OUTPUT_FILES
+  
+  ibrun $specfem_dir/bin/xspecfem3D
+  
+  mkdir $event_dir/\$out_dir/sac
+  mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 
-cd $event_dir
-rm -rf \$out_dir OUTPUT_FILES
-mkdir \$out_dir
-ln -sf \$out_dir OUTPUT_FILES
-
-cp $mesh_perturb_dir/OUTPUT_FILES/addressing.txt OUTPUT_FILES
-cp -L DATA/Par_file OUTPUT_FILES
-cp -L DATA/STATIONS OUTPUT_FILES
-cp -L DATA/CMTSOLUTION OUTPUT_FILES
-
-ibrun $specfem_dir/bin/xspecfem3D
-
-mkdir $event_dir/\$out_dir/sac
-mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
+done
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -411,7 +409,7 @@ cat <<EOF > $search_job
 #SBATCH -n 1
 #SBATCH --cpus-per-task=24
 #SBATCH -p normal
-#SBATCH -t 00:10:00
+#SBATCH -t 00:30:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end

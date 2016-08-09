@@ -21,7 +21,7 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (string) kernel_dir:  directory holds the aijkl_kernel files"
   print '(a)', "                        proc******_reg1_aijkl_kernel.bin"
-  print '(a)', "  (string) out_dir:  output directory for vphi2,vsv2,vsh2,F_kernel"
+  print '(a)', "  (string) out_dir:  output directory for [vp2,vsv2,vsh2]_kernel"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""

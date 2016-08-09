@@ -15,36 +15,16 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 
 #------ user inputs
-model0_dir = sys.argv[1] # reference
-model1_dir = sys.argv[2] # updated
-
-nc_tag = sys.argv[3]
-
-# xsection 41.17  119.78 116.5
+model0_dir = sys.argv[1] # dir of reference model nc file
+model1_dir = sys.argv[2] # dir of updated model nc file
+nc_tag = sys.argv[3] # to find file <model_dir>/<nc_tag>.nc
+# xsection geometry
 xsection_lat0 = float(sys.argv[4])
 xsection_lon0 = float(sys.argv[5])
 xsection_azimuth = float(sys.argv[6])
-
-# title
 title = sys.argv[7]
-
-# out dir
 out_dir = sys.argv[8]
 
-#v0_dir = 'model_REF'
-#v1_dir = 'model_EARA2014'
-#
-#nc_tag = "trench_normal_lat41.2"
-#
-## title
-#title = "iter00"
-#
-## xsection 41.17  119.78 116.5
-#xsection_lat0 = 41.17
-#xsection_lon0 = 119.78
-#xsection_azimuth = 116.5
-
-#
 model_names = ['vph', 'vpv', 'vsv', 'vsh']
 
 # earth parameters 
@@ -193,7 +173,7 @@ for irow in range(nrow):
   tag = model_names[irow]
   rdiff = (model1[tag] - model0[tag])/model0[tag] * 100.0
  
-  # contour velocity 
+  # contour model1 
   #vmin = np.min(model1[tag])
   #vmax = np.max(model1[tag])
   #dv = round((vmax-vmin)/40.0, 1)
@@ -205,6 +185,8 @@ for irow in range(nrow):
   
   # contourfill relative difference 
   cs = ax.contourf(xx, yy, rdiff, cmap=cmap, levels=np.arange(-8,8.1,0.5))
+  cs.cmap.set_over('black')
+  cs.cmap.set_under('purple')
 
   # colorbar for contourfill
   if irow == 0:

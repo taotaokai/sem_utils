@@ -70,6 +70,7 @@ cat <<EOF > $run_dir/mesh.job
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
 
+cd $run_dir
 ibrun $sem_dir/bin/xmeshfem3D
 
 EOF

@@ -19,5 +19,5 @@ do
   $sem_utils/utils/xsection/plot_slice_sphere.py \
     $model_dir \
     $nc_tag \
-    "$title" $out_dir
+    "$title ($depth km)" $out_dir
 done

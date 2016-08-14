@@ -38,7 +38,6 @@ ax_size_subplot = np.array([0.7, 0.7])
 # hist parameters
 nbins = 50
 max_dt = 10 
-#min_weight = 0.1
 
 #----- surface RZ
 
@@ -66,7 +65,7 @@ ax.hist(cc, nbins, histtype='step')
 ax.set_xlabel('cc0')
 ax.set_ylabel('No. of windows')
 ax.set_xlim([0.5, 1])
-title_str = "%s %.3f(%.2f)" % (data_type, np.sum(cc*weight)/np.sum(weight), np.sum(weight))
+title_str = "%s %.4f(%.2f)" % (data_type, np.sum(cc*weight)/np.sum(weight), np.sum(weight))
 ax.set_title(title_str)
 
 # plot dt
@@ -110,7 +109,7 @@ ax.hist(cc, nbins, histtype='step')
 ax.set_xlabel('cc0')
 ax.set_ylabel('No. of windows')
 ax.set_xlim([0.5, 1])
-title_str = "%s %.3f(%.2f)" % (data_type, np.sum(cc*weight)/np.sum(weight), np.sum(weight))
+title_str = "%s %.4f(%.2f)" % (data_type, np.sum(cc*weight)/np.sum(weight), np.sum(weight))
 ax.set_title(title_str)
 
 # plot dt
@@ -154,7 +153,7 @@ ax.hist(cc, nbins, histtype='step')
 ax.set_xlabel('cc0')
 ax.set_ylabel('No. of windows')
 ax.set_xlim([0.5, 1])
-title_str = "%s %.3f(%.2f)" % (data_type, np.sum(cc*weight)/np.sum(weight), np.sum(weight))
+title_str = "%s %.4f(%.2f)" % (data_type, np.sum(cc*weight)/np.sum(weight), np.sum(weight))
 ax.set_title(title_str)
 
 # plot dt
@@ -198,7 +197,7 @@ ax.hist(cc, nbins, histtype='step')
 ax.set_xlabel('cc0')
 ax.set_ylabel('No. of windows')
 ax.set_xlim([0.5, 1])
-title_str = "%s %.3f(%.2f)" % (data_type, np.sum(cc*weight)/np.sum(weight), np.sum(weight))
+title_str = "%s %.4f(%.2f)" % (data_type, np.sum(cc*weight)/np.sum(weight), np.sum(weight))
 ax.set_title(title_str)
 
 # plot dt

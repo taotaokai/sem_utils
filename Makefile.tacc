@@ -79,9 +79,10 @@ program = xsem_slice_gcircle \
 	xsem_mesh_get_ispec_is_tiso_gll \
 	xsem_hess_diag_sum_random_adjoint_kernel \
 	xsem_hess_diag_vti_3pars_random_adjoint_kernel \
-	xsem_kernel_vti_3pars_scale_max_dlnvs \
+	xsem_kernel_vti_3pars_scale_max_dlnv \
 	xsem_kernel_vti_3pars_divide_hess_diag \
-	xsem_kernel_vti_3pars_update_model
+	xsem_kernel_vti_3pars_update_model \
+	xsem_pcg_dmodel
 
 
 #------------------------------------------

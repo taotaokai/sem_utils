@@ -9,7 +9,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  xsem_kernel_vti_3pars_update_model"
   print '(a)', "    <nproc> <mesh_dir> <model_dir> <kernel_dir> <kernel_suffix>"
-  print '(a)', "    <scale_vp2> <scale_vsv2> <scale_vsh2> <out_dir>"
+  print '(a)', "    <scale_vp2> <scale_vsv2> <scale_vsh2> <dlnv_limit> <output_dmodel> <out_dir>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -27,6 +27,8 @@ subroutine selfdoc()
   print '(a)', "  (float) scale_vp2:  scale factor for vp2_kernel"
   print '(a)', "  (float) scale_vsv2:  scale factor for vsv2_kernel"
   print '(a)', "  (float) scale_vsh2:  scale factor for vsh2_kernel"
+  print '(a)', "  (float) dlnv_limit:  limit of maximum velocity change (no limit if < 0)"
+  print '(a)', "  (int) output_dmodel(0/1): =1 write out [vp2,vsv2,vsh2]_dmodel.bin, =0 do not"
   print '(a)', "  (string) out_dir:  output directory for new model"
   print '(a)', ""
   print '(a)', "note"
@@ -52,7 +54,7 @@ program xsem_kernel_vti_3pars_update_model
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 9
+  integer, parameter :: nargs = 11
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
@@ -62,6 +64,8 @@ program xsem_kernel_vti_3pars_update_model
   real(dp) :: scale_vp2
   real(dp) :: scale_vsv2
   real(dp) :: scale_vsh2
+  real(dp) :: dlnv_limit
+  integer :: output_dmodel 
   character(len=MAX_STRING_LEN) :: out_dir
 
   ! local variables
@@ -79,6 +83,8 @@ program xsem_kernel_vti_3pars_update_model
   ! scale rho 
   real(dp), parameter :: scale_rho = 0.33
   real(dp), dimension(:,:,:,:), allocatable :: dln_rho
+  ! dlnv_limit
+  real(dp), dimension(:,:,:,:), allocatable :: dlnv, ones
 
   !===== start MPI
   call init_mpi()
@@ -107,7 +113,9 @@ program xsem_kernel_vti_3pars_update_model
   read(args(6),*) scale_vp2
   read(args(7),*) scale_vsv2
   read(args(8),*) scale_vsh2
-  read(args(9),'(a)') out_dir
+  read(args(9),*) dlnv_limit
+  read(args(10),*) output_dmodel
+  read(args(11),'(a)') out_dir
 
   call synchronize_all()
 
@@ -131,6 +139,9 @@ program xsem_kernel_vti_3pars_update_model
   allocate(vsh2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
 
   allocate(dln_rho(NGLLX,NGLLY,NGLLZ,nspec))
+
+  allocate(dlnv(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(ones(NGLLX,NGLLY,NGLLZ,nspec))
  
   !====== create new model
   do iproc = myrank, (nproc-1), nrank
@@ -164,6 +175,23 @@ program xsem_kernel_vti_3pars_update_model
     vsv2_kernel = scale_vsv2 * vsv2_kernel
     vsh2_kernel = scale_vsh2 * vsh2_kernel
 
+    ! limit maximum dlnv
+    if (dlnv_limit > 0.0) then
+      ones = 1.0_dp
+
+      dlnv = 0.5*abs(vp2_kernel/vph2)
+      where (dlnv > dlnv_limit) vp2_kernel = 2.0*dlnv_limit*vph2*sign(ones,vp2_kernel)
+
+      dlnv = 0.5*abs(vp2_kernel/vpv2)
+      where (dlnv > dlnv_limit) vp2_kernel = 2.0*dlnv_limit*vpv2*sign(ones,vp2_kernel)
+
+      dlnv = 0.5*abs(vsv2_kernel/vsv2)
+      where (dlnv > dlnv_limit) vsv2_kernel = 2.0*dlnv_limit*vsv2*sign(ones,vsv2_kernel)
+
+      dlnv = 0.5*abs(vsh2_kernel/vsh2)
+      where (dlnv > dlnv_limit) vsh2_kernel = 2.0*dlnv_limit*vsh2*sign(ones,vsh2_kernel)
+    endif
+
     ! check if element is isotropic
     do ispec = 1, nspec
       if (.not. mesh_data%ispec_is_tiso(ispec)) then
@@ -189,13 +217,20 @@ program xsem_kernel_vti_3pars_update_model
     vsh2 = vsh2 + vsh2_kernel
     vf2  = vf2  + (vp2_kernel - 2.0*vsv2_kernel)
 
-    ! write new models
+    ! write new models (for model_gll)
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vph', sqrt(vph2))
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vpv', sqrt(vpv2))
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vsv', sqrt(vsv2))
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vsh', sqrt(vsh2))
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'eta', vf2/(vph2 - 2.0*vsv2))
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'rho', rho)
+
+    ! write out dmodel
+    if (output_dmodel == 1) then
+      call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vp2_dmodel', vp2_kernel)
+      call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vsv2_dmodel', vsv2_kernel)
+      call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vsh2_dmodel', vsh2_kernel)
+    endif
 
   enddo
 

@@ -288,8 +288,8 @@ cat <<EOF > $precond_job
 #!/bin/bash
 #SBATCH -J ${event_id}.precond
 #SBATCH -o ${precond_job}.o%j
-#SBATCH -N 5
-#SBATCH -n 120
+#SBATCH -N 1
+#SBATCH -n 24
 #SBATCH -p normal
 #SBATCH -t 01:00:00
 #SBATCH --mail-user=kai.tao@utexas.edu
@@ -315,25 +315,25 @@ ibrun $sem_utils/bin/xsem_kernel_aijkl_to_vti_3pars \
   \$out_dir \
   \$out_dir
 
-echo "====== random kernel to hessian diagonal [\$(date)]"
-ibrun $sem_utils/bin/xsem_hess_diag_sum_random_adjoint_kernel \
-  $nproc $mesh_dir/DATABASES_MPI \
-  $mesh_dir/DATABASES_MPI \
-  $event_dir/output_hess/kernel \
-  \$out_dir
+#echo "====== random kernel to hessian diagonal [\$(date)]"
+#ibrun $sem_utils/bin/xsem_hess_diag_sum_random_adjoint_kernel \
+#  $nproc $mesh_dir/DATABASES_MPI \
+#  $mesh_dir/DATABASES_MPI \
+#  $event_dir/output_hess/kernel \
+#  \$out_dir
 
-echo "====== smooth hess diagonal [\$(date)]"
-sigma_h=50
-sigma_v=20
-
-model_tags=sum_hess_diag
-
-ibrun $sem_utils/bin/xsem_smooth \
-  $nproc $mesh_dir/DATABASES_MPI \$out_dir \
-  \$model_tags \$sigma_h \$sigma_v \$out_dir "_smooth"
+#echo "====== smooth hess diagonal [\$(date)]"
+#sigma_h=50
+#sigma_v=20
+#
+#model_tags=sum_hess_diag
+#
+#ibrun $sem_utils/bin/xsem_smooth \
+#  $nproc $mesh_dir/DATABASES_MPI \$out_dir \
+#  \$model_tags \$sigma_h \$sigma_v \$out_dir "_smooth"
 
 echo "====== kernel precondition [\$(date)]"
-eps=0.01
+eps=0.001
 
 kernel_tags=vp2_kernel,vsv2_kernel,vsh2_kernel
 hess_tag=sum_hess_diag_smooth
@@ -369,7 +369,7 @@ cd $event_dir/DATA
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
  
-for dmodel in dvsv dvsh #perturb
+for dmodel in dvp dvsv dvsh
 do
 
   out_dir=output_\${dmodel}
@@ -379,6 +379,7 @@ do
   ln -s $wkdir/mesh_\${dmodel}/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
   
   cd $event_dir
+
   rm -rf \$out_dir OUTPUT_FILES
   mkdir \$out_dir
   ln -sf \$out_dir OUTPUT_FILES
@@ -418,13 +419,12 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
-#$utils_dir/waveform_der_dmodel_read.py $misfit_par $db_file $event_dir/output_perturb/sac
-
+$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvp/sac vp
 $utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsv/sac vsv
 $utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsh/sac vsh
 
-#$utils_dir/cc_dmodel_step_size.py $misfit_par $db_file $misfit_dir/cc_dmodel_step_size.txt
 $utils_dir/grid_search_dvsv_dvsh.py $misfit_par $db_file $misfit_dir/grid_search_dvsv_dvsh.txt
+$utils_dir/grid_search_dvp.py $misfit_par $db_file $misfit_dir/grid_search_dvp.txt
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

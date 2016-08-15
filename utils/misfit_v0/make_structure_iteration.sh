@@ -423,8 +423,8 @@ $utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvp/sac
 $utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsv/sac vsv
 $utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsh/sac vsh
 
-$utils_dir/grid_search_dvsv_dvsh.py $misfit_par $db_file $misfit_dir/grid_search_dvsv_dvsh.txt
-$utils_dir/grid_search_dvp.py $misfit_par $db_file $misfit_dir/grid_search_dvp.txt
+$utils_dir/grid_search_dvsh.py $misfit_par $db_file $misfit_dir/grid_search_dvsh.txt
+$utils_dir/grid_search_dvp_dvsv.py $misfit_par $db_file $misfit_dir/grid_search_dvp_dvsv.txt
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

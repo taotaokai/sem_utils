@@ -184,7 +184,7 @@ for irow in range(nrow):
   #plt.clabel(cs, fmt='%2.1f', colors='k', fontsize=5)
   
   # contourfill relative difference 
-  cs = ax.contourf(xx, yy, rdiff, cmap=cmap, levels=np.arange(-8,8.1,0.5))
+  cs = ax.contourf(xx, yy, rdiff, cmap=cmap, levels=np.arange(-8,8.1,0.5), extend="both")
   cs.cmap.set_over('black')
   cs.cmap.set_under('purple')
 

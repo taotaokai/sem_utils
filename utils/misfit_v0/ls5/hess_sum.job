@@ -1,0 +1,45 @@
+#!/bin/bash
+#SBATCH -J hess_sum
+#SBATCH -o hess_sum.job.o%j
+#SBATCH -N 1
+#SBATCH -n 24
+#SBATCH -p normal
+#SBATCH -t 01:30:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+wkdir=$(pwd)
+
+event_list=to_run.txt
+stage_dir=/home1/03244/ktao/NEChina/stage01.structure
+iter_nums=3,4
+
+sem_utils=/home1/03244/ktao/seiscode/sem_utils/
+nproc=256
+
+#====== make and submit jobs
+for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
+do
+
+  echo "====== $event_id"
+
+  out_dir=$wkdir/$event_id/kernel_precond
+  mkdir -p $out_dir
+
+  echo $iter_nums | awk 'BEGIN{RS=","}; {printf "%s/iter%02d/%s/kernel_precond\n", a,$1,b}' \
+    a="$stage_dir" b="$event_id" > hess_dir.list
+
+  ibrun $sem_utils/bin/xsem_sum_event_kernels_1 \
+    $nproc $wkdir/mesh/DATABASES_MPI \
+    hess_dir.list "sum_hess_diag" \
+    0 "xxx" $out_dir
+done
+
+echo
+echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

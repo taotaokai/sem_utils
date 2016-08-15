@@ -1,0 +1,37 @@
+#!/bin/bash
+#SBATCH -J dmodel_scale
+#SBATCH -o dmodel_scale.job.o%j
+#SBATCH -N 1
+#SBATCH -n 24
+#SBATCH -p normal
+#SBATCH -t 00:30:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+wkdir=$(pwd)
+sem_utils=/home1/03244/ktao/seiscode/sem_utils
+
+mesh_dir=mesh/DATABASES_MPI
+model_dir=model
+
+dmodel_dir=$wkdir/kernel_sum
+dmodel_suffix="_dmodel"
+
+max_dlnv=0.05
+keep_ratio=0
+
+out_dir=$wkdir/kernel_sum
+out_suffix="_dmodel_scale"
+
+ibrun $sem_utils/bin/xsem_kernel_vti_3pars_scale_max_dlnv \
+  256 $mesh_dir $model_dir $dmodel_dir $dmodel_suffix \
+  $max_dlnv $keep_ratio $out_dir $out_suffix
+
+echo
+echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

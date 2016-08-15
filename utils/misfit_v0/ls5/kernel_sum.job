@@ -1,0 +1,54 @@
+#!/bin/bash
+#SBATCH -J kernel_sum
+#SBATCH -o kernel_sum.job.o%j
+#SBATCH -N 1
+#SBATCH -n 24
+#SBATCH -p normal
+#SBATCH -t 00:30:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+wkdir=$(pwd)
+sem_utils=/home1/03244/ktao/seiscode/sem_utils/
+nproc=256
+
+# list of event kernel directories
+event_kernel_dir=kernel_precond
+awk -F"|" 'NF&&$1!~/#/{printf "%s/%s/%s\n", a,$9,b}' \
+  a="$wkdir" b="$event_kernel_dir" event.txt > kernel_dir.list
+
+out_dir=$wkdir/kernel_sum
+mkdir $out_dir
+
+#kernel_suffix=_kernel
+#for kernel_tag in vp2 vsv2 vsh2
+#do
+#  echo ====== $kernel_tag
+#  ibrun $sem_utils/bin/xsem_sum_event_kernels_1 \
+#    $nproc \
+#    $wkdir/mesh/DATABASES_MPI \
+#    kernel_dir.list ${kernel_tag}${kernel_suffix} \
+#    0 "xxx" \
+#    $out_dir
+#done
+
+kernel_suffix=_kernel_precond
+for kernel_tag in vp2 vsv2 vsh2
+do
+  echo ====== $kernel_tag
+  ibrun $sem_utils/bin/xsem_sum_event_kernels_1 \
+    $nproc \
+    $wkdir/mesh/DATABASES_MPI \
+    kernel_dir.list ${kernel_tag}${kernel_suffix} \
+    0 "xxx" \
+    $out_dir
+done
+
+echo
+echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

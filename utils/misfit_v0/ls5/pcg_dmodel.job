@@ -1,0 +1,45 @@
+#!/bin/bash
+#SBATCH -J pcg_dmodel
+#SBATCH -o pcg_dmodel.job.o%j
+#SBATCH -N 1
+#SBATCH -n 24
+#SBATCH -p normal
+#SBATCH -t 00:30:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+wkdir=$(pwd)
+stage_dir=/home1/03244/ktao/NEChina/stage01.structure
+sem_utils=/home1/03244/ktao/seiscode/sem_utils
+nproc=256
+previous_wkdir=$stage_dir/iter07
+
+current_kernel_dir=$wkdir/kernel_sum
+previous_kernel_dir=$previous_wkdir/kernel_sum
+previous_dmodel_dir=$previous_wkdir/model_searched
+
+out_dir=$wkdir/kernel_sum
+
+for model in vp2 vsv2 vsh2
+do
+  current_kernel_name=${model}_kernel_precond_threshold_smooth
+  previous_kernel_name=${model}_kernel_precond_threshold_smooth
+  previous_dmodel_name=${model}_dmodel
+  out_name=${model}_dmodel
+  
+  ibrun $sem_utils/bin/xsem_pcg_dmodel \
+    $nproc $wkdir/mesh/DATABASES_MPI \
+    $current_kernel_dir $current_kernel_name \
+    $previous_kernel_dir $previous_kernel_name \
+    $previous_dmodel_dir $previous_dmodel_name \
+    $out_dir $out_name
+done
+
+echo
+echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

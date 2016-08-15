@@ -18,6 +18,7 @@ echo ==============
 
 #====== <event_id>/
 cat<<EOF > $wkdir/rsync_exclude.list
+output_syn
 output_kernel
 output_hess
 output_perturb
@@ -43,7 +44,7 @@ do
 done
 
 #====== kernel
-for folder in misfit model_searched grid_search_vsv_vsh wcc_sum_step_size xsection
+for folder in misfit model_searched grid_search_* wcc_sum_step_size xsection
 do
   echo "====== $folder"
   rsync -auvz $folder ${jsg_host}/${iter_dir} --exclude-from $wkdir/rsync_exclude.list

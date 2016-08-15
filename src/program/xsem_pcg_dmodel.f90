@@ -194,8 +194,8 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   call synchronize_all()
 
   ! cg update parameter
-  beta = (yk_pk1_all - 2.0*dk_pk1_all*yk_yk_all/yk_dk_all) / yk_dk_all ! Hager and Zhang (2003)
-  !beta = yk_pk1_all/yk_dk_all ! Hestenes and Stiefel (1952)
+  !beta = (yk_pk1_all - 2.0*dk_pk1_all*yk_yk_all/yk_dk_all) / yk_dk_all ! Hager and Zhang (2003)
+  beta = yk_pk1_all/yk_dk_all ! Hestenes and Stiefel (1952)
 
   print *, "update parameter = ", beta 
 

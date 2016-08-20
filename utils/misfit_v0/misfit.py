@@ -1225,6 +1225,7 @@ class Misfit(object):
       max_frequency=0.1,
       min_dist=0.0,
       max_dist=180.0,
+      pre_weight=1.0,
       ):
     """ 
     Add misfit window for all stations
@@ -1368,7 +1369,9 @@ class Misfit(object):
           'msg': "created on "+UTCDateTime.now().isoformat() },
         'filter': filter_dict,
         'taper': taper_dict,
-        'polarity': polarity_dict }
+        'polarity': polarity_dict,
+        'pre_weight': pre_weight,
+        }
 
     #endfor station_id, station in station_dict.iteritems():
   #enddef add_window_body_wave
@@ -1389,6 +1392,7 @@ class Misfit(object):
       filter_order=2,
       min_frequency=0.01,
       max_frequency=0.05,
+      pre_weight=1.0,
       ):
     """ 
     Add misfit window for all stations
@@ -1504,7 +1508,9 @@ class Misfit(object):
           'msg': "created on "+UTCDateTime.now().isoformat() },
         'filter': filter_dict,
         'taper': taper_dict,
-        'polarity': polarity_dict }
+        'polarity': polarity_dict,
+        'pre_weight': pre_weight,
+        }
 
     #endfor station_id, station in station_dict.iteritems():
   #enddef add_window_surface_wave
@@ -1936,7 +1942,7 @@ class Misfit(object):
         ARmax = CCmax * syn_norm / obs_norm # amplitude ratio: syn/obs
 
         #------ window weighting based on SNR and misfit
-        weight = 1.0
+        weight = window['pre_weight']
         if 'SNR' in weight_param:
           weight *= cosine_taper(snr, weight_param['SNR'])
         if 'CCmax' in weight_param:
@@ -3134,217 +3140,212 @@ class Misfit(object):
 #======================================================
 #
 
-#  def cc_perturbed_seismogram(self,
-#      dm={'t0':None, 'xs':None},
-##     dist_min=0.0,
-##     dist_max=180.0,
-#      plot=False
-#      ):
-#    """ calculate normalized zero-lag cc for perturbed seismograms from linear combination of waveform derivatives
-#
-#    dm={<model_name>:<model_vector>, ...}
-#    model_name: ['dt0', 'dxs']
-#    model_vector: ndarray of the same length
-#
-#    dist_range : array(2)
-#      if set, use only stations within the specified distance range (degree)
-#
-#    return cc_sum, weight_sum
-#    """
-#    # check model vectors in dm have the same length
-#    if (not dm) or len(dm) == 0:
-#      error_str = "dm must not be empty"
-#      raise Exception(error_str)
-#    model_num = len(dm)
-#
-#    vector_size = []
-#    for model_name in dm:
-#      if dm[model_name].ndim != 1:
-#        error_str = "dm[%s] must be vector" % model_name
-#        raise Exception(error_str)
-#      vector_size.append(np.size(dm[model_name]))
-#    if not is_equal(vector_size) or vector_size[0] < 1:
-#      error_str = "vectors in dm must have the same non-zero length"
-#      raise Exception(error_str)
-#    vector_size = vector_size[0]
-#
-#    # check parameters
-#    event = self.data['event']
-#    if 'tau' in dm:
-#      tau = dm['tau'] + event['tau']
-#      if any(tau <= 0):
-#        error_str = "dm['dtau'] has invalid values (event['tau']=%f)!" \
-#            % event['tau']
-#        raise Exception(error_str)
-#
-#    #------ loop each station
-#    # sum of weighted normalized zero-lag cc at each model grid
-#    wcc_sum = np.zeros(vector_size)
-#    # sum of all windows' weighting
-#    weight_sum = 0.0
-#
-#    station_dict = self.data['station']
-#    for station_id in station_dict:
-#      station = station_dict[station_id]
-#      # skip rejected stations
-#      if station['stat']['code'] < 0:
-#        continue
-#
-#      ## skip stations out of the selected distance range
-#      #gcarc = station['meta']['dist_degree']
-#      #if gcarc < dist_min or gcarc > dist_max:
-#      #  #print("SKIP %s: gcarc=%f not in (%f, %f)" % (
-#      #  #  station_id, gcarc, dist_min, dist_max))
-#      #  continue
-#
-#      # check if model parameter included in waveform_der
-#      waveform_der = station['waveform_der']
-#      for model_name in dm:
-#        if (model_name not in ['t0', 'tau']) and \
-#           (model_name not in waveform_der):
-#          error_str = "%s not in waveform_der of %s" % (model_name, station_id)
-#          raise Exception(error_str)
-#
-#      #---- get seismograms: obs,grn 
-#      waveform = station['waveform']
-#      obs = waveform['obs']
-#      syn = waveform['syn']
-#      # time samples
-#      time_sample = waveform['time_sample']
-#      syn_starttime = time_sample['starttime']
-#      syn_delta = time_sample['delta']
-#      syn_nt = time_sample['nt']
-#      syn_nl = time_sample['nl']
-#      syn_nr = time_sample['nr']
-#      syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
-#
-#      #---- measure misfit
-#      window_dict = station['window']
-#      for window_id in window_dict:
-#        window = window_dict[window_id]
-#        # skip bad windows
-#        if window['stat']['code'] < 1:
-#          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
-#          continue
-#        # window weight
-#        weight = window['weight']
-#        # skip window with zero weight
-#        if np.isclose(weight, 0.0):
-#          continue
-#        weight_sum += weight
-#        # filter
-#        filter_dict = window['filter']
-#        filter_a = filter_dict['a']
-#        filter_b = filter_dict['b']
-#        # taper
-#        win_func = window['taper']['win']
-#        win_starttime = window['taper']['starttime']
-#        win_endtime = window['taper']['endtime']
-#        if plot:
-#          syn_times = np.arange(syn_nt) * syn_delta
-#          plt.plot(syn_times, win_func)
-#          plt.show()
-#          plt.title("wind_func")
-#        # polarity projection 
-#        proj_matrix = window['polarity']['proj_matrix']
-#        #-- filter,project,taper obs
-#        # F * d
-#        obs_filt = signal.filtfilt(filter_b, filter_a, obs)
-#        # w * p * F * d (window,project,filter)
-#        wpFd = np.dot(proj_matrix, obs_filt) * win_func 
-#        norm_wpFd = np.sqrt(np.sum(wpFd**2))
-#        #-- filter,project grn 
-#        # F * u
-#        grn_filt = signal.filtfilt(filter_b, filter_a, grn)
-#        # p * F * g
-#        pFg = np.dot(proj_matrix, grn_filt)
-#        if plot:
-#          F_src = stf_gauss_spectrum(syn_freq, event['tau'])
-#          # S * F * g
-#          syn_filt = np.fft.irfft(F_src*np.fft.rfft(grn_filt), syn_nt)
-#          # w * p * S * F * g
-#          wpFu = np.dot(proj_matrix, syn_filt) * win_func
-#        #-- filter,project dg: pFdg
-#        pFdg = {}
-#        for model_name in dm:
-#          # exclude source time function
-#          if model_name not in ['t0', 'tau']:
-#            dg = waveform_der[model_name]['dg']
-#            dg_filt = signal.filtfilt(filter_b, filter_a, dg)
-#            pFdg[model_name] = np.dot(proj_matrix, dg_filt)
-#        #-- misfit function: zero-lag cc
-#        for idx_model in range(vector_size):
-#          # perturbed grn: pFg1
-#          pFg1 = np.zeros((3,syn_nt))
-#          pFg1 += pFg
-#          for model_name in dm:
-#            # exclude source time function
-#            if model_name not in ['t0', 'tau']:
-#              pFg1 += dm[model_name][idx_model] * pFdg[model_name]
-#          # perturbed source time function
-#          dt0 = 0.0
-#          if 't0' in dm:
-#            dt0 = dm['t0'][idx_model]
-#          dtau = 0.0
-#          if 'tau' in dm:
-#            dtau = dm['tau'][idx_model]
-#          F_src = stf_gauss_spectrum(syn_freq, event['tau']+dtau)
-#          # perturbed syn: w * S * p * F * g1
-#          phase_shift = np.exp(-2.0j * np.pi * syn_freq * dt0)
-#          wpFu1 = np.fft.irfft(phase_shift*F_src*np.fft.rfft(pFg1), syn_nt) \
-#              * win_func
-#          norm_wpFu1 = np.sqrt(np.sum(wpFu1**2))
-#          Nw = norm_wpFd * norm_wpFu1
-#          #normalized cc between obs and perturbed syn
-#          cc_wpFd_wpFu1 = np.sum(wpFd*wpFu1) / Nw
-#          # weighted cc
-#          wcc_sum[idx_model] += weight * cc_wpFd_wpFu1
-#          #DEBUG
-#          if plot:
-#            syn_npts = syn_nt - syn_nl - syn_nr
-#            syn_orientation_codes = ['E', 'N', 'Z']
-#            syn_times = np.arange(syn_nt) * syn_delta
-#            Amax_obs = np.max(np.sum(wpFd**2, axis=0))**0.5
-#            Amax_syn = np.max(np.sum(wpFu**2, axis=0))**0.5
-#            Amax_syn1 = np.max(np.sum(wpFu1**2, axis=0))**0.5
-#            win_b = win_starttime - syn_starttime
-#            win_e = win_endtime - syn_starttime
-#            obs_filt_proj = np.dot(proj_matrix, obs_filt)
-#            syn_filt_proj = np.dot(proj_matrix, syn_filt)
-#            for i in range(3):
-#              plt.subplot(311+i)
-#              if i == 0:
-#                title_str = "%s.%s " % (station_id, window_id)
-#                for model_name in dm:
-#                  title_str += "%s:%.2f " \
-#                      % (model_name, dm[model_name][idx_model])
-#                title_str += "NCCwin:%.2f" % (cc_wpFd_wpFu1)
-#                plt.title(title_str)
-#
-#              idx_plt = range(syn_nl,(syn_nl+syn_npts))
-#              # whole trace, projected
-#              plt.plot(syn_times[idx_plt], obs_filt_proj[i,idx_plt]/Amax_obs, 
-#                  'k', linewidth=0.2)
-#              plt.plot(syn_times[idx_plt], syn_filt_proj[i,idx_plt]/Amax_syn,
-#                  'b', linewidth=0.2)
-#              # windowed trace
-#              idx_plt = (win_b <= syn_times) & (syn_times <= win_e)
-#              plt.plot(syn_times[idx_plt], wpFd[i,idx_plt]/Amax_obs,
-#                  'k', linewidth=1.0)
-#              plt.plot(syn_times[idx_plt], wpFu[i,idx_plt]/Amax_syn,
-#                  'b', linewidth=1.0)
-#              plt.plot(syn_times[idx_plt], wpFu1[i,idx_plt]/Amax_syn1,
-#                  'r', linewidth=1.0)
-#
-#              plt.xlim((syn_times[syn_nl], syn_times[syn_nl+syn_npts-1]))
-#              plt.ylim((-1.5, 1.5))
-#              plt.ylabel(syn_orientation_codes[i])
-#            plt.show()
-#
-#      #end for window_id in window_dict:
-#    #end for station_id in station_dict:
-#
-#    return wcc_sum, weight_sum
+  def cc_linearized_seismogram_for_source(self,
+      dm={'t0':None, 'xs':None},
+      plot=False
+      ):
+    """ 
+    calculate normalized zero-lag cc for perturbed seismograms 
+    by linear combination of waveform derivatives of source parameters (t0,tau,xs,M)
+
+    dm={<model_name>:<model_step_sizes>, ...}
+
+    return wcc_sum, weight_sum
+    """
+    # check model vectors in dm have the same length
+    if (not dm) or len(dm) == 0:
+      error_str = "dm must not be empty"
+      raise Exception(error_str)
+    model_num = len(dm)
+
+    vector_size = []
+    for model_name in dm:
+      if dm[model_name].ndim != 1:
+        error_str = "dm[%s] must be vector" % model_name
+        raise Exception(error_str)
+      vector_size.append(np.size(dm[model_name]))
+    if not is_equal(vector_size) or vector_size[0] < 1:
+      error_str = "vectors in dm must have the same non-zero length"
+      raise Exception(error_str)
+    nstep = vector_size[0]
+
+    # check parameters
+    event = self.data['event']
+    if 'tau' in dm:
+      tau = dm['tau'] + event['tau']
+      if any(tau <= 0):
+        error_str = "dm['dtau'] has invalid values (event['tau']=%f)!" \
+            % event['tau']
+        raise Exception(error_str)
+
+    #------ loop each station
+    # sum of weighted normalized zero-lag cc at each model grid
+    wcc_sum = np.zeros(nstep)
+    # sum of all windows' weighting
+    weight_sum = 0.0
+
+    station_dict = self.data['station']
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected stations
+      if station['stat']['code'] < 0:
+        continue
+
+      ## skip stations out of the selected distance range
+      #gcarc = station['meta']['dist_degree']
+      #if gcarc < dist_min or gcarc > dist_max:
+      #  #print("SKIP %s: gcarc=%f not in (%f, %f)" % (
+      #  #  station_id, gcarc, dist_min, dist_max))
+      #  continue
+
+      # check if model parameter included in waveform_der
+      waveform_der = station['waveform_der']
+      for model_name in dm:
+        if (model_name not in ['t0', 'tau']) and \
+           (model_name not in waveform_der):
+          error_str = "%s not in waveform_der of %s" % (model_name, station_id)
+          raise Exception(error_str)
+
+      #---- get seismograms: obs,grn 
+      waveform = station['waveform']
+      obs = waveform['obs']
+      grn = waveform['grn']
+      # time samples
+      time_sample = waveform['time_sample']
+      syn_starttime = time_sample['starttime']
+      syn_delta = time_sample['delta']
+      syn_nt = time_sample['nt']
+      syn_nl = time_sample['nl']
+      syn_nr = time_sample['nr']
+      syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
+
+      #---- measure misfit
+      window_dict = station['window']
+      for window_id in window_dict:
+        window = window_dict[window_id]
+        # skip bad windows
+        if window['stat']['code'] < 1:
+          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+          continue
+        # window weight
+        weight = window['weight']
+        # skip window with zero weight
+        if np.isclose(weight, 0.0):
+          continue
+        weight_sum += weight
+        # filter
+        filter_dict = window['filter']
+        filter_a = filter_dict['a']
+        filter_b = filter_dict['b']
+        # taper
+        win_func = window['taper']['win']
+        win_starttime = window['taper']['starttime']
+        win_endtime = window['taper']['endtime']
+        if plot:
+          syn_times = np.arange(syn_nt) * syn_delta
+          plt.plot(syn_times, win_func)
+          plt.show()
+          plt.title("wind_func")
+        # polarity projection 
+        proj_matrix = window['polarity']['proj_matrix']
+        #-- filter,project,taper obs
+        # F * d
+        obs_filt = signal.filtfilt(filter_b, filter_a, obs)
+        # w * p * F * d (window,project,filter)
+        wpFd = np.dot(proj_matrix, obs_filt) * win_func 
+        norm_wpFd = np.sqrt(np.sum(wpFd**2))
+        #-- filter,project grn 
+        # F * u
+        grn_filt = signal.filtfilt(filter_b, filter_a, grn)
+        # p * F * g
+        pFg = np.dot(proj_matrix, grn_filt)
+        if plot:
+          F_src = stf_gauss_spectrum(syn_freq, event['tau'])
+          # S * F * g
+          syn_filt = np.fft.irfft(F_src*np.fft.rfft(grn_filt), syn_nt)
+          # w * p * S * F * g
+          wpFu = np.dot(proj_matrix, syn_filt) * win_func
+        #-- filter,project dg: pFdg
+        pFdg = {}
+        for model_name in dm:
+          # exclude source time function
+          if model_name not in ['t0', 'tau']:
+            dg = waveform_der[model_name]['dg']
+            dg_filt = signal.filtfilt(filter_b, filter_a, dg)
+            pFdg[model_name] = np.dot(proj_matrix, dg_filt)
+        #-- misfit function: zero-lag cc
+        for idx_model in range(nstep):
+          # perturbed grn: pFg1
+          pFg1 = np.zeros((3,syn_nt))
+          pFg1 += pFg
+          for model_name in dm:
+            # exclude source time function
+            if model_name not in ['t0', 'tau']:
+              pFg1 += dm[model_name][idx_model] * pFdg[model_name]
+          # perturbed source time function
+          dt0 = 0.0
+          if 't0' in dm:
+            dt0 = dm['t0'][idx_model]
+          dtau = 0.0
+          if 'tau' in dm:
+            dtau = dm['tau'][idx_model]
+          F_src = stf_gauss_spectrum(syn_freq, event['tau']+dtau)
+          # perturbed syn: w * S * p * F * g1
+          phase_shift = np.exp(-2.0j * np.pi * syn_freq * dt0)
+          wpFu1 = np.fft.irfft(phase_shift*F_src*np.fft.rfft(pFg1), syn_nt) \
+              * win_func
+          norm_wpFu1 = np.sqrt(np.sum(wpFu1**2))
+          Nw = norm_wpFd * norm_wpFu1
+          #normalized cc between obs and perturbed syn
+          cc_wpFd_wpFu1 = np.sum(wpFd*wpFu1) / Nw
+          # weighted cc
+          wcc_sum[idx_model] += weight * cc_wpFd_wpFu1
+          #DEBUG
+          if plot:
+            syn_npts = syn_nt - syn_nl - syn_nr
+            syn_orientation_codes = ['E', 'N', 'Z']
+            syn_times = np.arange(syn_nt) * syn_delta
+            Amax_obs = np.max(np.sum(wpFd**2, axis=0))**0.5
+            Amax_syn = np.max(np.sum(wpFu**2, axis=0))**0.5
+            Amax_syn1 = np.max(np.sum(wpFu1**2, axis=0))**0.5
+            win_b = win_starttime - syn_starttime
+            win_e = win_endtime - syn_starttime
+            obs_filt_proj = np.dot(proj_matrix, obs_filt)
+            syn_filt_proj = np.dot(proj_matrix, syn_filt)
+            for i in range(3):
+              plt.subplot(311+i)
+              if i == 0:
+                title_str = "%s.%s " % (station_id, window_id)
+                for model_name in dm:
+                  title_str += "%s:%.2f " \
+                      % (model_name, dm[model_name][idx_model])
+                title_str += "NCCwin:%.2f" % (cc_wpFd_wpFu1)
+                plt.title(title_str)
+
+              idx_plt = range(syn_nl,(syn_nl+syn_npts))
+              # whole trace, projected
+              plt.plot(syn_times[idx_plt], obs_filt_proj[i,idx_plt]/Amax_obs, 
+                  'k', linewidth=0.2)
+              plt.plot(syn_times[idx_plt], syn_filt_proj[i,idx_plt]/Amax_syn,
+                  'b', linewidth=0.2)
+              # windowed trace
+              idx_plt = (win_b <= syn_times) & (syn_times <= win_e)
+              plt.plot(syn_times[idx_plt], wpFd[i,idx_plt]/Amax_obs,
+                  'k', linewidth=1.0)
+              plt.plot(syn_times[idx_plt], wpFu[i,idx_plt]/Amax_syn,
+                  'b', linewidth=1.0)
+              plt.plot(syn_times[idx_plt], wpFu1[i,idx_plt]/Amax_syn1,
+                  'r', linewidth=1.0)
+
+              plt.xlim((syn_times[syn_nl], syn_times[syn_nl+syn_npts-1]))
+              plt.ylim((-1.5, 1.5))
+              plt.ylabel(syn_orientation_codes[i])
+            plt.show()
+
+      #end for window_id in window_dict:
+    #end for station_id in station_dict:
+
+    return wcc_sum, weight_sum
 
 #
 #======================================================

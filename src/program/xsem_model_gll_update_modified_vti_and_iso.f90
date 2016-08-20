@@ -2,7 +2,7 @@ subroutine selfdoc()
   print '(a)', "NAME"
   print '(a)', ""
   print '(a)', "  xsem_model_gll_update_modified_vti_and_iso"
-  print '(a)', "    - add (scaled) vti (precondioned-)kernel (vc2, vsv2, vsh2 or vs2)"
+  print '(a)', "    - add (scaled) vti (precondioned-)kernel vc2, vsv2,vsh2 or vs2"
   print '(a)', "      to GLL model file (vpv,vph,vsv,vsh,eta,rho)"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
@@ -80,6 +80,7 @@ program xsem_kernel_vti_3pars_update_model
   integer :: ispec, nspec
   ! model
   real(dp), dimension(:,:,:,:), allocatable :: vph2, vpv2, vsv2, vsh2, vf2, rho
+  real(dp), dimension(:,:,:,:), allocatable :: vc2, vs2
   ! kernel
   real(dp), dimension(:,:,:,:), allocatable :: vc2_kernel, vs2_kernel, vsv2_kernel, vsh2_kernel
   ! scale rho 
@@ -137,6 +138,9 @@ program xsem_kernel_vti_3pars_update_model
   allocate(vf2(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(rho(NGLLX,NGLLY,NGLLZ,nspec))
 
+  allocate(vc2(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(vs2(NGLLX,NGLLY,NGLLZ,nspec))
+
   allocate(vc2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(vs2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(vsv2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
@@ -160,14 +164,14 @@ program xsem_kernel_vti_3pars_update_model
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', vpv2)
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vsv', vsv2)
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vsh', vsh2)
-    call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'eta', vf2)
+    !call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'eta', vf2)
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'rho', rho)
     ! convert to squared value and also vf2
     vph2 = vph2**2              ! = C11/rho
     vpv2 = vpv2**2              ! = C33/rho
     vsv2 = vsv2**2              ! = C44/rho
     vsh2 = vsh2**2              ! = C66/rho
-    vf2 = vf2*(vph2 - 2.0*vsv2) ! = C13/rho
+    !vf2 = vf2*(vph2 - 2.0*vsv2) ! = C13/rho
 
     ! bulk sound velocity (average)
     vc2 = ( 2.0*(vph2 - 4.0/3.0*vsh2) + (vpv2 - 4.0/3.0*vsv2) ) / 3.0
@@ -175,10 +179,10 @@ program xsem_kernel_vti_3pars_update_model
     vs2 = ( 2.0*vsv2 + vsh2 ) / 3.0
 
     ! read kernels
-    call sem_io_read_gll_file_1(kernel_dir, iproc, iregion,  'vc2'//kernel_suffix, vc2_kernel)
-    call sem_io_read_gll_file_1(kernel_dir, iproc, iregion,  'vs2'//kernel_suffix, vs2_kernel)
-    call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vsv2'//kernel_suffix, vsv2_kernel)
-    call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vsh2'//kernel_suffix, vsh2_kernel)
+    call sem_io_read_gll_file_1(kernel_dir, iproc, iregion,  'vc2'//trim(kernel_suffix), vc2_kernel)
+    call sem_io_read_gll_file_1(kernel_dir, iproc, iregion,  'vs2'//trim(kernel_suffix), vs2_kernel)
+    call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vsv2'//trim(kernel_suffix), vsv2_kernel)
+    call sem_io_read_gll_file_1(kernel_dir, iproc, iregion, 'vsh2'//trim(kernel_suffix), vsh2_kernel)
 
     ! scale kernels
     vc2_kernel = scale_vc2 * vc2_kernel
@@ -203,46 +207,42 @@ program xsem_kernel_vti_3pars_update_model
       where (dlnv > dlnv_limit) vsh2_kernel = 2.0*dlnv_limit*vsh2*sign(ones,vsh2_kernel)
     endif
 
-    ! enforce original model to be modified VTI or ISO
+    ! update model
     do ispec = 1, nspec
       if (.not. mesh_data%ispec_is_tiso(ispec)) then
         ! enforce model to be isotropic
-        vsv2(:,:,:,ispec) = vs2(:,:,:,ispec)
-        vsh2(:,:,:,ispec) = vs2(:,:,:,ispec)
-
-        vpv2(:,:,:,ispec) = vc2(:,:,:,ispec) + 4.0/3.0*vsv2(:,:,:,ispec)
-        vph2(:,:,:,ispec) = vpv2(:,:,:,ispec)
-
-        vf2(:,:,:,ispec) = vpv2(:,:,:,ispec) - 2.0*vsv2(:,:,:,ispec)
+        vph2(:,:,:,ispec) = vc2(:,:,:,ispec) + vc2_kernel(:,:,:,ispec) + 4.0/3.0*(vs2(:,:,:,ispec) + vs2_kernel(:,:,:,ispec))
+        vpv2(:,:,:,ispec) = vph2(:,:,:,ispec)
+        vsv2(:,:,:,ispec) = vs2(:,:,:,ispec) + vs2_kernel(:,:,:,ispec)
+        vsh2(:,:,:,ispec) = vsv2(:,:,:,ispec)
+        vf2(:,:,:,ispec) = vc2(:,:,:,ispec) + vc2_kernel(:,:,:,ispec) - 2.0/3.0*(vs2(:,:,:,ispec) + vs2_kernel(:,:,:,ispec))
+        dln_rho(:,:,:,ispec) = scale_rho * 0.5*vs2_kernel(:,:,:,ispec)/vs2(:,:,:,ispec)
       else ! enforce modified VTI, i.e. use Vc, and delta = 0
-        vph2(:,:,:,ispec) = vc2(:,:,:,ispec) + 4.0/3.0*vsh2(:,:,:,ispec)
-        vpv2(:,:,:,ispec) = vc2(:,:,:,ispec) + 4.0/3.0*vsv2(:,:,:,ispec)
-        vf2(:,:,:,ispec) = vpv2(:,:,:,ispec) - 2.0*vsv2(:,:,:,ispec)
+        vph2(:,:,:,ispec) = vc2(:,:,:,ispec) + vc2_kernel(:,:,:,ispec) + 4.0/3.0*(vsh2(:,:,:,ispec) + vsh2_kernel(:,:,:,ispec))
+        vpv2(:,:,:,ispec) = vc2(:,:,:,ispec) + vc2_kernel(:,:,:,ispec) + 4.0/3.0*(vsv2(:,:,:,ispec) + vsv2_kernel(:,:,:,ispec))
+        vsv2(:,:,:,ispec) = vsv2(:,:,:,ispec) + vsv2_kernel(:,:,:,ispec)
+        vsh2(:,:,:,ispec) = vsh2(:,:,:,ispec) + vsh2_kernel(:,:,:,ispec)
+        vf2(:,:,:,ispec) = vc2(:,:,:,ispec) + vc2_kernel(:,:,:,ispec) - 2.0/3.0*(vsv2(:,:,:,ispec) + vsv2_kernel(:,:,:,ispec))
+        dln_rho(:,:,:,ispec) = scale_rho * 0.5*( (2.0*vsv2_kernel(:,:,:,ispec)+vsh2_kernel(:,:,:,ispec))/3.0 / vs2(:,:,:,ispec))
       endif
     enddo
 
-    ! scale
-    ! voigt_G = (2*C44 + C66)/3
-    dln_rho = scale_rho*((2.0*vsv2_kernel + vsh2_kernel)/3.0 + vs2_kernel)/vs2/2.0
+    ! scale density
     rho = rho*(1.0 + dln_rho)
     print *, "dln_rho: min/max = ", minval(dln_rho), maxval(dln_rho)
 
-    vc2 = vc2 + vc2_kernel
-    vsv2 = vsv2 + vsv2_kernel + vs2_kernel
-    vsh2 = vsh2 + vsh2_kernel + vs2_kernel
-    vf2  = vf2  + (vc2_kernel - 2.0/3.0*(vsv2_kernel + vs2_kernel))
-
     ! write new models (for model_gll)
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vph', sqrt(vc2 + 4.0/3.0*vsh2))
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vpv', sqrt(vc2 + 4.0/3.0*vsv2))
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vph', sqrt(vph2))
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vpv', sqrt(vpv2))
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vsv', sqrt(vsv2))
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vsh', sqrt(vsh2))
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'eta', vf2/(vc2 + 4.0/3.0*vsh2 - 2.0*vsv2))
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'eta', vf2/(vph2 - 2.0*vsv2))
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'rho', rho)
 
     ! write out dmodel
     if (output_dmodel == 1) then
-      call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vp2_dmodel', vp2_kernel)
+      call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vc2_dmodel', vc2_kernel)
+      call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vs2_dmodel', vs2_kernel)
       call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vsv2_dmodel', vsv2_kernel)
       call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vsh2_dmodel', vsh2_kernel)
     endif

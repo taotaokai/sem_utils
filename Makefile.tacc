@@ -82,7 +82,12 @@ program = xsem_slice_gcircle \
 	xsem_kernel_vti_3pars_scale_max_dlnv \
 	xsem_kernel_vti_3pars_divide_hess_diag \
 	xsem_kernel_vti_3pars_update_model \
-	xsem_pcg_dmodel
+	xsem_pcg_dmodel \
+	xsem_math_serial \
+	xsem_model_gll_enforce_modified_vti_and_iso \
+	xsem_kernel_aijkl_to_modified_vti_and_iso \
+	xsem_kernel_modified_vti_and_iso_scale_max_dlnv \
+	xsem_model_gll_update_modified_vti_and_iso
 
 
 #------------------------------------------

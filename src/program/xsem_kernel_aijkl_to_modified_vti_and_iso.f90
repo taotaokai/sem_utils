@@ -33,7 +33,7 @@ end subroutine
 
 
 !///////////////////////////////////////////////////////////////////////////////
-program xsem_kernel_aijkl_to_vti_3pars
+program xsem_kernel_aijkl_to_modified_vti_and_iso
 
   use sem_constants
   use sem_io
@@ -108,9 +108,9 @@ program xsem_kernel_aijkl_to_vti_3pars
   ! initialize gll arrays 
   allocate(aijkl_kernel(21,NGLLX,NGLLY,NGLLZ,nspec))
   allocate(vc2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(vs2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(vsv2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(vsh2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
-  allocate(vs2_kernel(NGLLX,NGLLY,NGLLZ,nspec))
 
   ! reduce aijkl kernels
   do iproc = myrank, (nproc-1), nrank
@@ -124,9 +124,9 @@ program xsem_kernel_aijkl_to_vti_3pars
     call sem_io_read_cijkl_kernel(kernel_dir, iproc, iregion, 'aijkl_kernel', aijkl_kernel)
 
     vc2_kernel = 0.0
+    vs2_kernel = 0.0
     vsv2_kernel = 0.0
     vsh2_kernel = 0.0
-    vs2_kernel = 0.0
 
     ! reduce aijkl_kernel to vc2 kernel
     vc2_kernel = aijkl_kernel(1,:,:,:,:) &
@@ -140,45 +140,42 @@ program xsem_kernel_aijkl_to_vti_3pars
     do ispec = 1, nspec
       ! isotropic element
       if (.not. mesh_data%ispec_is_tiso(ispec)) then
-        vs2_kernel = 4.0/3.0*(  aijkl_kernel(1,:,:,:,ispec)    &
-                              + aijkl_kernel(7,:,:,:,ispec)    &
-                              + aijkl_kernel(12,:,:,:,ispec) ) &
-                   - 2.0/3.0*(  aijkl_kernel(2,:,:,:,ispec)    &
-                              + aijkl_kernel(3,:,:,:,ispec)    &
-                              + aijkl_kernel(8,:,:,:,ispec) )  &
-                   + aijkl_kernel(16,:,:,:,ispec)              &
-                   + aijkl_kernel(19,:,:,:,ispec)              &
-                   + aijkl_kernel(21,:,:,:,ispec)
+        vs2_kernel(:,:,:,ispec) =                  &
+           4.0/3.0*(aijkl_kernel(1,:,:,:,ispec)    &
+                  + aijkl_kernel(7,:,:,:,ispec)    &
+                  + aijkl_kernel(12,:,:,:,ispec))  &
+         - 2.0/3.0*(aijkl_kernel(2,:,:,:,ispec)    &
+                  + aijkl_kernel(3,:,:,:,ispec)    &
+                  + aijkl_kernel(8,:,:,:,ispec))   &
+         + aijkl_kernel(16,:,:,:,ispec)            &
+         + aijkl_kernel(19,:,:,:,ispec)            &
+         + aijkl_kernel(21,:,:,:,ispec)
 
       else ! enforce modified VTI, i.e. use Vc, and delta = 0
-        vsv2_kernel = aijkl_kernel(16,:,:,:,ispec)             &
-                    + aijkl_kernel(19,:,:,:,ispec)             &
-                    - 2.0/3.0*(  aijkl_kernel(3,:,:,:,ispec)   &
-                               + aijkl_kernel(8,:,:,:,ispec) ) &
-                    + 4.0/3.0*aijkl_kernel(12,:,:,:,ispec)
+        vsv2_kernel(:,:,:,ispec) = aijkl_kernel(16,:,:,:,ispec)          &
+                                 + aijkl_kernel(19,:,:,:,ispec)          &
+                                 - 2.0/3.0*(aijkl_kernel(3,:,:,:,ispec)  &
+                                          + aijkl_kernel(8,:,:,:,ispec)) &
+                                 + 4.0/3.0*aijkl_kernel(12,:,:,:,ispec)
 
-        vsh2_kernel = aijkl_kernel(21,:,:,:,ispec)             &
-                    - 2.0/3.0*aijkl_kernel(2,:,:,:,ispec)      &
-                    + 4.0/3.0*(  aijkl_kernel(1,:,:,:,ispec)   &
-                               + aijkl_kernel(7,:,:,:,ispec) )
+        vsh2_kernel(:,:,:,ispec) = aijkl_kernel(21,:,:,:,ispec)          &
+                                 - 2.0/3.0*aijkl_kernel(2,:,:,:,ispec)   &
+                                 + 4.0/3.0*(aijkl_kernel(1,:,:,:,ispec)  &
+                                          + aijkl_kernel(7,:,:,:,ispec))
       endif
     enddo
 
     print *, "aijkl_kernel: min/max=", minval(aijkl_kernel), maxval(aijkl_kernel)
     print *, "vc2_kernel: min/max=", minval(vc2_kernel), maxval(vc2_kernel)
+    print *, "vs2_kernel: min/max=", minval(vs2_kernel), maxval(vs2_kernel)
     print *, "vsv2_kernel: min/max=", minval(vsv2_kernel), maxval(vsv2_kernel)
     print *, "vsh2_kernel: min/max=", minval(vsh2_kernel), maxval(vsh2_kernel)
-    print *, "vs2_kernel: min/max=", minval(vs2_kernel), maxval(vs2_kernel)
 
     ! write out kernel files
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
-        'vc2_kernel', vc2_kernel)
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
-        'vs2_kernel', vs2_kernel)
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
-        'vsv2_kernel', vsv2_kernel)
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
-        'vsh2_kernel', vsh2_kernel)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vc2_kernel', vc2_kernel)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vs2_kernel', vs2_kernel)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vsv2_kernel', vsv2_kernel)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vsh2_kernel', vsh2_kernel)
 
   enddo ! iproc
 

@@ -196,7 +196,7 @@ sed -i "/^ANISOTROPIC_KL/s/=.*/= .true./" Par_file
 sed -i "/^SAVE_TRANSVERSE_KL_ONLY/s/=.*/= .false./" Par_file
 sed -i "/^APPROXIMATE_HESS_KL/s/=.*/= .false./" Par_file
 
-cp $event_dir/adj_kernel/STATIONS_ADJOINT $event_dir/DATA/
+cp -f $event_dir/adj_kernel/STATIONS_ADJOINT $event_dir/DATA/
 rm -rf $event_dir/SEM
 ln -s $event_dir/adj_kernel $event_dir/SEM
 
@@ -253,7 +253,7 @@ sed -i "/^ANISOTROPIC_KL/s/=.*/= .true./" Par_file
 sed -i "/^SAVE_TRANSVERSE_KL_ONLY/s/=.*/= .false./" Par_file
 sed -i "/^APPROXIMATE_HESS_KL/s/=.*/= .false./" Par_file
 
-cp $event_dir/adj_hess/STATIONS_ADJOINT $event_dir/DATA/
+cp -f $event_dir/adj_hess/STATIONS_ADJOINT $event_dir/DATA/
 rm -rf $event_dir/SEM
 ln -s $event_dir/adj_hess $event_dir/SEM
 
@@ -300,7 +300,7 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
-out_dir=$event_dir/kernel_precond
+out_dir=$event_dir/kernel
 mkdir \$out_dir
 
 echo "====== convert cijkl to aijkl kernel [\$(date)]"
@@ -315,15 +315,15 @@ ibrun $sem_utils/bin/xsem_kernel_aijkl_to_vti_3pars \
   \$out_dir \
   \$out_dir
 
-#echo "====== random kernel to hessian diagonal [\$(date)]"
-#ibrun $sem_utils/bin/xsem_hess_diag_sum_random_adjoint_kernel \
-#  $nproc $mesh_dir/DATABASES_MPI \
-#  $mesh_dir/DATABASES_MPI \
-#  $event_dir/output_hess/kernel \
-#  \$out_dir
+echo "====== random kernel to hessian diagonal [\$(date)]"
+ibrun $sem_utils/bin/xsem_hess_diag_sum_random_adjoint_kernel \
+  $nproc $mesh_dir/DATABASES_MPI \
+  $mesh_dir/DATABASES_MPI \
+  $event_dir/output_hess/kernel \
+  \$out_dir
 
 #echo "====== smooth hess diagonal [\$(date)]"
-#sigma_h=50
+#sigma_h=20
 #sigma_v=20
 #
 #model_tags=sum_hess_diag
@@ -332,16 +332,16 @@ ibrun $sem_utils/bin/xsem_kernel_aijkl_to_vti_3pars \
 #  $nproc $mesh_dir/DATABASES_MPI \$out_dir \
 #  \$model_tags \$sigma_h \$sigma_v \$out_dir "_smooth"
 
-echo "====== kernel precondition [\$(date)]"
-eps=0.001
-
-kernel_tags=vp2_kernel,vsv2_kernel,vsh2_kernel
-hess_tag=sum_hess_diag_smooth
-
-ibrun $sem_utils/bin/xsem_kernel_divide_hess_water_level \
-  $nproc $mesh_dir/DATABASES_MPI \$out_dir \
-  \$kernel_tags \$out_dir \$hess_tag \
-  \$eps \$out_dir "_precond"
+#echo "====== kernel precondition [\$(date)]"
+#eps=0.00001
+#
+#kernel_tags=vp2_kernel,vsv2_kernel,vsh2_kernel
+#hess_tag=sum_hess_diag_smooth
+#
+#ibrun $sem_utils/bin/xsem_kernel_divide_hess_water_level \
+#  $nproc $mesh_dir/DATABASES_MPI \$out_dir \
+#  \$kernel_tags \$out_dir \$hess_tag \
+#  \$eps \$out_dir "_precond"
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

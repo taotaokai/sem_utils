@@ -30,7 +30,8 @@ subroutine selfdoc()
   print '(a)', "NOTE"
   print '(a)', ""
   print '(a)', "  1. can be run in parallel"
-  print '(a)', "  2. rdiff: relative difference (V1-V2)/V2 = V1/V2 - 1"
+  print '(a)', "  2. rdiff: relative difference betwee V1 and V2 as (V1-V2)/V2 = V1/V2 - 1"
+  print '(a)', "  2. radd: add relative difference into a reference model (V1 + 1)*V2"
 
 end subroutine
 

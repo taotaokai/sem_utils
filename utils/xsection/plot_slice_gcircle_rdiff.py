@@ -174,14 +174,14 @@ for irow in range(nrow):
   rdiff = (model1[tag] - model0[tag])/model0[tag] * 100.0
  
   # contour model1 
-  #vmin = np.min(model1[tag])
-  #vmax = np.max(model1[tag])
-  #dv = round((vmax-vmin)/40.0, 1)
-  #cs = ax.contour(xx, yy, model1[tag],
-  #    levels=np.arange(vmin, vmax, dv), 
-  #    colors=('k',), 
-  #    linewidths=(0.1,), )
-  #plt.clabel(cs, fmt='%2.1f', colors='k', fontsize=5)
+  vmin = np.min(model1[tag])
+  vmax = np.max(model1[tag])
+  dv = round((vmax-vmin)/40.0, 1)
+  cs = ax.contour(xx, yy, model1[tag],
+      levels=np.arange(vmin, vmax, dv), 
+      colors=('k',), 
+      linewidths=(0.1,), )
+  plt.clabel(cs, fmt='%2.1f', colors='k', fontsize=5)
   
   # contourfill relative difference 
   cs = ax.contourf(xx, yy, rdiff, cmap=cmap, levels=np.arange(-8,8.1,0.5), extend="both")

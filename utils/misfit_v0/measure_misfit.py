@@ -49,6 +49,7 @@ for win in window_list_P_wave:
       filter_order=win['filter'][2],
       min_dist=win['dist'][0],
       max_dist=win['dist'][1],
+      pre_weight=win['pre_weight'],
       )
 
 print("\n====== add S wave windows\n")
@@ -66,6 +67,7 @@ for win in window_list_S_wave:
       filter_order=win['filter'][2],
       min_dist=win['dist'][0],
       max_dist=win['dist'][1],
+      pre_weight=win['pre_weight'],
       )
 
 print("\n====== add surface wave windows\n")
@@ -83,6 +85,7 @@ for win in window_list_surface_wave:
       min_frequency=win['filter'][0],
       max_frequency=win['filter'][1],
       filter_order=win['filter'][2],
+      pre_weight=win['pre_weight'],
       )
 
 print("\n====== measure window\n")

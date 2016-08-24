@@ -1,8 +1,8 @@
 subroutine selfdoc()
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_model_gll_to_vsv2_kappa2_eps_gamma"
-  print '(a)', "    - convert GLL model into (vsv2,kappa2,eps,gamma)"
+  print '(a)', "  xsem_model_gll_to_vsv2_kappa2_thomsen"
+  print '(a)', "    - convert GLL model into (vsv2,kappa2,eps,gamma,delta)"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
@@ -16,8 +16,8 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
-  print '(a)', "  (string) model_dir:  directory holds proc*_reg1_[vph,vpv,vsv,vsh].bin"
-  print '(a)', "  (string) out_dir:  output directory for proc*_reg1_[vsv2,kappa2,eps,gamma].bin"
+  print '(a)', "  (string) model_dir:  directory holds proc*_reg1_[vph,vpv,vsv,vsh,eta].bin"
+  print '(a)', "  (string) out_dir:  output directory for proc*_reg1_[vsv2,kappa2,eps,gamma,delta].bin"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
@@ -25,7 +25,7 @@ subroutine selfdoc()
 end subroutine
 
 
-program xsem_model_gll_to_vsv2_kappa2_eps_gamma
+program xsem_model_gll_to_vsv2_thomsen
 
   use sem_constants
   use sem_io
@@ -54,8 +54,8 @@ program xsem_model_gll_to_vsv2_kappa2_eps_gamma
   type(sem_mesh_data) :: mesh_data
   integer :: ispec, nspec
   ! model
-  real(dp), dimension(:,:,:,:), allocatable :: vph,vpv,vsh,vsv
-  real(dp), dimension(:,:,:,:), allocatable :: vsv2, kappa2, eps, gamma
+  real(dp), dimension(:,:,:,:), allocatable :: vph2,vpv2,vsh2,vsv2,eta
+  real(dp), dimension(:,:,:,:), allocatable :: kappa2,eps,gamma,delta
 
   !===== start MPI
   call init_mpi()
@@ -96,10 +96,12 @@ program xsem_model_gll_to_vsv2_kappa2_eps_gamma
   allocate(vpv2(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(vsv2(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(vsh2(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(eta(NGLLX,NGLLY,NGLLZ,nspec))
 
   allocate(kappa2(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(eps(NGLLX,NGLLY,NGLLZ,nspec))
   allocate(gamma(NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(delta(NGLLX,NGLLY,NGLLZ,nspec))
 
   !====== calculate thomsen parameters
   do iproc = myrank, (nproc-1), nrank
@@ -114,6 +116,7 @@ program xsem_model_gll_to_vsv2_kappa2_eps_gamma
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', vpv2)
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vsv', vsv2)
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vsh', vsh2)
+    call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'eta', eta)
 
     vph2 = vph2**2
     vpv2 = vpv2**2
@@ -123,12 +126,14 @@ program xsem_model_gll_to_vsv2_kappa2_eps_gamma
     kappa2 = vpv2/vsv2
     eps = 0.5*(vph2/vpv2 - 1.0)
     gamma = 0.5*(vsh2/vsv2 - 1.0)
+    delta = (eta*(vph2-2.0*vsv2) - (vpv2-2.0*vsv2))/vpv2
 
     ! enforce isotropy for element with ispec_is_tiso = .false.
     do ispec = 1, nspec
       if (.not. mesh_data%ispec_is_tiso(ispec)) then
         eps(:,:,:,ispec) = 0.0
         gamma(:,:,:,ispec) = 0.0
+        delta(:,:,:,ispec) = 0.0
       endif
     enddo
 
@@ -137,12 +142,11 @@ program xsem_model_gll_to_vsv2_kappa2_eps_gamma
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'kappa2', kappa2)
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'eps', eps)
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'gamma', gamma)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'delta', delta)
 
   enddo
 
   !====== Finalize
-  if (myrank == 0) close(IOUT)
-
   call synchronize_all()
   call finalize_mpi()
 

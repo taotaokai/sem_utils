@@ -27,6 +27,7 @@ adj_kernel
 SEM
 OUTPUT_FILES
 source_mask
+kernel
 kernel_precond
 kernel_smooth_precond
 vtk

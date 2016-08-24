@@ -11,7 +11,7 @@ subroutine selfdoc()
   print '(a)', "    <model_dir> <model_name> "
   print '(a)', "    <dmodel_dir> <dmodel_name> "
   print '(a)', "    <step_length> <min_value> <max_value>"
-  print '(a)', "    <out_dir> <output_dmodel> <output_dmodel_name>"
+  print '(a)', "    <out_dir> <output_dmodel> <out_dmodel_name>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -28,9 +28,9 @@ subroutine selfdoc()
   print '(a)', "  (float) step_length:  "
   print '(a)', "  (float) min_value:  minimum value"
   print '(a)', "  (float) max_value:  maximum value"
-  print '(a)', "  (string) out_dir:  output directory for new model"
-  print '(a)', "  (int) output_dmodel:  flag output dmodel (0:no, 1:yes)"
-  print '(a)', "  (string) output_dmodel_name:  proc000***_reg1_<output_dmodel_name>.bin"
+  print '(a)', "  (string) out_dir:  out directory for new model"
+  print '(a)', "  (int) output_dmodel:  flag out dmodel (0:no, 1:yes)"
+  print '(a)', "  (string) out_dmodel_name:  proc000***_reg1_<out_dmodel_name>.bin"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
@@ -65,7 +65,7 @@ program xsem_add_dmodel
   real(dp) :: max_value 
   character(len=MAX_STRING_LEN) :: out_dir
   integer :: output_dmodel
-  character(len=MAX_STRING_LEN) :: output_dmodel_name
+  character(len=MAX_STRING_LEN) :: out_dmodel_name
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
@@ -76,7 +76,7 @@ program xsem_add_dmodel
   type(sem_mesh_data) :: mesh_data
   integer :: nspec
   ! model
-  real(dp), dimension(:,:,:,:), allocatable :: model
+  real(dp), dimension(:,:,:,:), allocatable :: model, model_new
   ! dmodel 
   real(dp), dimension(:,:,:,:), allocatable :: dmodel
 
@@ -143,9 +143,9 @@ program xsem_add_dmodel
     ! write new models
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, model_name, model_new)
 
-    ! output dmodel
+    ! write out dmodel
     if (output_dmodel == 1) then
-      call sem_io_write_gll_file_1(out_dir, iproc, iregion, output_dmodel_name, model_new - model)
+      call sem_io_write_gll_file_1(out_dir, iproc, iregion, out_dmodel_name, model_new - model)
     endif
 
   enddo

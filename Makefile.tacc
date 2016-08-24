@@ -20,7 +20,7 @@ program_dir = ${src_dir}/program
 # ifort
 #FCFLAGS = -g -check bounds -check all
 FCFLAGS = -O3
-FCFLAGS += -I $(inc_dir) -I$(netcdf_mod) -module $(obj_dir)
+FCFLAGS += -I $(inc_dir) -I $(netcdf_mod) -module $(obj_dir)
 LDFLAGS = -L$(netcdf_lib) -lnetcdff
 
 module = sem_constants_mod sem_io_mod sem_mesh_mod \
@@ -87,8 +87,14 @@ program = xsem_slice_gcircle \
 	xsem_model_gll_enforce_modified_vti_and_iso \
 	xsem_kernel_aijkl_to_modified_vti_and_iso \
 	xsem_kernel_modified_vti_and_iso_scale_max_dlnv \
-	xsem_model_gll_update_modified_vti_and_iso
-
+	xsem_model_gll_update_modified_vti_and_iso \
+	xsem_model_gll_to_vsv2_kappa2_thomsen \
+	xsem_model_vsv2_kappa2_thomsen_to_gll \
+	xsem_kernel_aijkl_to_vsv2_kappa2_thomsen \
+	xsem_scale_dmodel \
+	xsem_add_dmodel \
+	xsem_threshold_amplitude \
+	xsem_pcg_dmodel_n
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))

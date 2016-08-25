@@ -62,7 +62,7 @@ program xsem_add_dmodel
   integer :: myrank, nrank
   ! mesh
   type(sem_mesh_data) :: mesh_data
-  integer :: nspec
+  integer :: ispec, nspec
   ! dmodel
   real(dp), dimension(:,:,:,:), allocatable :: dmodel
   ! scale factor
@@ -143,17 +143,7 @@ program xsem_add_dmodel
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, "kappa"//trim(out_suffix), dmodel)
     print *, "kappa min/max = ", minval(dmodel), maxval(dmodel)
 
-    call sem_io_read_gll_file_1(model_dir, iproc, iregion, "gamma"//trim(model_suffix), dmodel)
-    dmodel = scale_factor*dmodel
-    ! enforce isotropic elements
-    do ispec = 1, nspec
-      if (.not. mesh_data%ispec_is_tiso(ispec)) then
-        dmodel(:,:,:,ispec) = 0.0
-      endif
-    enddo
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, "gamma"//trim(out_suffix), dmodel)
-    print *, "gamma min/max = ", minval(dmodel), maxval(dmodel)
-
+    ! eps
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, "eps"//trim(model_suffix), dmodel)
     dmodel = scale_factor*dmodel
     ! enforce isotropic elements
@@ -164,6 +154,18 @@ program xsem_add_dmodel
     enddo
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, "eps"//trim(out_suffix), dmodel)
     print *, "eps min/max = ", minval(dmodel), maxval(dmodel)
+
+    ! gamma
+    call sem_io_read_gll_file_1(model_dir, iproc, iregion, "gamma"//trim(model_suffix), dmodel)
+    dmodel = scale_factor*dmodel
+    ! enforce isotropic elements
+    do ispec = 1, nspec
+      if (.not. mesh_data%ispec_is_tiso(ispec)) then
+        dmodel(:,:,:,ispec) = 0.0
+      endif
+    enddo
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, "gamma"//trim(out_suffix), dmodel)
+    print *, "gamma min/max = ", minval(dmodel), maxval(dmodel)
 
   enddo
 

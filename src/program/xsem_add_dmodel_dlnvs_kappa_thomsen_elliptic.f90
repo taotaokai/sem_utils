@@ -79,7 +79,7 @@ program xsem_add_dmodel
   integer :: myrank, nrank
   ! mesh
   type(sem_mesh_data) :: mesh_data
-  integer :: nspec
+  integer :: ispec, nspec
   ! model
   real(dp), dimension(:,:,:,:), allocatable :: dlnvs, kappa, eps, gamma
   real(dp), dimension(:,:,:,:), allocatable :: dlnvs_new, kappa_new, eps_new, gamma_new

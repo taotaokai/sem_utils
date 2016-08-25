@@ -7,8 +7,8 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_make_source_mask \"
-  print '(a)', "    <nproc> <mesh_dir> <source_xyz_list> <source_gaussa> \"
-  print '(a)', "    <out_tag> <out_dir> "
+  print '(a)', "    <nproc> <mesh_dir> <source_xyz_list> <gauss_width_km> \"
+  print '(a)', "    <out_dir> <out_name> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -18,9 +18,9 @@ subroutine selfdoc()
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (string) source_xyz_list: list of source locations(x,y,z) in SEM (normalized by R_EARTH)"
-  print '(a)', "  (float) source_gaussa: Gaussian width (one sigma) in km"
-  print '(a)', "  (string) out_tag: tag in file name proc*_reg1_<out_tag>.bin"
-  print '(a)', "  (string) out_dir: out_dir/proc*_reg1_<out_tag>.bin"
+  print '(a)', "  (float) gauss_width_km: Gaussian width (one sigma) in km"
+  print '(a)', "  (string) out_dir: out_dir/proc*_reg1_<out_name>.bin"
+  print '(a)', "  (string) out_name: tag in file name proc*_reg1_<out_name>.bin"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
@@ -47,9 +47,9 @@ program xsem_make_kernel_mask
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: source_xyz_list
-  real(dp) :: source_gaussa
-  character(len=MAX_STRING_LEN) :: out_tag
+  real(dp) :: gauss_width_km
   character(len=MAX_STRING_LEN) :: out_dir
+  character(len=MAX_STRING_LEN) :: out_name
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
@@ -67,7 +67,7 @@ program xsem_make_kernel_mask
   real(dp), allocatable :: mask(:,:,:,:)
   real(dp) :: xyz(3), weight
   ! source
-  real(dp) :: dist_sq
+  real(dp) :: dist_sq, gauss_width
 
   !===== start MPI
 
@@ -91,15 +91,15 @@ program xsem_make_kernel_mask
   read(args(1), *) nproc
   read(args(2), '(a)') mesh_dir
   read(args(3), '(a)') source_xyz_list
-  read(args(4), *) source_gaussa
-  read(args(5), '(a)') out_tag
-  read(args(6), '(a)') out_dir
+  read(args(4), *) gauss_width_km
+  read(args(5), '(a)') out_dir
+  read(args(6), '(a)') out_name
 
   ! validate input
-  if (source_gaussa < 0.0) then
+  if (gauss_width_km < 0.0) then
     if (myrank == 0) then
       call selfdoc()
-      print *, "[ERROR] source_gaussa must > 0.0"
+      print *, "[ERROR] gauss_width_km must > 0.0"
       call abort_mpi()
     endif
   endif
@@ -111,25 +111,23 @@ program xsem_make_kernel_mask
     print *, "#[LOG] nproc=", nproc
     print *, "#[LOG] mesh_dir=", trim(mesh_dir)
     print *, "#[LOG] source_xyz_list=", trim(source_xyz_list)
-    print *, "#[LOG] source_gaussa=", source_gaussa
-    print *, "#[LOG] out_tag=", trim(out_tag)
+    print *, "#[LOG] gauss_width_km=", gauss_width_km
     print *, "#[LOG] out_dir=", trim(out_dir)
+    print *, "#[LOG] out_name=", trim(out_name)
   endif
 
   !====== read source_xyz_list
   call sem_utils_read_line(source_xyz_list, lines, nsource)
-
   allocate(source_xyz(3, nsource))
+  ! read source x,y,z 
   do isrc = 1, nsource
-    ! read source x,y,z 
-    read(lines(isrc), *) source_xyz(1, isrc), source_xyz(2, isrc), &
-                         source_xyz(3, isrc)
+    read(lines(isrc), *) source_xyz(1, isrc), source_xyz(2, isrc), source_xyz(3, isrc)
   enddo
 
   !===== loop each mesh slice
 
-  ! non-dimensionalization
-  source_gaussa = source_gaussa / R_EARTH_KM
+  ! non-dimensionalize
+  gauss_width = gauss_width_km / R_EARTH_KM
 
   do iproc = myrank, (nproc-1), nrank
 
@@ -159,8 +157,7 @@ program xsem_make_kernel_mask
 
             do isrc = 1, nsource
               dist_sq = sum((xyz - source_xyz(:,isrc))**2)
-              weight = weight * (1.0_dp - &
-                  exp(-0.5*dist_sq/source_gaussa**2))
+              weight = weight * (1.0_dp - exp(-0.5*dist_sq/gauss_width**2))
             enddo
 
             mask(igllx,iglly,igllz,ispec) = weight
@@ -173,7 +170,7 @@ program xsem_make_kernel_mask
     print *,'min/max=', minval(mask), maxval(mask)
 
     ! save mask gll file
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, out_tag, mask)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, out_name, mask)
 
   enddo ! iproc
 

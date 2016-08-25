@@ -160,6 +160,9 @@ program xsem_add_dmodel
 
     print *, "====== proc ", iproc
 
+    ! read mesh
+    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+
     ! read old models
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'dlnvs', dlnvs)
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'kappa', kappa)
@@ -187,6 +190,16 @@ program xsem_add_dmodel
     where(  eps_new > max_eps)     eps_new = max_eps
     where(gamma_new < min_gamma) gamma_new = min_gamma
     where(gamma_new > max_gamma) gamma_new = max_gamma
+
+    ! enforce isotropic element
+    do ispec = 1, nspec
+      if (.not. mesh_data%ispec_is_tiso(ispec)) then
+        eps(:,:,:,ispec) = 0.0
+        gamma(:,:,:,ispec) = 0.0
+        eps_new(:,:,:,ispec) = 0.0
+        gamma_new(:,:,:,ispec) = 0.0
+      endif
+    enddo
 
     print *, "dlnvs min/max = ", minval(dlnvs_new), maxval(dlnvs_new)
     print *, "kappa min/max = ", minval(kappa_new), maxval(kappa_new)

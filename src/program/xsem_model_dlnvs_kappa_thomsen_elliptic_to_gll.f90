@@ -145,6 +145,7 @@ program xsem_model_dlnvs_kappa_thomsen_to_gll
     vpv = kappa*vsv
     vph = sqrt((1.0 + 2.0*eps)*vpv**2)
     vsh = sqrt((1.0 + 2.0*gamma)*vsv**2)
+    ! elliptic condition: delta = eps
     eta = ((1.0+eps)*kappa**2 - 2.0) / ((1.0+2.0*eps)*kappa**2 - 2.0)
 
     ! write models

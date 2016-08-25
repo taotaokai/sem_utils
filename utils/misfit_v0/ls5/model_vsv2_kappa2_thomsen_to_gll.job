@@ -1,0 +1,31 @@
+#!/bin/bash
+#SBATCH -J model_vsv2_kappa2_thomsen_to_gll
+#SBATCH -o model_vsv2_kappa2_thomsen_to_gll.job.o%j
+#SBATCH -N 1
+#SBATCH -n 24
+#SBATCH -p normal
+#SBATCH -t 00:30:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+wkdir=$(pwd)
+sem_utils=/home1/03244/ktao/seiscode/sem_utils
+
+nproc=256
+mesh_dir=mesh_tiso_crust_220/DATABASES_MPI
+model_dir=model_tiso_crsut_220
+model_suffix="_threshold_smooth"
+out_dir=model_gll_new
+mkdir $out_dir
+
+ibrun $sem_utils/bin/xsem_model_vsv2_kappa2_thomsen_to_gll \
+  $nproc $mesh_dir $model_dir $model_suffix $out_dir
+
+echo
+echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH -J kernel_smooth
-#SBATCH -o kernel_smooth.job.o%j
-#SBATCH -N 11
-#SBATCH -n 256
+#SBATCH -J hess_smooth
+#SBATCH -o hess_smooth.job.o%j
+#SBATCH -N 5
+#SBATCH -n 120
 #SBATCH -p normal
 #SBATCH -t 00:30:00
 #SBATCH --mail-user=kai.tao@utexas.edu
@@ -16,23 +16,20 @@ echo
 wkdir=$(pwd)
 utils_dir=/home1/03244/ktao/seiscode/sem_utils
 
-nproc=256
 mesh_dir=$wkdir/mesh/DATABASES_MPI
-
 model_dir=$wkdir/kernel_sum
-model_name=dlnvs_kernel_threshold,kappa_kernel_threshold,eps_kernel_threshold,gamma_kernel_threshold,rhoprime_kernel_threshold
 
-sigma_h=30
-sigma_v=5
+#model_tag=vp2_kernel_precond_threshold,vsv2_kernel_precond_threshold,vsh2_kernel_precond_threshold
+model_tag=sum_hess_diag
+
+sigma_h=20
+sigma_v=20
 
 out_dir=$model_dir
 out_suffix="_smooth"
 
 ibrun $utils_dir/bin/xsem_smooth \
-  $nproc $mesh_dir \
-  $model_dir $model_name \
-  $sigma_h $sigma_v \
-  $out_dir $out_suffix
+  256 $mesh_dir $model_dir $model_tag $sigma_h $sigma_v $out_dir $out_suffix
 
 echo
 echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"

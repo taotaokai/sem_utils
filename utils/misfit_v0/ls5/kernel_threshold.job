@@ -18,8 +18,10 @@ sem_utils=/home1/03244/ktao/seiscode/sem_utils
 
 nproc=256
 mesh_dir=$wkdir/mesh/DATABASES_MPI
+
 kernel_dir=$wkdir/kernel_sum
-kernel_suffix=_kernel_precond
+#kernel_suffix=_kernel_precond
+kernel_suffix=_kernel
 
 nbin=5000
 threshold_percentage=0.85
@@ -28,7 +30,7 @@ rmax=0.05
 out_dir=$wkdir/kernel_sum
 out_suffix=_threshold
 
-for model_name in vp2 vsv2 vsh2
+for model_name in dlnvs kappa eps gamma rhoprime
 do
   ibrun $sem_utils/bin/xsem_threshold_percentage \
     $nproc $mesh_dir $kernel_dir ${model_name}${kernel_suffix} \

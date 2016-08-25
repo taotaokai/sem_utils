@@ -101,7 +101,8 @@ program = xsem_slice_gcircle \
 	xsem_kernel_aijkl_to_dlnvs_kappa_thomsen_elliptic \
 	xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll \
 	xsem_model_gll_to_dlnvs_kappa_thomsen \
-	xsem_scale_dmodel_dlnvs_kappa_thomsen_elliptic
+	xsem_scale_dmodel_dlnvs_kappa_thomsen_elliptic \
+	xsem_add_dmodel_dlnvs_kappa_thomsen_elliptic
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))

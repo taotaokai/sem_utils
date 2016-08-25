@@ -15,48 +15,33 @@ echo
 
 wkdir=$(pwd)
 sem_utils=/home1/03244/ktao/seiscode/sem_utils
+ref_dir=/work/03244/ktao/lonestar/NEChina/ref_model/crust1_s362ani410-660/model_REF
 
+nproc=256
 mesh_dir=mesh/DATABASES_MPI
+
 model_dir=model
-
 kernel_dir=$wkdir/kernel_sum
-kernel_suffix="_dmodel_scale"
 
-dlnv_limit=-1
-output_dmodel=0
-
-#====== model_dvp
-scale_vp2=1.0
-scale_vsv2=0.0
-scale_vsh2=0.0
-out_dir=model_dvp
+out_dir=model_perturb
 mkdir $out_dir
-ibrun $sem_utils/bin/xsem_kernel_vti_3pars_update_model \
-  256 $mesh_dir $model_dir $kernel_dir $kernel_suffix \
-  $scale_vp2 $scale_vsv2 $scale_vsh2 $dlnv_limit \
-  $output_dmodel $out_dir
 
-#====== model_dvsv
-scale_vp2=0.0
-scale_vsv2=1.0
-scale_vsh2=0.0
-out_dir=model_dvsv
-mkdir $out_dir
-ibrun $sem_utils/bin/xsem_kernel_vti_3pars_update_model \
-  256 $mesh_dir $model_dir $kernel_dir $kernel_suffix \
-  $scale_vp2 $scale_vsv2 $scale_vsh2 $dlnv_limit \
-  $output_dmodel $out_dir
+#====== add dmodel
+ibrun $sem_utils/bin/xsem_math \
+  $nproc $mesh_dir \
+  $model_dir "dlnvs,kappa,gamma,eps" \
+  $kernel_dir "dlnvs_dmodel_scale,kappa_dmodel_scale,gamma_dmodel_scale,eps_dmodel_scale" \
+  "add" \
+  $out_dir "dlnvs,kappa,gamma,eps"
 
-#====== model_dvsh
-scale_vp2=0.0
-scale_vsv2=0.0
-scale_vsh2=1.0
-out_dir=model_dvsh
-mkdir $out_dir
-ibrun $sem_utils/bin/xsem_kernel_vti_3pars_update_model \
-  256 $mesh_dir $model_dir $kernel_dir $kernel_suffix \
-  $scale_vp2 $scale_vsv2 $scale_vsh2 $dlnv_limit \
-  $output_dmodel $out_dir
+#====== convert to gll model
+ln -sf $ref_dir/*vsv_ref.bin $out_dir
+
+ibrun $sem_utils/bin/xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll \
+  $nproc $mesh_dir $out_dir x $out_dir
+
+#====== use reference rho model
+ln -s $ref_dir/*rho.bin $out_dir
 
 echo
 echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"

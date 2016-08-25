@@ -16,8 +16,9 @@ echo
 wkdir=$(pwd)
 stage_dir=/home1/03244/ktao/NEChina/stage01.structure
 sem_utils=/home1/03244/ktao/seiscode/sem_utils
+
 nproc=256
-previous_wkdir=$stage_dir/iter07
+previous_wkdir=$stage_dir/iter11
 
 current_kernel_dir=$wkdir/kernel_sum
 previous_kernel_dir=$previous_wkdir/kernel_sum

@@ -15,29 +15,52 @@ echo
 
 wkdir=$(pwd)
 sem_utils=/home1/03244/ktao/seiscode/sem_utils
+ref_dir=/work/03244/ktao/lonestar/NEChina/ref_model/crust1_s362ani410-660/model_REF
 
+nproc=256
 mesh_dir=mesh/DATABASES_MPI
 model_dir=model
+dmodel_dir=kernel_sum
+dmodel_suffix="_dmodel_scale"
 
-kernel_dir=$wkdir/kernel_sum
-kernel_suffix="_dmodel_scale"
+#======
+step_length=0.323
 
-# model_searched
-scale_vp2=2.22
-scale_vsv2=1.859
-scale_vsh2=3.216
+min_dlnvs=-0.12
+max_dlnvs=0.12
 
-dlnv_limit=0.05
+min_kappa=1.65
+max_kappa=2.2
+
+min_eps=-0.02
+max_eps=0.06
+
+min_gamma=-0.02
+max_gamma=0.06
+#======
+
 output_dmodel=1
-
 out_dir=model_searched
 mkdir $out_dir
 
-ibrun $sem_utils/bin/xsem_kernel_vti_3pars_update_model \
-  256 $mesh_dir $model_dir $kernel_dir $kernel_suffix \
-  $scale_vp2 $scale_vsv2 $scale_vsh2 \
-  $dlnv_limit $output_dmodel \
-  $out_dir
+#ibrun $sem_utils/bin/xsem_add_dmodel_dlnvs_kappa_thomsen_elliptic \
+#  $nproc $mesh_dir \
+#  $model_dir $dmodel_dir $dmodel_suffix \
+#  $step_length \
+#  $min_dlnvs $max_dlnvs \
+#  $min_kappa $max_kappa \
+#  $min_eps   $max_eps \
+#  $min_gamma $max_gamma \
+#  $output_dmodel \
+#  $out_dir
+
+# convert to gll model
+ln -sf $ref_dir/*vsv_ref.bin $out_dir
+ibrun $sem_utils/bin/xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll \
+  $nproc $mesh_dir $out_dir x $out_dir
+
+# use reference rho model
+ln -sf $ref_dir/*rho.bin $out_dir
 
 echo
 echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"

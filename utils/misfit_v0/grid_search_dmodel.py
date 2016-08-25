@@ -32,11 +32,12 @@ misfit.load(misfit_file)
 print("\n====== grid_cc \n")
 wcc_sum, weight_sum = \
     misfit.cc_linearized_seismogram_for_dmodel(
-        step_size=par.dmodel_step_size, 
+        dm=par.dm_model,
         plot=False)
 
 with open(out_file, 'w') as f:
   f.write("#weight_sum = {:12.5e}\n".format(weight_sum))
   f.write("#step_size wcc_sum/weight_sum\n")
   for idx in range(len(wcc_sum)):
-    f.write("{:12.5e}  {:15.8e}\n".format(par.dmodel_step_size[idx], wcc_sum[idx]/weight_sum))
+    f.write("{:12.5e}  {:15.8e}\n".format(
+      par.dm_model['model'][idx], wcc_sum[idx]/weight_sum))

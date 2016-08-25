@@ -18,7 +18,7 @@ cmt_is_ECEF = True
 # misfit window specfications
 def make_window_list_P_wave(evdp_km):
   flo = 0.01
-  fhi = 0.067
+  fhi = 0.05
   pre_weight = 1.0
   if evdp_km <= 150:
     window_list_P_wave = [
@@ -47,7 +47,7 @@ def make_window_list_P_wave(evdp_km):
 
 def make_window_list_S_wave(evdp_km):
   flo = 0.01
-  fhi = 0.067
+  fhi = 0.05
   pre_weight = 1.0
   if evdp_km <= 150:
     window_list_S_wave = [
@@ -85,8 +85,8 @@ def make_window_list_surface_wave(evdp_km):
   # for 50s period, the phase velocity sensitivity kernel can only reach to about 200/150 km depth for fundamental Rayleigh/Love waves, respectively  
   # slowness: 22 ~ 35 s/deg = 5 ~ 3.1 km/s
   flo = 0.01
-  fhi = 0.033
-  pre_weight = 0.1
+  fhi = 0.025
+  pre_weight = 0.5
   if evdp_km <= 150:
     window_list_surface_wave = [
        {'phase':'surface', 'component':'Z', 'time':[-150,150], 'slowness':[24,33], 'pre_weight':pre_weight, 'filter':[flo, fhi, 2]},
@@ -139,8 +139,10 @@ range_ratio = 0.8
 
 #====== structure inversion
 # search range
+dm_model = {'model': np.linspace(-2, 8, 100)}
+
 #dm_vp = {'vp': np.linspace(0, 10, 100)}
-dm_vsh = {'vsh': np.linspace(-2, 8, 100)}
+#dm_vsh = {'vsh': np.linspace(-2, 8, 100)}
 
 ## grid search in 2D space vsv2,vsh2
 #vsv1d = np.linspace(0, 10, 30)
@@ -151,9 +153,9 @@ dm_vsh = {'vsh': np.linspace(-2, 8, 100)}
 #    'vsh':vsh2d.reshape(vsh2d.size), }
 
 # grid search in 2D space vp2,vsv2
-vp1d = np.linspace(-2, 8, 30)
-vsv1d = np.linspace(-2, 8, 30)
-vp2d, vsv2d = np.meshgrid(vp1d, vsv1d)
-dm_vp_vsv = {
-    'vp':vp2d.reshape(vp2d.size), 
-    'vsv':vsv2d.reshape(vsv2d.size), }
+#vp1d = np.linspace(-2, 8, 30)
+#vsv1d = np.linspace(-2, 8, 30)
+#vp2d, vsv2d = np.meshgrid(vp1d, vsv1d)
+#dm_vp_vsv = {
+#    'vp':vp2d.reshape(vp2d.size), 
+#    'vsv':vsv2d.reshape(vsv2d.size), }

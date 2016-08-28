@@ -11,7 +11,7 @@ subroutine selfdoc()
   print '(a)', "    <current_kernel_dir> <current_kernel_names> "
   print '(a)', "    <previous_kernel_dir> <previous_kernel_names> "
   print '(a)', "    <previous_dmodel_dir> <previous_dmodel_names> "
-  print '(a)', "    <out_dir> <out_names>"
+  print '(a)', "    <cg_type> <out_dir> <out_names>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -24,11 +24,12 @@ subroutine selfdoc()
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) current_kernel_dir: directory of the current kernel files proc*_reg1_<kernel_names>.bin"
-  print '(a)', "  (string) current_kernel_names:  comma separated string, e.g. vsv2,kappa2,eps,gamm,delta "
+  print '(a)', "  (string) current_kernel_names:  comma separated string, e.g. dlnvs_kernel,kappa_kernel,... "
   print '(a)', "  (string) previous_kernel_dir: directory for the previous kernel files"
   print '(a)', "  (string) previous_kernel_names:  comma separated string"
   print '(a)', "  (string) previous_dmodel_dir: directory for the previous dmodel (model update direction)"
   print '(a)', "  (string) previous_dmodel_names:  comma separated string"
+  print '(a)', "  (string) cg_type:  choise on update parameter, e.g. HS, N"
   print '(a)', "  (string) out_dir:  output directory for new dmodel files"
   print '(a)', "  (string) out_names:  comma separated string"
   print '(a)', ""
@@ -52,7 +53,7 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 10
+  integer, parameter :: nargs = 11
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
@@ -62,6 +63,7 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   character(len=MAX_STRING_LEN) :: previous_kernel_names
   character(len=MAX_STRING_LEN) :: previous_dmodel_dir
   character(len=MAX_STRING_LEN) :: previous_dmodel_names
+  character(len=MAX_STRING_LEN) :: cg_type 
   character(len=MAX_STRING_LEN) :: out_dir
   character(len=MAX_STRING_LEN) :: out_names
 
@@ -120,8 +122,9 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   read(args(6),'(a)') previous_kernel_names
   read(args(7),'(a)') previous_dmodel_dir 
   read(args(8),'(a)') previous_dmodel_names
-  read(args(9),'(a)') out_dir
-  read(args(10),'(a)') out_names
+  read(args(9),'(a)') cg_type
+  read(args(10),'(a)') out_dir
+  read(args(11),'(a)') out_names
 
   call synchronize_all()
 
@@ -212,8 +215,13 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   call synchronize_all()
 
   ! cg update parameter
-  !beta = (yk_pk1_all - 2.0*dk_pk1_all*yk_yk_all/yk_dk_all) / yk_dk_all ! Hager and Zhang (2003)
-  beta = yk_pk1_all/yk_dk_all ! Hestenes and Stiefel (1952)
+  if (cg_type == "HS") then
+    beta = yk_pk1_all/yk_dk_all ! Hestenes and Stiefel (1952)
+  else if (cg_type == "N") then
+    beta = (yk_pk1_all - 2.0*dk_pk1_all*yk_yk_all/yk_dk_all) / yk_dk_all ! Hager and Zhang (2003)
+  else
+    print *, "[ERROR] unknown type of CG (valid option: HS or N)"
+  endif
 
   print *, "update parameter = ", beta 
 

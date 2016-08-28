@@ -111,7 +111,7 @@ program xsem_add_dmodel
   do iproc = myrank, (nproc-1), nrank
     ! read dmodel
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, "dlnvs"//trim(model_suffix), dmodel)
-    ! get max ratio
+    ! get max amplitude 
     max_dlnvs_local = max(max_dlnvs_local, maxval(abs(dmodel)))
   enddo
   call max_all_dp(max_dlnvs_local, max_dlnvs_all)

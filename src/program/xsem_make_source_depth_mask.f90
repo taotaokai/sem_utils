@@ -6,9 +6,11 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xsem_make_source_mask \"
-  print '(a)', "    <nproc> <mesh_dir> <source_xyz_list> <source_gaussa> \"
-  print '(a)', "    <depth_gaussa> <out_tag> <out_dir> "
+  print '(a)', "  xsem_make_source_mask "
+  print '(a)', "    <nproc> <mesh_dir> "
+  print '(a)', "    <source_xyz_list> <source_gaussa> "
+  print '(a)', "    <surface_weight> <depth_gaussa> "
+  print '(a)', "    <out_dir> <out_name>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -19,9 +21,10 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
   print '(a)', "  (string) source_xyz_list: list of source locations(x,y,z) in SEM (normalized)"
   print '(a)', "  (float) source_gaussa: Gaussian width (one sigma) in km"
+  print '(a)', "  (float) surface_weight: weighting at the surface, should be between (0, 1), usually small number, say 0.001"
   print '(a)', "  (float) depth_gaussa: Gaussian width (one sigma) in km"
-  print '(a)', "  (string) out_tag: tag in file name proc*_reg1_<out_tag>.bin"
-  print '(a)', "  (string) out_dir: out_dir/proc*_reg1_<out_tag>.bin"
+  print '(a)', "  (string) out_dir: <out_dir>/proc*_reg1_<out_name>.bin"
+  print '(a)', "  (string) out_name: file name will be proc*_reg1_<out_name>.bin"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
@@ -43,15 +46,16 @@ program xsem_make_source_depth_mask
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 7
+  integer, parameter :: nargs = 8
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
   character(len=MAX_STRING_LEN) :: source_xyz_list
   real(dp) :: source_gaussa
+  real(dp) :: surface_weight
   real(dp) :: depth_gaussa
-  character(len=MAX_STRING_LEN) :: out_tag
   character(len=MAX_STRING_LEN) :: out_dir
+  character(len=MAX_STRING_LEN) :: out_name
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
@@ -68,10 +72,10 @@ program xsem_make_source_depth_mask
   ! mask gll 
   real(dp), allocatable :: mask(:,:,:,:)
   real(dp) :: xyz(3), weight
-  ! source
+  ! source weighting
   real(dp) :: dist_sq
-  ! depth
-  real(dp) :: depth 
+  ! depth weighting
+  real(dp) :: depth
 
   !===== start MPI
 
@@ -96,18 +100,25 @@ program xsem_make_source_depth_mask
   read(args(2), '(a)') mesh_dir
   read(args(3), '(a)') source_xyz_list
   read(args(4), *) source_gaussa
-  read(args(5), *) depth_gaussa
-  read(args(6), '(a)') out_tag
+  read(args(5), *) surface_weight
+  read(args(6), *) depth_gaussa
   read(args(7), '(a)') out_dir
+  read(args(8), '(a)') out_name
 
   ! validate input
-  if (source_gaussa < 0.0) then
-    if (myrank == 0) then
+  if (myrank == 0) then
+    if (source_gaussa < 0.0 .or. depth_gaussa < 0.0) then
       call selfdoc()
-      print *, "[ERROR] source_gaussa must > 0.0"
+      print *, "[ERROR] gaussa must > 0.0"
+      call abort_mpi()
+    endif
+    if (surface_weight <= 0.0 .or. surface_weight >= 1.0) then
+      call selfdoc()
+      print *, "[ERROR] surface_weight must between (0,1)"
       call abort_mpi()
     endif
   endif
+
   call synchronize_all()
 
   ! log output
@@ -117,8 +128,9 @@ program xsem_make_source_depth_mask
     print *, "#[LOG] mesh_dir=", trim(mesh_dir)
     print *, "#[LOG] source_xyz_list=", trim(source_xyz_list)
     print *, "#[LOG] source_gaussa=", source_gaussa
+    print *, "#[LOG] surface_weight=", surface_weight
     print *, "#[LOG] depth_gaussa=", depth_gaussa
-    print *, "#[LOG] out_tag=", trim(out_tag)
+    print *, "#[LOG] out_name=", trim(out_name)
     print *, "#[LOG] out_dir=", trim(out_dir)
   endif
 
@@ -127,9 +139,8 @@ program xsem_make_source_depth_mask
 
   allocate(source_xyz(3, nsource))
   do isrc = 1, nsource
-    ! read source x,y,z 
-    read(lines(isrc), *) source_xyz(1, isrc), source_xyz(2, isrc), &
-                         source_xyz(3, isrc)
+    ! read source x,y,z
+    read(lines(isrc), *) source_xyz(1, isrc), source_xyz(2, isrc), source_xyz(3, isrc)
   enddo
 
   !===== loop each mesh slice
@@ -160,20 +171,22 @@ program xsem_make_source_depth_mask
             ! gll point xyz
             iglob = mesh_data%ibool(igllx,iglly,igllz,ispec)
             xyz = mesh_data%xyz_glob(:,iglob)
-            depth = 1.0 - sqrt(sum(xyz**2))
-            
-            ! source mask: mask source region
-            weight = 1.0_dp
 
+            ! source mask: mask source region
+            weight = 1.0
             do isrc = 1, nsource
               dist_sq = sum((xyz - source_xyz(:,isrc))**2)
-              weight = weight * (1.0_dp - &
-                  exp(-0.5*dist_sq/source_gaussa**2))
+              weight = weight * (1.0 - exp(-0.5*dist_sq/source_gaussa**2))
             enddo
 
             ! depth weighting
-            weight = weight * (1.0_dp - exp(-0.5*(depth/depth_gaussa)**2))
+            depth = 1.0 - sqrt(sum(xyz**2))
+            if (depth < 0.0 ) then
+              depth = 0.0
+            endif
+            weight = weight * (surface_weight + (1.0 - surface_weight)*(1.0 - exp(-0.5*(depth/depth_gaussa)**2)))
 
+            ! mask gll
             mask(igllx,iglly,igllz,ispec) = weight
 
           enddo
@@ -184,7 +197,7 @@ program xsem_make_source_depth_mask
     print *,'min/max=', minval(mask), maxval(mask)
 
     ! save mask gll file
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, out_tag, mask)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, out_name, mask)
 
   enddo ! iproc
 

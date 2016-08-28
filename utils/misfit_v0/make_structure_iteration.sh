@@ -57,7 +57,7 @@ cat <<EOF > $syn_job
 #SBATCH -N 11
 #SBATCH -n 256
 #SBATCH -p normal
-#SBATCH -t 00:40:00
+#SBATCH -t 00:50:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -110,7 +110,7 @@ cat <<EOF > $misfit_job
 #SBATCH -n 1
 #SBATCH --cpus-per-task=24
 #SBATCH -p normal
-#SBATCH -t 01:30:00
+#SBATCH -t 00:40:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -151,17 +151,17 @@ ls *Z.adj | sed 's/..Z\.adj$//' |\
 grep -f $event_dir/adj_kernel/grep_pattern $event_dir/DATA/STATIONS \
   > $event_dir/adj_kernel/STATIONS_ADJOINT
 
-#------ adjoint source for hessian simulation
-rm -rf $event_dir/adj_hess
-mkdir -p $event_dir/adj_hess
-$utils_dir/output_adj_hess.py $db_file $event_dir/adj_hess
-
-# make STATIONS_ADJOINT
-cd $event_dir/adj_hess
-ls *Z.adj | sed 's/..Z\.adj$//' |\
-  awk -F"." '{printf "%s[ ]*%s.%s[ ]\n",\$1,\$2,\$3}' > grep_pattern
-grep -f $event_dir/adj_hess/grep_pattern $event_dir/DATA/STATIONS \
-  > $event_dir/adj_hess/STATIONS_ADJOINT
+### #------ adjoint source for hessian simulation
+### rm -rf $event_dir/adj_hess
+### mkdir -p $event_dir/adj_hess
+### $utils_dir/output_adj_hess.py $db_file $event_dir/adj_hess
+### 
+### # make STATIONS_ADJOINT
+### cd $event_dir/adj_hess
+### ls *Z.adj | sed 's/..Z\.adj$//' |\
+###   awk -F"." '{printf "%s[ ]*%s.%s[ ]\n",\$1,\$2,\$3}' > grep_pattern
+### grep -f $event_dir/adj_hess/grep_pattern $event_dir/DATA/STATIONS \
+###   > $event_dir/adj_hess/STATIONS_ADJOINT
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -177,7 +177,7 @@ cat <<EOF > $kernel_job
 #SBATCH -N 11
 #SBATCH -n 256
 #SBATCH -p normal
-#SBATCH -t 01:10:00
+#SBATCH -t 01:20:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -189,7 +189,7 @@ echo
 out_dir=output_kernel
 
 cd $event_dir/DATA
-
+chmod u+w Par_file
 sed -i "/^SIMULATION_TYPE/s/=.*/= 3/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
 sed -i "/^ANISOTROPIC_KL/s/=.*/= .true./" Par_file
@@ -310,17 +310,22 @@ ibrun $sem_utils/bin/xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
   \$out_dir
 
 echo "====== reduce aijkl kernel [\$(date)]"
+#ibrun $sem_utils/bin/xsem_kernel_aijkl_to_vti_3pars \
+#  $nproc $mesh_dir/DATABASES_MPI \
+#  \$out_dir \
+#  \$out_dir
 ibrun $sem_utils/bin/xsem_kernel_aijkl_to_vti_3pars \
   $nproc $mesh_dir/DATABASES_MPI \
   \$out_dir \
   \$out_dir
 
-echo "====== random kernel to hessian diagonal [\$(date)]"
-ibrun $sem_utils/bin/xsem_hess_diag_sum_random_adjoint_kernel \
-  $nproc $mesh_dir/DATABASES_MPI \
-  $mesh_dir/DATABASES_MPI \
-  $event_dir/output_hess/kernel \
-  \$out_dir
+
+#echo "====== random kernel to hessian diagonal [\$(date)]"
+#ibrun $sem_utils/bin/xsem_hess_diag_sum_random_adjoint_kernel \
+#  $nproc $mesh_dir/DATABASES_MPI \
+#  $mesh_dir/DATABASES_MPI \
+#  $event_dir/output_hess/kernel \
+#  \$out_dir
 
 #echo "====== smooth hess diagonal [\$(date)]"
 #sigma_h=20
@@ -356,7 +361,7 @@ cat <<EOF > $perturb_job
 #SBATCH -N 11
 #SBATCH -n 256
 #SBATCH -p normal
-#SBATCH -t 02:00:00
+#SBATCH -t 00:40:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -366,10 +371,12 @@ echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
 cd $event_dir/DATA
+chmod u+w Par_file
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
  
-for dmodel in dvp dvsv dvsh
+#for dmodel in dvp dvsv dvsh
+for dmodel in perturb
 do
 
   out_dir=output_\${dmodel}
@@ -419,12 +426,16 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
-$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvp/sac vp
-$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsv/sac vsv
-$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsh/sac vsh
+#$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvp/sac vp
+#$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsv/sac vsv
+#$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsh/sac vsh
 
-$utils_dir/grid_search_dvsh.py $misfit_par $db_file $misfit_dir/grid_search_dvsh.txt
-$utils_dir/grid_search_dvp_dvsv.py $misfit_par $db_file $misfit_dir/grid_search_dvp_dvsv.txt
+#$utils_dir/grid_search_dvsh.py $misfit_par $db_file $misfit_dir/grid_search_dvsh.txt
+#$utils_dir/grid_search_dvp_dvsv.py $misfit_par $db_file $misfit_dir/grid_search_dvp_dvsv.txt
+
+$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_perturb/sac model
+
+$utils_dir/grid_search_dmodel.py $misfit_par $db_file $misfit_dir/grid_search_dmodel.txt
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

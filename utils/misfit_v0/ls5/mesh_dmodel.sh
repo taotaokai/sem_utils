@@ -8,7 +8,8 @@ sem_utils=/home1/03244/ktao/seiscode/sem_utils
 par_dir=$base_dir/sem_config/DATA
 sem_dir=$base_dir/specfem3d_globe
 
-for dmodel in dvp dvsv dvsh
+#for dmodel in dvp dvsv dvsh
+for dmodel in perturb
 do
   echo ====== $dmodel
 

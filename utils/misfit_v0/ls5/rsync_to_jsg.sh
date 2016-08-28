@@ -31,10 +31,11 @@ kernel
 kernel_precond
 kernel_smooth_precond
 vtk
-kernel_sum
-mesh_dv*
-mesh
+kernel_sum*
+mesh*
 model_dv*
+model_perturb
+old
 EOF
 
 

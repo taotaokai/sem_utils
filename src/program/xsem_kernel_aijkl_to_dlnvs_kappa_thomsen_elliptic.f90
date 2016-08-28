@@ -19,7 +19,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
-  print '(a)', "  (string) model_dir:  directory holds proc*_reg1_[vsv_ref,dlnvs,kappa,eps,gamma].bin"
+  print '(a)', "  (string) model_dir:  directory holds the model files to do the simulation, proc*_reg1_[vsv_ref,dlnvs,kappa,eps,gamma].bin"
   print '(a)', "  (string) kernel_dir:  directory holds the aijkl_kernel files"
   print '(a)', "                        proc******_reg1_aijkl_kernel.bin"
   print '(a)', "  (string) out_dir:  output directory for [dlnvs,kappa,eps,gamma]_kernel"

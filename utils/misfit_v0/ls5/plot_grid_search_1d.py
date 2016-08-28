@@ -38,8 +38,8 @@ for fname in fnames:
   plt.plot(step_length, wcc_avg, 'k', lw=0.5)
   idx_max = np.argmax(wcc_avg)
   plt.plot(step_length[idx_max], wcc_avg[idx_max], 'bo', markersize=5)
-  if idx_max == 0:
-    print("%s idx_max=0" % fname)
+  if step_length[idx_max] <= 0:
+    print("%s step_length[idx_max]=%f" % fname, step_length[idx_max])
 
 # total
 plt.plot(step_length, wcc_sum_total/weight_sum_total, 'r', lw=2)
@@ -48,11 +48,12 @@ idx_max = np.argmax(wcc_sum_total)
 plt.plot(step_length[idx_max], wcc_sum_total[idx_max]/weight_sum_total, 'r*', markersize=20)
 print("optimal step_length = ", step_length[idx_max])
 
-plt.xlabel('step size')
+plt.xlabel('step length')
 plt.ylabel('wcc_sum')
 str_title = "weighted cc of linearized seismograms: step %.3f wcc_avg %.3f" % (
     step_length[idx_max], wcc_sum_total[idx_max]/weight_sum_total)
 plt.title(str_title)
+
 
 #plt.show()
 plt.savefig("wcc_sum.pdf", format='pdf')

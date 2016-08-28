@@ -32,7 +32,6 @@ subroutine selfdoc()
   print '(a)', "NOTE"
   print '(a)', ""
   print '(a)', "  1. can be run in parallel"
-
 end subroutine
 
 

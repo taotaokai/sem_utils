@@ -88,19 +88,14 @@ program = xsem_slice_gcircle \
 	xsem_kernel_aijkl_to_modified_vti_and_iso \
 	xsem_kernel_modified_vti_and_iso_scale_max_dlnv \
 	xsem_model_gll_update_modified_vti_and_iso \
-	xsem_model_gll_to_vsv2_kappa2_thomsen \
-	xsem_model_vsv2_kappa2_thomsen_to_gll \
-	xsem_kernel_aijkl_to_vsv2_kappa2_thomsen \
 	xsem_scale_dmodel \
 	xsem_add_dmodel \
 	xsem_threshold_amplitude \
 	xsem_pcg_dmodel_n \
 	xsem_math_unary \
-	xsem_model_vsv2_kappa2_thomsen_elliptic_to_gll \
-	xsem_kernel_aijkl_to_vsv2_kappa2_thomsen_elliptic \
-	xsem_kernel_aijkl_to_dlnvs_kappa_thomsen_elliptic \
 	xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll \
 	xsem_model_gll_to_dlnvs_kappa_thomsen \
+	xsem_kernel_aijkl_to_dlnvs_kappa_thomsen_elliptic \
 	xsem_scale_dmodel_dlnvs_kappa_thomsen_elliptic \
 	xsem_add_dmodel_dlnvs_kappa_thomsen_elliptic
 

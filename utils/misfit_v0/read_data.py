@@ -35,7 +35,7 @@ misfit.setup_event(cmt_file, ECEF=par.cmt_is_ECEF)
 print(misfit.data['event'])
 
 print("\n====== setup station\n")
-misfit.setup_station(channel_file)
+misfit.setup_station(channel_file, band_code=par.obs_band_code,three_channels=True)
 
 print("\n====== read seismogram: obs, syn\n")
 misfit.read_obs_syn(

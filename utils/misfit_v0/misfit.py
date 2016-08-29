@@ -463,7 +463,7 @@ class Misfit(object):
 
   def setup_station(self,
       channel_file,
-      band_code=None, 
+      band_code=None,
       three_channels=True, 
       ):
     """ Setup station metadata.
@@ -541,10 +541,17 @@ class Misfit(object):
       channel = [ x for x in metadata[net_sta_loc] 
           if x['starttime'] < active_time and x['endtime'] > active_time ]
 
+      if not channel:
+        print("[WARNING] %s not active." % (station_id))
+        continue
+
       # select band code (e.g. BH )
       if band_code:
         n = len(band_code)
         channel = [ x for x in channel if x['code'][0:n]==band_code ]
+        if not channel:
+          print("[WARNING] %s has no specified band code %s." % (station_id, band_code))
+          continue
 
       # check if all selected channels have the same location
       lats = [ x['latitude'] for x in channel ]

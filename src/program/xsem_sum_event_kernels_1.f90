@@ -7,9 +7,11 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xsem_sum_event_kernels_1 \"
-  print '(a)', "    <nproc> <mesh_dir> <kernel_dir_list> <kernel_name> "
-  print '(a)', "    <use_mask> <mask_tag> <out_dir>"
+  print '(a)', "  xsem_sum_event_kernels_1 "
+  print '(a)', "    <nproc> <mesh_dir> "
+  print '(a)', "    <kernel_dir_list> <kernel_name> "
+  print '(a)', "    <use_mask> <mask_tag> "
+  print '(a)', "    <out_dir> <out_name>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -24,6 +26,7 @@ subroutine selfdoc()
   print '(a)', "  (int) use_mask:  flag whether apply kernel mask (mask file is read from each kernel_dir)"
   print '(a)', "  (string) mask_tag:  tags of mask files"
   print '(a)', "  (string) out_dir:  directory to write out summed kernel files"
+  print '(a)', "  (string) out_name:  <out_dir>/proc*_reg1_<out_name>.bin"
   print '(a)', ""
   print '(a)', "NOTE"
   print '(a)', ""
@@ -48,7 +51,7 @@ program xsem_sum_event_kernels_cijkl
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 7
+  integer, parameter :: nargs = 8
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
@@ -57,6 +60,7 @@ program xsem_sum_event_kernels_cijkl
   logical :: use_mask
   character(len=MAX_STRING_LEN) :: mask_tag 
   character(len=MAX_STRING_LEN) :: out_dir
+  character(len=MAX_STRING_LEN) :: out_name
 
   ! local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
@@ -109,8 +113,9 @@ program xsem_sum_event_kernels_cijkl
         call abort_mpi()
       endif
   end select
-  read(args(6), '(a)') mask_tag 
+  read(args(6), '(a)') mask_tag
   read(args(7), '(a)') out_dir
+  read(args(8), '(a)') out_name
 
   call synchronize_all()
 
@@ -143,13 +148,11 @@ program xsem_sum_event_kernels_cijkl
     do iker = 1, nkernel
 
       ! read kernel gll
-      call sem_io_read_gll_file_1(kernel_dirs(iker), iproc, iregion, &
-        kernel_name, kernel)
+      call sem_io_read_gll_file_1(kernel_dirs(iker), iproc, iregion, kernel_name, kernel)
 
       ! read mask
       if (use_mask) then
-        call sem_io_read_gll_file_1(kernel_dirs(iker), iproc, iregion, &
-          mask_tag, mask)
+        call sem_io_read_gll_file_1(kernel_dirs(iker), iproc, iregion, mask_tag, mask)
       endif
 
       ! sum up kernels
@@ -158,8 +161,7 @@ program xsem_sum_event_kernels_cijkl
     enddo ! iker
 
     ! write out gll file
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, &
-      kernel_name, kernel_sum)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, out_name, kernel_sum)
 
   enddo ! iproc
 

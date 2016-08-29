@@ -39,7 +39,7 @@ for fname in fnames:
   idx_max = np.argmax(wcc_avg)
   plt.plot(step_length[idx_max], wcc_avg[idx_max], 'bo', markersize=5)
   if step_length[idx_max] <= 0:
-    print("%s step_length[idx_max]=%f" % fname, step_length[idx_max])
+    print("%s step_length[idx_max]=%f" % (fname, step_length[idx_max]))
 
 # total
 plt.plot(step_length, wcc_sum_total/weight_sum_total, 'r', lw=2)

@@ -8,6 +8,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  xsem_pcg_dmodel"
   print '(a)', "    <nproc> <mesh_dir> "
+  print '(a)', "    <current_precond_kernel_dir> <current_precond_kernel_names> "
   print '(a)', "    <current_kernel_dir> <current_kernel_names> "
   print '(a)', "    <previous_kernel_dir> <previous_kernel_names> "
   print '(a)', "    <previous_dmodel_dir> <previous_dmodel_names> "
@@ -16,13 +17,16 @@ subroutine selfdoc()
   print '(a)', "DESCRIPTION"
   print '(a)', ""
   print '(a)', "  To maximize an objective function the PCG update is d_k+1 = p_k+1 - beta_k*d_k"
-  print '(a)', "  , where beta_k = < y_k - 2*<y_k,y_k>/<d_k,y_k>d_k , p_k+1 > / <d_k,y_k>"
+  print '(a)', "  , where beta_k = < y_k - 2*<y_k,y_k>/<d_k,y_k>d_k , p_k+1 > / <d_k,y_k>, y_k = g_k+1 - g_k"
   print '(a)', "  (Hager and Zhang, 2003)"
   print '(a)', ""
   print '(a)', "PARAMETERS"
   print '(a)', ""
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
+  print '(a)', "  (string) current_precond_kernel_dir: directory of the current preconditioned kernel files proc*_reg1_<kernel_names>.bin"
+  print '(a)', "  (string) current_precond_kernel_names:  comma separated string, e.g. dlnvs_kernel,kappa_kernel,... "
+  print '(a)', "  (string) previous_kernel_dir: directory for the previous kernel files"
   print '(a)', "  (string) current_kernel_dir: directory of the current kernel files proc*_reg1_<kernel_names>.bin"
   print '(a)', "  (string) current_kernel_names:  comma separated string, e.g. dlnvs_kernel,kappa_kernel,... "
   print '(a)', "  (string) previous_kernel_dir: directory for the previous kernel files"
@@ -53,10 +57,12 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 11
+  integer, parameter :: nargs = 13
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
+  character(len=MAX_STRING_LEN) :: current_precond_kernel_dir
+  character(len=MAX_STRING_LEN) :: current_precond_kernel_names
   character(len=MAX_STRING_LEN) :: current_kernel_dir
   character(len=MAX_STRING_LEN) :: current_kernel_names
   character(len=MAX_STRING_LEN) :: previous_kernel_dir
@@ -76,18 +82,20 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   type(sem_mesh_data) :: mesh_data
   integer :: ispec, nspec
   ! model names
-  integer :: nmodel, nmodel_1, nmodel_2, nmodel_3
+  integer :: nmodel, nmodel_1, nmodel_2, nmodel_3, nmodel_4
+  character(len=MAX_STRING_LEN), allocatable :: current_precond_kernel_name_list(:)
   character(len=MAX_STRING_LEN), allocatable :: current_kernel_name_list(:)
   character(len=MAX_STRING_LEN), allocatable :: previous_kernel_name_list(:)
   character(len=MAX_STRING_LEN), allocatable :: previous_dmodel_name_list(:)
   character(len=MAX_STRING_LEN), allocatable :: out_name_list(:)
   ! kernel
-  real(dp), dimension(:,:,:,:,:), allocatable :: kernel_current
-  real(dp), dimension(:,:,:,:,:), allocatable :: kernel_previous
+  real(dp), dimension(:,:,:,:,:), allocatable :: pk1
+  real(dp), dimension(:,:,:,:,:), allocatable :: gk1
+  real(dp), dimension(:,:,:,:,:), allocatable :: gk
   ! previous dmodel
-  real(dp), dimension(:,:,:,:,:), allocatable :: dmodel
+  real(dp), dimension(:,:,:,:,:), allocatable :: dk
   ! cg update parameter
-  real(dp), dimension(:,:,:,:,:), allocatable :: dkernel
+  real(dp), dimension(:,:,:,:,:), allocatable :: yk
   real(dp), dimension(:,:,:,:), allocatable :: volume_gll
   real(dp) :: yk_dk,  yk_dk_all
   real(dp) :: yk_pk1, yk_pk1_all
@@ -116,24 +124,27 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   enddo
   read(args(1),*) nproc
   read(args(2),'(a)') mesh_dir 
-  read(args(3),'(a)') current_kernel_dir 
-  read(args(4),'(a)') current_kernel_names
-  read(args(5),'(a)') previous_kernel_dir 
-  read(args(6),'(a)') previous_kernel_names
-  read(args(7),'(a)') previous_dmodel_dir 
-  read(args(8),'(a)') previous_dmodel_names
-  read(args(9),'(a)') cg_type
-  read(args(10),'(a)') out_dir
-  read(args(11),'(a)') out_names
+  read(args(3),'(a)') current_precond_kernel_dir 
+  read(args(4),'(a)') current_precond_kernel_names
+  read(args(5),'(a)') current_kernel_dir 
+  read(args(6),'(a)') current_kernel_names
+  read(args(7),'(a)') previous_kernel_dir 
+  read(args(8),'(a)') previous_kernel_names
+  read(args(9),'(a)') previous_dmodel_dir 
+  read(args(10),'(a)') previous_dmodel_names
+  read(args(11),'(a)') cg_type
+  read(args(12),'(a)') out_dir
+  read(args(13),'(a)') out_names
 
   call synchronize_all()
 
   ! read in model names
-  call sem_utils_delimit_string(current_kernel_names, ',', current_kernel_name_list, nmodel)
-  call sem_utils_delimit_string(previous_kernel_names, ',', previous_kernel_name_list, nmodel_1)
-  call sem_utils_delimit_string(previous_dmodel_names, ',', previous_dmodel_name_list, nmodel_2)
-  call sem_utils_delimit_string(out_names, ',', out_name_list, nmodel_3)
-  if (nmodel_1 /= nmodel .or. nmodel_2 /= nmodel .or. nmodel_3 /= nmodel) then
+  call sem_utils_delimit_string(current_precond_kernel_names, ',', current_precond_kernel_name_list, nmodel)
+  call sem_utils_delimit_string(current_kernel_names, ',', current_kernel_name_list, nmodel_1)
+  call sem_utils_delimit_string(previous_kernel_names, ',', previous_kernel_name_list, nmodel_2)
+  call sem_utils_delimit_string(previous_dmodel_names, ',', previous_dmodel_name_list, nmodel_3)
+  call sem_utils_delimit_string(out_names, ',', out_name_list, nmodel_4)
+  if (nmodel_1 /= nmodel .or. nmodel_2 /= nmodel .or. nmodel_3 /= nmodel .or. nmodel_4 /= nmodel) then
     if (myrank == 0) then
       print *, "[ERROR] number of parameters should be the same"
       call abort_mpi()
@@ -148,10 +159,11 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   call bcast_all_singlei(nspec)
 
   ! intialize arrays
-  allocate(kernel_current(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
-  allocate(kernel_previous(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
-  allocate(dmodel(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
-  allocate(dkernel(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(pk1(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(gk1(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(gk(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(dk(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(yk(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
   allocate(volume_gll(NGLLX,NGLLY,NGLLZ,nspec))
 
   !====== calculate inner products
@@ -164,32 +176,36 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   
     ! read in mesh 
     call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+
     ! calculate gll volumes
     call sem_mesh_gll_volume(mesh_data, volume_gll)
 
-    ! read kernels (p_k+1)
-    call sem_io_read_gll_file_n(current_kernel_dir, iproc, iregion,  current_kernel_name_list, nmodel, kernel_current)
+    ! read preconditioned kernel (p_k+1)
+    call sem_io_read_gll_file_n(current_precond_kernel_dir, iproc, iregion,  current_precond_kernel_name_list, nmodel, pk1)
 
-    ! read kernels (p_k)
-    call sem_io_read_gll_file_n(previous_kernel_dir, iproc, iregion, previous_kernel_name_list, nmodel, kernel_previous)
+    ! read kernels (g_k+1)
+    call sem_io_read_gll_file_n(current_kernel_dir, iproc, iregion,  current_kernel_name_list, nmodel, gk1)
+
+    ! read kernels (g_k)
+    call sem_io_read_gll_file_n(previous_kernel_dir, iproc, iregion, previous_kernel_name_list, nmodel, gk)
 
     ! read previous dmodel (d_k)
-    call sem_io_read_gll_file_n(previous_dmodel_dir, iproc, iregion, previous_dmodel_name_list, nmodel, dmodel)
+    call sem_io_read_gll_file_n(previous_dmodel_dir, iproc, iregion, previous_dmodel_name_list, nmodel, dk)
 
-    ! y_k = p_k+1 - p_k
-    dkernel = kernel_current - kernel_previous
+    ! y_k = g_k+1 - g_k
+    yk = gk1 - gk
 
     ! <y_k, d_k>
-    yk_dk = yk_dk + sum(dkernel*dmodel*spread(volume_gll,1,nmodel))
+    yk_dk = yk_dk + sum(yk*dk*spread(volume_gll,1,nmodel))
 
     ! <y_k, p_k+1>
-    yk_pk1 = yk_pk1 + sum(dkernel*kernel_current*spread(volume_gll,1,nmodel))
+    yk_pk1 = yk_pk1 + sum(yk*pk1*spread(volume_gll,1,nmodel))
 
     ! <y_k, y_k>
-    yk_yk = yk_yk + sum(dkernel**2 * spread(volume_gll,1,nmodel))
+    yk_yk = yk_yk + sum(yk**2 * spread(volume_gll,1,nmodel))
 
     ! <d_k, p_k+1>
-    dk_pk1 = dk_pk1 + sum(dmodel*kernel_current*spread(volume_gll,1,nmodel))
+    dk_pk1 = dk_pk1 + sum(dk*pk1*spread(volume_gll,1,nmodel))
 
   enddo
 
@@ -230,16 +246,16 @@ program xsem_kernel_vti_3pars_pcg_dmodel
     print *, "iproc = ", iproc
 
     ! read kernels (p_k+1)
-    call sem_io_read_gll_file_n(current_kernel_dir, iproc, iregion, current_kernel_name_list, nmodel, kernel_current)
+    call sem_io_read_gll_file_n(current_precond_kernel_dir, iproc, iregion, current_precond_kernel_name_list, nmodel, pk1)
 
     ! read previous dmodel (d_k)
-    call sem_io_read_gll_file_n(previous_dmodel_dir, iproc, iregion, previous_dmodel_name_list, nmodel, dmodel)
+    call sem_io_read_gll_file_n(previous_dmodel_dir, iproc, iregion, previous_dmodel_name_list, nmodel, dk)
 
-    ! get new dmodel
-    dmodel = kernel_current - beta*dmodel
+    ! get new dmodel (d_k+1)
+    dk = pk1 - beta*dk
 
     ! write new dmodel
-    call sem_io_write_gll_file_n(out_dir, iproc, iregion, out_name_list, nmodel, dmodel)
+    call sem_io_write_gll_file_n(out_dir, iproc, iregion, out_name_list, nmodel, dk)
 
   enddo
  

@@ -10,6 +10,7 @@ syn_band_code = "MX"
 syn_suffix = ".sem.sac"
 left_pad = 100.0
 right_pad = 0.0
+obs_band_code = None
 obs_preevent = 100.0
 syn_is_grn = False
 cmt_is_ECEF = True
@@ -139,7 +140,7 @@ range_ratio = 0.8
 
 #====== structure inversion
 # search range
-dm_model = {'model': np.linspace(-2, 8, 100)}
+dm_model = {'model': np.linspace(-1, 2, 601)}
 
 #dm_vp = {'vp': np.linspace(0, 10, 100)}
 #dm_vsh = {'vsh': np.linspace(-2, 8, 100)}

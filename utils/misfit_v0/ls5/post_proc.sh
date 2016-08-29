@@ -6,8 +6,8 @@ wkdir=$(pwd)
 
 job_id=${1:--1}
 
-#for job in kernel_sum pcg_dmodel dmodel_threshold dmodel_smooth dmodel_scale dmodel_statis
-for job in dmodel_threshold dmodel_smooth dmodel_scale dmodel_statis
+#for job in dmodel_threshold dmodel_smooth dmodel_scale dmodel_statis
+for job in kernel_sum kernel_precond kernel_threshold kernel_smooth pcg_dmodel dmodel_scale
 do 
 
   echo

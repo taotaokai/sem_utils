@@ -129,7 +129,7 @@ program xsem_add_dmodel
     print *, "======", iproc
 
     ! read mesh
-    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+    call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
 
     ! dlnvs
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, "dlnvs"//trim(model_suffix), dmodel)

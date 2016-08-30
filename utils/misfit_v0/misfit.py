@@ -464,7 +464,7 @@ class Misfit(object):
   def setup_station(self,
       channel_file,
       band_code=None,
-      three_channels=True, 
+      three_channels=True,
       ):
     """ Setup station metadata.
 

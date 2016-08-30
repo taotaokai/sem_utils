@@ -89,13 +89,13 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   character(len=MAX_STRING_LEN), allocatable :: previous_dmodel_name_list(:)
   character(len=MAX_STRING_LEN), allocatable :: out_name_list(:)
   ! kernel
-  real(dp), dimension(:,:,:,:,:), allocatable :: pk1
-  real(dp), dimension(:,:,:,:,:), allocatable :: gk1
-  real(dp), dimension(:,:,:,:,:), allocatable :: gk
+  real(dp), dimension(:,:,:,:,:), allocatable :: pk1 !current preconditioned kernel
+  real(dp), dimension(:,:,:,:,:), allocatable :: gk1 !current gradient/kernel
+  real(dp), dimension(:,:,:,:,:), allocatable :: gk  !previous gradient
   ! previous dmodel
-  real(dp), dimension(:,:,:,:,:), allocatable :: dk
+  real(dp), dimension(:,:,:,:,:), allocatable :: dk  !previous model update direction
   ! cg update parameter
-  real(dp), dimension(:,:,:,:,:), allocatable :: yk
+  real(dp), dimension(:,:,:,:,:), allocatable :: yk  !gradient difference
   real(dp), dimension(:,:,:,:), allocatable :: volume_gll
   real(dp) :: yk_dk,  yk_dk_all
   real(dp) :: yk_pk1, yk_pk1_all
@@ -175,16 +175,16 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   do iproc = myrank, (nproc-1), nrank
   
     ! read in mesh 
-    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+    call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
 
     ! calculate gll volumes
     call sem_mesh_gll_volume(mesh_data, volume_gll)
 
     ! read preconditioned kernel (p_k+1)
-    call sem_io_read_gll_file_n(current_precond_kernel_dir, iproc, iregion,  current_precond_kernel_name_list, nmodel, pk1)
+    call sem_io_read_gll_file_n(current_precond_kernel_dir, iproc, iregion, current_precond_kernel_name_list, nmodel, pk1)
 
     ! read kernels (g_k+1)
-    call sem_io_read_gll_file_n(current_kernel_dir, iproc, iregion,  current_kernel_name_list, nmodel, gk1)
+    call sem_io_read_gll_file_n(current_kernel_dir, iproc, iregion, current_kernel_name_list, nmodel, gk1)
 
     ! read kernels (g_k)
     call sem_io_read_gll_file_n(previous_kernel_dir, iproc, iregion, previous_kernel_name_list, nmodel, gk)
@@ -233,8 +233,8 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   ! cg update parameter
   if (cg_type == "HS") then
     beta = yk_pk1_all/yk_dk_all ! Hestenes and Stiefel (1952)
-  else if (cg_type == "N") then
-    beta = (yk_pk1_all - 2.0*dk_pk1_all*yk_yk_all/yk_dk_all) / yk_dk_all ! Hager and Zhang (2003)
+  !else if (cg_type == "N") then
+  !  beta = (yk_pk1_all - 2.0*dk_pk1_all*yk_yk_all/yk_dk_all) / yk_dk_all ! Hager and Zhang (2003)
   else
     print *, "[ERROR] unknown type of CG (valid option: HS or N)"
   endif

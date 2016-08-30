@@ -132,7 +132,7 @@ program xsem_kernel_aijkl_to_dlnvs_kappa_thomsen_elliptic
     print *, '# iproc=', iproc
 
     ! read mesh
-    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+    call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
 
     ! read aijkl_kernel
     call sem_io_read_cijkl_kernel(kernel_dir, iproc, iregion, 'aijkl_kernel', aijkl_kernel)

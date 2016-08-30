@@ -1,15 +1,25 @@
 #!/bin/bash
 # Make jobs files for slurm 
+# source inversion
 
 wkdir=$(pwd)
+sem_utils=/home1/03244/ktao/seiscode/sem_utils
+nproc=256
 
 event_id=${1:?[arg]need event_id}
 iter_num=${2:?[arg]need iter_num}
 
+# link the required directories to your wkdir
+specfem_dir=$wkdir/specfem3d_globe
 mesh_dir=$wkdir/mesh
 data_dir=$wkdir/events
 utils_dir=$wkdir/utils
-specfem_dir=$wkdir/specfem3d_globe
+
+# get the full path
+specfem_dir=$(readlink -f $specfem_dir)
+mesh_dir=$(readlink -f $mesh_dir)
+data_dir=$(readlink -f $data_dir)
+utils_dir=$(readlink -f $utils_dir)
 
 #====== define variables
 iter_num=$(echo $iter_num | awk '{printf "%02d",$1}')
@@ -32,7 +42,7 @@ db_file=$misfit_dir/misfit.pkl
 # initial cmt file
 if [ $iter_num -eq 0 ]
 then
-  cmt_file=$event_dir/DATA/CMTSOLUTION.harvard.ECEF
+  cmt_file=$event_dir/DATA/CMTSOLUTION.init
 else
   cmt_file=$event_dir/DATA/CMTSOLUTION.iter${iter_prev}
 fi
@@ -100,6 +110,7 @@ ibrun $specfem_dir/bin/xspecfem3D
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
+
 EOF
 
 #====== misfit
@@ -122,20 +133,23 @@ echo
 
 cd $event_dir
 
+rm -rf $misfit_dir
 mkdir -p $misfit_dir
 $utils_dir/read_data.py \
+  $misfit_par \
   $db_file \
   $cmt_file \
   $data_dir/$event_id/data/channel.txt \
-  $event_dir/output_green \
+  $event_dir/output_green/sac \
   $data_dir/$event_id/dis
 
-$utils_dir/measure_misfit.py $db_file $misfit_par
+$utils_dir/measure_misfit.py $misfit_par $db_file
 
-$utils_dir/output_misfit.py $db_file $misfit_dir/misfit.iter${iter_num}.txt
+$utils_dir/output_misfit.py $db_file $misfit_par $misfit_dir/misfit.iter${iter_num}.txt
 
+rm -rf $figure_dir
 mkdir -p $figure_dir
-$utils_dir/plot_misfit.py $db_file $figure_dir
+$utils_dir/plot_misfit.py $misfit_par $db_file $figure_dir
 
 rm -rf $event_dir/SEM
 mkdir -p $event_dir/SEM
@@ -146,7 +160,7 @@ cd $event_dir/SEM
 ls *Z.adj | sed 's/..Z\.adj$//' |\
   awk -F"." '{printf "%s[ ]*%s.%s[ ]\n",\$1,\$2,\$3}' > grep_pattern
 grep -f $event_dir/SEM/grep_pattern $event_dir/DATA/STATIONS \
-  > $event_dir/DATA/STATIONS_ADJOINT
+  > $event_dir/SEM/STATIONS_ADJOINT
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -154,7 +168,7 @@ echo
 
 EOF
 
-#====== derivative of misfit function
+#====== source frechet simulation 
 cat <<EOF > $srcfrechet_job
 #!/bin/bash
 #SBATCH -J ${event_id}.srcfrechet.iter$iter_num

@@ -122,7 +122,7 @@ program xsem_model_dlnvs_kappa_thomsen_to_gll
     print *, "iproc = ", iproc
 
     ! read mesh
-    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+    call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
 
     ! read reference model
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vsv_ref', vsv_ref)

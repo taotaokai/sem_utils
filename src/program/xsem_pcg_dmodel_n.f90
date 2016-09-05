@@ -101,6 +101,9 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   real(dp) :: yk_pk1, yk_pk1_all
   real(dp) :: yk_yk,  yk_yk_all
   real(dp) :: dk_pk1, dk_pk1_all
+  real(dp) :: dk_gk1, dk_gk1_all
+  real(dp) :: dk_dk, dk_dk_all
+  real(dp) :: gk1_gk1, gk1_gk1_all
   real(dp) :: beta
 
   !===== start MPI
@@ -159,18 +162,23 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   call bcast_all_singlei(nspec)
 
   ! intialize arrays
+  allocate(volume_gll(NGLLX,NGLLY,NGLLZ,nspec))
+
   allocate(pk1(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
   allocate(gk1(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
   allocate(gk(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
   allocate(dk(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
   allocate(yk(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
-  allocate(volume_gll(NGLLX,NGLLY,NGLLZ,nspec))
 
   !====== calculate inner products
   yk_dk = 0.0_dp
   yk_pk1 = 0.0_dp
   yk_yk = 0.0_dp
   dk_pk1 = 0.0_dp
+
+  dk_gk1 = 0.0_dp
+  dk_dk = 0.0_dp
+  gk1_gk1 = 0.0_dp
 
   do iproc = myrank, (nproc-1), nrank
   
@@ -207,6 +215,15 @@ program xsem_kernel_vti_3pars_pcg_dmodel
     ! <d_k, p_k+1>
     dk_pk1 = dk_pk1 + sum(dk*pk1*spread(volume_gll,1,nmodel))
 
+    ! <d_k, g_k+1>
+    dk_gk1 = dk_gk1 + sum(dk*gk1 * spread(volume_gll,1,nmodel))
+
+    ! <d_k, d_k>
+    dk_dk = dk_dk + sum(dk**2 * spread(volume_gll,1,nmodel))
+
+    ! <g_k+1, g_k+1>
+    gk1_gk1 = gk1_gk1 + sum(gk1**2 * spread(volume_gll,1,nmodel))
+
   enddo
 
   call synchronize_all()
@@ -216,15 +233,26 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   call sum_all_dp(yk_yk, yk_yk_all)
   call sum_all_dp(dk_pk1, dk_pk1_all)
 
+  call sum_all_dp(dk_gk1, dk_gk1_all)
+  call sum_all_dp(dk_dk, dk_dk_all)
+  call sum_all_dp(gk1_gk1, gk1_gk1_all)
+
   call bcast_all_singledp(yk_dk_all)
   call bcast_all_singledp(yk_pk1_all)
   call bcast_all_singledp(yk_yk_all)
   call bcast_all_singledp(dk_pk1_all)
 
-  print *, "yk_dk = ", yk_dk_all
-  print *, "yk_pk1 = ", yk_pk1_all
-  print *, "yk_yk = ", yk_yk_all
-  print *, "dk_pk1 = ", dk_pk1_all
+  if (myrank == 0) then
+    print *, "<y_k, d_k> = ", yk_dk_all
+    print *, "<y_k, p_k+1> = ", yk_pk1_all
+    print *, "|y_k|^2 = ", yk_yk_all
+    print *, "<d_k, p_k+1> = ", dk_pk1_all
+
+    print *, "<d_k, g_k+1> = ", dk_gk1_all
+    print *, "|d_k|^2 = ", dk_dk_all
+    print *, "|g_k+1|^2 = ", gk1_gk1_all
+    print *, "<d_k, g_k+1>/(|d_k|*|g_k+1|) = ", dk_gk1_all/sqrt(dk_dk_all)/sqrt(gk1_gk1_all)
+  endif
 
   !====== make new dmodel
 
@@ -237,13 +265,16 @@ program xsem_kernel_vti_3pars_pcg_dmodel
   !  beta = (yk_pk1_all - 2.0*dk_pk1_all*yk_yk_all/yk_dk_all) / yk_dk_all ! Hager and Zhang (2003)
   else
     print *, "[ERROR] unknown type of CG (valid option: HS or N)"
+    call abort_mpi()
   endif
 
-  print *, "update parameter = ", beta 
+  if (myrank == 0) then
+    print *, "update parameter = ", beta 
+  endif
 
   do iproc = myrank, (nproc-1), nrank
 
-    print *, "iproc = ", iproc
+    !print *, "iproc = ", iproc
 
     ! read kernels (p_k+1)
     call sem_io_read_gll_file_n(current_precond_kernel_dir, iproc, iregion, current_precond_kernel_name_list, nmodel, pk1)

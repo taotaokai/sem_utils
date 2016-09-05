@@ -110,6 +110,25 @@ geod = pyproj.Geod(ellps='WGS84')
 ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
 lla = pyproj.Proj(proj='latlong', ellps='WGS84', datum='WGS84')
 
+#--- plot fault lines
+fault_line_file = 'fault_lines.txt'
+fault_lines = []
+with open(fault_line_file, 'r') as f:
+  lon = []
+  lat = []
+  for l in f.readlines():
+    if not l.startswith('>'):
+      x = l.split()
+      lon.append(float(x[0]))
+      lat.append(float(x[1]))
+    else:
+      fault_lines.append([lon, lat])
+      lon = []
+      lat = []
+for l in fault_lines:
+  x, y = m(l[0], l[1])
+  ax.plot(x, y, 'k-', lw=0.1)
+
 # unit direction vector v0 at origin point of the great circle
 x, y, z = pyproj.transform(lla, ecef, xsection_lon0, xsection_lat0, 0.0)
 v0 = np.array([x, y, z])

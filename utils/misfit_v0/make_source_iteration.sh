@@ -7,7 +7,6 @@ sem_utils=/home1/03244/ktao/seiscode/sem_utils
 nproc=256
 
 event_id=${1:?[arg]need event_id}
-iter_num=${2:?[arg]need iter_num}
 
 # link the required directories to your wkdir
 specfem_dir=$wkdir/specfem3d_globe
@@ -22,36 +21,28 @@ data_dir=$(readlink -f $data_dir)
 utils_dir=$(readlink -f $utils_dir)
 
 #====== define variables
-iter_num=$(echo $iter_num | awk '{printf "%02d",$1}')
-iter_prev=$(echo $iter_num | awk '{printf "%02d",$1-1}')
 # directories
 event_dir=$wkdir/$event_id
 misfit_dir=$event_dir/misfit
-figure_dir=$misfit_dir/figure.iter${iter_num}
+figure_dir=$misfit_dir/figure
 slurm_dir=$event_dir/slurm
 # job scripts for slurm
 mkdir -p $slurm_dir
-green_job=$slurm_dir/iter${iter_num}.green.job
-misfit_job=$slurm_dir/iter${iter_num}.misfit.job
-srcfrechet_job=$slurm_dir/iter${iter_num}.srcfrechet.job
-dgreen_job=$slurm_dir/iter${iter_num}.dgreen.job
-search_job=$slurm_dir/iter${iter_num}.search.job
-# database file
-mkdir -p $misfit_dir
-db_file=$misfit_dir/misfit.pkl
-# initial cmt file
-if [ $iter_num -eq 0 ]
-then
-  cmt_file=$event_dir/DATA/CMTSOLUTION.init
-else
-  cmt_file=$event_dir/DATA/CMTSOLUTION.iter${iter_prev}
-fi
+green_job=$slurm_dir/green.job
+misfit_job=$slurm_dir/misfit.job
+srcfrechet_job=$slurm_dir/srcfrechet.job
+dgreen_job=$slurm_dir/dgreen.job
+search_job=$slurm_dir/search.job
+# cmt file
+cmt_file=$event_dir/DATA/CMTSOLUTION.init
 if [ ! -f "$cmt_file" ]
 then
   echo "[ERROR] $cmt_file does NOT exist!"
   exit -1
 fi
-
+# database file
+mkdir -p $misfit_dir
+db_file=$misfit_dir/misfit.pkl
 # misfit par file
 misfit_par=$event_dir/DATA/misfit_par.py
 if [ ! -f "$misfit_par" ]
@@ -63,8 +54,8 @@ fi
 #====== green's function
 cat <<EOF > $green_job
 #!/bin/bash
-#SBATCH -J ${event_id}.green.iter$iter_num
-#SBATCH -o $green_job.o%j
+#SBATCH -J ${event_id}.green
+#SBATCH -o ${green_job}.o%j
 #SBATCH -N 11
 #SBATCH -n 256
 #SBATCH -p normal
@@ -90,6 +81,7 @@ cp $data_dir/$event_id/data/STATIONS .
 
 cp $mesh_dir/DATA/Par_file .
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
+sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
 
 rm -rf $event_dir/DATABASES_MPI
 mkdir $event_dir/DATABASES_MPI
@@ -107,6 +99,9 @@ cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
 ibrun $specfem_dir/bin/xspecfem3D
 
+mkdir $event_dir/\$out_dir/sac
+mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
+
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
@@ -116,13 +111,13 @@ EOF
 #====== misfit
 cat <<EOF > $misfit_job
 #!/bin/bash
-#SBATCH -J ${event_id}.misfit.iter$iter_num
+#SBATCH -J ${event_id}.misfit
 #SBATCH -o $misfit_job.o%j
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH --cpus-per-task=24
 #SBATCH -p normal
-#SBATCH -t 01:30:00
+#SBATCH -t 00:40:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -145,12 +140,13 @@ $utils_dir/read_data.py \
 
 $utils_dir/measure_misfit.py $misfit_par $db_file
 
-$utils_dir/output_misfit.py $db_file $misfit_par $misfit_dir/misfit.iter${iter_num}.txt
+$utils_dir/output_misfit.py $db_file $misfit_dir/misfit.txt
 
 rm -rf $figure_dir
 mkdir -p $figure_dir
 $utils_dir/plot_misfit.py $misfit_par $db_file $figure_dir
 
+#------ adjoint source for kernel simulation
 rm -rf $event_dir/SEM
 mkdir -p $event_dir/SEM
 $utils_dir/output_adj.py $db_file $event_dir/SEM
@@ -171,7 +167,7 @@ EOF
 #====== source frechet simulation 
 cat <<EOF > $srcfrechet_job
 #!/bin/bash
-#SBATCH -J ${event_id}.srcfrechet.iter$iter_num
+#SBATCH -J ${event_id}.srcfrechet
 #SBATCH -o $srcfrechet_job.o%j
 #SBATCH -N 11
 #SBATCH -n 256
@@ -191,15 +187,16 @@ cd $event_dir/DATA
 
 rm CMTSOLUTION
 cp $cmt_file CMTSOLUTION
-sed -i "/^tau(s)/s/.*/tau(s):            +0.00000000E+00/" CMTSOLUTION
-
 sed -i "/^SIMULATION_TYPE/s/=.*/= 2/" Par_file
+sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
 
 cd $event_dir
 
 rm -rf \$out_dir OUTPUT_FILES
 mkdir \$out_dir
 ln -sf \$out_dir OUTPUT_FILES
+
+cp SEM/STATIONS_ADJOINT DATA/
 
 cp $mesh_dir/OUTPUT_FILES/addressing.txt OUTPUT_FILES
 cp -L DATA/Par_file OUTPUT_FILES
@@ -211,26 +208,23 @@ ibrun $specfem_dir/bin/xspecfem3D
 
 mv DATABASES_MPI/*.sem OUTPUT_FILES
 
-echo "make_cmt_der.py [\$(date)]"
-$utils_dir/make_cmt_der.py \
-  $db_file \
-  $event_dir/output_srcfrechet/src_frechet.000001 \
-  $event_dir/DATA
+cp $event_dir/output_srcfrechet/src_frechet.000001 $misfit_dir/srcfrechet
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
+
 EOF
 
-#====== derivatives of green's function: dxs, dmt
+#====== partial derivative of green's function
 cat <<EOF > $dgreen_job
 #!/bin/bash
-#SBATCH -J ${event_id}.dgreen.iter$iter_num
+#SBATCH -J ${event_id}.dgreen
 #SBATCH -o $dgreen_job.o%j
 #SBATCH -N 11
 #SBATCH -n 256
 #SBATCH -p normal
-#SBATCH -t 01:30:00
+#SBATCH -t 00:50:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -239,18 +233,25 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
-for tag in dxs dmt
+# make perturbed CMTSOLUTION
+$utils_dir/make_dcmt.py $cmt_file $misfit_dir/srcfrechet 0.001 $misfit_dir/dcmt
+$utils_dir/add_dcmt.py $cmt_file $misfit_dir/dcmt 1.0 0.0 0.0 $misfit_dir/CMTSOLUTION.perturb
+
+#for tag in dxs dmt
+for tag in perturb
 do
   echo "====== \$tag"
   out_dir=output_\$tag
-  cmt_file=CMTSOLUTION.\$tag
+  dcmt_file=$misfit_dir/CMTSOLUTION.\$tag
 
   cd $event_dir/DATA
+
   rm CMTSOLUTION
-  cp -L \$cmt_file CMTSOLUTION
-  
+  cp -L \$dcmt_file CMTSOLUTION
   sed -i "/^tau(s)/s/.*/tau(s):            +0.00000000E+00/" CMTSOLUTION 
+
   sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
+  sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
   
   cd $event_dir
   rm -rf \$out_dir OUTPUT_FILES
@@ -264,6 +265,10 @@ do
   
   cd $event_dir
   ibrun $specfem_dir/bin/xspecfem3D
+
+  mkdir $event_dir/\$out_dir/sac
+  mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
+
 done
   
 echo
@@ -275,7 +280,7 @@ EOF
 #====== search source parameters
 cat <<EOF > $search_job
 #!/bin/bash
-#SBATCH -J ${event_id}.search.iter$iter_num
+#SBATCH -J ${event_id}.search
 #SBATCH -o $search_job.o%j
 #SBATCH -N 1
 #SBATCH -n 1
@@ -293,12 +298,21 @@ echo
 cd $event_dir 
 
 # read derivatives of green's fuction 
-$utils_dir/waveform_der.py $db_file
+$utils_dir/waveform_der_source.py $misfit_par $db_file $event_dir/output_perturb/sac xs_mt
 
 # grid search of source model
-$utils_dir/search1d.py \
-  $db_file $misfit_par \
-  DATA/CMTSOLUTION.iter${iter_num} DATA/search.iter${iter_num}.log
+$utils_dir/grid_search_source.py $misfit_par $db_file $misfit_dir/grid_search_source.txt $misfit_dir/grid_search_source.pdf
+
+# get optimal model
+xs_mt_step_opt=\$(grep xs_mt_step_opt $misfit_dir/grid_search_source.txt | tail -n1 | awk '{print \$3}')
+dt0_opt=\$(grep dt0_opt $misfit_dir/grid_search_source.txt | tail -n1 | awk '{print \$3}')
+dtau_opt=\$(grep dtau_opt $misfit_dir/grid_search_source.txt | tail -n1 | awk '{print \$3}')
+
+echo xs_mt_step_opt = \$xs_mt_step_opt
+echo dt0_opt = \$dt0_opt
+echo dtau_opt = \$dtau_opt
+
+$utils_dir/add_dcmt.py $cmt_file $misfit_dir/dcmt \$xs_mt_step_opt \$dt0_opt \$dtau_opt $misfit_dir/CMTSOLUTION.updated
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

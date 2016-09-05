@@ -48,6 +48,11 @@ db_file=$misfit_dir/misfit.pkl
 
 # misfit par file
 misfit_par=$event_dir/DATA/misfit_par.py
+if [ ! -f "$misfit_par" ]
+then
+  echo "[ERROR] $misfit_par does NOT exist!"
+  exit -1
+fi
 
 #====== syn: forward simulation
 cat <<EOF > $syn_job
@@ -99,6 +104,7 @@ mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
+
 EOF
 
 #====== misfit

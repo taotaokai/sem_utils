@@ -46,6 +46,7 @@ program = \
 	xsem_interp_IRIS_netcdf \
 	xsem_add_model_dlnV \
 	xsem_sum_event_kernels_1 \
+	xsem_sum_event_kernels_1_serial \
 	xsem_sum_event_kernels_cijkl \
 	xsem_make_source_mask \
 	xsem_make_depth_mask \

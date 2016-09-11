@@ -2,8 +2,6 @@
 # Make jobs files for slurm 
 # structure inversion
 
-# after this put correct CMTSOLUTION into event_id/DATA/ 
-
 wkdir=$(pwd)
 sem_utils=/home1/03244/ktao/seiscode/sem_utils
 nproc=256
@@ -42,10 +40,24 @@ hess_job=$slurm_dir/hess.job
 precond_job=$slurm_dir/precond.job
 perturb_job=$slurm_dir/perturb.job
 search_job=$slurm_dir/search.job
+hess_diag_job=$slurm_dir/hess_diag.job
 # database file
 mkdir -p $misfit_dir
 db_file=$misfit_dir/misfit.pkl
-
+# station file
+station_file=$event_dir/DATA/STATIONS
+if [ ! -f "$station_file" ]
+then
+  echo "[ERROR] $station_file does NOT exist!"
+  exit -1
+fi
+# cmt file
+cmt_file=$event_dir/DATA/CMTSOLUTION.init
+if [ ! -f "$cmt_file" ]
+then
+  echo "[ERROR] $cmt_file does NOT exist!"
+  exit -1
+fi
 # misfit par file
 misfit_par=$event_dir/DATA/misfit_par.py
 if [ ! -f "$misfit_par" ]
@@ -76,7 +88,8 @@ out_dir=output_syn
 mkdir -p $event_dir/DATA
 cd $event_dir/DATA
 
-cp $data_dir/$event_id/data/STATIONS .
+cp $cmt_file $event_dir/DATA/CMTSOLUTION
+#cp $data_dir/$event_id/data/STATIONS .
 
 cp $mesh_dir/DATA/Par_file .
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
@@ -442,6 +455,36 @@ echo
 $utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_perturb/sac model
 
 $utils_dir/grid_search_dmodel.py $misfit_par $db_file $misfit_dir/grid_search_dmodel.txt
+
+echo
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+
+EOF
+
+#====== hess_diag for random model perurbation
+cat <<EOF > $hess_diag_job
+#!/bin/bash
+#SBATCH -J ${event_id}.hess_diag
+#SBATCH -o $hess_diag_job.o%j
+#SBATCH -N 1
+#SBATCH -n 1
+#SBATCH --cpus-per-task=24
+#SBATCH -p normal
+#SBATCH -t 01:30:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+
+$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_random/sac random
+
+$utils_dir/hess_diag_dmodel.py $db_file random
+
+$utils_dir/output_hess_diag.py $db_file random $misfit_dir/hess_diag.txt
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

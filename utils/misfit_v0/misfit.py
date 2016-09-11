@@ -2680,8 +2680,8 @@ class Misfit(object):
         raise Exception("%s: not the same dt for diff-srcloc!" % (station_id))
 
       tr_starttime =  tr.stats.starttime - nl*dt
-      #if tr_starttime != starttime:
-      if np.abs(tr_starttime - starttime) > 1.0e-5:
+      if tr_starttime != starttime:
+      #if np.abs(tr_starttime - starttime) > 1.0e-5:
         raise Exception("%s: not the same starttime for diff-srcloc!" % (station_id))
 
       if tr.stats.npts != sem_nt:
@@ -2956,6 +2956,8 @@ class Misfit(object):
         syn_ENZ[i,nl:(nl+sem_nt)] = syn_st[i].data
 
       # waveform partial derivatives 
+      if 'syn' not in waveform:
+        raise Exception("%s: initial syn is not stored in waveform!" % (station_id))
       u0 = waveform['syn']
       du = syn_ENZ - u0
 
@@ -5359,5 +5361,135 @@ class Misfit(object):
 
     #endfor station_id in station_dict:
 
+#
+#======================================================
+#
+
+  def hess_diag_dmodel(self, model_name):
+    """
+    Output approximated Hessian diagonals for one model perturbation i.e. H(dm, dm).
+
+    There are actually two more terms in the Hessian related to the recorded waveforms.
+    However if the recorded and modelled waveforms are similar (cc0 close to 1), then
+    the difference can be ignored (for hessian) and simplified to Part 2.
+
+    Notes
+    -----
+    For the objective function as the normalized zero-lag correlation ceofficient, 
+    the approximated Hessian can be seperated into two parts:
+
+    Part 1:
+        H = - CC0 * norm(wFu)^(-2) * (wFdu1, wFdu2)
+          = - Nw^-1 * Aw * (wFdu1, wFdu2)
+        , where CC0 > 0 is the zero-lag correlation coefficient of (wFd, wFu)
+
+    Part 2:
+        H(x,y) = + CC0 * norm(wFu)^(-4) * (wFu, wFdu1) * (wFu, wFdu2)
+               = H1(x) * H2(y)
+    """
+    event = self.data['event']
+
+    #------ loop each station
+    station_dict = self.data['station']
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected statations
+      if station['stat']['code'] < 1:
+        continue
+
+      # initial waveform
+      waveform = station['waveform']
+      time_sample = waveform['time_sample']
+      syn_starttime = time_sample['starttime']
+      syn_delta = time_sample['delta']
+      syn_nt = time_sample['nt']
+      syn_nl = time_sample['nl']
+      syn_nr = time_sample['nr']
+      syn = waveform['syn']
+
+      # perturbed waveform  
+      waveform_der = station['waveform_der']
+      du = waveform_der[model_name]['du']
+
+      #------ loop each window
+      window_dict = station['window']
+      for window_id in window_dict:
+        # window parameters
+        window = window_dict[window_id]
+        # skip bad windows
+        if window['stat']['code'] < 1:
+          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+          continue
+
+        #------ window parameters 
+        # filter
+        filter_dict = window['filter']
+        filter_a = filter_dict['a']
+        filter_b = filter_dict['b']
+        # taper
+        win_func = window['taper']['win']
+        # polarity projection 
+        proj_matrix = window['polarity']['proj_matrix']
+        # CC0
+        cc0 = window['cc']['CC0']
+
+        #------ hessian for current window
+        Fu = signal.filtfilt(filter_b, filter_a, syn)
+        wFu = np.dot(proj_matrix, Fu) * win_func
+        norm2_wFu = np.sum(wFu**2)
+
+        Fdu = signal.filtfilt(filter_b, filter_a, du)
+        wFdu = np.dot(proj_matrix, Fdu) * win_func
+
+        hess_win = -1.0 * cc0/norm2_wFu * (np.sum(wFdu**2) - np.sum(wFu*wFdu)**2/norm2_wFu)
+
+        #------ record hess
+        if 'hess_diag' not in window:
+          window['hess_diag'] = {}
+        window['hess_diag'][model_name] = hess_win
+
+      #endfor window_id in window_dict:
+    #endfor station_id in station_dict:
+  #enddef hess_diag_dmodel
+
+#
+#======================================================
+#
+
+  def output_hess_diag(self, model_name, out_file='hess_diag.txt'):
+    """
+    Output hess diag
+
+    """
+    event = self.data['event']
+    station_dict = self.data['station']
+
+    f = open(out_file, 'w')
+    f.write("#station window hess_diag(%s)\n" % (model_name))
+
+    #------ loop each station
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected statations
+      if station['stat']['code'] < 1:
+        continue
+
+      #------ loop each window
+      window_dict = station['window']
+      for window_id in window_dict:
+        # window parameters
+        window = window_dict[window_id]
+        # skip bad windows
+        if window['stat']['code'] < 1:
+          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+          continue
+        # write out hess_diag
+        hess_diag = window['hess_diag'][model_name]
+
+        f.write("{:15s} {:15s} {:12.5e}\n".format(
+          station_id, window_id, hess_diag))
+
+    f.close()
+  #enddef 
 
 #END class misfit

@@ -10,41 +10,45 @@ utils_dir=$wkdir/utils
 specfem_dir=$wkdir/specfem3d_globe
 source_dir=$wkdir/source
 
-#jsg_host="jsg19:~/NEChina/source_inversion/"
-
 #====== make and submit jobs
-#work_flow=syn,misfit,kernel,hess
-#work_flow=misfit,kernel,hess
-#work_flow=syn
-work_flow=misfit
+
+#------ source inversion
+#work_flow=green
+#work_flow=misfit
+#work_flow=srcfrechet
+#work_flow=dgreen
+#work_flow=search
+
+#------ structure inversion
+work_flow=syn
+#work_flow=misfit
 #work_flow=kernel
 #work_flow=hess
 #work_flow=precond
 #work_flow=perturb
 #work_flow=search
 
-awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list |\
-while read event_id
+for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
 do
-
   echo "====== $event_id"
 
-  # need default mesh_dir,data_dir,utils_dir
-  $utils_dir/make_structure_iteration.sh $event_id
+  event_dir=$wkdir/$event_id
 
-# # copy CMTSOLUTION
-# cmt_file=$(ls $source_dir/$event_id/DATA/CMTSOLUTION.iter?? | sort | tail -n1)
-# if [ $? -ne 0 ]; then
-#   echo "[ERROR] CMTSOLUTION not found"
-#   exit -1
-# fi
-# mkdir -p $wkdir/$event_id/DATA/
-# cp $cmt_file $wkdir/$event_id/DATA/CMTSOLUTION
-# sed -i "s/^event name:.*/event name:        $event_id/" $wkdir/$event_id/DATA/CMTSOLUTION
+  # copy initial CMTSOLUTION file
+  cmt_file=$source_dir/${event_id}.cmt
+  if [ ! -f "$cmt_file" ]; then
+    echo "[ERROR] CMTSOLUTION not found"
+    exit -1
+  fi
+  mkdir -p $event_dir/DATA
+  cp $cmt_file $event_dir/DATA/CMTSOLUTION.init
 
-# # copy misfit_par file
-# cp $wkdir/misfit_par.py $wkdir/$event_id/DATA/
+  # copy misfit_par file
+  cp $wkdir/misfit_par.py $event_dir/DATA/
 
-  $utils_dir/submit_structure_iteration.sh $event_id ${work_flow}
+  # create batch scripts
+  $utils_dir/make_source_iteration.sh $event_id
+
+  $utils_dir/submit_slurm_jobs.sh $event_id ${work_flow}
 
 done

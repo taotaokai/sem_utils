@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Managing misfit windows
+"""Convert CMTSOLUTION to have ECEF coordinates and tau
 """
 import sys
 import numpy as np

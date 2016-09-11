@@ -14,4 +14,4 @@ cp -a $source_dir/*.py .
 find $source_dir -maxdepth 1 -type l | xargs -I@ cp -a @ .
 
 rm model
-ln -sf $source_dir/model_searched model
+ln -sf $source_dir/model_updated model

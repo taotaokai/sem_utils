@@ -208,7 +208,7 @@ ibrun $specfem_dir/bin/xspecfem3D
 
 mv DATABASES_MPI/*.sem OUTPUT_FILES
 
-cp $event_dir/output_srcfrechet/src_frechet.000001 $misfit_dir/srcfrechet
+cp $event_dir/\$out_dir/src_frechet.000001 $misfit_dir/srcfrechet
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

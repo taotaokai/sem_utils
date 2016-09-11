@@ -1,24 +1,24 @@
 #!/bin/bash
-
-# submit kernel post-process jobs files 
+# submit squential jobs files for slurm 
 
 wkdir=$(pwd)
 
-job_id=${1:--1}
+event_id=${1:?[arg]need event_id}
+work_flow=${2:?[arg]need work_flow (e.g. syn,misfit,kernel,hess)}
+job_dep=${3:--1} # dependent jobs
 
-#for job in dmodel_threshold dmodel_smooth dmodel_scale dmodel_statis
-#for job in kernel_threshold kernel_smooth #pcg_dmodel dmodel_scale
-for job in kernel_sum kernel_threshold kernel_smooth pcg_dmodel dmodel_scale
+event_dir=$wkdir/$event_id
+
+job_id=$job_dep
+for work in ${work_flow//,/ }
 do 
 
   echo
-  echo "====== job: $job"
-  echo
+  echo "====== job: $work"
 
-  job_file=$job.job
+  job_file=$event_dir/slurm/$work.job
 
-  if [ ! -f $job_file ]
-  then
+  if [ ! -f $job_file ];then
     echo "[ERROR] job file ($job_file) does NOT exist!"
     exit -1
   fi

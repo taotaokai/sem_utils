@@ -149,12 +149,12 @@ for l in fault_lines:
   ax.plot(x, y, 'k-', lw=0.1)
 
 #--- plot seismicity
-gcmt_catalog = 'gcmt.txt'
-with open(gcmt_catalog, 'r') as f:
+catalog_file = 'isc_d50km.txt'
+with open(catalog_file, 'r') as f:
   lines = [ l.split('|') for l in f.readlines() if not l.startswith('#') ] 
-  eq_lats = np.array([float(x[3]) for x in lines])
-  eq_lons = np.array([float(x[4]) for x in lines])
-  eq_deps = 1000.0 * np.array([float(x[5]) for x in lines])
+  eq_lats = np.array([float(x[2]) for x in lines])
+  eq_lons = np.array([float(x[3]) for x in lines])
+  eq_deps = 1000.0 * np.array([float(x[4]) for x in lines])
 
 eq_x, eq_y, eq_z = pyproj.transform(lla, ecef, eq_lons, eq_lats, -1.0*eq_deps, radians=False)
 

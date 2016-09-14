@@ -380,7 +380,7 @@ cat <<EOF > $perturb_job
 #SBATCH -N 11
 #SBATCH -n 256
 #SBATCH -p normal
-#SBATCH -t 00:40:00
+#SBATCH -t 00:50:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end

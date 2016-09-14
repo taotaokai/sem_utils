@@ -61,7 +61,7 @@ cp -L Par_file CMTSOLUTION $run_dir/OUTPUT_FILES/
 cat <<EOF > $run_dir/mesh.job
 #!/bin/bash
 #SBATCH -J mesh
-#SBATCH -o mesh.job.o%j
+#SBATCH -o $run_dir/mesh.job.o%j
 #SBATCH -N 11
 #SBATCH -n 256
 #SBATCH -p normal

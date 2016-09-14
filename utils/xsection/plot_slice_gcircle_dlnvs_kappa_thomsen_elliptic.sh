@@ -14,8 +14,9 @@ do
   echo
   echo "#====== $nc_tag: $lat0 $lon0 $azimuth $theta0 $theta1 $ntheta $r0 $r1 $nr"
   echo
+
+  out_fig=$out_dir/${nc_tag}.pdf
+
   $sem_utils/utils/xsection/plot_slice_gcircle_dlnvs_kappa_thomsen_elliptic.py \
-    $model_dir $nc_tag \
-    $lat0 $lon0 $azimuth \
-    "$title" $out_dir
+    $model_dir/${nc_tag}.nc "$title" $out_fig
 done

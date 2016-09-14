@@ -88,7 +88,7 @@ program xsem_vertical_slice
   integer :: ipoint, npoint
   real(dp) :: v0(3), v1(3), vnorth(3), veast(3), v_axis(3), vr(3), rotmat(3,3)
   real(dp) :: dtheta, dradius
-  real(dp), allocatable :: theta(:), radius(:)
+  real(dp), allocatable :: theta(:), radius(:), lat(:), lon(:)
   integer :: itheta, iradius, idx
   real(dp), allocatable :: xyz(:,:)
   integer, allocatable :: idoubling(:)
@@ -121,13 +121,25 @@ program xsem_vertical_slice
   ! dimensions: theta, radius
   integer, parameter :: NDIMS = 2
   integer :: theta_dimid, radius_dimid, dimids(NDIMS)
-  ! coordinates: theta(:), radius(:)
-  integer :: theta_varid, radius_varid
+  ! coordinates: theta(:), radius(:), lat(:), lon(:)
+  integer :: theta_varid, radius_varid, lat_varid, lon_varid
   character(len=*), parameter :: UNITS = "units"
   character(len=*), parameter :: theta_name = "theta"
   character(len=*), parameter :: theta_units = "degree"
   character(len=*), parameter :: radius_name = "radius"
   character(len=*), parameter :: radius_units = "km"
+  character(len=*), parameter :: lat_name = "latitude"
+  character(len=*), parameter :: lat_units = "degree"
+  character(len=*), parameter :: lon_name = "longitude"
+  character(len=*), parameter :: lon_units = "degree"
+  ! slice geometry
+  integer :: lat0_varid, lon0_varid, az0_varid
+  character(len=*), parameter :: lat0_name = "latitude_orig"
+  character(len=*), parameter :: lat0_units = "degree"
+  character(len=*), parameter :: lon0_name = "longitude_orig"
+  character(len=*), parameter :: lon0_units = "degree"
+  character(len=*), parameter :: az0_name = "azimuth_orig"
+  character(len=*), parameter :: az0_units = "degree"
   ! data: x,y,z(ntheta, nradius)
   integer :: x_varid, y_varid, z_varid
   real(sp), dimension(:,:), allocatable :: x_var, y_var, z_var
@@ -222,7 +234,7 @@ program xsem_vertical_slice
   dradius = (radius1 - radius0) / (nradius - 1)
 
   ! mesh grid xyz(1:3, radius*theta)
-  allocate(theta(ntheta), radius(nradius))
+  allocate(theta(ntheta), radius(nradius), lat(ntheta), lon(ntheta))
   theta = [ (theta0 + i * dtheta, i=0,ntheta-1) ]
   radius = [ (radius0 + i * dradius, i=0,nradius-1 ) ]
 
@@ -232,6 +244,7 @@ program xsem_vertical_slice
   do itheta = 1, ntheta
     call rotation_matrix(v_axis, theta(itheta), rotmat)
     vr = matmul(rotmat, v0)
+    call geographic_ecef2ll_zeroalt(vr(1), vr(2), vr(3), lat(itheta), lon(itheta))
     idx = nradius * (itheta - 1)
     do iradius = 1, nradius
       xyz(:, idx+iradius) = radius(iradius) * vr
@@ -434,9 +447,21 @@ program xsem_vertical_slice
     !-- define coordinate variables.
     call check( nf90_def_var(ncid, theta_name, NF90_DOUBLE, theta_dimid, theta_varid) )
     call check( nf90_def_var(ncid, radius_name, NF90_DOUBLE, radius_dimid, radius_varid) )
+    call check( nf90_def_var(ncid, lat_name, NF90_DOUBLE, theta_dimid, lat_varid) )
+    call check( nf90_def_var(ncid, lon_name, NF90_DOUBLE, theta_dimid, lon_varid) )
     ! coordinate units
     call check( nf90_put_att(ncid, theta_varid, UNITS, theta_units) )
     call check( nf90_put_att(ncid, radius_varid, UNITS, radius_units) )
+    call check( nf90_put_att(ncid, lat_varid, UNITS, lat_units) )
+    call check( nf90_put_att(ncid, lon_varid, UNITS, lon_units) )
+
+    !-- define slice geometry variables
+    call check( nf90_def_var(ncid, lat0_name, NF90_DOUBLE, lat0_varid) )
+    call check( nf90_put_att(ncid, lat0_varid, UNITS, lat0_units) )
+    call check( nf90_def_var(ncid, lon0_name, NF90_DOUBLE, lon0_varid) )
+    call check( nf90_put_att(ncid, lon0_varid, UNITS, lon0_units) )
+    call check( nf90_def_var(ncid, az0_name, NF90_DOUBLE, az0_varid) )
+    call check( nf90_put_att(ncid, az0_varid, UNITS, az0_units) )
 
     !-- define data variables.
     dimids = [theta_dimid, radius_dimid]
@@ -465,6 +490,13 @@ program xsem_vertical_slice
     ! write coordinate variables
     call check( nf90_put_var(ncid, theta_varid, theta * RADIANS_TO_DEGREES) )
     call check( nf90_put_var(ncid, radius_varid, radius * R_EARTH_KM) )
+    call check( nf90_put_var(ncid, lat_varid, lat * RADIANS_TO_DEGREES) )
+    call check( nf90_put_var(ncid, lon_varid, lon * RADIANS_TO_DEGREES) )
+
+    ! write slice geometry variables
+    call check( nf90_put_var(ncid, lat0_varid, lat0 * RADIANS_TO_DEGREES) )
+    call check( nf90_put_var(ncid, lon0_varid, lon0 * RADIANS_TO_DEGREES) )
+    call check( nf90_put_var(ncid, az0_varid, azimuth * RADIANS_TO_DEGREES) )
 
     ! write data: x,y,z
     allocate(x_var(ntheta, nradius), y_var(ntheta, nradius), z_var(ntheta, nradius))

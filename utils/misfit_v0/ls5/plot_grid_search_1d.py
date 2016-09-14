@@ -38,6 +38,7 @@ for fname in fnames:
   plt.plot(step_length, wcc_avg, 'k', lw=0.5)
   idx_max = np.argmax(wcc_avg)
   plt.plot(step_length[idx_max], wcc_avg[idx_max], 'bo', markersize=5)
+  plt.text(step_length[idx_max], wcc_avg[idx_max], fname.split('.')[0], fontsize=8)
   if step_length[idx_max] <= 0:
     print("%s step_length[idx_max]=%f" % (fname, step_length[idx_max]))
 

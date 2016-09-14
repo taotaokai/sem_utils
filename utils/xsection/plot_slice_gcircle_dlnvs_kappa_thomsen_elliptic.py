@@ -15,15 +15,9 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 
 #------ user inputs
-model_dir = sys.argv[1] # dir of reference model nc file
-nc_tag = sys.argv[2] # to find nc file <model_dir>/<nc_tag>.nc
-
-# xsection geometry
-xsection_lat0 = float(sys.argv[3])
-xsection_lon0 = float(sys.argv[4])
-xsection_azimuth = float(sys.argv[5])
-title = sys.argv[6]
-out_dir = sys.argv[7]
+nc_file = sys.argv[1]
+title = sys.argv[2]
+out_fig = sys.argv[3]
 
 #model_names = ['eps', 'gamma', 'kappa', 'dlnvs']
 model_names = ['gamma', 'kappa', 'dlnvs']
@@ -83,10 +77,16 @@ def rotation_matrix(v_axis, theta):
   return R
 
 #------ read nc files 
-fh = Dataset("{:s}/{:s}.nc".format(model_dir, nc_tag), mode='r')
+fh = Dataset(nc_file, mode='r')
 
 radius = fh.variables['radius'][:]
 theta = np.deg2rad(fh.variables['theta'][:])
+
+xsection_lat0 = fh.variables['latitude_orig'][:]
+xsection_lon0 = fh.variables['longitude_orig'][:]
+xsection_az0 = fh.variables['azimuth_orig'][:]
+xsection_lats = fh.variables['latitude'][:]
+xsection_lons = fh.variables['longitude'][:]
 
 model = {}
 for tag in model_names:
@@ -110,6 +110,25 @@ geod = pyproj.Geod(ellps='WGS84')
 ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
 lla = pyproj.Proj(proj='latlong', ellps='WGS84', datum='WGS84')
 
+#--- xsection geometry parameters
+# unit direction vector v0 at origin point of the great circle
+x, y, z = pyproj.transform(lla, ecef, xsection_lon0, xsection_lat0, 0.0)
+v0 = np.array([x, y, z])
+v0 = v0 / np.sqrt(np.sum(v0**2))
+
+# unit direction vector v1 along the shooting azimuth of the great circle
+vnorth = np.array( [ - np.sin(np.deg2rad(xsection_lat0)) * np.cos(np.deg2rad(xsection_lon0)),
+                     - np.sin(np.deg2rad(xsection_lat0)) * np.sin(np.deg2rad(xsection_lon0)),
+                       np.cos(np.deg2rad(xsection_lat0)) ])
+veast = np.array([ - np.sin(np.deg2rad(xsection_lon0)), np.cos(np.deg2rad(xsection_lon0)), 0.0 ])
+
+v1 = np.cos(np.deg2rad(xsection_az0)) * vnorth + np.sin(np.deg2rad(xsection_az0)) * veast
+v1 = v1 / np.sqrt(np.sum(v1**2))
+
+# rotation axis = v0 cross-product v1
+v_axis = np.cross(v0, v1)
+v_axis = v_axis / np.sqrt(np.sum(v_axis**2))
+
 #--- plot fault lines
 fault_line_file = 'fault_lines.txt'
 fault_lines = []
@@ -129,58 +148,65 @@ for l in fault_lines:
   x, y = m(l[0], l[1])
   ax.plot(x, y, 'k-', lw=0.1)
 
-# unit direction vector v0 at origin point of the great circle
-x, y, z = pyproj.transform(lla, ecef, xsection_lon0, xsection_lat0, 0.0)
-v0 = np.array([x, y, z])
-v0 = v0 / np.sqrt(np.sum(v0**2))
+#--- plot seismicity
+gcmt_catalog = 'gcmt.txt'
+with open(gcmt_catalog, 'r') as f:
+  lines = [ l.split('|') for l in f.readlines() if not l.startswith('#') ] 
+  eq_lats = np.array([float(x[3]) for x in lines])
+  eq_lons = np.array([float(x[4]) for x in lines])
+  eq_deps = 1000.0 * np.array([float(x[5]) for x in lines])
 
-# unit direction vector v1 along the shooting azimuth of the great circle
-vnorth = np.array( [ - np.sin(np.deg2rad(xsection_lat0)) * np.cos(np.deg2rad(xsection_lon0)),
-                     - np.sin(np.deg2rad(xsection_lat0)) * np.sin(np.deg2rad(xsection_lon0)),
-                       np.cos(np.deg2rad(xsection_lat0)) ])
-veast = np.array([ - np.sin(np.deg2rad(xsection_lon0)), np.cos(np.deg2rad(xsection_lon0)), 0.0 ])
+eq_x, eq_y, eq_z = pyproj.transform(lla, ecef, eq_lons, eq_lats, -1.0*eq_deps, radians=False)
 
-v1 = np.cos(np.deg2rad(xsection_azimuth)) * vnorth + np.sin(np.deg2rad(xsection_azimuth)) * veast
+# get earthquakes located within a certain distance to the xsection
+eq_dist = v_axis[0]*eq_x + v_axis[1]*eq_y + v_axis[2]*eq_z
+eq_indx = np.abs(eq_dist) < 25000.0
+# project to xsection
+nsrc = np.sum(eq_indx)
+eq_xyz = np.zeros((nsrc,3))
+eq_xyz[:,0] = eq_x[eq_indx]
+eq_xyz[:,1] = eq_y[eq_indx]
+eq_xyz[:,2] = eq_z[eq_indx]
+eq_xyz = eq_xyz - np.sum(eq_xyz*v_axis, axis=1, keepdims=True)*v_axis
+eq_theta = np.arctan2(np.sum(eq_xyz*v1, axis=1), np.sum(eq_xyz*v0, axis=1))
+eq_radius = np.sum(eq_xyz**2, axis=1)**0.5/1000.0
 
-# rotation axis = v0 cross-product v1
-v_axis = np.cross(v0, v1)
-
-# xsection surface trace
-xsection_lons = np.zeros(theta.shape)
-xsection_lats = np.zeros(theta.shape)
-for i in range(len(theta)):
-  rotmat = rotation_matrix(v_axis, theta[i])
-  vr = np.dot(rotmat, v0)*R_earth_meter
-  xsection_lons[i], xsection_lats[i], alt = pyproj.transform(ecef, lla, vr[0], vr[1], vr[2])
-
+#--- plot xsection surface track
 x, y = m(xsection_lons, xsection_lats)
 ax.plot(x, y, 'k-', lw=0.5)
 xlim = ax.get_xlim()
 length = xlim[1]-xlim[0]
 ax.arrow(x[-1], y[-1], x[-1]-x[-2], y[-1]-y[-2], head_width=0.03*length, head_length=0.03*length, fc='k', ec='k')
 
-# xsection surface marker 
+#--- plot xsection surface marker 
 nmarker = 5
-xsection_lons = np.zeros(nmarker)
-xsection_lats = np.zeros(nmarker)
+marker_lons = np.zeros(nmarker)
+marker_lats = np.zeros(nmarker)
 marker_theta = np.linspace(theta[0], theta[-1], nmarker)
 for i in range(nmarker):
   rotmat = rotation_matrix(v_axis, marker_theta[i])
   vr = np.dot(rotmat, v0)*R_earth_meter
-  xsection_lons[i], xsection_lats[i], alt = pyproj.transform(ecef, lla, vr[0], vr[1], vr[2])
-x, y = m(xsection_lons, xsection_lats)
+  marker_lons[i], marker_lats[i], alt = pyproj.transform(ecef, lla, vr[0], vr[1], vr[2])
+x, y = m(marker_lons, marker_lats)
 ax.plot(x, y, 'ro', markersize=4, )
 
 # title
 ax.set_title(title)
 
 #------ plot models
+# shift theta to center plot 
 theta_mid = (theta[-1]+theta[0])/2.0
 theta = theta - theta_mid
 
 rr, tt = np.meshgrid(radius, theta, indexing='ij')
 xx = np.sin(tt) * rr
 yy = np.cos(tt) * rr
+
+# seismicity
+eq_theta = eq_theta - theta_mid  
+idx = (eq_theta >= np.min(theta)) & (eq_theta <= np.max(theta))
+eq_x = eq_radius[idx] * np.sin(eq_theta[idx])
+eq_y = eq_radius[idx] * np.cos(eq_theta[idx])
 
 nrow = len(model_names)
 subplot_height = height/nrow
@@ -223,6 +249,9 @@ for irow in range(nrow):
     cs.cmap.set_under('black')
     cb = plt.colorbar(cs, cax=cax, orientation="vertical")
     cb.ax.set_title("(%)", fontsize=10)
+  
+  # plot seismicity
+  ax.plot(eq_x, eq_y, 'w+', markersize=5)
 
   ## colorbar for contourfill
   #if irow == 0:
@@ -264,4 +293,4 @@ for irow in range(nrow):
   
 #------ save figure
 #plt.show()
-plt.savefig("{:s}/{:s}.pdf".format(out_dir, nc_tag), format='pdf')
+plt.savefig(out_fig, format='pdf')

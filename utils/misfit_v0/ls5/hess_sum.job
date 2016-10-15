@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH -J hess_sum
 #SBATCH -o hess_sum.job.o%j
-#SBATCH -N 1
-#SBATCH -n 24
+#SBATCH -N 2
+#SBATCH -n 48
 #SBATCH -p normal
 #SBATCH -t 01:30:00
 #SBATCH --mail-user=kai.tao@utexas.edu
@@ -14,30 +14,52 @@ echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
 echo
 
 wkdir=$(pwd)
-
-event_list=to_run.txt
-stage_dir=/home1/03244/ktao/NEChina/stage01.structure
-iter_nums=3,4
-
 sem_utils=/home1/03244/ktao/seiscode/sem_utils/
+event_list=event.txt
 nproc=256
+mesh_dir=$wkdir/mesh/DATABASES_MPI
+model_dir=$wkdir/model
 
-#====== make and submit jobs
+model_name=cosine_200km_010
+
+#====== process each event hess 
 for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
 do
+  echo "====== process $event_id"
+  event_dir=$wkdir/$event_id
+  out_dir=$event_dir/hess_${model_name}
 
-  echo "====== $event_id"
+  mkdir $out_dir
 
-  out_dir=$wkdir/$event_id/kernel_precond
-  mkdir -p $out_dir
+  echo "------ convert cijkl to aijkl kernel [$(date)]"
+  ibrun $sem_utils/bin/xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
+    $nproc $mesh_dir $model_dir \
+    $event_dir/output_hess_${model_name}/kernel \
+    $out_dir
 
-  echo $iter_nums | awk 'BEGIN{RS=","}; {printf "%s/iter%02d/%s/kernel_precond\n", a,$1,b}' \
-    a="$stage_dir" b="$event_id" > hess_dir.list
+  echo "------ reduce aijkl kernel to dlnvs,kappa,eps,gamma kernel [$(date)]"
+  ibrun $sem_utils/bin/xsem_kernel_aijkl_to_dlnvs_kappa_thomsen_elliptic \
+    $nproc $mesh_dir $model_dir $out_dir $out_dir
+  
+done
 
+#====== sum up event hess kernels
+echo "====== sum up event hess kernels [$(date)]"
+awk -F"|" 'NF&&$1!~/#/{printf "%s/%s/hess_%s\n", a,$9,b}' \
+  a="$wkdir" b="$model_name" $event_list > hess_dir.list
+
+out_dir=$wkdir/hess_${model_name}
+mkdir $out_dir
+
+# raw kernel
+for kernel_tag in dlnvs kappa eps gamma rhoprime
+do
+  echo ====== $kernel_tag
   ibrun $sem_utils/bin/xsem_sum_event_kernels_1 \
-    $nproc $wkdir/mesh/DATABASES_MPI \
-    hess_dir.list "sum_hess_diag" \
-    0 "xxx" $out_dir
+    $nproc $mesh_dir \
+    hess_dir.list ${kernel_tag}_kernel \
+    0 "xxx" \
+    $out_dir ${kernel_tag}_kernel
 done
 
 echo

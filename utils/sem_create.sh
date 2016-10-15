@@ -59,12 +59,12 @@ cp -r ${sem_source_dir}/setup ./
 
 #====== use sem_config_dir
 cd $sem_build_dir/DATA
-rm Par_file CMTSOLUTION
+rm -f Par_file CMTSOLUTION
 cp $sem_data_dir/Par_file .
 cp $sem_data_dir/CMTSOLUTION .
 
 cd $sem_build_dir/setup
-rm constants.h.in
+rm -f constants.h.in
 cp $sem_setup_dir/constants.h.in .
 
 #====== build SEM 

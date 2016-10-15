@@ -1,9 +1,9 @@
 #!/bin/bash
 
-rm *job* *.list model mesh sem_utils
+#rm *job* *.list model mesh sem_utils
 
 ln -sf ../model .
-ln -sf ../mesh .
+#ln -sf ../mesh .
 ln -sf ~/seiscode/sem_utils .
 
 # make list

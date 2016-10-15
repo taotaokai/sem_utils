@@ -96,7 +96,7 @@ program xsem_mesh_get_idoubling_gll
     print *, "iproc = ", iproc
 
     ! read mesh
-    call sem_mesh_read(mesh_dir, myrank, iregion, mesh_data)
+    call sem_mesh_read(mesh_dir, iproc, iregion, mesh_data)
 
     ! idoubling gll
     do ispec = 1, nspec

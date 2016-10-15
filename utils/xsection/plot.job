@@ -14,11 +14,13 @@ sem_utils=~/seiscode/sem_utils
 #rm -rf figure/*
 mkdir figure
 
-title=stage04.iter03
+title=stage04.iter07
 
 #srun -n1 $sem_utils/utils/xsection/plot_slice_gcircle_rdiff.sh model_REF nc slice_gcircle.list ${title} figure &
 #srun -n1 $sem_utils/utils/xsection/plot_slice_sphere.sh nc slice_sphere.list ${title} figure
 
-srun -n1 $sem_utils/utils/xsection/plot_slice_gcircle_dlnvs_kappa_thomsen_elliptic.sh nc slice_gcircle.list ${title} figure &
+#srun -n1 $sem_utils/utils/xsection/plot_slice_gcircle_dlnvs_kappa_thomsen_elliptic.sh nc slice_gcircle.list ${title} figure &
 
-wait
+$sem_utils/utils/xsection/plot_slice_gcircle_dlnvs_kappa_thomsen_elliptic.sh nc slice_gcircle.list ${title} figure
+
+#wait

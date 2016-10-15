@@ -1113,8 +1113,9 @@ class Misfit(object):
         first_arrtime = event['t0'] + meta['ttime'][0].time
         # required obs begin/end times
         obs_t1 = first_arrtime - obs_preevent
-        obs_t2 = syn_starttime + (nt-nr)*syn_delta
-        if obs_starttime > obs_t1 or obs_endtime < obs_t2:
+        #obs_t2 = syn_starttime + (nt-nr)*syn_delta
+        #if obs_starttime > obs_t1 or obs_endtime < obs_t2:
+        if obs_starttime > obs_t1:
           flag = False
           warn_str = "%s: record not long enough, SKIP %s" \
               % (obs_files[i], station_id)
@@ -1866,10 +1867,10 @@ class Misfit(object):
         #  plt.subplot(311+i)
         #  plt.plot(syn_times, obs[i,:], 'k', syn_times, obs_filt[i,:], 'r')
         #plt.show()
-        #-- noise: use signals 40s before first arrival time on obs
+        #-- noise: use signals 30s before first arrival time on obs
         first_arrtime = event['t0'] + meta['ttime'][0].time
         #FIXME: better choice of the time length before first arrival? 
-        tnoise = (first_arrtime - 40.0) - syn_starttime
+        tnoise = (first_arrtime - 30.0) - syn_starttime
         noise_idx = syn_times < tnoise
         #t = syn_times[noise_idx]
         #b = t[0]
@@ -5491,5 +5492,147 @@ class Misfit(object):
 
     f.close()
   #enddef 
+
+#
+#======================================================
+#
+
+  def output_adj_hess_model_product(self,
+      model_name='perturb',
+      out_dir='adj',
+      syn_band_code='MX'):
+    """
+    Output adjoint sources for calculating Hessian-model product H * dm.
+
+    Notes
+    -----
+    For the objective function as the normalized zero-lag correlation ceofficient, 
+    the approximate Hessian for one data window is (ignore second order derivative in u)
+
+    Hw = - Nw^-1 * Aw * (wFdu1, wFdu2)
+         + 3 * Nw^-1 * Aw * norm(wFu)^-2 * (wFu, wFdu1) * (wFu, wFdu2)
+         - Nw^-1 * norm(wFu)^-2 * (wFu, wFdu1) * (wFd, wFdu2)
+         - Nw^-1 * norm(wFu)^-2 * (wFu, wFdu2) * (wFd, wFdu1)
+
+    , where Nw = norm(wFu)*norm(wFd), Aw = (wFu, wFd)/norm(wFu)^2
+    and norm(.) = sqrt((., .)), (.,.) is inner product. Notice Aw/Nw = cc0/norm(wFu)^2
+
+    If the recorded and modelled waveforms are close enough (cc0 close to 1), then
+    the last three terms in Hw can be simplified to one term (wFd ~ Aw * wFu):  
+
+        + Nw^-1 * Aw * norm(wFu)^-2 * (wFu, wFdu1) * (wFu, wFdu2)
+
+    For the Hessian-model product H(., dm) let du2 = Du(m; dm) = u(m+dm) - u(m)
+    then the adjoint source is (simplified)
+
+    r = - Nw^-1 * Aw * wFdu2 + Nw^-1 * Aw * norm(wFu)^-2 * (wFu, wFdu2) * wFu
+
+    adj_w = conj(F)(transpose(w) * r)
+
+    The total hessian is sum(weight * Hw) and the total adjoint source is sum(weight * adj_w)
+
+    """
+    syn_orientation_codes = ['E', 'N', 'Z']
+    event = self.data['event']
+
+    #------ loop each station
+    station_dict = self.data['station']
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected statations
+      if station['stat']['code'] < 1:
+        continue
+
+      # waveform
+      waveform = station['waveform']
+      time_sample = waveform['time_sample']
+      syn_starttime = time_sample['starttime']
+      syn_delta = time_sample['delta']
+      syn_nt = time_sample['nt']
+      syn_nl = time_sample['nl']
+      syn_nr = time_sample['nr']
+
+      syn = waveform['syn']
+
+      du = station['waveform_der'][model_name]['du']
+
+      #------ loop each window
+      adj = np.zeros((3, syn_nt))
+
+      window_dict = station['window']
+      for window_id in window_dict:
+        # window parameters
+        window = window_dict[window_id]
+        # skip bad windows
+        if window['stat']['code'] < 1:
+          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+          continue
+        if window['weight'] < 1.0e-3:
+          continue
+
+        #------ window parameters 
+        # filter
+        filter_dict = window['filter']
+        filter_a = filter_dict['a']
+        filter_b = filter_dict['b']
+        # taper
+        win_func = window['taper']['win']
+        # polarity projection 
+        proj_matrix = window['polarity']['proj_matrix']
+        # CC0
+        cc0 = window['cc']['CC0']
+
+        #------ make adjoint source
+        # r = - Nw^-1 * Aw * wFdu + Nw^-1 * Aw * norm(wFu)^-2 * (wFu, wFdu) * wFu
+        #   = - cc0/norm(wFu)^2 * (wFdu - norm(wFu)^-2*(wFu, wFdu)*wFu)
+        # adj_w = conj(F)(transpose(w) * r)
+        Fu = signal.filtfilt(filter_b, filter_a, syn)
+        wFu = np.dot(proj_matrix, Fu) * win_func
+        norm_wFu = np.sqrt(np.sum(wFu**2))
+
+        Fdu = signal.filtfilt(filter_b, filter_a, du)
+        wFdu = np.dot(proj_matrix, Fdu) * win_func
+
+        adj_w = -cc0/norm_wFu**2 * (wFdu - wFu*np.sum(wFu*wFdu)/norm_wFu**2)
+        adj_w = np.dot(np.transpose(proj_matrix), adj_w) * win_func
+        adj_w = signal.filtfilt(filter_b, filter_a, adj_w[:,::-1])
+        adj_w = adj_w[:,::-1]
+
+        #------ add into total adjoint source
+        adj += window['weight'] * adj_w
+
+      #endfor window_id in window_dict:
+
+      #------ output adjoint source
+      # without padding
+      npts = syn_nt - syn_nl - syn_nr
+      starttime = syn_starttime + syn_nl*syn_delta
+      # time samples for ascii output, referred to origin time
+      syn_times = np.arange(npts)*syn_delta
+      b = starttime - event['t0']
+      syn_times += b
+
+      # loop ENZ
+      tr = Trace()
+      for i in range(3):
+        tr.data = adj[i, syn_nl:(syn_nl+npts)]
+        tr.stats.starttime = starttime
+        tr.stats.delta = syn_delta
+
+        out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
+            out_dir, station_id, syn_band_code,
+            syn_orientation_codes[i])
+
+        # sac format
+        tr.write(out_file + '.adj.sac', 'sac')
+
+        # ascii format (needed by SEM)
+        # time is relative to event origin time: t0
+        with open(out_file+'.adj','w') as fp:
+          for j in range(npts):
+            fp.write("{:16.9e}  {:16.9e}\n".format(
+              syn_times[j], adj[i,syn_nl+j]))
+
+    #endfor station_id in station_dict:
 
 #END class misfit

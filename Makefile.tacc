@@ -42,6 +42,7 @@ program = \
 	xsem_add_model_horizontal_layer \
 	xsem_add_model_geographic_region \
 	xsem_make_dmodel_random \
+	xsem_make_dmodel_cosine \
 	xsem_create_model_homogeneous \
 	xsem_inner_product \
 	xsem_interp_IRIS_netcdf \
@@ -60,6 +61,7 @@ program = \
 	xsem_thresholding \
 	xsem_threshold_percentage \
 	xsem_smooth \
+	xsem_smooth_spherical_cap \
 	xsem_combine_solver_data_in_v5.1 \
 	xsem_diff_relative \
 	xsem_threshold_amplitude \
@@ -76,6 +78,7 @@ program = \
 	xsem_model_tiso_enforce_iso_iflag \
 	xsem_mesh_get_idoubling_gll \
 	xsem_mesh_get_ispec_is_tiso_gll \
+	xsem_mesh_color_code_slices \
 	xsem_hess_diag_sum_random_adjoint_kernel \
 	xsem_get_dmodel_steepest_descent \
 	xsem_get_dmodel_lbfgs \
@@ -85,7 +88,12 @@ program = \
 	xsem_scale_dmodel_dlnvs_kappa_thomsen_elliptic \
 	xsem_add_dmodel \
 	xsem_add_dmodel_random \
-	xsem_add_dmodel_dlnvs_kappa_thomsen_elliptic
+	xsem_add_dmodel_dlnvs_kappa_thomsen_elliptic \
+	xsem_get_radius \
+	xsem_make_1d_gll \
+	xsem_add_crust_to_1d_gll \
+	xsem_mesh_get_slice_center
+
 
 #------------------------------------------
 module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))

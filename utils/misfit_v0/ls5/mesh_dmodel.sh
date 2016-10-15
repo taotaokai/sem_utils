@@ -4,8 +4,9 @@ dmodel=${1:?[arg]need model types (e.g. perturb,random)}
 
 wkdir=$(pwd)
 
-base_dir=/work/03244/ktao/lonestar/NEChina
 sem_utils=/home1/03244/ktao/seiscode/sem_utils
+
+base_dir=/work/03244/ktao/lonestar/NEChina
 par_dir=$base_dir/sem_config/DATA
 sem_dir=$base_dir/specfem3d_globe
 

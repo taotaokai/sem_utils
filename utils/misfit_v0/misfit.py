@@ -1103,12 +1103,18 @@ class Misfit(object):
       obs_ENZ = np.zeros((3, nt))
       syn_nyq = 0.5/syn_delta
       flag = True
+      # use the minimum obs endtime
+      obs_endtime = min(
+          obs_st[0].stats.endtime,
+          obs_st[1].stats.endtime,
+          obs_st[2].stats.endtime,
+          )
       for i in range(3):
         tr = obs_st[i]
         obs_npts = tr.stats.npts
         obs_delta = tr.stats.delta
         obs_starttime = tr.stats.starttime
-        obs_endtime = tr.stats.endtime
+        #obs_endtime = tr.stats.endtime
         # check if obs has enough pre-event records
         first_arrtime = event['t0'] + meta['ttime'][0].time
         # required obs begin/end times
@@ -1120,8 +1126,8 @@ class Misfit(object):
           warn_str = "%s: record not long enough, SKIP %s" \
               % (obs_files[i], station_id)
           warnings.warn(warn_str)
-          print("obs:", obs_starttime, obs_endtime)
-          print("required:", obs_t1, obs_t2)
+          print("obs_starttime = ", obs_starttime)
+          print("required starttime = ", obs_t1)
           station['stat']['code'] = -1
           station['stat']['msg'] = "%s [%s]" \
               % (warn_str, UTCDateTime.now().isoformat())
@@ -1175,7 +1181,9 @@ class Misfit(object):
       waveform = station['waveform']
       waveform['time_sample'] = {
           'starttime': syn_starttime, 'delta': syn_delta,
-          'nt': nt, 'nl': nl, 'nr': nr }
+          'nt': nt, 'nl': nl, 'nr': nr,
+          'obs_endtime':obs_endtime,
+          }
       waveform['obs'] = obs_ENZ
 
       if syn_is_grn:
@@ -1294,6 +1302,9 @@ class Misfit(object):
       # valid data time range
       data_starttime = syn_starttime + syn_nl*syn_delta
       data_endtime = syn_starttime + (syn_nt-syn_nr)*syn_delta
+      obs_endtime = time_sample['obs_endtime']
+      if obs_endtime < data_endtime:
+        data_endtime = obs_endtime
 
       # get ak135 traveltimes
       phase_list = phase.split(',')
@@ -1332,17 +1343,17 @@ class Misfit(object):
       # check if time window lies out side of valid data time range
       if win_endtime < (data_starttime + half_period) \
           or win_starttime > (data_endtime - half_period):
-        warn = "Window(%s) lies outside of the data time window"
+        warn = "%s %s: window lies outside of the data time window" % (station_id, window_id)
         warnings.warn(warn)
         continue
       if win_starttime < data_starttime:
-        warn = "Window(%s) has a starttime(%s) smaller than data starttime(%s)" \
-            ", limited to data" % (window_id, win_starttime, data_starttime)
+        warn = "%s %s has a starttime(%s) smaller than data starttime(%s)" \
+            ", limited to data" % (station_id, window_id, win_starttime, data_starttime)
         warnings.warn(warn)
         win_starttime = data_starttime
       if win_endtime > (data_endtime - half_period):
-        warn = "Window(%s) has an endtime(%s) larger than data endtime-half_period(%s - %f)" \
-            ", limited to data" % (window_id, win_endtime, data_endtime, half_period)
+        warn = "%s %s has an endtime(%s) larger than data endtime-half_period(%s - %f)" \
+            ", limited to data" % (station_id, window_id, win_endtime, data_endtime, half_period)
         warnings.warn(warn)
         win_endtime = data_endtime - half_period
 
@@ -1456,6 +1467,9 @@ class Misfit(object):
       # valid data time range
       data_starttime = syn_starttime + syn_nl*syn_delta
       data_endtime = syn_starttime + (syn_nt-syn_nr)*syn_delta
+      obs_endtime = time_sample['obs_endtime']
+      if obs_endtime < data_endtime:
+        data_endtime = obs_endtime
 
       # initialize window dict
       if 'window' not in station:
@@ -1471,17 +1485,17 @@ class Misfit(object):
       # check if time window lies out side of valid data time range
       if win_endtime < (data_starttime + half_period) \
           or win_starttime > (data_endtime - half_period):
-        warn = "Window(%s) lies outside of the data time window"
+        warn = "%s %s lies outside of the data time window" % (station_id, window_id)
         warnings.warn(warn)
         continue
       if win_starttime < data_starttime:
-        warn = "Window(%s) has a starttime(%s) smaller than data starttime(%s)" \
-            ", limited to data" % (window_id, win_starttime, data_starttime)
+        warn = "%s %s has a starttime(%s) smaller than data starttime(%s)" \
+            ", limited to data" % (station_id, window_id, win_starttime, data_starttime)
         warnings.warn(warn)
         win_starttime = data_starttime
       if win_endtime > (data_endtime - half_period):
-        warn = "Window(%s) has an endtime(%s) larger than data endtime-half_period(%s - %f)" \
-            ", limited to data" % (window_id, win_endtime, data_endtime, half_period)
+        warn = "%s %s has an endtime(%s) larger than data endtime-half_period(%s - %f)" \
+            ", limited to data" % (station_id, window_id, win_endtime, data_endtime, half_period)
         warnings.warn(warn)
         win_endtime = data_endtime - half_period
 

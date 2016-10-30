@@ -1356,6 +1356,11 @@ class Misfit(object):
             ", limited to data" % (station_id, window_id, win_endtime, data_endtime, half_period)
         warnings.warn(warn)
         win_endtime = data_endtime - half_period
+      if (win_endtime - win_starttime) < half_period/2.0:
+        warn = "%s %s has an win_endtime(%s) smaller than win_starttime+half_period/2(%s + %f/2)" \
+            ", skip" % (station_id, window_id, win_endtime, win_starttime, half_period)
+        warnings.warn(warn)
+        continue
 
       # window taper
       taper_dict = { 'type':'cosine', 'ratio':taper_percentage,
@@ -1498,6 +1503,11 @@ class Misfit(object):
             ", limited to data" % (station_id, window_id, win_endtime, data_endtime, half_period)
         warnings.warn(warn)
         win_endtime = data_endtime - half_period
+      if (win_endtime - win_starttime) < half_period/2.0:
+        warn = "%s %s has an win_endtime(%s) smaller than win_starttime+half_period/2(%s + %f/2)" \
+            ", skip" % (station_id, window_id, win_endtime, win_starttime, half_period)
+        warnings.warn(warn)
+        continue
 
       # window taper
       taper_dict = { 'type':'cosine', 'ratio':taper_percentage,

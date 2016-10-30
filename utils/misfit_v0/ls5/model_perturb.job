@@ -15,24 +15,26 @@ echo
 
 wkdir=$(pwd)
 sem_utils=/home1/03244/ktao/seiscode/sem_utils
-ref_dir=/work/03244/ktao/lonestar/NEChina/ref_model/crust1_s362ani410-660/model_REF
+ref_dir=/home1/03244/ktao/NEChina/ref_model/crust1_s362ani410-660/model_REF_deep_moho_large410_vsv_LID_4.46
 
 nproc=256
 mesh_dir=mesh/DATABASES_MPI
 
 model_dir=model
-kernel_dir=$wkdir/kernel_sum
+dmodel_dir=kernel_sum
 
 out_dir=model_perturb
 mkdir $out_dir
 
 #====== add dmodel
+model_names=dlnvs,kappa,eps,gamma
+dmodel_names=dlnvs_dmodel_scale,kappa_dmodel_scale,eps_dmodel_scale,gamma_dmodel_scale
 ibrun $sem_utils/bin/xsem_math \
   $nproc $mesh_dir \
-  $model_dir "dlnvs,kappa,gamma,eps" \
-  $kernel_dir "dlnvs_dmodel_scale,kappa_dmodel_scale,gamma_dmodel_scale,eps_dmodel_scale" \
+  $model_dir $model_names \
+  $dmodel_dir $dmodel_names \
   "add" \
-  $out_dir "dlnvs,kappa,gamma,eps"
+  $out_dir $model_names
 
 #====== convert to gll model
 ln -sf $ref_dir/*vsv_ref.bin $out_dir

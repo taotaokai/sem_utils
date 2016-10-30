@@ -16,21 +16,20 @@ echo
 wkdir=$(pwd)
 sem_utils=/home1/03244/ktao/seiscode/sem_utils
 
+nproc=256
 mesh_dir=mesh/DATABASES_MPI
-model_dir=model
 
-dmodel_dir=$wkdir/kernel_sum
-dmodel_suffix="_dmodel"
+kernel_dir=$wkdir/kernel_sum
+kernel_suffix="_dmodel"
 
-max_dlnv=0.05
-keep_ratio=0
-
-out_dir=$wkdir/kernel_sum
+max_dlnvs=0.01
 out_suffix="_dmodel_scale"
 
-ibrun $sem_utils/bin/xsem_kernel_vti_3pars_scale_max_dlnv \
-  256 $mesh_dir $model_dir $dmodel_dir $dmodel_suffix \
-  $max_dlnv $keep_ratio $out_dir $out_suffix
+ibrun $sem_utils/bin/xsem_scale_dmodel_dlnvs_kappa_thomsen_elliptic \
+  $nproc $mesh_dir \
+  $kernel_dir $kernel_suffix \
+  $max_dlnvs \
+  $kernel_dir $out_suffix
 
 echo
 echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"

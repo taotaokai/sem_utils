@@ -1,0 +1,58 @@
+#!/bin/bash
+#SBATCH -J model_random 
+#SBATCH -o model_random.job.o%j
+#SBATCH -N 1
+#SBATCH -n 24
+#SBATCH -p normal
+#SBATCH -t 00:30:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+# create randomly perturbed model
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+wkdir=$(pwd)
+sem_utils=/home1/03244/ktao/seiscode/sem_utils
+ref_dir=/work/03244/ktao/lonestar/NEChina/ref_model/crust1_s362ani410-660/model_REF
+
+nproc=256
+mesh_dir=mesh/DATABASES_MPI
+model_dir=model
+model_name=dlnvs
+# random perturbation value range
+min_dlnvs=-0.01
+max_dlnvs=0.01
+#
+output_dmodel=1
+dmodel_name=dlnvs_dmodel
+out_dir=model_random
+
+mkdir $out_dir
+
+# randomly perturb current dlnvs model
+#ibrun $sem_utils/bin/xsem_add_dmodel_random \
+#  $nproc $mesh_dir \
+#  $model_dir $model_name \
+#  $min_dlnvs $max_dlnvs \
+#  $output_dmodel $dmodel_name $out_dir
+
+# use the same kappa,eps,gamma as in the current model
+ln -sf $wkdir/$model_dir/*kappa.bin $out_dir
+ln -sf $wkdir/$model_dir/*eps.bin $out_dir
+ln -sf $wkdir/$model_dir/*gamma.bin $out_dir
+
+# convert to gll model
+ln -sf $ref_dir/*vsv_ref.bin $out_dir
+ibrun $sem_utils/bin/xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll \
+  $nproc $mesh_dir $out_dir x $out_dir
+
+# use reference rho model
+ln -sf $ref_dir/*rho.bin $out_dir
+
+echo
+echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

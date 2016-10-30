@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH -J kernel_sum
 #SBATCH -o kernel_sum.job.o%j
-#SBATCH -N 1
-#SBATCH -n 24
+#SBATCH -N 2
+#SBATCH -n 48
 #SBATCH -p normal
 #SBATCH -t 01:30:00
 #SBATCH --mail-user=kai.tao@utexas.edu
@@ -19,7 +19,11 @@ event_list=event.txt
 nproc=256
 mesh_dir=$wkdir/mesh/DATABASES_MPI
 model_dir=$wkdir/model
-gauss_width_km=500
+
+# kernel preconditioner
+source_gauss_width_km=300
+surface_weight=0.2
+depth_gauss_width_km=80
 
 #====== process each event kernel
 for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
@@ -39,12 +43,13 @@ do
   ibrun $sem_utils/bin/xsem_kernel_aijkl_to_dlnvs_kappa_thomsen_elliptic \
     $nproc $mesh_dir $model_dir $out_dir $out_dir
   
-  echo "------ make source mask [$(date)]"
+  echo "------ make kernel mask [$(date)]"
   awk 'NR==6' $event_dir/output_kernel/source.vtk > $out_dir/source.xyz
-  ibrun $sem_utils/bin/xsem_make_source_mask \
+  ibrun $sem_utils/bin/xsem_make_source_depth_mask \
     $nproc $mesh_dir \
-    $out_dir/source.xyz $gauss_width_km \
-    $event_dir/kernel "source_mask"
+    $out_dir/source.xyz $source_gauss_width_km \
+    $surface_weight $depth_gauss_width_km \
+    $event_dir/kernel "mask"
 
 done
 
@@ -56,14 +61,26 @@ awk -F"|" 'NF&&$1!~/#/{printf "%s/%s/kernel\n", a,$9}' \
 out_dir=$wkdir/kernel_sum
 mkdir $out_dir
 
+# raw kernel
 for kernel_tag in dlnvs kappa eps gamma rhoprime
 do
   echo ====== $kernel_tag
   ibrun $sem_utils/bin/xsem_sum_event_kernels_1 \
     $nproc $mesh_dir \
     kernel_dir.list ${kernel_tag}_kernel \
-    1 "source_mask" \
-    $out_dir
+    0 "xxx" \
+    $out_dir ${kernel_tag}_kernel
+done
+
+# preconditioned kernel
+for kernel_tag in dlnvs kappa eps gamma rhoprime
+do
+  echo ====== $kernel_tag
+  ibrun $sem_utils/bin/xsem_sum_event_kernels_1 \
+    $nproc $mesh_dir \
+    kernel_dir.list ${kernel_tag}_kernel \
+    1 "mask" \
+    $out_dir ${kernel_tag}_kernel_precond
 done
 
 echo

@@ -66,6 +66,7 @@ program = \
 	xsem_diff_relative \
 	xsem_threshold_amplitude \
 	xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll \
+	xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll_serial \
 	xsem_model_gll_to_dlnvs_kappa_thomsen \
 	xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
 	xsem_kernel_aijkl_to_iso \
@@ -91,8 +92,11 @@ program = \
 	xsem_add_dmodel_dlnvs_kappa_thomsen_elliptic \
 	xsem_get_radius \
 	xsem_make_1d_gll \
+	xsem_make_gll_from_1d_um_mtz_lm \
 	xsem_add_crust_to_1d_gll \
-	xsem_mesh_get_slice_center
+	xsem_mesh_get_slice_center \
+	xsem_model_gll_reduce_amplitude
+
 
 
 #------------------------------------------

@@ -20,7 +20,13 @@ nproc=256
 mesh_dir=$wkdir/mesh/DATABASES_MPI
 model_dir=$wkdir/model
 
-model_name=cosine_200km_010
+#model_name=cosine_200km_010
+model_name=cosine_200km_100
+
+# preconditioner
+source_gauss_width_km=300
+surface_weight=0.2
+depth_gauss_width_km=80
 
 #====== process each event hess 
 for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
@@ -41,6 +47,15 @@ do
   ibrun $sem_utils/bin/xsem_kernel_aijkl_to_dlnvs_kappa_thomsen_elliptic \
     $nproc $mesh_dir $model_dir $out_dir $out_dir
   
+  echo "------ make kernel mask [$(date)]"
+  chmod u+w $out_dir
+  awk 'NR==6' $event_dir/output_syn/source.vtk > $out_dir/source.xyz
+  ibrun $sem_utils/bin/xsem_make_source_depth_mask \
+    $nproc $mesh_dir \
+    $out_dir/source.xyz $source_gauss_width_km \
+    $surface_weight $depth_gauss_width_km \
+    $out_dir "mask"
+
 done
 
 #====== sum up event hess kernels
@@ -60,6 +75,18 @@ do
     hess_dir.list ${kernel_tag}_kernel \
     0 "xxx" \
     $out_dir ${kernel_tag}_kernel
+done
+
+# preconditioned kernel
+#chmod u+w $out_dir
+for kernel_tag in dlnvs kappa eps gamma rhoprime
+do
+  echo ====== $kernel_tag
+  ibrun $sem_utils/bin/xsem_sum_event_kernels_1 \
+    $nproc $mesh_dir \
+    hess_dir.list ${kernel_tag}_kernel \
+    1 "mask" \
+    $out_dir ${kernel_tag}_kernel_precond
 done
 
 echo

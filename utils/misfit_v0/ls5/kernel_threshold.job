@@ -17,23 +17,27 @@ wkdir=$(pwd)
 sem_utils=/home1/03244/ktao/seiscode/sem_utils
 
 nproc=256
-mesh_dir=$wkdir/mesh/DATABASES_MPI
+mesh_dir=mesh/DATABASES_MPI
 
-kernel_dir=$wkdir/kernel_sum
-#kernel_suffix=_kernel_precond
-kernel_suffix=_kernel
+kernel_dir=kernel_sum
+kernel_suffix=_kernel_precond
 
 nbin=5000
 threshold_percentage=0.85
 rmax=0.05
 
-out_dir=$wkdir/kernel_sum
+out_dir=kernel_sum
 out_suffix=_threshold
 
+#for model_name in rhoprime
 for model_name in dlnvs kappa eps gamma rhoprime
 do
+  echo
+  echo ====== ${model_name}${kernel_suffix}
+  echo
   ibrun $sem_utils/bin/xsem_threshold_percentage \
-    $nproc $mesh_dir $kernel_dir ${model_name}${kernel_suffix} \
+    $nproc $mesh_dir \
+    $kernel_dir ${model_name}${kernel_suffix} \
     $nbin $threshold_percentage $rmax \
     $out_dir $out_suffix
 done

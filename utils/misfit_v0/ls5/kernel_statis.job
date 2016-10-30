@@ -4,7 +4,7 @@
 #SBATCH -N 1
 #SBATCH -n 24
 #SBATCH -p normal
-#SBATCH -t 00:10:00
+#SBATCH -t 00:30:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -22,31 +22,17 @@ kernel_dir=$wkdir/kernel_sum
 
 nbin=201
 
-suffix=_kernel
-#for model_name in dlnvs kappa eps gamma
-for model_name in rhoprime
+for suffix in _kernel _kernel_precond _kernel_precond_threshold _kernel_precond_threshold_smooth _dmodel _dmodel_scale
 do
-  out_file=$kernel_dir/statis_${model_name}${suffix}.txt
-  ibrun $sem_utils/bin/xsem_pdf \
-    $nproc $mesh_dir $kernel_dir ${model_name}${suffix} $nbin 0 $out_file
-done
 
-suffix=_kernel_threshold
-#for model_name in dlnvs kappa eps gamma
-for model_name in rhoprime
-do
-  out_file=$kernel_dir/statis_${model_name}${suffix}.txt
-  ibrun $sem_utils/bin/xsem_pdf \
-    $nproc $mesh_dir $kernel_dir ${model_name}${suffix} $nbin 0 $out_file
-done
+  for model_name in dlnvs kappa eps gamma
+  do
+    echo ====== ${model_name}${suffix}
+    out_file=$kernel_dir/statis_${model_name}${suffix}.txt
+    ibrun $sem_utils/bin/xsem_pdf \
+      $nproc $mesh_dir $kernel_dir ${model_name}${suffix} $nbin 0 $out_file
+  done
 
-suffix=_kernel_threshold_smooth
-#for model_name in dlnvs kappa eps gamma
-for model_name in rhoprime
-do
-  out_file=$kernel_dir/statis_${model_name}${suffix}.txt
-  ibrun $sem_utils/bin/xsem_pdf \
-    $nproc $mesh_dir $kernel_dir ${model_name}${suffix} $nbin 0 $out_file
 done
 
 echo

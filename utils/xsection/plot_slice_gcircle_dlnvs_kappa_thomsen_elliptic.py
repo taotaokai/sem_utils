@@ -236,7 +236,7 @@ for irow in range(nrow):
   if tag == 'kappa':
     cmap = plt.cm.get_cmap("jet")
     zz = model[tag]
-    cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=np.arange(1.65,1.96,0.01), extend="both")
+    cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=np.arange(1.65,1.9,0.01), extend="both")
     cs.cmap.set_over('purple')
     cs.cmap.set_under('black')
     cb = plt.colorbar(cs, cax=cax, orientation="vertical")
@@ -244,7 +244,7 @@ for irow in range(nrow):
   if tag in ['eps','gamma']:
     cmap = plt.cm.get_cmap("jet")
     zz = model[tag]*100
-    cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=np.arange(0,6,0.5), extend="both")
+    cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=np.arange(-3,7,0.5), extend="both")
     cs.cmap.set_over('purple')
     cs.cmap.set_under('black')
     cb = plt.colorbar(cs, cax=cax, orientation="vertical")

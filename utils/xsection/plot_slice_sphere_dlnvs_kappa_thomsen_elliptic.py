@@ -16,10 +16,10 @@ from mpl_toolkits.basemap import Basemap
 def round_to_1(x):
   """round a number to one significant figure
   """
-  return round(x, -int(np.floor(np.log10(np.abs(x)))))
+  return np.round(x, -int(np.floor(np.log10(np.abs(x)))))
 
 # round to n significant figure
-round_to_n = lambda x, n: round(x, -int(np.floor(np.log10(x))) + (n - 1)) 
+round_to_n = lambda x, n: np.round(x, -int(np.floor(np.log10(x))) + (n - 1)) 
 
 #------ user inputs
 nc_file = sys.argv[1]
@@ -89,25 +89,39 @@ for irow in range(nrow):
   zz = np.transpose(model[model_tag])
 
   if model_tag in ['dlnvs']:
-    z_max = np.max(np.abs(zz))
+    z_max = round_to_1(np.max(np.abs(zz)))
     dz = 2.0*z_max/10
-    dz = round_to_1(dz)
     levels = np.arange(-z_max, z_max+dz/2, dz)
     cmap = plt.cm.get_cmap("jet_r")
     cs = m.contourf(xx, yy, zz, cmap=cmap, levels=levels, extend="both")
     cs.cmap.set_over('black')
     cs.cmap.set_under('purple')
     # colorbar for contourfill
-    cb = m.colorbar(cs,location='right',pad="5%", format="%.2f")
+    cb = m.colorbar(cs,location='right',pad="5%", format="%.3f")
     #cb.set_label('%')
     ax.set_title("{:s}".format(model_tag))
-  elif model_tag in ['kappa', 'gamma', 'eps']:
+  elif model_tag in ['kappa']:
+    dz = (np.max(zz) - np.min(zz))/10
+    dz = round_to_1(dz)
+    levels = np.arange(np.min(zz), np.max(zz)+dz/2, dz)
+    cmap = plt.cm.get_cmap("jet")
+    cs = m.contourf(xx, yy, zz, cmap=cmap, levels=levels, extend="both")
+    cs.cmap.set_over('purple')
+    cs.cmap.set_under('black')
+    # colorbar for contourfill
+    cb = m.colorbar(cs,location='right',pad="5%", format="%.2f")
+    #cb.set_label('% mean')
+    ax.set_title("{:s}".format(model_tag))
+  elif model_tag in ['gamma', 'eps']:
     dz = (np.max(zz) - np.min(zz))/10
     if dz < np.finfo(np.float).eps:
       levels = (0, 1.0)
     else:
-      dz = round_to_1(dz)
-      levels = np.arange(np.min(zz), np.max(zz)+dz/2, dz)
+      z_max = round_to_1(np.max(np.abs(zz)))
+      dz = 2.0*z_max/10
+      levels = np.arange(-z_max, z_max+dz/2, dz)
+      #dz = round_to_1(dz)
+      #levels = np.arange(np.min(zz), np.max(zz)+dz/2, dz)
     cmap = plt.cm.get_cmap("jet")
     cs = m.contourf(xx, yy, zz, cmap=cmap, levels=levels, extend="both")
     cs.cmap.set_over('purple')
@@ -118,6 +132,25 @@ for irow in range(nrow):
     ax.set_title("{:s}".format(model_tag))
   else:
     raise Exception("unrecognized model {:s}".format(model_tag))
+
+  #-- plot fault lines
+  fault_line_file = 'fault_lines.txt'
+  fault_lines = []
+  with open(fault_line_file, 'r') as f:
+    lon = []
+    lat = []
+    for l in f.readlines():
+      if not l.startswith('>'):
+        x = l.split()
+        lon.append(float(x[0]))
+        lat.append(float(x[1]))
+      else:
+        fault_lines.append([lon, lat])
+        lon = []
+        lat = []
+  for l in fault_lines:
+    x, y = m(l[0], l[1])
+    ax.plot(x, y, 'k-', lw=0.05)
 
 #------ save figure
 #plt.show()

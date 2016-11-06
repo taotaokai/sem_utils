@@ -81,8 +81,8 @@ for irow in range(nrow):
       lat_0=map_lat_center, lon_0=map_lon_center)
   m.drawcoastlines(linewidth=0.2)
   m.drawcountries(linewidth=0.2)
-  m.drawparallels(map_parallels, linewidth=0.1, labels=[1,0,0,1], fontsize=8)
-  m.drawmeridians(map_meridians, linewidth=0.1, labels=[1,0,0,1], fontsize=8)
+  m.drawparallels(map_parallels, linewidth=0.1, labels=[1,0,0,0], fontsize=8)
+  m.drawmeridians(map_meridians, linewidth=0.1, labels=[0,0,0,1], fontsize=8)
   
   # contourf model
   xx, yy = m(lons2, lats2)
@@ -134,23 +134,23 @@ for irow in range(nrow):
     raise Exception("unrecognized model {:s}".format(model_tag))
 
   #-- plot fault lines
-  fault_line_file = 'fault_lines.txt'
-  fault_lines = []
-  with open(fault_line_file, 'r') as f:
-    lon = []
-    lat = []
-    for l in f.readlines():
-      if not l.startswith('>'):
-        x = l.split()
-        lon.append(float(x[0]))
-        lat.append(float(x[1]))
-      else:
-        fault_lines.append([lon, lat])
-        lon = []
-        lat = []
-  for l in fault_lines:
-    x, y = m(l[0], l[1])
-    ax.plot(x, y, 'k-', lw=0.05)
+  #fault_line_file = 'fault_lines.txt'
+  #fault_lines = []
+  #with open(fault_line_file, 'r') as f:
+  #  lon = []
+  #  lat = []
+  #  for l in f.readlines():
+  #    if not l.startswith('>'):
+  #      x = l.split()
+  #      lon.append(float(x[0]))
+  #      lat.append(float(x[1]))
+  #    else:
+  #      fault_lines.append([lon, lat])
+  #      lon = []
+  #      lat = []
+  #for l in fault_lines:
+  #  x, y = m(l[0], l[1])
+  #  ax.plot(x, y, 'k-', lw=0.05)
 
 #------ save figure
 #plt.show()

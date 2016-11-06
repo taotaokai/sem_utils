@@ -224,10 +224,12 @@ for irow in range(nrow):
     cmap = plt.cm.get_cmap("jet_r")
 
     zz = model[tag]*100
-    cs = ax.contour(xx, yy, zz, levels=np.arange(-6,6.1,1), colors=('k',), linewidths=(0.1,))
+    levels = np.concatenate((np.arange(-6,0,1), np.arange(1,6.1,1)))
+    cs = ax.contour(xx, yy, zz, levels=levels, colors=('k',), linewidths=(0.1,))
     plt.clabel(cs, fmt='%2.1f', colors='k', fontsize=5)
 
-    cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=np.arange(-6,6.001,0.5), extend="both")
+    levels = np.arange(-6,6.1,1)
+    cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=levels, extend="both")
     cs.cmap.set_over('black')
     cs.cmap.set_under('purple')
     cb = plt.colorbar(cs, cax=cax, orientation="vertical")
@@ -236,7 +238,7 @@ for irow in range(nrow):
   if tag == 'kappa':
     cmap = plt.cm.get_cmap("jet")
     zz = model[tag]
-    cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=np.arange(1.6,1.901,0.02), extend="both")
+    cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=np.arange(1.65,1.971,0.02), extend="both")
     cs.cmap.set_over('purple')
     cs.cmap.set_under('black')
     cb = plt.colorbar(cs, cax=cax, orientation="vertical")
@@ -264,7 +266,7 @@ for irow in range(nrow):
   #  #cb.ax.set_position([ll, b + 0.1*h, ww, h*0.8])
  
   # mark certain depths 
-  for depth in [220, 410, 670]:
+  for depth in [40, 220, 410, 670]:
     x = np.sin(theta) * (R_earth_km - depth)
     y = np.cos(theta) * (R_earth_km - depth)
     ax.plot(x, y, 'k', lw=0.5)

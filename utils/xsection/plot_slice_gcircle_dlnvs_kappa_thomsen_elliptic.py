@@ -222,17 +222,20 @@ for irow in range(nrow):
   # contourfill relative difference 
   if tag == 'dlnvs':
     cmap = plt.cm.get_cmap("jet_r")
+    #cmap = plt.cm.get_cmap("seismic_r")
 
     zz = model[tag]*100
     levels = np.concatenate((np.arange(-6,0,1), np.arange(1,6.1,1)))
     cs = ax.contour(xx, yy, zz, levels=levels, colors=('k',), linewidths=(0.1,))
     plt.clabel(cs, fmt='%2.1f', colors='k', fontsize=5)
 
-    levels = np.arange(-6,6.1,1)
+    #levels = np.concatenate((np.arange(-6,0,0.5), np.array([-0.25, 0.25]), np.arange(0.5,6.1,0.5)))
+    levels = np.concatenate((np.arange(-6,0,0.5), np.arange(0.5,6.1,0.5)))
+    #levels = np.linspace(-5.0,5.0,1000)
     cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=levels, extend="both")
     cs.cmap.set_over('black')
     cs.cmap.set_under('purple')
-    cb = plt.colorbar(cs, cax=cax, orientation="vertical")
+    cb = plt.colorbar(cs, cax=cax, ticks=np.arange(-6,6.1,1), orientation="vertical")
     #cb.set_label('%', fontsize=10)
     cb.ax.set_title('(%)', fontsize=10)
   if tag == 'kappa':
@@ -266,7 +269,7 @@ for irow in range(nrow):
   #  #cb.ax.set_position([ll, b + 0.1*h, ww, h*0.8])
  
   # mark certain depths 
-  for depth in [40, 220, 410, 670]:
+  for depth in [40, 220, 410, 670, 900]:
     x = np.sin(theta) * (R_earth_km - depth)
     y = np.cos(theta) * (R_earth_km - depth)
     ax.plot(x, y, 'k', lw=0.5)

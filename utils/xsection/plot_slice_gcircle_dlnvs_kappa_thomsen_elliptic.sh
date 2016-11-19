@@ -18,5 +18,5 @@ do
   out_fig=$out_dir/${nc_tag}.pdf
 
   $sem_utils/utils/xsection/plot_slice_gcircle_dlnvs_kappa_thomsen_elliptic.py \
-    $model_dir/${nc_tag}.nc "$title" $out_fig
+    $model_dir/${nc_tag}.nc "$title ($nc_tag)" $out_fig
 done

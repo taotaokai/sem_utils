@@ -82,7 +82,8 @@ program xsem_get_radius
 
   call sem_io_read_gll_file_n(model_dir, iproc, iregion, model_name_list, nmodel, model_gll)
 
-  print *, "# radius ", (/ (trim(model_name_list(i))//"  ", i=1,nmodel) /)
+  i = 1 ! avoid fake error report from -fbounds-check in gfortran compiler 
+  print *, "# radius r_elem_center ", (/ (trim(model_name_list(i))//"  ", i=1,nmodel) /)
   do ispec = 1, nspec
     do igllz =  1, NGLLZ
       do iglly =  1, NGLLY

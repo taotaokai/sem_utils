@@ -63,18 +63,25 @@ project/
 |   |   *   <event_id>/
 |   |   |   *   DATABASES_MPI/ 
 |   |   |   *   DATA/ 
-|   |   |   *   OUTPUT_forward/ 
-|   |   |   *   OUTPUT_adjoint/ 
+|   |   |   *   output_syn/ 
+|   |   |   |   *   sac/
+|   |   |   *   output_kernel/ 
+|   |   |   |   *   kernel/ proc*_reg1_cijkl,rho_kernel.bin
+|   |   |   *   output_hess/ 
+|   |   |   |   *   kernel/ proc*_reg1_cijkl,rho_kernel.bin
+|   |   |   *   output_perturb/ # simulation for perturbed model
+|   |   |   |   *   sac/
 |   |   |   *   misfit/ 
 |   |   |   |   *   CMTSOLUTION.reloc # relocated source parameter
-|   |   |   |   *   misfit.json # misfit measurments (e.g. CC0, CCmax, ...)
-|   |   |   *   adj/ # adjoint source 
+|   |   |   |   *   misfit.pkl # misfit measurments (e.g. CC0, CCmax, ...)
+|   |   |   *   adj_kernel/ # adjoint source for kernel calculation 
+|   |   |   *   adj_hess/ # random adjoint source for hessian calculation 
 |   |   |
 |   |   *   <event_id>/
 |   |   |   *   ...
 |   |   ...
-|   |   *   kernel/
-|   |   |   *   DATABASES_MPI/ # *_dkernel.bin, *_kernel.bin
+|   |   *   kernel_sum/ # summed kernel (with precondition, smoothing, thresholding etc.)
+|   |   |   *   # *_dkernel.bin, *_kernel.bin
 |   |   |
 |   *   iteration.01/
 |   |   ...

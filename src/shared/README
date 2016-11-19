@@ -1,2 +1,2 @@
-Keep source files in shared/ independent from the files in module/, as we will
-try to compile shared/ first and then the module files.
+Must keep source files in shared/ independent from the files in module/, as we will
+compile shared/ first and then the module files.

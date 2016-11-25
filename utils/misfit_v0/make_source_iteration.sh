@@ -4,7 +4,9 @@
 
 wkdir=$(pwd)
 sem_utils=/home1/03244/ktao/seiscode/sem_utils
-nproc=256
+
+nnode=14
+nproc=336
 
 event_id=${1:?[arg]need event_id}
 
@@ -56,10 +58,10 @@ cat <<EOF > $green_job
 #!/bin/bash
 #SBATCH -J ${event_id}.green
 #SBATCH -o ${green_job}.o%j
-#SBATCH -N 11
-#SBATCH -n 256
+#SBATCH -N $nnode
+#SBATCH -n $nproc
 #SBATCH -p normal
-#SBATCH -t 00:50:00
+#SBATCH -t 01:10:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -128,6 +130,7 @@ echo
 
 cd $event_dir
 
+chmod u+w -R $misfit_dir
 rm -rf $misfit_dir
 mkdir -p $misfit_dir
 $utils_dir/read_data.py \
@@ -142,14 +145,16 @@ $utils_dir/measure_misfit.py $misfit_par $db_file
 
 $utils_dir/output_misfit.py $db_file $misfit_dir/misfit.txt
 
+chmod u+w $figure_dir
 rm -rf $figure_dir
 mkdir -p $figure_dir
 $utils_dir/plot_misfit.py $misfit_par $db_file $figure_dir
 
 #------ adjoint source for kernel simulation
+chmod u+w $event_dir/SEM
 rm -rf $event_dir/SEM
 mkdir -p $event_dir/SEM
-$utils_dir/output_adj.py $db_file $event_dir/SEM
+$utils_dir/output_adj.py $misfit_par $db_file $event_dir/SEM
 
 # make STATIONS_ADJOINT
 cd $event_dir/SEM
@@ -169,10 +174,10 @@ cat <<EOF > $srcfrechet_job
 #!/bin/bash
 #SBATCH -J ${event_id}.srcfrechet
 #SBATCH -o $srcfrechet_job.o%j
-#SBATCH -N 11
-#SBATCH -n 256
+#SBATCH -N $nnode
+#SBATCH -n $nproc
 #SBATCH -p normal
-#SBATCH -t 00:50:00
+#SBATCH -t 01:10:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -196,6 +201,7 @@ rm -rf \$out_dir OUTPUT_FILES
 mkdir \$out_dir
 ln -sf \$out_dir OUTPUT_FILES
 
+chmod u+w $event_dir/DATA/STATIONS_ADJOINT
 cp SEM/STATIONS_ADJOINT DATA/
 
 cp $mesh_dir/OUTPUT_FILES/addressing.txt OUTPUT_FILES
@@ -221,10 +227,10 @@ cat <<EOF > $dgreen_job
 #!/bin/bash
 #SBATCH -J ${event_id}.dgreen
 #SBATCH -o $dgreen_job.o%j
-#SBATCH -N 11
-#SBATCH -n 256
+#SBATCH -N $nnode
+#SBATCH -n $nproc
 #SBATCH -p normal
-#SBATCH -t 00:50:00
+#SBATCH -t 01:10:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -286,7 +292,7 @@ cat <<EOF > $search_job
 #SBATCH -n 1
 #SBATCH --cpus-per-task=24
 #SBATCH -p normal
-#SBATCH -t 00:50:00
+#SBATCH -t 01:30:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end

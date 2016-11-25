@@ -2,6 +2,9 @@
 
 # setup mesh folders, generate the batch script to run SEM meshfem3D
 
+nnode=14
+nproc=336
+
 #====== command line args
 run_dir=${1:?[arg]need run_dir(for all output)}
 par_dir=${2:?[arg]need par_dir(for Par_file,STATIONS,CMTSOLUTION)}
@@ -62,8 +65,8 @@ cat <<EOF > $run_dir/mesh.job
 #!/bin/bash
 #SBATCH -J mesh
 #SBATCH -o $run_dir/mesh.job.o%j
-#SBATCH -N 11
-#SBATCH -n 256
+#SBATCH -N $nnode
+#SBATCH -n $nproc
 #SBATCH -p normal
 #SBATCH -t 00:10:00
 #SBATCH --mail-user=kai.tao@utexas.edu

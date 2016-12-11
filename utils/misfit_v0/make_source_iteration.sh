@@ -72,6 +72,7 @@ echo
 
 out_dir=output_green
 
+chmod u+w -R $event_dir/DATA
 mkdir -p $event_dir/DATA
 cd $event_dir/DATA
 
@@ -90,6 +91,7 @@ mkdir $event_dir/DATABASES_MPI
 ln -s $mesh_dir/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
 
 cd $event_dir
+chmod u+w -R \$out_dir
 rm -rf \$out_dir OUTPUT_FILES
 mkdir \$out_dir
 ln -sf \$out_dir OUTPUT_FILES
@@ -119,7 +121,7 @@ cat <<EOF > $misfit_job
 #SBATCH -n 1
 #SBATCH --cpus-per-task=24
 #SBATCH -p normal
-#SBATCH -t 00:40:00
+#SBATCH -t 00:50:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end

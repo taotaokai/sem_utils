@@ -55,7 +55,7 @@ cat <<EOF > $job_file
 #SBATCH -N 1
 #SBATCH -n 24
 #SBATCH -p normal
-#SBATCH -t 01:30:00
+#SBATCH -t 02:00:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end

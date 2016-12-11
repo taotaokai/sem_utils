@@ -117,16 +117,20 @@ program xsem_slice_sphere
 
   !-- netcdf data structure
   integer :: ncid
-  ! define dimensions: lon, lat
+  ! dimensions: lon, lat
   integer, parameter :: NDIMS = 2
   integer :: lon_dimid, lat_dimid, dimids(NDIMS)
-  ! define coordinate variables/units
+  ! coordinates: lon(:), lat(:)
   integer :: lon_varid, lat_varid
   character(len=*), parameter :: UNITS = "units"
   character(len=*), parameter :: lon_name = "longitude"
   character(len=*), parameter :: lon_units = "degrees_east"
   character(len=*), parameter :: lat_name = "latitude"
   character(len=*), parameter :: lat_units = "degrees_north"
+  ! slice geometry
+  integer :: depth_varid
+  character(len=*), parameter :: depth_name = "depth"
+  character(len=*), parameter :: depth_units = "km"
   ! define data variables
   ! this is defined from model_tags
   ! data units is not determined
@@ -432,6 +436,10 @@ program xsem_slice_sphere
     call check( nf90_put_att(ncid, lon_varid, UNITS, lon_units) )
     call check( nf90_put_att(ncid, lat_varid, UNITS, lat_units) )
 
+    !-- define slice geometry variable
+    call check( nf90_def_var(ncid, depth_name, NF90_DOUBLE, depth_varid) )
+    call check( nf90_put_att(ncid, depth_varid, UNITS, depth_units) )
+
     ! define data variables: model values
     dimids = [lon_dimid, lat_dimid]
     allocate(model_varids(nmodel))
@@ -456,6 +464,9 @@ program xsem_slice_sphere
 
     call check( nf90_put_var(ncid, lon_varid, lon) )
     call check( nf90_put_var(ncid, lat_varid, lat) )
+
+    ! write slice geometry variable
+    call check( nf90_put_var(ncid, depth_varid, depth) )
 
     ! write data: interpolated model values
     allocate(model_var(nlon, nlat))

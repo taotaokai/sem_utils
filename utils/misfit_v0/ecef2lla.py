@@ -21,4 +21,4 @@ z = float(lines[6][1])
 lon, lat, alt = pyproj.transform(ecef, lla, x, y, z)
 dep = -alt / 1000.0
 
-print(lat, lon, dep)
+print(lat, " ", lon, " ", dep)

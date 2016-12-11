@@ -4,7 +4,9 @@
 
 wkdir=$(pwd)
 sem_utils=/home1/03244/ktao/seiscode/sem_utils
-nproc=256
+
+nnode=14
+nproc=336
 
 event_id=${1:?[arg]need event_id}
 
@@ -73,10 +75,10 @@ cat <<EOF > $syn_job
 #!/bin/bash
 #SBATCH -J ${event_id}.syn
 #SBATCH -o $syn_job.o%j
-#SBATCH -N 11
-#SBATCH -n 256
+#SBATCH -N $nnode
+#SBATCH -n $nproc
 #SBATCH -p normal
-#SBATCH -t 00:50:00
+#SBATCH -t 01:10:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -131,7 +133,7 @@ cat <<EOF > $misfit_job
 #SBATCH -n 1
 #SBATCH --cpus-per-task=24
 #SBATCH -p normal
-#SBATCH -t 00:40:00
+#SBATCH -t 00:50:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -163,7 +165,7 @@ $utils_dir/plot_misfit.py $misfit_par $db_file $figure_dir
 #------ adjoint source for kernel simulation
 rm -rf $event_dir/adj_kernel
 mkdir -p $event_dir/adj_kernel
-$utils_dir/output_adj.py $db_file $event_dir/adj_kernel
+$utils_dir/output_adj.py $misfit_par $db_file $event_dir/adj_kernel
 
 # make STATIONS_ADJOINT
 cd $event_dir/adj_kernel
@@ -195,10 +197,10 @@ cat <<EOF > $kernel_job
 #!/bin/bash
 #SBATCH -J ${event_id}.kernel
 #SBATCH -o $kernel_job.o%j
-#SBATCH -N 11
-#SBATCH -n 256
+#SBATCH -N $nnode
+#SBATCH -n $nproc
 #SBATCH -p normal
-#SBATCH -t 01:20:00
+#SBATCH -t 02:30:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -252,8 +254,8 @@ EOF
 ##!/bin/bash
 ##SBATCH -J ${event_id}.hess
 ##SBATCH -o $hess_job.o%j
-##SBATCH -N 11
-##SBATCH -n 256
+##SBATCH -N $nnode
+##SBATCH -n $nproc
 ##SBATCH -p normal
 ##SBATCH -t 02:00:00
 ##SBATCH --mail-user=kai.tao@utexas.edu
@@ -379,10 +381,10 @@ cat <<EOF > $perturb_job
 #!/bin/bash
 #SBATCH -J ${event_id}.perturb
 #SBATCH -o $perturb_job.o%j
-#SBATCH -N 11
-#SBATCH -n 256
+#SBATCH -N $nnode
+#SBATCH -n $nproc
 #SBATCH -p normal
-#SBATCH -t 00:50:00
+#SBATCH -t 01:10:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -533,8 +535,8 @@ cat <<EOF > $hess_kernel_job
 #!/bin/bash
 #SBATCH -J ${event_id}.hess_kernel
 #SBATCH -o $hess_kernel_job.o%j
-#SBATCH -N 11
-#SBATCH -n 256
+#SBATCH -N $nnode
+#SBATCH -n $nproc
 #SBATCH -p normal
 #SBATCH -t 01:20:00
 #SBATCH --mail-user=kai.tao@utexas.edu

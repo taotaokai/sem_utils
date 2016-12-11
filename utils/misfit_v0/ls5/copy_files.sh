@@ -10,6 +10,7 @@ cp -a $source_dir/*.txt .
 cp -a $source_dir/*.job .
 cp -a $source_dir/*.sh .
 cp -a $source_dir/*.py .
+cp -a $source_dir/misfit_par .
 
 find $source_dir -maxdepth 1 -type l | xargs -I@ cp -a @ .
 

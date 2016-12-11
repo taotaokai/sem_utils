@@ -29,6 +29,7 @@ do
 
   $sem_utils/utils/sem_mesh.sh $mesh_dir $par_dir $sem_dir
 
+  sed -i "/^MODEL/s/=.*/= GLL/" $mesh_dir/DATA/Par_file
   ln -s $model_dir $mesh_dir/DATA/GLL
 
 done

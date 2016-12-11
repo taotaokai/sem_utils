@@ -1,10 +1,12 @@
 #!/bin/bash
 
-#rm *job* *.list model mesh sem_utils
+rm *job* *.list model mesh sem_utils
 
-#ln -sf ../model .
-#ln -sf ../mesh .
+ln -sf ../model .
+ln -sf ../mesh .
 ln -sf ~/seiscode/sem_utils .
+ln -sf sem_utils/utils/xsection/isc_d50km.txt .
+ln -sf sem_utils/utils/xsection/fault_lines.txt .
 
 # make list
 sem_utils/utils/xsection/make_list_slice_gcircle.sh sem_utils slice_gcircle.list

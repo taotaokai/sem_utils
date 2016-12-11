@@ -21,7 +21,7 @@ do
 
 done
 
-cp $wkdir/misfit_par.py $out_dir/
+#cp $wkdir/misfit_par.py $out_dir/
 
 cd $out_dir
 ls *.txt > list

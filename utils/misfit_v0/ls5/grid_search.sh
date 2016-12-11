@@ -21,7 +21,7 @@ sem_utils=/home1/03244/ktao/seiscode/sem_utils
 
 mkdir grid_search_dmodel
 ls */misfit/grid_search_dmodel.txt | awk -F"/" '{printf "cp %s grid_search_dmodel/%s.txt\n",$0,$1}' | bash
-cp misfit_par.py grid_search_dmodel/
+#cp misfit_par.py grid_search_dmodel/
 
 cd $wkdir/grid_search_dmodel
 

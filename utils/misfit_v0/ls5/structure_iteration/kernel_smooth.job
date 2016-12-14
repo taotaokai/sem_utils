@@ -1,0 +1,40 @@
+#!/bin/bash
+#SBATCH -J kernel_smooth
+#SBATCH -o kernel_smooth.job.o%j
+#SBATCH -N 14
+#SBATCH -n 336
+#SBATCH -p normal
+#SBATCH -t 01:00:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+wkdir=$(pwd)
+utils_dir=/home1/03244/ktao/seiscode/sem_utils
+
+nproc=336
+mesh_dir=$wkdir/mesh/DATABASES_MPI
+
+model_dir=$wkdir/kernel_sum
+model_name=dlnvs_kernel_precond_threshold,kappa_kernel_precond_threshold,eps_kernel_precond_threshold,gamma_kernel_precond_threshold,rhoprime_kernel_precond_threshold
+#model_name=rhoprime_kernel_precond_threshold
+
+sigma_h=50
+sigma_v=25
+
+out_dir=$model_dir
+out_suffix="_smooth"
+
+ibrun $utils_dir/bin/xsem_smooth \
+  $nproc $mesh_dir \
+  $model_dir $model_name \
+  $sigma_h $sigma_v \
+  $out_dir $out_suffix
+
+echo
+echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

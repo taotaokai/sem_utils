@@ -5,9 +5,9 @@
 out_file=${1:?[arg]need output list (e.g. slice_sphere.list)}
 
 #---- geographic range and mesh size
-lat0=15
+lat0=10
 lat1=60
-nlat=451
+nlat=501
 lon0=90
 lon1=150
 nlon=601

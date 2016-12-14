@@ -7,7 +7,7 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_mesh_get_slice_center \"
-  print '(a)', "    <mesh_dir> <iproc>"
+  print '(a)', "    <mesh_dir> <nproc>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -83,7 +83,7 @@ program xsem_mesh_get_slice_center
     endif
     allocate(xyz(3,num/3))
 
-    ! use only one crustal layer to fine the center
+    ! use only one crustal layer to find the center at surface
     num = 0
     do ispec = 1, nspec
       if (mesh_data%idoubling(ispec) == 10*IFLAG_CRUST) then

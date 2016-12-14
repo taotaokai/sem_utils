@@ -52,8 +52,8 @@ cat <<EOF > $job_file
 #!/bin/bash
 #SBATCH -J slice_sphere
 #SBATCH -o ${job_file}.o%j
-#SBATCH -N 1
-#SBATCH -n 24
+#SBATCH -N 5
+#SBATCH -n 120
 #SBATCH -p normal
 #SBATCH -t 02:00:00
 #SBATCH --mail-user=kai.tao@utexas.edu

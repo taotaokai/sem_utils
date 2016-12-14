@@ -31,7 +31,7 @@ R_earth_km = 6371.0
 # map plot
 map_lat_center = 38.5
 map_lon_center = 118.0
-map_lat_min= 15
+map_lat_min=  5
 map_lat_max= 55
 map_lon_min= 90
 map_lon_max= 160
@@ -102,8 +102,8 @@ m = Basemap(ax=ax, projection='tmerc', resolution='l',
     lat_0=map_lat_center, lon_0=map_lon_center)
 m.drawcoastlines(linewidth=0.2)
 m.drawcountries(linewidth=0.2)
-m.drawparallels(map_parallels, linewidth=0.1, labels=[1,0,0,1], fontsize=8)
-m.drawmeridians(map_meridians, linewidth=0.1, labels=[1,0,0,1], fontsize=8)
+m.drawparallels(map_parallels, linewidth=0.1, labels=[1,0,0,0], fontsize=8)
+m.drawmeridians(map_meridians, linewidth=0.1, labels=[0,0,0,1], fontsize=8)
 
 # initialize pyproj objects
 geod = pyproj.Geod(ellps='WGS84')
@@ -160,7 +160,7 @@ eq_x, eq_y, eq_z = pyproj.transform(lla, ecef, eq_lons, eq_lats, -1.0*eq_deps, r
 
 # get earthquakes located within a certain distance to the xsection
 eq_dist = v_axis[0]*eq_x + v_axis[1]*eq_y + v_axis[2]*eq_z
-eq_indx = np.abs(eq_dist) < 25000.0
+eq_indx = np.abs(eq_dist) <= 25000.0
 # project to xsection
 nsrc = np.sum(eq_indx)
 eq_xyz = np.zeros((nsrc,3))
@@ -256,7 +256,7 @@ for irow in range(nrow):
     cb.ax.set_title("(%)", fontsize=10)
   
   # plot seismicity
-  ax.plot(eq_x, eq_y, 'w+', markersize=5)
+  ax.plot(eq_x, eq_y, 'w+', markersize=2)
 
   ## colorbar for contourfill
   #if irow == 0:

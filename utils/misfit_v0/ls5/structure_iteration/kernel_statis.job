@@ -1,0 +1,40 @@
+#!/bin/bash
+#SBATCH -J kernel_statis
+#SBATCH -o kernel_statis.job.o%j
+#SBATCH -N 1
+#SBATCH -n 24
+#SBATCH -p normal
+#SBATCH -t 00:30:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+wkdir=$(pwd)
+sem_utils=/home1/03244/ktao/seiscode/sem_utils
+
+nproc=336
+mesh_dir=$wkdir/mesh/DATABASES_MPI
+kernel_dir=$wkdir/kernel_sum
+
+nbin=201
+
+for suffix in _kernel _kernel_precond _kernel_precond_threshold _kernel_precond_threshold_smooth _dmodel _dmodel_scale
+do
+
+  for model_name in dlnvs kappa eps gamma
+  do
+    echo ====== ${model_name}${suffix}
+    out_file=$kernel_dir/statis_${model_name}${suffix}.txt
+    ibrun $sem_utils/bin/xsem_pdf \
+      $nproc $mesh_dir $kernel_dir ${model_name}${suffix} $nbin 0 $out_file
+  done
+
+done
+
+echo
+echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

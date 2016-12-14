@@ -32,7 +32,7 @@ model_names = ['gamma', 'kappa', 'dlnvs']
 # map plot
 map_lat_center = 38.5
 map_lon_center = 118.0
-map_lat_min= 15
+map_lat_min= 10
 map_lat_max= 55
 map_lon_min= 90
 map_lon_max= 160
@@ -49,6 +49,8 @@ fh = Dataset(nc_file, mode='r')
 
 lats = fh.variables['latitude'][:]
 lons = fh.variables['longitude'][:]
+
+slice_depth = fh.variables['depth'][:]
 
 model = {}
 for tag in model_names:
@@ -89,15 +91,23 @@ for irow in range(nrow):
   zz = np.transpose(model[model_tag])
 
   if model_tag in ['dlnvs']:
-    z_max = round_to_1(np.max(np.abs(zz)))
-    dz = 2.0*z_max/10
-    levels = np.arange(-z_max, z_max+dz/2, dz)
+    #z_max = round_to_1(np.max(np.abs(zz)))
+    #dz = 2.0*z_max/10
+    #levels = np.arange(-z_max, z_max+dz/2, dz)
+    zz = zz * 100 # use percentage
+
+    levels = np.concatenate((np.arange(-6,0,1), np.arange(1,6.1,1)))
+    cs = m.contour(xx, yy, zz, levels=levels, colors=('k',), linewidths=(0.1,))
+    plt.clabel(cs, fmt='%1.0f', colors='k', fontsize=3)
+
+    levels = np.concatenate((np.arange(-6,0,0.5), np.arange(0.5,6.1,0.5)))
     cmap = plt.cm.get_cmap("jet_r")
     cs = m.contourf(xx, yy, zz, cmap=cmap, levels=levels, extend="both")
     cs.cmap.set_over('black')
     cs.cmap.set_under('purple')
     # colorbar for contourfill
-    cb = m.colorbar(cs,location='right',pad="5%", format="%.3f")
+    cb = m.colorbar(cs,location='right',ticks=np.arange(-6,6.1,1), pad="5%")
+    cb.ax.set_title('(%)', fontsize=10)
     #cb.set_label('%')
     ax.set_title("{:s}".format(model_tag))
   elif model_tag in ['kappa']:
@@ -151,6 +161,25 @@ for irow in range(nrow):
   #for l in fault_lines:
   #  x, y = m(l[0], l[1])
   #  ax.plot(x, y, 'k-', lw=0.05)
+
+  #--- plot seismicity
+  catalog_file = 'isc_d50km.txt'
+  with open(catalog_file, 'r') as f:
+    lines = [ l.split('|') for l in f.readlines() if not l.startswith('#') ] 
+    eq_lats = np.array([float(x[2]) for x in lines])
+    eq_lons = np.array([float(x[3]) for x in lines])
+    eq_deps = np.array([float(x[4]) for x in lines]) # km
+
+  eq_indx = np.abs(eq_deps - slice_depth) <= 10.0
+  x, y = m(eq_lons[eq_indx], eq_lats[eq_indx])
+  if slice_depth < 200:
+    markersize = 0.5
+  elif slice_depth < 500:
+    markersize = 1
+  else:
+    markersize = 2
+
+  ax.plot(x, y, 'w.', markersize=markersize)
 
 #------ save figure
 #plt.show()

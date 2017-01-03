@@ -4,6 +4,7 @@ wkdir=$(pwd)
 
 event_list=${1:?[arg]need event_list}
 
+#!!! make sure these folders/links do exits and are what you want
 mesh_dir=$wkdir/mesh
 data_dir=$wkdir/events
 utils_dir=$wkdir/utils
@@ -25,21 +26,26 @@ do
 
   event_dir=$wkdir/$event_id
 
-  # copy initial CMTSOLUTION file
-  cmt_file=$source_dir/${event_id}.cmt
-  if [ ! -f "$cmt_file" ]; then
-    echo "[ERROR] CMTSOLUTION not found"
-    exit -1
+  if [[ "$work_flow" == "green"* ]]
+  then
+    chmod u+w -R $event_dir/DATA
+    mkdir -p $event_dir/DATA
+
+    # copy initial CMTSOLUTION file
+    cmt_file=$source_dir/${event_id}.cmt
+    echo ------ use: $(readlink -f $cmt_file)
+    if [ ! -f "$cmt_file" ]; then
+      echo "[ERROR] $cmt_file not found"
+      exit -1
+    fi
+    cp $cmt_file $event_dir/DATA/CMTSOLUTION.init
+
+    # copy misfit_par file
+    cp $wkdir/misfit_par/${event_id}_misfit_par.py $event_dir/DATA/misfit_par.py
+
+    # create batch scripts
+    $utils_dir/make_source_iteration.sh $event_id
   fi
-  mkdir -p $event_dir/DATA
-  chmod u+w $event_dir/DATA/CMTSOLUTION.init
-  cp $cmt_file $event_dir/DATA/CMTSOLUTION.init
-
-  # copy misfit_par file
-  cp $wkdir/misfit_par.py $wkdir/$event_id/DATA/
-
-  # create batch scripts
-  $utils_dir/make_source_iteration.sh $event_id
 
   $utils_dir/submit_slurm_jobs.sh $event_id ${work_flow}
 

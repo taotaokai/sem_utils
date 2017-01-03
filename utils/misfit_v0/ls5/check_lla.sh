@@ -30,4 +30,5 @@ done > check_lla.out
 
 # dlat, dlon(deg), ddep(km)
 #awk 'BEGIN{RS="======"; pi=atan2(0,-1); deg2rad=pi/180} {printf "%s %8.5f %8.5f %8.5f\n", $1, $5-$2, $6-$3, $7-$4, $8}' check_lla.out > diff_lla.out
-awk 'BEGIN{RS="======";} {printf "%s %8.5f %8.5f %8.5f %8.5f\n", $1, $5-$2, $6-$3, $7-$4, $8}' check_lla.out > diff_lla.out
+echo "# event_id dlat(deg) dlon(deg) ddep(km) dloc(km)" > diff_lla.out
+awk 'BEGIN{RS="======";} {printf "%s %8.5f %8.5f %8.5f %8.5f\n", $1, $5-$2, $6-$3, $7-$4, $8}' check_lla.out | sed "1d" | sort -n -k5 >> diff_lla.out

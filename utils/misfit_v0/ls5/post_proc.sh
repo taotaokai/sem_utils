@@ -7,7 +7,7 @@ wkdir=$(pwd)
 job_id=${1:--1}
 
 #for job in dmodel_threshold dmodel_smooth dmodel_scale dmodel_statis
-#for job in kernel_sum kernel_threshold kernel_smooth #pcg_dmodel dmodel_scale
+#for job in kernel_threshold kernel_smooth pcg_dmodel dmodel_scale kernel_statis model_perturb
 for job in kernel_sum kernel_threshold kernel_smooth pcg_dmodel dmodel_scale kernel_statis model_perturb
 do 
 

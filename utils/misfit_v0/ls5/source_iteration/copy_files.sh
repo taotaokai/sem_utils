@@ -12,6 +12,9 @@ rm CMTSOLUTION_initial
 ln -s $(readlink -f $source_dir/CMTSOLUTION_updated) CMTSOLUTION_initial
 #ln -s $(readlink -f $source_dir/mesh) mesh
 
-cp $source_dir/proc.sh .
-cp $source_dir/to_run.txt .
-cp $source_dir/misfit_par.py .
+rm mesh; ln -s $(readlink -f $source_dir/mesh) mesh
+cp -a $source_dir/proc.sh .
+cp -a $source_dir/to_run.txt .
+#cp -a $source_dir/misfit_par.py .
+cp -a $source_dir/misfit_par .
+

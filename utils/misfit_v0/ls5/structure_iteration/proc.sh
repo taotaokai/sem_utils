@@ -11,17 +11,10 @@ utils_dir=$wkdir/utils
 specfem_dir=$wkdir/specfem3d_globe
 source_dir=$wkdir/source
 
-#------ source inversion
-#work_flow=green
-#work_flow=misfit
-#work_flow=srcfrechet
-#work_flow=dgreen
-#work_flow=search
-
 #------ structure inversion
-#work_flow=syn
+work_flow=syn
 #work_flow=misfit
-work_flow=kernel
+#work_flow=kernel
 #############work_flow=hess
 #############work_flow=precond #do this in post_proc.sh
 #work_flow=perturb
@@ -38,14 +31,14 @@ do
 
   event_dir=$wkdir/$event_id
 
-  if [[ "$work_flow" == *"syn"* ]]
+  if [[ "$work_flow" == "syn"* ]]
   then
     #rm -rf $event_dir
     chmod u+w -R $event_dir/DATA
     mkdir -p $event_dir/DATA
 
     # copy CMTSOLUTION file
-    cmt_file=$(find -L $source_dir -name "${event_id}.cmt" | sort | tail -n1)
+    cmt_file=$(find -L $source_dir -path "iter0?/CMTSOLUTION_updated/${event_id}.cmt" | sort | tail -n1)
     echo ------ use: $(readlink -f $cmt_file)
     if [ ! -f "$cmt_file" ]; then
       echo "[ERROR] $cmt_file not found"

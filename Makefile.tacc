@@ -62,6 +62,7 @@ program = \
 	xsem_threshold_percentage \
 	xsem_smooth \
 	xsem_smooth_spherical_cap \
+	xsem_smooth_spatial_variant \
 	xsem_combine_solver_data_in_v5.1 \
 	xsem_diff_relative \
 	xsem_threshold_amplitude \

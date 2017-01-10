@@ -144,7 +144,7 @@ def cosine_taper(x, xc):
             idx = (xc[2] < x) & (x < xc[3])
             y[idx] = 0.5 + 0.5*np.cos(np.pi*(x[idx] - xc[2])/(xc[3]-xc[2]))
 
-            idx = x > xc[3]; y[idx] = 0.0
+            idx = x >= xc[3]; y[idx] = 0.0
     else:
         raise ValueError('number of cutoff values must be either 2 or 4.')
 

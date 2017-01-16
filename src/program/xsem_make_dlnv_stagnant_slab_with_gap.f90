@@ -119,17 +119,19 @@ program xsem_add_model_stagnant_slab_with_gap
   slab_strike = slab_strike * DEGREES_TO_RADIANS
   flat_slab_gap_angle = flat_slab_gap_angle * DEGREES_TO_RADIANS
 
-  ! non-dimenionalize length by R_EARTH_KM
-  slab_half_width = slab_half_width/R_EARTH_KM
-  flat_slab_thickness = flat_slab_thickness/R_EARTH_KM
-  origin_depth = origin_depth/R_EARTH_KM
-
-  dipping_slab_thickness = cos(slab_dip)*flat_slab_thickness
-
   ! slab origin point
   call geographic_lla2ecef(origin_lat, origin_lon, -1000.0*origin_depth, &
                            origin_vec(1), origin_vec(2), origin_vec(3))
   origin_vec = origin_vec / R_EARTH
+  print *, origin_vec
+
+  ! non-dimenionalize length by R_EARTH_KM
+  slab_half_width = slab_half_width/R_EARTH_KM
+  flat_slab_len = flat_slab_len/R_EARTH_KM
+  flat_slab_thickness = flat_slab_thickness/R_EARTH_KM
+  origin_depth = origin_depth/R_EARTH_KM
+
+  dipping_slab_thickness = cos(slab_dip)*flat_slab_thickness
 
   ! radial, north and east unit vectors at origin point
   unit_vec_radial = origin_vec/(sum(origin_vec**2))**0.5
@@ -185,6 +187,7 @@ program xsem_add_model_stagnant_slab_with_gap
                   dist_along_dipping_slab_normal >= 0 .and. &
                   dist_along_dipping_slab_normal <= dipping_slab_thickness) &
               then
+                !print *, ispec, "inside dipping slab"
                 dlnv = slab_dlnv
               endif
 
@@ -193,15 +196,19 @@ program xsem_add_model_stagnant_slab_with_gap
                   dist_along_convergent_direction <= flat_slab_len .and. &
                   dist_along_radial_direction <= flat_slab_thickness) &
               then
+                !print *, ispec, "inside flat slab"
                 dlnv = slab_dlnv
 
                 ! project xyz to the flat slab plane
                 xyz_proj_to_flat_slab = xyz - sum(xyz*unit_vec_radial)*unit_vec_radial
                 ! get angle from convergent direction
-                angle_from_convergent_direction = acos(sum(xyz_proj_to_flat_slab*unit_vec_convergent))
+                angle_from_convergent_direction = atan2( &
+                  sum(xyz_proj_to_flat_slab*unit_vec_strike), &
+                  sum(xyz_proj_to_flat_slab*unit_vec_convergent))
 
                 ! inside slab gap
-                if (angle_from_convergent_direction < flat_slab_gap_angle) then
+                if (abs(angle_from_convergent_direction) < flat_slab_gap_angle) then
+                  !print *, ispec, "inside flat slab gap"
                   dlnv = 0.0
                 endif
               endif
@@ -217,7 +224,7 @@ program xsem_add_model_stagnant_slab_with_gap
     enddo
 
     ! write out model
-    call sem_io_write_gll_file_1(out_dir, iproc, iregion, out_tag,dlnv_gll)
+    call sem_io_write_gll_file_1(out_dir, iproc, iregion, out_tag, dlnv_gll)
 
   enddo ! iproc
 

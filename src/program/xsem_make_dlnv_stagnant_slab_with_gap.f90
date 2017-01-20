@@ -70,17 +70,19 @@ program xsem_add_model_stagnant_slab_with_gap
   real(dp), allocatable :: dlnv_gll(:,:,:,:)
   real(dp) :: dlnv
 
-  real(dp) :: xyz(3)
-  real(dp), dimension(3) :: origin_vec
+  real(dp) :: xyz(3), r, angle_from_origin
+  real(dp) :: origin_vec(3), origin_radius
   real(dp), dimension(3) :: unit_vec_north, unit_vec_east
   real(dp), dimension(3) :: unit_vec_radial, unit_vec_strike, unit_vec_convergent
   real(dp), dimension(3) :: normal_vec_dipping_slab
   real(dp) :: dipping_slab_thickness
+  real(dp) :: flat_slab_angular_width
   real(dp) :: dist_along_radial_direction
   real(dp) :: dist_along_strike_direction
   real(dp) :: dist_along_convergent_direction
   real(dp) :: dist_along_dipping_slab_normal
   real(dp) :: xyz_proj_to_flat_slab(3), angle_from_convergent_direction
+  real(dp) :: xyz_proj_to_vertical_plane(3)
 
   !====== read command line arguments
 
@@ -119,17 +121,16 @@ program xsem_add_model_stagnant_slab_with_gap
   slab_strike = slab_strike * DEGREES_TO_RADIANS
   flat_slab_gap_angle = flat_slab_gap_angle * DEGREES_TO_RADIANS
 
-  ! slab origin point
+  ! slab origin point (bottom joint point between dipping and flat plane)
   call geographic_lla2ecef(origin_lat, origin_lon, -1000.0*origin_depth, &
                            origin_vec(1), origin_vec(2), origin_vec(3))
   origin_vec = origin_vec / R_EARTH
-  print *, origin_vec
+  origin_radius = sum(origin_vec**2)**0.5
 
   ! non-dimenionalize length by R_EARTH_KM
   slab_half_width = slab_half_width/R_EARTH_KM
-  flat_slab_len = flat_slab_len/R_EARTH_KM
+  flat_slab_angular_width = flat_slab_len/R_EARTH_KM
   flat_slab_thickness = flat_slab_thickness/R_EARTH_KM
-  origin_depth = origin_depth/R_EARTH_KM
 
   dipping_slab_thickness = cos(slab_dip)*flat_slab_thickness
 
@@ -168,16 +169,21 @@ program xsem_add_model_stagnant_slab_with_gap
           do igllx = 1, NGLLX
     
             iglob = mesh_data%ibool(igllx,iglly,igllz,ispec)
-            xyz = mesh_data%xyz_glob(:,iglob) - origin_vec
+            xyz = mesh_data%xyz_glob(:,iglob)
+            r = sum(xyz**2)**0.5
 
-            dist_along_radial_direction = sum(xyz*unit_vec_radial)
+            xyz_proj_to_vertical_plane = xyz - sum(xyz*unit_vec_strike)*unit_vec_strike
+            angle_from_origin = acos(sum(xyz_proj_to_vertical_plane*unit_vec_radial) &
+                                     /sum(xyz_proj_to_vertical_plane**2)**0.5)
+
+            xyz = xyz - origin_vec
             dist_along_strike_direction = sum(xyz*unit_vec_strike)
 
             dlnv = 0.0
 
             ! within the slab width and above the flat slab bottom plane
-            if (abs(dist_along_strike_direction) <= slab_half_width .and. &
-                dist_along_radial_direction >= 0.0 ) then
+            if ( abs(dist_along_strike_direction) <= slab_half_width &
+                .and. r >= origin_radius ) then
 
               dist_along_convergent_direction = sum(xyz * unit_vec_convergent)
               dist_along_dipping_slab_normal = sum(xyz * normal_vec_dipping_slab)
@@ -193,8 +199,8 @@ program xsem_add_model_stagnant_slab_with_gap
 
               ! inside flat slab
               if (dist_along_convergent_direction >= 0 .and. &
-                  dist_along_convergent_direction <= flat_slab_len .and. &
-                  dist_along_radial_direction <= flat_slab_thickness) &
+                  angle_from_origin <= flat_slab_angular_width .and. &
+                  r <= (origin_radius+flat_slab_thickness) ) &
               then
                 !print *, ispec, "inside flat slab"
                 dlnv = slab_dlnv

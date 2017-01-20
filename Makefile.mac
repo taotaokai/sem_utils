@@ -60,6 +60,7 @@ program = \
 	xsem_make_depth_mask \
 	xsem_make_source_depth_mask \
 	xsem_math \
+	xsem_math_serial \
 	xsem_pdf \
 	xsem_depth_pdf \
 	xsem_thresholding \

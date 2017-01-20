@@ -130,7 +130,7 @@ program xsem_smooth_spatial_variant
   read(args(2), '(a)') mesh_dir
   read(args(3), '(a)') model_dir
   read(args(4), '(a)') model_tags
-  read(args(5), *) sigma_h_v_dir
+  read(args(5), '(a)') sigma_h_v_dir
   read(args(6), *) sigma_h_tag
   read(args(7), *) sigma_v_tag
   read(args(8), '(a)') output_dir
@@ -163,6 +163,7 @@ program xsem_smooth_spatial_variant
     if (allocated(xyz_elem_target)) then
       deallocate(xyz_elem_target, xyz_gll_target)
       deallocate(model_gll_target, weight_gll_target)
+      deallocate(sigma_h2, sigma_v2, max_search_dist2)
     endif
     allocate(xyz_elem_target(3,nspec_target))
     allocate(xyz_gll_target(3,NGLLX,NGLLY,NGLLZ,nspec_target))
@@ -175,8 +176,9 @@ program xsem_smooth_spatial_variant
 
     !------ spatial-variant smoothing parameters 
     ! read in gaussian sigma_h/v in KM
-    call sem_io_read_gll_file_1(model_dir, iproc_contrib, iregion, sigma_h_tag, sigma_h2)
-    call sem_io_read_gll_file_1(model_dir, iproc_contrib, iregion, sigma_v_tag, sigma_v2)
+    print *, "before reading in gaussian sigma_h/v:", trim(sigma_h_v_dir), iproc_target, iregion, trim(sigma_h_tag)
+    call sem_io_read_gll_file_1(sigma_h_v_dir, iproc_target, iregion, sigma_h_tag, sigma_h2)
+    call sem_io_read_gll_file_1(sigma_h_v_dir, iproc_target, iregion, sigma_v_tag, sigma_v2)
     ! non-dimensionalize smoothing scales 
     ! get sigma squared
     sigma_h2 = (sigma_h2 / R_EARTH_KM)**2

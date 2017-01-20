@@ -2,8 +2,9 @@
 
 # setup mesh folders, generate the batch script to run SEM meshfem3D
 
-nnode=14
-nproc=336
+#nnode=14
+#nproc=336
+proc_per_node=24
 
 #====== command line args
 run_dir=${1:?[arg]need run_dir(for all output)}
@@ -61,6 +62,11 @@ cp -L $par_dir/CMTSOLUTION .
 cp -L Par_file CMTSOLUTION $run_dir/OUTPUT_FILES/
 
 # generate sbatch job file
+nproc_xi=$(grep NPROC_XI $par_dir/Par_file | awk '{print $NF}')
+nproc_eta=$(grep NPROC_ETA $par_dir/Par_file | awk '{print $NF}')
+nproc=$(echo "$nproc_xi * $nproc_eta" | bc -l)
+nnode=$(echo "$nproc $proc_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
+ 
 cat <<EOF > $run_dir/mesh.job
 #!/bin/bash
 #SBATCH -J mesh

@@ -12,7 +12,7 @@ subroutine selfdoc()
   print '(a)', "    <origin_lat> <origin_lon> <origin_depth> "
   print '(a)', "    <slab_dip> <slab_strike> <slab_half_width>"
   print '(a)', "    <flat_slab_len> <flat_slab_thickness> <flat_slab_gap_angle> "
-  print '(a)', "    <slab_dlnv> <out_tag> <out_dir> "
+  print '(a)', "    <slab_dlnv> <flag_ellipticity> <out_tag> <out_dir> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -31,6 +31,7 @@ subroutine selfdoc()
   print '(a)', "  (float) flat_slab_thickness(km):  flat slab thickness (km)"
   print '(a)', "  (float) slab_gap_angle (deg):  angle of gap in the flat slab, the gap opens from the origin point and increases away from the dipping slab "
   print '(a)', "  (float) slab_dlnv:  velocity perturbation in slab"
+  print '(a)', "  (int) flag_ellipticity: (0/1) 0: spherical; other: WGS84 ellipsoid"
   print '(a)', "  (string) out_tag:  output tag (proc*_reg1_<tag>.bin) "
   print '(a)', "  (string) out_dir:  output directory"
   print '(a)', ""
@@ -52,13 +53,14 @@ program xsem_add_model_stagnant_slab_with_gap
   !===== declare variables
 
   ! command line args
-  integer, parameter :: nargs = 14
+  integer, parameter :: nargs = 15
   character(len=MAX_STRING_LEN) :: args(nargs)
   integer :: nproc
   character(len=MAX_STRING_LEN) :: mesh_dir
   real(dp) :: origin_lat, origin_lon, origin_depth
   real(dp) :: slab_dip, slab_strike, slab_half_width
   real(dp) :: flat_slab_len, flat_slab_thickness, flat_slab_gap_angle, slab_dlnv
+  integer :: flag_ellipticity
   character(len=MAX_STRING_LEN) :: out_tag, out_dir
 
   ! local variables
@@ -107,8 +109,9 @@ program xsem_add_model_stagnant_slab_with_gap
   read(args(10), *) flat_slab_thickness
   read(args(11), *) flat_slab_gap_angle
   read(args(12), *) slab_dlnv
-  read(args(13), '(a)') out_tag
-  read(args(14), '(a)') out_dir
+  read(args(13), *) flag_ellipticity
+  read(args(14), '(a)') out_tag
+  read(args(15), '(a)') out_dir
 
   !===== geometric parameters of slab
   ! use ECEF coordinate frame
@@ -121,11 +124,16 @@ program xsem_add_model_stagnant_slab_with_gap
   slab_strike = slab_strike * DEGREES_TO_RADIANS
   flat_slab_gap_angle = flat_slab_gap_angle * DEGREES_TO_RADIANS
 
+  ! convert to gedesic latitude to geocentric latitude
+  if (flag_ellipticity /= 0) then
+    origin_lat = geographic_geocentric_lat(origin_lat) 
+  endif
+
   ! slab origin point (bottom joint point between dipping and flat plane)
-  call geographic_lla2ecef(origin_lat, origin_lon, -1000.0*origin_depth, &
-                           origin_vec(1), origin_vec(2), origin_vec(3))
-  origin_vec = origin_vec / R_EARTH
-  origin_radius = sum(origin_vec**2)**0.5
+  origin_radius = 1.0 - origin_depth/R_EARTH_KM
+  origin_vec(1) = cos(origin_lat)*cos(origin_lon)*origin_radius
+  origin_vec(2) = cos(origin_lat)*sin(origin_lon)*origin_radius
+  origin_vec(3) = sin(origin_lat)*origin_radius
 
   ! non-dimenionalize length by R_EARTH_KM
   slab_half_width = slab_half_width/R_EARTH_KM
@@ -135,7 +143,7 @@ program xsem_add_model_stagnant_slab_with_gap
   dipping_slab_thickness = cos(slab_dip)*flat_slab_thickness
 
   ! radial, north and east unit vectors at origin point
-  unit_vec_radial = origin_vec/(sum(origin_vec**2))**0.5
+  unit_vec_radial = origin_vec/origin_radius
   unit_vec_north = [ -sin(origin_lat)*cos(origin_lon), -sin(origin_lat)*sin(origin_lon), cos(origin_lat) ]
   unit_vec_east = [ -sin(origin_lon), cos(origin_lon), 0.0_dp ]
 

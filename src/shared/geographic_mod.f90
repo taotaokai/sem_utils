@@ -29,6 +29,7 @@ module geographic
   public :: geographic_ecef2ned
   public :: geographic_ecef2lla
   public :: geographic_ecef2ll_zeroalt
+  public :: geographic_geocentric_lat
   public :: rotation_matrix
 
 contains
@@ -150,6 +151,23 @@ subroutine geographic_ecef2ll_zeroalt(x, y, z, lat, lon)
 
 end subroutine
 
+
+!///////////////////////////////////////////////////////////////////////////////
+real(dp) function geographic_geocentric_lat(lat)
+!- convert geodesic latitude to geocentric latitude 
+!
+!-input:
+!   lat: geodesic latitude, radians
+!-return:
+!   geocentric_lat: radians
+
+  real(dp), intent(in) :: lat
+
+  ! convert from geodetic to geocentric latitude
+  ! tan(phi_geocentric) = (1-f)^2 * tan(phi_geodetic)
+  geographic_geocentric_lat = atan(wgs84_sq_one_minus_f*lat)
+
+end function
 
 !///////////////////////////////////////////////////////////////////////////////
 subroutine rotation_matrix(v_axis, theta, R)

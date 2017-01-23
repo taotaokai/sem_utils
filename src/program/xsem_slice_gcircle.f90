@@ -11,7 +11,7 @@ subroutine selfdoc()
   print '(a)', "    <lat0> <lon0> <azimuth> "
   print '(a)', "    <theta0> <theta1> <ntheta> "
   print '(a)', "    <radius0> <radius1> <nradius> "
-  print '(a)', "    <out_file> "
+  print '(a)', "    <flag_ellipticity> <out_file> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -30,6 +30,7 @@ subroutine selfdoc()
   print '(a)', "  (integer) ntheta: number of grids along the great cicle"
   print '(a)', "  (float) radius0,radius1: begin/end radius (km)"
   print '(a)', "  (integer) nradius: number of grids along the radius"
+  print '(a)', "  (int) flag_ellipticity: (0/1) 0: spherical; 1: WGS84 ellipsoid"
   print '(a)', "  (string) out_file: output file name (GMT netcdf format)"
   print '(a)', ""
   print '(a)', "NOTES"
@@ -69,11 +70,12 @@ program xsem_vertical_slice
   !===== declare variables
 
   !-- command line args
-  integer, parameter :: nargs = 14
+  integer, parameter :: nargs = 15
   character(len=MAX_STRING_LEN) :: args(nargs)
   character(len=MAX_STRING_LEN) :: mesh_dir, model_dir, model_tags, out_file
   real(dp) :: lat0, lon0, azimuth, theta0, theta1, radius0, radius1
   integer :: nproc, ntheta, nradius
+  integer :: flag_ellipticity
 
   !-- local variables
   integer, parameter :: iregion = IREGION_CRUST_MANTLE ! crust_mantle
@@ -194,7 +196,8 @@ program xsem_vertical_slice
   read(args(11), *) radius0
   read(args(12), *) radius1
   read(args(13), *) nradius
-  read(args(14), '(a)') out_file
+  read(args(14), *) flag_ellipticity
+  read(args(15), '(a)') out_file
 
   call synchronize_all()
 
@@ -211,9 +214,16 @@ program xsem_vertical_slice
   radius0 = radius0 / R_EARTH_KM
   radius1 = radius1 / R_EARTH_KM
 
-  ! unit direction vector v0 at origin point of the great circle
-  call geographic_lla2ecef(lat0, lon0, 0.d0, v0(1), v0(2), v0(3))
-  v0 = v0 / sqrt(sum(v0**2))
+  ! unit radial vector v0 at origin point on the great circle
+  if (flag_ellipticity == 0) then
+    v0(1) = cos(lat0)*cos(lon0)
+    v0(2) = cos(lat0)*sin(lon0)
+    v0(3) = sin(lat0)
+  else
+    call geographic_lla2ecef(lat0, lon0, 0.d0, v0(1), v0(2), v0(3))
+    v0 = v0 / sqrt(sum(v0**2))
+    lat0 = geographic_geocentric_lat(lat0) ! convert to geocentric latitude
+  endif
 
   ! unit direction vector v1 along the shooting azimuth of the great circle
   vnorth = [ - sin(lat0) * cos(lon0), &

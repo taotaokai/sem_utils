@@ -6,7 +6,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xmap_gcircle <lat0> <lon0> <azimuth> <theta_list>"
+  print '(a)', "  xmap_gcircle <lat0> <lon0> <azimuth> <flag_ellipticity> <theta_list>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -18,6 +18,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  (float) lat0,lon0: origin point on the great circle (degrees)"
   print '(a)', "  (float) azimuth: shooting azimuth of the great circle (degrees)"
+  print '(a)', "  (int) flag_ellipticity: (0/1) 0: spherical; other: WGS84 ellipsoid"
   print '(a)', "  (string) theta_list: list of theta angles (degrees) "
   print '(a)', ""
   print '(a)', "NOTES"
@@ -51,10 +52,11 @@ program xmap_gcircle
   !===== declare variables
 
   !-- command line args
-  integer, parameter :: nargs = 4
+  integer, parameter :: nargs = 5
   character(len=MAX_STRING_LEN) :: args(nargs)
   character(len=MAX_STRING_LEN) :: theta_list
   real(dp) :: lat0, lon0, azimuth
+  integer :: flag_ellipticity
 
   !-- local variables
   integer :: i, ier
@@ -82,7 +84,8 @@ program xmap_gcircle
   read(args(1), *) lat0
   read(args(2), *) lon0
   read(args(3), *) azimuth
-  read(args(4), '(a)') theta_list
+  read(args(4), *) flag_ellipticity
+  read(args(5), '(a)') theta_list
 
   !===== read theta_list
   call sem_utils_read_line(theta_list, theta_lines, ntheta)
@@ -99,9 +102,15 @@ program xmap_gcircle
   azimuth = azimuth * DEGREES_TO_RADIANS
   theta = theta * DEGREES_TO_RADIANS
 
-  ! unit direction vector v0 at origin point of the great circle
-  call geographic_lla2ecef(lat0, lon0, 0.d0, v0(1), v0(2), v0(3))
-  v0 = v0 / sqrt(sum(v0**2))
+  ! convert to gedesic latitude to geocentric latitude
+  if (flag_ellipticity /= 0) then
+    lat0 = geographic_geocentric_lat(lat0) 
+  endif
+
+  ! unit radial vector v0 from earth center to the origin point on the great circle
+  v0(1) = cos(lat0)*cos(lon0)
+  v0(2) = cos(lat0)*sin(lon0)
+  v0(3) = sin(lat0)
 
   ! unit direction vector v1 along the shooting azimuth of the great circle
   vnorth = [ - sin(lat0) * cos(lon0), &
@@ -122,7 +131,12 @@ program xmap_gcircle
   do itheta = 1, ntheta
     call rotation_matrix(v_axis, theta(itheta), rotmat)
     vr = matmul(rotmat, v0)
-    call geographic_ecef2ll_zeroalt(vr(1), vr(2), vr(3), lat(itheta), lon(itheta))
+    if (flag_ellipticity == 0) then
+      lat(itheta) = atan2(vr(3), (vr(1)**2+vr(2)**2)**0.5)
+      lon(itheta) = atan2(vr(2), vr(1))
+    else
+      call geographic_ecef2ll_zeroalt(vr(1), vr(2), vr(3), lat(itheta), lon(itheta))
+    endif
   enddo
 
   !===== output results

@@ -48,6 +48,7 @@ program = \
 	xsem_add_model_horizontal_layer \
 	xsem_add_model_geographic_region \
 	xsem_make_dlnv_stagnant_slab_with_gap \
+	xsem_make_dlnv_gauss_point \
 	xsem_make_dmodel_random \
 	xsem_make_dmodel_cosine \
 	xsem_create_model_homogeneous \

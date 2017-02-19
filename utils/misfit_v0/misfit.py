@@ -13,7 +13,7 @@ from scipy import interpolate
 import pickle
 #
 from obspy import UTCDateTime, read, Trace
-from obspy.geodetics import gps2dist_azimuth, kilometer2degrees
+#from obspy.geodetics import gps2dist_azimuth, kilometer2degrees
 from obspy.taup import TauPyModel
 from obspy.imaging.beachball import beach
 #
@@ -308,7 +308,7 @@ class Misfit(object):
 #======================================================
 #
 
-  def setup_event(self, cmt_file, ECEF=False):
+  def setup_event(self, cmt_file, ECEF=False, GPS_ELLPS="WGS84"):
     """cmt_file (str): CMTSOLUTION format file
     """
     with open(cmt_file, 'r') as f:
@@ -327,9 +327,9 @@ class Misfit(object):
     time_shift = float(lines[2][1])
 
     # initialize pyproj objects
-    geod = pyproj.Geod(ellps='WGS84')
-    ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
-    lla = pyproj.Proj(proj='latlong', ellps='WGS84', datum='WGS84')
+    #geod = pyproj.Geod(ellps='WGS84')
+    ecef = pyproj.Proj(proj='geocent', ellps=GPS_ELLPS)
+    lla = pyproj.Proj(proj='latlong', ellps=GPS_ELLPS)
 
     if ECEF:
       tau = float(lines[3][1])
@@ -466,6 +466,7 @@ class Misfit(object):
       channel_file,
       band_code=None,
       three_channels=True,
+      GPS_ELLPS="WGS84",
       ):
     """ Setup station metadata.
 
@@ -478,12 +479,17 @@ class Misfit(object):
         instrument/band code [default: None]
       three_channels (bool):
         check for completeness of 3 channels [default: False]
+      GPS_ELLPS (str):
+        GPS ellipsoid: like WGS84, sphere [default: WGS84]
 
       Note: 
       1) only use stations which have the same lat/lon/ele/depth 
         in all the available channels.
       2) gcmt info must be set first.
     """
+    # initiate Geod
+    geod = pyproj.Geod(ellps=GPS_ELLPS)
+
     # initiate taup
     taup_model = TauPyModel(model="ak135")
 
@@ -595,10 +601,13 @@ class Misfit(object):
           continue
 
       # geodetic and ak135 traveltimes
-      dist, az, baz = gps2dist_azimuth(
-          event['latitude'], event['longitude'],
-          channel[0]['latitude'], channel[0]['longitude'])
-      dist_degree = kilometer2degrees(dist/1000.0)
+      #dist, az, baz = gps2dist_azimuth(
+      #    event['latitude'], event['longitude'],
+      #    channel[0]['latitude'], channel[0]['longitude'])
+      az, baz, dist = geod.inv(event['longitude'], event['latitude'], 
+                               channel[0]['longitude'], channel[0]['latitude'])
+      #dist_degree = kilometer2degrees(dist/1000.0)
+      dist_degree = np.rad2deg(dist/6371000.0)
 
       evdp_km = event['depth']
       if evdp_km < 0.0:
@@ -2588,7 +2597,7 @@ class Misfit(object):
 #======================================================
 #
 
-  def make_cmt_dxs(self, out_file="CMTSOLUTION.dxs", norm=2000.0):
+  def make_cmt_dxs(self, out_file="CMTSOLUTION.dxs", norm=2000.0, GPS_ELLPS="WGS84"):
     """ Calculate derivative for source location along one direction
     norm: displacement in meter
     """
@@ -2597,9 +2606,9 @@ class Misfit(object):
       raise Exception("norm(dxs) must be larger than 0.")
 
     # initialize pyproj objects
-    geod = pyproj.Geod(ellps='WGS84')
-    ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
-    lla = pyproj.Proj(proj='latlong', ellps='WGS84', datum='WGS84')
+    #geod = pyproj.Geod(ellps='WGS84')
+    ecef = pyproj.Proj(proj='geocent', ellps=GPS_ELLPS)
+    lla = pyproj.Proj(proj='latlong', ellps=GPS_ELLPS)
 
     # get source parameters
     event = self.data['event']
@@ -3973,7 +3982,7 @@ class Misfit(object):
 #    ev_dt = dm[3]
 #
 #    # initialize pyproj objects
-#    geod = pyproj.Geod(ellps='WGS84')
+#    #geod = pyproj.Geod(ellps='WGS84')
 #    ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
 #    lla = pyproj.Proj(proj='latlong', ellps='WGS84', datum='WGS84')
 #
@@ -4582,7 +4591,7 @@ class Misfit(object):
         meta = station['meta']
         azimuth = meta['azimuth']
         dist_degree = meta['dist_degree']
-        if plot_dist:
+        if plot_dist.any():
           if dist_degree < np.min(plot_dist) or dist_degree > np.max(plot_dist):
             continue
         if azimuth < azmin or azimuth >= azmax:
@@ -4822,7 +4831,7 @@ class Misfit(object):
       min_CC0=None,
       min_CCmax=None,
       min_SNR=None,
-      min_dist=None,
+      dist_lim=None,
       ):
     """ 
     Plot record section in azimuthal bins
@@ -4857,7 +4866,7 @@ class Misfit(object):
     plot_SNR = np.array(min_SNR)
     plot_CC0 = np.array(min_CC0)
     plot_CCmax = np.array(min_CCmax)
-    plot_dist = np.array(min_dist)
+    plot_dist = np.array(dist_lim)
 
     plot_clip = float(clip_ratio)
     if plot_clip < 1.0:
@@ -4988,7 +4997,7 @@ class Misfit(object):
         meta = station['meta']
         azimuth = meta['azimuth']
         dist_degree = meta['dist_degree']
-        if plot_dist:
+        if plot_dist.any():
           if dist_degree < np.min(plot_dist) or dist_degree > np.max(plot_dist):
             continue
         if azimuth < azmin or azimuth >= azmax:

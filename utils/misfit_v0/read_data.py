@@ -30,12 +30,12 @@ print("\n====== initialize\n")
 misfit = Misfit()
 
 print("\n====== setup event\n")
-misfit.setup_event(cmt_file, ECEF=par.cmt_is_ECEF)
+misfit.setup_event(cmt_file, ECEF=par.cmt_is_ECEF, GPS_ELLPS=par.GPS_ELLPS)
 
 print(misfit.data['event'])
 
 print("\n====== setup station\n")
-misfit.setup_station(channel_file, band_code=par.obs_band_code,three_channels=True)
+misfit.setup_station(channel_file, band_code=par.obs_band_code,three_channels=True, GPS_ELLPS=par.GPS_ELLPS)
 
 print("\n====== read seismogram: obs, syn\n")
 misfit.read_obs_syn(

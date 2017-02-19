@@ -23,6 +23,19 @@ else:
   par = importlib.util.module_from_spec(spec)
   spec.loader.exec_module(par)
 
+min_CC0 = None
+min_CCmax = None
+min_SNR = None
+#dist = None
+if 'CC0' in par.weight_param:
+  min_CC0 = min(par.weight_param['CC0'])
+if 'CCmax' in par.weight_param:
+  min_CCmax = min(par.weight_param['CCmax'])
+if 'SNR' in par.weight_param:
+  min_SNR = min(par.weight_param['SNR'])
+#if 'dist' in par.weight_param:
+#  dist_lim = par.weight_param['dist']
+
 #------
 print("\n====== initialize\n")
 misfit = Misfit()

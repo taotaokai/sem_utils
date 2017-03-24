@@ -215,13 +215,15 @@ program xsem_vertical_slice
   radius1 = radius1 / R_EARTH_KM
 
   ! unit radial vector v0 from earth's center to the origin point on the great circle
-  if (flag_ellipticity /= 0) then
-    call geographic_lla2ecef(lat0, lon0, 0.0_dp, v0(1), v0(2), v0(3))
-    v0 = v0 / sqrt(sum(v0**2))
-  else ! spherical earth
+  if (flag_ellipticity == 0) then
+    ! spherical earth
     v0(1) = cos(lat0)*cos(lon0)
     v0(2) = cos(lat0)*sin(lon0)
     v0(3) = sin(lat0)
+  else 
+    ! WGS84 ellipsoid
+    call geographic_lla2ecef(lat0, lon0, 0.0_dp, v0(1), v0(2), v0(3))
+    v0 = v0 / sqrt(sum(v0**2))
   endif
 
   ! unit direction vector v1 along the shooting azimuth of the great circle

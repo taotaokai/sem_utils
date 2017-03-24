@@ -1156,7 +1156,7 @@ class Misfit(object):
         tr.filter('lowpass', freq=0.8*syn_nyq, corners=10, zerophase=True)
         # interpolation: windowed sinc reconstruction
         obs_ENZ[i,:] = lanczos_interp1(tr.data, obs_delta,
-            syn_times+(syn_starttime-obs_starttime), na=20)
+            syn_times+(syn_starttime-obs_starttime), na=40)
 
         #DEBUG
         #plt.plot(obs_times, tr.data, 'r')
@@ -1750,7 +1750,8 @@ class Misfit(object):
 
   def measure_adj(self,
       plot=False,
-      cc_delta=0.01, 
+      cc_delta=0.001, 
+      misfit_type='cc0',
       weight_param={
         'cc_tshift':[-10,-8, 8,10],
         'SNR':[10,15], 
@@ -1763,6 +1764,9 @@ class Misfit(object):
 
     Parameters
     ----------
+    misfit_type:
+      cc0: zero-lag cross-correlation misfit
+      ccdt: cross-correlation traveltime
     weight_param : SNR, CCmax, CC0, cc_tshift
 
     Notes
@@ -1801,12 +1805,12 @@ class Misfit(object):
       syn_times = syn_delta * np.arange(syn_nt)
 
       obs = waveform['obs']
+      syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
       if 'syn' in waveform:
         syn = waveform['syn']
       elif 'grn' in waveform:
         grn = waveform['grn']
         # source spectrum (moment-rate function)
-        syn_freq = np.fft.rfftfreq(syn_nt, d=syn_delta)
         F_src = stf_gauss_spectrum(syn_freq, event['tau'])
         syn = np.fft.irfft(F_src*np.fft.rfft(grn), syn_nt)
       else:
@@ -1982,7 +1986,7 @@ class Misfit(object):
           warnings.warn("syn_delta(%f) < cc_time_step(%f)" \
               % (syn_delta, cc_delta))
         ti = cc_times + (syn_nt-1)*syn_delta  # -(npts-1)*dt: begin time in cc
-        cci = lanczos_interp1(cc, syn_delta, ti, na=20)
+        cci = lanczos_interp1(cc, syn_delta, ti, na=40)
         # time shift at the maximum correlation
         imax = np.argmax(cci)
         CC_time_shift = cc_times[imax]
@@ -2005,17 +2009,48 @@ class Misfit(object):
           weight *= cosine_taper(CC_time_shift, weight_param['cc_tshift'])
 
         #------ measure adjoint source
-        # adjoint source: dchiw_du (misfit functional: zero-lag cc coef.)
-        # dchiw_du = conj(F * [S]) * w * [ w * F * d - A * w * F * S * g] / N, 
-        # , where A = CC0(un-normalized) / norm(u)**2, N = norm(d)*norm(u)
         Aw = CC0 * obs_norm / syn_norm # window amplitude raito
-        #-- dchiw_du
-        #NOTE: *dt is put back to Nw
-        dchiw_du1 = win_func * (obs_filt_win - Aw*syn_filt_win) / Nw / syn_delta
-        # apply conj(F), equivalent to conj(F*conj(adj))
-        # for two-pass filter (zero phase) conj(F) = F
-        dchiw_du = signal.filtfilt(filter_b, filter_a, dchiw_du1[:,::-1])
-        dchiw_du = dchiw_du[:,::-1]
+        if misfit_type == 'cc0':
+          # misfit: zero-lag cross-correlation
+          # adjoint source: dchiw_du (misfit functional: zero-lag cc coef.)
+          # dchiw_du = conj(F * [S]) * w * [ w * F * d - A * w * F * S * g] / N, 
+          # , where A = CC0(un-normalized) / norm(u)**2, N = norm(d)*norm(u)
+          #-- dchiw_du
+          #NOTE: *dt is put back to Nw
+          dchiw_du1 = win_func * (obs_filt_win - Aw*syn_filt_win) / Nw / syn_delta
+          # apply conj(F), equivalent to conj(F*conj(adj))
+          # for two-pass filter (zero phase) conj(F) = F
+          dchiw_du = signal.filtfilt(filter_b, filter_a, dchiw_du1[:,::-1])
+          dchiw_du = dchiw_du[:,::-1]
+        elif misfit_type == 'ccdt':
+          # misfit: cross-correlation traveltime difference -1*|ccdtau|^2
+          # adjoint source: dchiw_du = ccdt * dtau/du
+          # dchiw_du = conj(F)*w*d/dt(w*F*u)/N,
+          # , where N = norm(d/dt(w*F*u))
+          #-- dchiw_du
+          #NOTE: *dt is put back to Nw
+          dwFu_dt = np.fft.irfft(np.fft.rfft(syn_filt_win)*2.0j*np.pi*syn_freq, n=syn_nt)
+          w_dwFu_dt = win_func * dwFu_dt
+          # apply conj(F), for two-pass filter (zero phase) conj(F) = F
+          conjF_w_dwFu_dt = signal.filtfilt(filter_b, filter_a, w_dwFu_dt[:,::-1])
+          conjF_w_dwFu_dt = conjF_w_dwFu_dt[:,::-1]
+          # 
+          dchiw_du = -1*CC_time_shift*conjF_w_dwFu_dt/np.sum(dwFu_dt**2)
+          #DEBUG
+          #print(CC_time_shift)
+          #plt.subplot(411)
+          #plt.plot(syn_times, syn_filt_win[1,:])
+          #plt.subplot(412)
+          #plt.plot(syn_times, dwFu_dt[1,:])
+          #plt.subplot(413)
+          #plt.plot(syn_times, conjF_w_dwFu_dt[1,:])
+          #plt.subplot(414)
+          #plt.plot(syn_times, dchiw_du[1,:])
+          #plt.show()
+        else:
+          error_str = "%s:%s: unknown misfit type (%s)" % (station_id, window_id, misfit_type)
+          raise Exception(error_str)
+
         #DEBUG
         #for i in range(3):
         #  plt.subplot(311+i)
@@ -4832,6 +4867,7 @@ class Misfit(object):
       min_CCmax=None,
       min_SNR=None,
       dist_lim=None,
+      plot_az0=0,
       ):
     """ 
     Plot record section in azimuthal bins
@@ -4980,7 +5016,7 @@ class Misfit(object):
     if plot_azbin <= 0.0:
       raise Exception("plot_param['azbin']=%f must > 0.0" % plot_azbin)
 
-    for az in np.arange(0, 360, plot_azbin):
+    for az in np.arange(plot_az0, plot_az0+360, plot_azbin):
       azmin = az
       azmax = az + plot_azbin
 
@@ -5000,7 +5036,8 @@ class Misfit(object):
         if plot_dist.any():
           if dist_degree < np.min(plot_dist) or dist_degree > np.max(plot_dist):
             continue
-        if azimuth < azmin or azimuth >= azmax:
+        #if azimuth < azmin or azimuth >= azmax:
+        if (azimuth-azmin)%360 >= plot_azbin:
           continue
 
         window_dict = station['window']
@@ -5115,13 +5152,14 @@ class Misfit(object):
       #-- create axis for seismograms
       ax_origin = [0.45, 0.05]
       ax_size = [0.43, 0.90]
+      #ax_size = [0.2, 0.90]
       ax_1comp = fig.add_axes(ax_origin + ax_size)
 
       #-- ylim setting
       y = [ data_azbin[key]['meta']['dist_degree'] for key in data_azbin ]
       ny = len(y)
       plot_dy = 0.5*(max(y)-min(y)+1)/ny
-      if plot_dist:
+      if plot_dist.any():
         plot_ymax = max(plot_dist) + 2*plot_dy
         plot_ymin = min(plot_dist) - 2*plot_dy
       else:

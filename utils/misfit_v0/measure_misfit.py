@@ -89,8 +89,10 @@ for win in window_list_surface_wave:
       )
 
 print("\n====== measure window\n")
+print("misfit_type = %s" % (par.misfit_type))
 misfit.measure_adj(
     plot=False,
+    misfit_type=par.misfit_type,
     weight_param=par.weight_param)
 
 print("\n====== save data\n")

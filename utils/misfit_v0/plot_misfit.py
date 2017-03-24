@@ -23,19 +23,6 @@ else:
   par = importlib.util.module_from_spec(spec)
   spec.loader.exec_module(par)
 
-min_CC0 = None
-min_CCmax = None
-min_SNR = None
-#dist = None
-if 'CC0' in par.weight_param:
-  min_CC0 = min(par.weight_param['CC0'])
-if 'CCmax' in par.weight_param:
-  min_CCmax = min(par.weight_param['CCmax'])
-if 'SNR' in par.weight_param:
-  min_SNR = min(par.weight_param['SNR'])
-#if 'dist' in par.weight_param:
-#  dist_lim = par.weight_param['dist']
-
 #------
 print("\n====== initialize\n")
 misfit = Misfit()
@@ -62,9 +49,11 @@ for win in window_list_P_wave:
       begin_time=par.plot_begin_time,
       end_time=par.plot_end_time,
       clip_ratio=par.plot_clip_ratio,
-      min_CC0=min(par.weight_param['CC0']),
-      min_CCmax=min(par.weight_param['CCmax']),
-      min_SNR=min(par.weight_param['SNR']),
+      min_CC0=par.plot_min_CC0,
+      min_CCmax=par.plot_min_CCmax,
+      min_SNR=par.plot_min_SNR,
+      dist_lim=par.plot_dist_lim,
+      plot_az0=par.plot_az0,
       )
 
 window_list_S_wave = par.make_window_list_S_wave(evdp_km)
@@ -81,9 +70,11 @@ for win in window_list_S_wave:
       begin_time=par.plot_begin_time,
       end_time=par.plot_end_time,
       clip_ratio=par.plot_clip_ratio,
-      min_CC0=min(par.weight_param['CC0']),
-      min_CCmax=min(par.weight_param['CCmax']),
-      min_SNR=min(par.weight_param['SNR']),
+      min_CC0=par.plot_min_CC0,
+      min_CCmax=par.plot_min_CCmax,
+      min_SNR=par.plot_min_SNR,
+      dist_lim=par.plot_dist_lim,
+      plot_az0=par.plot_az0,
       )
 
 window_list_surface_wave = par.make_window_list_surface_wave(evdp_km)
@@ -100,7 +91,9 @@ for win in window_list_surface_wave:
       begin_time=par.plot_begin_time,
       end_time=par.plot_end_time,
       clip_ratio=par.plot_clip_ratio,
-      min_CC0=min(par.weight_param['CC0']),
-      min_CCmax=min(par.weight_param['CCmax']),
-      min_SNR=min(par.weight_param['SNR']),
+      min_CC0=par.plot_min_CC0,
+      min_CCmax=par.plot_min_CCmax,
+      min_SNR=par.plot_min_SNR,
+      dist_lim=par.plot_dist_lim,
+      plot_az0=par.plot_az0,
       )

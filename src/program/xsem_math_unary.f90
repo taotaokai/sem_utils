@@ -22,7 +22,7 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) model_dir:  directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (string) model_names:  comma delimited string, e.g. vsv,vsh,rho "
-  print '(a)', "  (string) math_op:  math operations, e.g. abs"
+  print '(a)', "  (string) math_op:  math operations, e.g. abs, zero"
   print '(a)', "  (string) out_dir:  output directory"
   print '(a)', "  (string) out_names:  comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', ""
@@ -134,19 +134,22 @@ program xsem_vertical_slice
 
     print *, '# iproc=', iproc
 
-    call sem_io_read_gll_file_n(model_dir, iproc, iregion, model_name_list, nmodel, model)
-
     ! math operations
     select case (trim(math_op))
       ! binary operation
       case ('abs')
+        call sem_io_read_gll_file_n(model_dir, iproc, iregion, model_name_list, nmodel, model)
         model = abs(model)
+      case ('zero')
+        ! output a gll with zeros, no need to read input gll files
+        model = 0.0
       case default
         print *, "[ERROR] unrecognized operation: ", trim(math_op)
         stop
     endselect
 
     ! write out result
+    print *, "min/max = ", minval(model), maxval(model)
     call sem_io_write_gll_file_n(out_dir, iproc, iregion, out_name_list, nmodel, model)
 
   enddo ! iproc

@@ -89,6 +89,7 @@ program xsem_vertical_slice
   !-- interpolation points 
   integer :: ipoint, npoint
   real(dp) :: v0(3), v1(3), vnorth(3), veast(3), v_axis(3), vr(3), rotmat(3,3)
+  real(dp) :: lat0_geocentric
   real(dp) :: dtheta, dradius
   real(dp), allocatable :: theta(:), radius(:), lat(:), lon(:)
   integer :: itheta, iradius, idx
@@ -227,9 +228,10 @@ program xsem_vertical_slice
   endif
 
   ! unit direction vector v1 along the shooting azimuth of the great circle
-  vnorth = [ - sin(lat0) * cos(lon0), &
-             - sin(lat0) * sin(lon0), &
-               cos(lat0) ]
+  lat0_geocentric = atan2(v0(3), sqrt(v0(1)**2 + v0(2)**2))
+  vnorth = [ - sin(lat0_geocentric) * cos(lon0), &
+             - sin(lat0_geocentric) * sin(lon0), &
+               cos(lat0_geocentric) ]
   veast = [ - sin(lon0), cos(lon0), 0.d0 ]
 
   v1 = cos(azimuth) * vnorth + sin(azimuth) * veast

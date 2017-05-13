@@ -23,7 +23,7 @@ subroutine selfdoc()
   print '(a)', "  (string) mesh_dir:  directory containing proc000***_reg1_solver_data.bin"
   print '(a)', "  (string) model_dir_1/2:  directory holds proc*_reg1_<model_tag>.bin"
   print '(a)', "  (string) model_tags_1/2:  comma delimited string, e.g. vsv,vsh,rho "
-  print '(a)', "  (string) math_op:  math operations, e.g. add, sub, mul, div, rdiff"
+  print '(a)', "  (string) math_op:  math operations, e.g. add, sub, mul, div, rdiff,radd, divlog,expmul"
   print '(a)', "  (string) out_dir:  output directory"
   print '(a)', "  (string) model_tags:  comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', ""
@@ -31,7 +31,9 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  1. only run in serial"
   print '(a)', "  2. rdiff: relative difference betwee V1 and V2 as (V1-V2)/V2 = V1/V2 - 1"
-  print '(a)', "  3. radd: add relative difference into a reference model (V1 + 1)*V2"
+  print '(a)', "     radd: add relative difference into a reference model (V1 + 1)*V2"
+  print '(a)', "  3. divlog: log(V1/V2)"
+  print '(a)', "     expmul: exp(V1)*V2"
 
 end subroutine
 
@@ -144,6 +146,10 @@ program xsem_math_serial
         gll_model_1 = gll_model_1/gll_model_2 - 1.0_dp
       case ('radd')
         gll_model_1 = (gll_model_1 + 1.0_dp) * gll_model_2
+      case ('divlog')
+        gll_model_1 = log(gll_model_1/gll_model_2)
+      case ('expmul')
+        gll_model_1 = exp(gll_model_1)*gll_model_2
       case default
         print *, "[ERROR] unrecognized operation: ", trim(math_op)
         stop

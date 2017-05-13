@@ -103,7 +103,7 @@ program xsem_make_dmodel_random
   do iproc = myrank, (nproc-1), nrank
 
     ! make random dmodel
-    call RANDOM_SEED()
+    !call RANDOM_SEED()
     call RANDOM_NUMBER(dmodel)
     ! restrict to min/max value
     dmodel = min_value + (max_value - min_value)*dmodel

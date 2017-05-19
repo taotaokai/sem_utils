@@ -31,7 +31,9 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  1. can be run in parallel"
   print '(a)', "  2. rdiff: relative difference betwee V1 and V2 as (V1-V2)/V2 = V1/V2 - 1"
-  print '(a)', "  2. radd: add relative difference into a reference model (V1 + 1)*V2"
+  print '(a)', "     radd: add relative difference into a reference model (V1 + 1)*V2"
+  print '(a)', "  3. divlog: log(V1/V2)"
+  print '(a)', "     expmul: exp(V1)*V2"
 
 end subroutine
 
@@ -167,6 +169,10 @@ program xsem_vertical_slice
         gll_model_1 = gll_model_1/gll_model_2 - 1.0_dp
       case ('radd')
         gll_model_1 = (gll_model_1 + 1.0_dp) * gll_model_2
+      case ('divlog')
+        gll_model_1 = log(gll_model_1/gll_model_2)
+      case ('expmul')
+        gll_model_1 = exp(gll_model_1)*gll_model_2
       case default
         print *, "[ERROR] unrecognized operation: ", trim(math_op)
         stop

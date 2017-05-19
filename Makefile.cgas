@@ -51,6 +51,10 @@ program = \
 	xsem_add_model_horizontal_layer \
 	xsem_add_model_geographic_region \
 	xsem_make_dlnv_stagnant_slab_with_gap \
+	xsem_make_dlnv_stagnant_slab \
+	xsem_make_dlnv_flat_slab \
+	xsem_make_dlnv_gauss_point \
+	xsem_make_gauss_point_from_list \
 	xsem_make_dmodel_random \
 	xsem_make_dmodel_cosine \
 	xsem_create_model_homogeneous \
@@ -77,6 +81,7 @@ program = \
 	xsem_diff_relative \
 	xsem_threshold_amplitude \
 	xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll \
+	xsem_model_dlnvs_to_gll \
 	xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll_serial \
 	xsem_model_gll_to_dlnvs_kappa_thomsen \
 	xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
@@ -97,16 +102,22 @@ program = \
 	xsem_pcg_dmodel_n \
 	xsem_scale_dmodel \
 	xsem_scale_dmodel_dlnvs_kappa_thomsen_elliptic \
+	xsem_scale_dmodel_dlnvs \
 	xsem_add_dmodel \
 	xsem_add_dmodel_random \
 	xsem_add_dmodel_dlnvs_kappa_thomsen_elliptic \
+	xsem_add_dmodel_dlnvs \
 	xsem_get_radius \
 	xsem_make_1d_gll \
 	xsem_make_gll_from_1d_um_mtz_lm \
 	xsem_add_crust_to_1d_gll \
 	xsem_mesh_get_slice_center \
 	xsem_model_gll_reduce_amplitude \
-	xsem_make_gll_depth_taper_linear
+	xsem_make_gll_depth_taper_linear \
+	xsem_gll_get_value_range \
+	xsem_gll_scale \
+	xsem_inverse_hess_diag_water_level \
+	xsem_make_gaussian_mask
 
 
 #------------------------------------------

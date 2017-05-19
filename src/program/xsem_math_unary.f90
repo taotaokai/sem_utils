@@ -143,6 +143,9 @@ program xsem_vertical_slice
       case ('zero')
         ! output a gll with zeros, no need to read input gll files
         model = 0.0
+      case ('sqrt')
+        call sem_io_read_gll_file_n(model_dir, iproc, iregion, model_name_list, nmodel, model)
+        model = sqrt(model)
       case default
         print *, "[ERROR] unrecognized operation: ", trim(math_op)
         stop

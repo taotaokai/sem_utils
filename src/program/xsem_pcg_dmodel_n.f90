@@ -283,6 +283,7 @@ program xsem_kernel_vti_3pars_pcg_dmodel
     call sem_io_read_gll_file_n(previous_dmodel_dir, iproc, iregion, previous_dmodel_name_list, nmodel, dk)
 
     ! get new dmodel (d_k+1)
+    ! note: because I am trying to maximize the objective function, the update formula is d_k = g_k - beta*d_k-1
     dk = pk1 - beta*dk
 
     ! write new dmodel

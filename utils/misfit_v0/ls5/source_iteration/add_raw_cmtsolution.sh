@@ -8,6 +8,8 @@ utils=~/seiscode/sem_utils/utils/misfit_v0
 
 event_list=${1:?[arg]need event_list}
 
+mkdir $wkdir/CMTSOLUTION_initial
+
 for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
 do
 

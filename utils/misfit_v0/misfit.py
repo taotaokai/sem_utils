@@ -1750,7 +1750,7 @@ class Misfit(object):
 
   def measure_adj(self,
       plot=False,
-      cc_delta=0.001, 
+      cc_delta=0.01,
       misfit_type='cc0',
       weight_param={
         'cc_tshift':[-10,-8, 8,10],
@@ -2083,6 +2083,7 @@ class Misfit(object):
         window['quality'] = quality_dict
         window['cc'] = cc_dict
         window['weight'] = weight
+        window['misfit_type'] = misfit_type
         window['stat'] = {'code': 1, 
             'msg': "measure adj on "+UTCDateTime.now().isoformat()}
 
@@ -2161,8 +2162,8 @@ class Misfit(object):
           continue
 
         # skip bad windows 
-        if window['weight'] < 1.0e-3:
-          continue
+        #if window['weight'] < 1.0e-3:
+        #  continue
 
         cc = window['cc']
         quality = window['quality']
@@ -4868,6 +4869,7 @@ class Misfit(object):
       min_SNR=None,
       dist_lim=None,
       plot_az0=0,
+      plot_adj=False, # whether plot adjoint source
       ):
     """ 
     Plot record section in azimuthal bins
@@ -4893,6 +4895,7 @@ class Misfit(object):
     """
     #------ check parameters
     plot_time = np.array([begin_time, end_time])
+    plot_flip = -1
 
     plot_azbin = float(azbin)
     if plot_azbin <= 0:
@@ -4965,6 +4968,7 @@ class Misfit(object):
     plot_rayp, plot_c = np.linalg.lstsq(A, winc_all)[0]
     # round to the integer
     plot_rayp = np.round(plot_rayp)
+    plot_rayp = 16 # taok: temporary use
     # get time window relative to the regressed window central time
     plot_t0 = np.min(winb_all - plot_rayp*dist_all)
     plot_t1 = np.max(wine_all - plot_rayp*dist_all)
@@ -5100,13 +5104,24 @@ class Misfit(object):
           raise Exception("Not single component: " % (comp))
         obs = np.dot(cmp_vec, obs)
         syn = np.dot(cmp_vec, syn)
+
         # append to data
-        data_dict = {
-            'meta': meta,
-            'window': window,
-            'syn': syn,
-            'obs': obs
-            }
+        if plot_adj:
+          adj = np.dot(cmp_vec, station['dchi_du'])
+          data_dict = {
+              'meta': meta,
+              'window': window,
+              'syn': syn,
+              'obs': obs,
+              'adj': adj,
+              }
+        else:
+          data_dict = {
+              'meta': meta,
+              'window': window,
+              'syn': syn,
+              'obs': obs,
+              }
         data_azbin[station_id] = data_dict
       #endfor station_id in station_dict:
   
@@ -5152,7 +5167,7 @@ class Misfit(object):
       #-- create axis for seismograms
       ax_origin = [0.45, 0.05]
       ax_size = [0.43, 0.90]
-      #ax_size = [0.2, 0.90]
+      #ax_size = [0.3, 0.90]
       ax_1comp = fig.add_axes(ax_origin + ax_size)
 
       #-- ylim setting
@@ -5196,6 +5211,36 @@ class Misfit(object):
               fontsize=11, color='blue')
 
       #-- plot each station
+      if plot_adj: # use a constant scaling factor for adj_src
+        Amax_adj = -1.0
+        for station_id in data_azbin: 
+          station = data_azbin[station_id]
+          meta = station['meta']
+          window = station['window']
+          adj = station['adj']
+          # get plot time 
+          dist_degree = meta['dist_degree']
+          reduced_time = dist_degree * plot_rayp
+          # time of first sample referred to centroid time 
+          t0 = syn_starttime - event['t0']
+          # time of samples referred to centroid time
+          syn_times = syn_delta*np.arange(syn_npts) + t0
+          ## plot time window
+          #plot_t0 = min(plot_time) + reduced_time
+          #plot_t1 = max(plot_time) + reduced_time
+          #plot_idx = (syn_times > plot_t0) & (syn_times < plot_t1)
+          ## plot time (reduced time)
+          #t_plot = syn_times[plot_idx] - reduced_time
+          #  window begin/end
+          taper = window['taper']
+          win_starttime = taper['starttime'] - event['t0']
+          win_endtime = taper['endtime'] - event['t0']
+          win_t0 = win_starttime - reduced_time
+          win_t1 = win_endtime - reduced_time
+          win_idx = (syn_times > win_starttime) & (syn_times < win_endtime)
+
+          Amax_adj = max(Amax_adj, np.sqrt(np.max(adj[win_idx]**2)))
+
       for station_id in data_azbin:
         station = data_azbin[station_id]
         meta = station['meta']
@@ -5230,17 +5275,26 @@ class Misfit(object):
         Amax_syn = np.sqrt(np.max(syn[win_idx]**2))
         
         # clip large amplitudes
+        if plot_adj:
+          adj = station['adj']
+          y = adj[plot_idx]/Amax_adj
+          idx = abs(y) > plot_clip+1.0e-3
+          y[idx] = np.nan
+          ax_1comp.plot(t_plot, plot_flip*plot_dy*y+dist_degree, \
+              'k-', linewidth=0.5)
+
         y = obs[plot_idx]/Amax_obs
         idx = abs(y) > plot_clip+1.0e-3
         y[idx] = np.nan
-        ax_1comp.plot(t_plot, plot_dy*y+dist_degree, \
+        ax_1comp.plot(t_plot, plot_flip*plot_dy*y+dist_degree, \
             'k-', linewidth=0.5)
 
         y = syn[plot_idx]/Amax_syn
         idx = abs(y) > plot_clip+1.0e-3
         y[idx] = np.nan
-        ax_1comp.plot(t_plot, plot_dy*y+dist_degree, \
+        ax_1comp.plot(t_plot, plot_flip*plot_dy*y+dist_degree, \
             'r-', linewidth=0.5)
+
         # mark measure window range
         ax_1comp.plot(win_t0, dist_degree, 'k|', markersize=8)
         ax_1comp.plot(win_t1, dist_degree, 'k|', markersize=8)
@@ -5261,19 +5315,24 @@ class Misfit(object):
         #  ax.text(max(plot_time), dist_degree, ' %.1f' % (window['weight']),
         #      verticalalignment='center', fontsize=7)
         ##annotate station names 
-        str_annot = ' %s (%.3f,%.1f)' % (station_id,
-            window['cc']['CC0'], window['weight'])
+        str_annot = ' %s (%.3f,%.3f,%.1f)' % (station_id,
+            window['cc']['CC0'], window['cc']['cc_tshift'], window['weight'])
         ax_1comp.text(max(plot_time), dist_degree, str_annot, 
             verticalalignment='center', fontsize=7)
+        #ax_1comp.text(160, dist_degree, str_annot, 
+        #    verticalalignment='center', fontsize=7)
+
       #endfor data in data_azbin:
 
       #-- set axes limits and lables, annotation
       ax_1comp.set_xlim(min(plot_time), max(plot_time))
+      #ax_1comp.set_xlim(80,160)
       ax_1comp.set_ylim(plot_ymin, plot_ymax)
       ax_1comp.set_xlabel('t - {:.1f}*dist (s)'.format(plot_rayp))
       ax_1comp.tick_params(axis='both',labelsize=10)
       # ylabel 
       ax_1comp.set_ylabel('dist (deg)')
+      #ax_1comp.invert_yaxis()
 
       #-- save figures
       if savefig: 
@@ -5292,7 +5351,7 @@ class Misfit(object):
       out_dir='adj',
       syn_band_code='MX'):
     """
-    Output adjoint sources for the estimation of approximated Hessian diagonals.
+    Output adjoint sources for the estimation of approximated Hessian diagonals for CC0 misfit.
 
     This only output adjoint source of Part 1, that is, only the random part.
 
@@ -5432,6 +5491,155 @@ class Misfit(object):
               syn_times[j], adj[i,syn_nl+j]))
 
     #endfor station_id in station_dict:
+
+#
+#======================================================
+#
+
+  def output_adj_hess_part2(self,
+      out_dir='adj',
+      syn_band_code='MX'):
+    """
+    Output adjoint sources for the estimation of approximated Hessian diagonals for CC0 misfit.
+
+    This only output adjoint source of Part 2, which is related to the synthetics.
+
+    We need run adjoint simulations for Part 1 and 2 separately.
+
+    There are actually two more terms in the Hessian related to the recorded waveforms.
+    However if the recorded and modelled waveforms are similar (cc0 close to 1), then
+    the difference can be ignored (for hessian) and simplified to Part 2.
+
+    Notes
+    -----
+    For the objective function as the normalized zero-lag correlation ceofficient, 
+    the approximated Hessian can be seperated into two parts:
+
+    Part 1:
+        H = - CC0 * norm(wFu)^(-2) * (wFdu1, wFdu2)
+          = - Nw^-1 * Aw * (wFdu1, wFdu2)
+        , where CC0 > 0 is the zero-lag correlation coefficient of (wFd, wFu)
+        and the corresponding adjoint source is
+
+        adj = sqrt(CC0) * norm(wFu)^(-1) * conj(F)(transpose(w)r) 
+        , where r is a radome time series such that E(r*transpose(r)) = i.d.
+        , for example, standard normal distribution N(0,1)
+
+        This follows the idea of random phase encoding method.
+
+    Part 2:
+        H(x,y) = + CC0 * norm(wFu)^(-4) * (wFu, wFdu1) * (wFu, wFdu2)
+               = H1(x) * H2(y)
+        H1 = sqrt(CC0) * norm(wFu)^(-2) * (wFu, wFdu1)
+        , the cooresponding adjoint source is
+
+        adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(transpose(w)wFu)
+    """
+    syn_orientation_codes = ['E', 'N', 'Z']
+    event = self.data['event']
+
+    #------ loop each station
+    station_dict = self.data['station']
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected statations
+      if station['stat']['code'] < 1:
+        continue
+
+      # waveform
+      waveform = station['waveform']
+      time_sample = waveform['time_sample']
+      syn_starttime = time_sample['starttime']
+      syn_delta = time_sample['delta']
+      syn_nt = time_sample['nt']
+      syn_nl = time_sample['nl']
+      syn_nr = time_sample['nr']
+
+      syn = waveform['syn']
+
+      #------ loop each window
+      adj = np.zeros((3, syn_nt))
+      # normal distribution
+      #rand = np.random.randn(3, syn_nt)
+
+      window_dict = station['window']
+      for window_id in window_dict:
+        # window parameters
+        window = window_dict[window_id]
+        # skip bad windows
+        if window['stat']['code'] < 1:
+          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+          continue
+        if window['weight'] < 1.0e-3:
+          continue
+
+        #------ window parameters 
+        # filter
+        filter_dict = window['filter']
+        filter_a = filter_dict['a']
+        filter_b = filter_dict['b']
+        # taper
+        win_func = window['taper']['win']
+        # polarity projection 
+        proj_matrix = window['polarity']['proj_matrix']
+        # CC0
+        cc0 = window['cc']['CC0']
+
+        #------ Part 1: random adjoint source
+        # adj = sqrt(CC0) * norm(wFu)^(-1) * conj(F)(transpose(w)r) 
+        #wr = np.dot(np.transpose(proj_matrix), rand) * win_func
+        #Fwr = signal.filtfilt(filter_b, filter_a, wr[:,::-1])
+        #Fwr = Fwr[:,::-1]
+        #adj_w = np.sqrt(cc0)/norm_wFu * Fwr
+
+        #------ Part 2: synthetic related adjoint source
+        # adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(transpose(w)wFu)
+        Fu = signal.filtfilt(filter_b, filter_a, syn)
+        wFu = np.dot(proj_matrix, Fu) * win_func
+        norm_wFu = np.sqrt(np.sum(wFu**2))
+        wwFu = np.dot(np.transpose(proj_matrix), wFu) * win_func 
+        FwwFu = signal.filtfilt(filter_b, filter_a, wwFu[:,::-1])
+        FwwFu = FwwFu[:,::-1]
+        adj_w = np.sqrt(cc0) * norm_wFu**(-2) * FwwFu
+
+        #------ add into total adjoint source
+        # chi = sum(chi_w * window_weight, over all w[indow])
+        adj += np.sqrt(window['weight']) * adj_w
+
+      #endfor window_id in window_dict:
+
+      #------ output adjoint source
+      # without padding
+      npts = syn_nt - syn_nl - syn_nr
+      starttime = syn_starttime + syn_nl*syn_delta
+      # time samples for ascii output, referred to origin time
+      syn_times = np.arange(npts)*syn_delta
+      b = starttime - event['t0']
+      syn_times += b
+
+      # loop ENZ
+      tr = Trace()
+      for i in range(3):
+        tr.data = adj[i, syn_nl:(syn_nl+npts)]
+        tr.stats.starttime = starttime
+        tr.stats.delta = syn_delta
+
+        out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
+            out_dir, station_id, syn_band_code,
+            syn_orientation_codes[i])
+
+        # sac format
+        tr.write(out_file + '.adj.sac', 'sac')
+
+        # ascii format (needed by SEM)
+        # time is relative to event origin time: t0
+        with open(out_file+'.adj','w') as fp:
+          for j in range(npts):
+            fp.write("{:16.9e}  {:16.9e}\n".format(
+              syn_times[j], adj[i,syn_nl+j]))
+
+    #endfor station_id in station_dict:
+
 
 #
 #======================================================

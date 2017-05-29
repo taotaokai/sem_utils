@@ -15,8 +15,6 @@ source_dir=$wkdir/source
 work_flow=syn
 #work_flow=misfit
 #work_flow=kernel
-#############work_flow=hess
-#############work_flow=precond #do this in post_proc.sh
 #work_flow=perturb
 #work_flow=search
 

@@ -42,8 +42,8 @@ misfit.load(misfit_file)
 print("\n====== grid_cc \n")
 range_shrink_ratio = 0.618
 dtau_range = 2
-dt0_range = 0.5
-xs_mt_step_range = 0.5
+dt0_range = 5
+xs_mt_step_range = 5
 
 dtau_opt = 0.0
 dt0_opt = 0.0

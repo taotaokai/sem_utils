@@ -1,7 +1,7 @@
 #!/bin/bash
 
 wkdir=$(pwd)
-utils_dir=/home1/03244/ktao/seiscode/sem_utils/utils/misfit_v0
+utils_dir=~/seiscode/sem_utils/utils/misfit_v0
 
 file_list=${1:?[arg]need misfit file list}
 pdf_file=${2:?[arg]need output pdf name}

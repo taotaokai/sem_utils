@@ -6,6 +6,7 @@ source_dir=${1:?[arg]need previous iter_dir}
 
 source_dir=$(readlink -f $source_dir)
 
+cp -a $source_dir/old .
 cp -a $source_dir/*.txt .
 cp -a $source_dir/*.job .
 cp -a $source_dir/*.sh .

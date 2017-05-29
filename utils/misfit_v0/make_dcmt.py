@@ -83,10 +83,11 @@ mt[2,1] = mt[1,2]; dchi_dmt[2,1] = dchi_dmt[1,2]
 cc = np.sum(dchi_dmt*mt)/np.sum(mt**2)**0.5/np.sum(dchi_dmt**2)**0.5
 print("cc(dchi_dmt,mt) = ", cc)
 
-# project dchi_dmt to be orthogonal with mt
-dchi_dmt = dchi_dmt - mt*np.sum(dchi_dmt*mt)/np.sum(mt**2)
-cc = np.sum(dchi_dmt*mt)/np.sum(mt**2)**0.5/np.sum(dchi_dmt**2)**0.5
-print("cc(dchi_dmt_ortho,mt) = ", cc)
+## [2017-05-28] I decide not to project dchi_dmt orthogonal to mt
+## project dchi_dmt to be orthogonal with mt
+#dchi_dmt = dchi_dmt - mt*np.sum(dchi_dmt*mt)/np.sum(mt**2)
+#cc = np.sum(dchi_dmt*mt)/np.sum(mt**2)**0.5/np.sum(dchi_dmt**2)**0.5
+#print("cc(dchi_dmt_ortho,mt) = ", cc)
 
 #====== get gradient for xs_ratio and mt_ratio
 # xs = R_earth * xs_ratio

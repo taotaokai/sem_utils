@@ -3,6 +3,7 @@
 wkdir=$(pwd)
 
 event_list=${1:?[arg]need event_list}
+dep_jobs=${2:--1}
 
 #!!! make sure these folders/links do exits and are what you want
 mesh_dir=$wkdir/mesh
@@ -12,12 +13,12 @@ specfem_dir=$wkdir/specfem3d_globe
 source_dir=$wkdir/CMTSOLUTION_initial
 
 #====== make and submit jobs
-#work_flow=green,misfit,srcfrechet,dgreen,search
-#work_flow=green
+work_flow=green,misfit,srcfrechet,dgreen,search
+#work_flow=green,misfit
 #work_flow=misfit
 #work_flow=srcfrechet
 #work_flow=dgreen
-work_flow=search
+#work_flow=search
 
 for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
 do
@@ -44,9 +45,11 @@ do
     cp $wkdir/misfit_par/${event_id}_misfit_par.py $event_dir/DATA/misfit_par.py
 
     # create batch scripts
-    $utils_dir/make_source_iteration.sh $event_id
+    #$utils_dir/make_source_iteration.sh $event_id
+    #$wkdir/make_source_iteration.sh $event_id
+    $wkdir/make_slurm_jobs_for_source_inversion.sh $event_id
   fi
 
-  $utils_dir/submit_slurm_jobs.sh $event_id ${work_flow}
+  $utils_dir/submit_slurm_jobs.sh $event_id ${work_flow} ${dep_jobs}
 
 done

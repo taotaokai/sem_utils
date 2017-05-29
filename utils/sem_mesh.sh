@@ -10,13 +10,14 @@ proc_per_node=24
 run_dir=${1:?[arg]need run_dir(for all output)}
 par_dir=${2:?[arg]need par_dir(for Par_file,STATIONS,CMTSOLUTION)}
 sem_dir=${3:?[arg]need sem_dir(for code, DATA/*)}
+mpiexec=${4:?[arg]need mpiexec (e.g. ibrun or mpirun -np 144)}
 
 if [ -d "$run_dir" ]
 then
     echo "[WARN] run_dir($run_dir) exists, delete!"
     rm -rf $run_dir
 fi
-mkdir $run_dir
+mkdir -p $run_dir
 
 if [ ! -d "$par_dir" ]
 then
@@ -80,7 +81,7 @@ cat <<EOF > $run_dir/mesh.job
 #SBATCH --mail-type=end
 
 cd $run_dir
-ibrun $sem_dir/bin/xmeshfem3D
+${mpiexec} $sem_dir/bin/xmeshfem3D
 
 EOF
 #END

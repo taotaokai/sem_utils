@@ -25,7 +25,10 @@ source_dir=$wkdir/source
 #work_flow=hess_diag
 #work_flow=hess_adj
 #work_flow=hess_kernel
-work_flow=kernel,perturb_random,misfit_random,kernel_random
+#work_flow=kernel,perturb_random,misfit_random,kernel_random
+#work_flow=perturb_random
+#work_flow=misfit_random
+work_flow=kernel_random
 
 for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
 do
@@ -64,7 +67,7 @@ do
 
     # create batch scripts
     #$utils_dir/make_source_iteration.sh $event_id
-    $utils_dir/make_structure_iteration.sh $event_id
+    #$utils_dir/make_structure_iteration.sh $event_id
   fi
 
   chmod u+w -R $event_dir/DATA

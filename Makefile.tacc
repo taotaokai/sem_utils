@@ -98,7 +98,10 @@ program = \
 	xsem_add_crust_to_1d_gll \
 	xsem_mesh_get_slice_center \
 	xsem_model_gll_reduce_amplitude \
-	xsem_make_gll_depth_taper_linear
+	xsem_make_gll_depth_taper_linear \
+	xsem_gll_get_value_range \
+	xsem_inverse_hess_diag_water_level \
+	xsem_make_gaussian_mask
 
 
 #------------------------------------------

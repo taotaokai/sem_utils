@@ -1,0 +1,30 @@
+#!/bin/bash
+#SBATCH -J model_gll_to_dlnvs_kappa_thomsen
+#SBATCH -o model_gll_to_dlnvs_kappa_thomsen.job.o%j
+#SBATCH -N 1
+#SBATCH -n 20
+#SBATCH -p compute
+#SBATCH -t 00:30:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+wkdir=$(pwd)
+sem_utils=~/seiscode/sem_utils
+mpiexec="mpirun -np 20"
+
+nproc=256
+mesh_dir=mesh/DATABASES_MPI
+model_dir=model
+out_dir=model
+
+${mpiexec} $sem_utils/bin/xsem_model_gll_to_dlnvs_kappa_thomsen \
+  $nproc $mesh_dir $model_dir $out_dir
+
+echo
+echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

@@ -66,7 +66,7 @@ program xsem_make_kernel_mask
   real(dp), allocatable :: mask(:,:,:,:)
   real(dp) :: xyz(3), weight
   ! source
-  real(dp) :: dist_sq
+  real(dp) :: dist_sq, one_sigma2
 
   !===== start MPI
 
@@ -130,7 +130,7 @@ program xsem_make_kernel_mask
     if (.not. allocated(mask)) then
       allocate(mask(NGLLX,NGLLY,NGLLZ,nspec))
     endif
-
+    
     ! loop each gll point to set mask
     do ispec = 1, nspec
       do igllz = 1, NGLLZ
@@ -146,7 +146,15 @@ program xsem_make_kernel_mask
 
             do isrc = 1, nsource
               dist_sq = sum((xyz - source_xyz(:,isrc))**2)
-              weight = weight * (1.0_dp - exp(-0.5*dist_sq/gauss_width(isrc)**2))
+              one_sigma2 = gauss_width(isrc)**2
+              !! avoid exp underflow
+              !if (dist_sq < 20.0*one_sigma2) then
+              !  weight = weight * (1.0_dp - exp(-0.5*dist_sq/one_sigma2))
+              !endif
+              weight = weight * (1.0_dp - exp(-0.5*dist_sq/one_sigma2))
+              if (weight < 1.0d-5) then
+                exit
+              endif
             enddo
 
             mask(igllx,iglly,igllz,ispec) = weight

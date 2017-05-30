@@ -1,0 +1,80 @@
+#!/bin/bash
+#SBATCH -J model_perturb_random
+#SBATCH -o model_perturb_random.job.o%j
+#SBATCH -N 1
+#SBATCH -n 20
+#SBATCH -p compute
+#SBATCH -t 00:30:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+#xsem_make_dmodel_random
+#    - make random model perturbation 
+#
+#SYNOPSIS
+#
+#  xsem_make_dmodel_random 
+#    <nproc> <mesh_dir> 
+#    <min_value> <max_value>
+#    <out_dir> <out_name> 
+
+#mpiexec=ibrun
+mpiexec="mpirun -np 20"
+
+wkdir=$(pwd)
+sem_utils=~/seiscode/sem_utils
+ref_dir=~/NAmer/mesh_REF/DATABASES_MPI
+ref_dir=$(readlink -f $ref_dir)
+
+nproc=256
+mesh_dir=mesh/DATABASES_MPI
+
+model_dir=model
+
+out_dir=model_perturb_random
+rm -rf $out_dir
+mkdir $out_dir
+
+#====== make random dmodel
+min_value=-0.01
+max_value=0.01
+${mpiexec} $sem_utils/bin/xsem_make_dmodel_random \
+  $nproc $mesh_dir \
+  $min_value $max_value \
+  $out_dir dlnv_random
+
+#====== add dmodel
+model_names=dlnvs
+${mpiexec} $sem_utils/bin/xsem_math \
+  $nproc $mesh_dir \
+  $model_dir $model_names \
+  $out_dir dlnv_random \
+  "add" \
+  $out_dir $model_names
+
+#====== convert to gll model
+
+# use the same kappa,eps,gamma,rho as in the current model
+ln -sf $wkdir/$model_dir/*kappa.bin $out_dir
+ln -sf $wkdir/$model_dir/*eps.bin $out_dir
+ln -sf $wkdir/$model_dir/*gamma.bin $out_dir
+ln -sf $wkdir/$model_dir/*rho.bin $out_dir
+
+# convert to gll model
+ls $ref_dir/proc*_reg1_vsv.bin | awk -F"/" '{a=$NF;gsub(/\.bin/,"_ref.bin",a); printf "ln -s %s %s/%s\n",$0,outdir,a}' outdir=$out_dir > $out_dir/link_vsv_ref_sh
+bash $out_dir/link_vsv_ref_sh
+
+${mpiexec} $sem_utils/bin/xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll \
+  $nproc $mesh_dir $out_dir x $out_dir
+
+## use reference rho model
+#ln -sf $ref_dir/proc*_reg1_rho.bin $out_dir
+
+echo
+echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

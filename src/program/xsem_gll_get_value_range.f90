@@ -76,7 +76,7 @@ program xsem_add_dmodel
   allocate(gll(NGLLX,NGLLY,NGLLZ,nspec))
  
   !====== get scale factor
-  print *, "#iproc  max  min  maxabs"
+  print *, "#iproc min max maxabs"
   do iproc = 0, (nproc-1)
     ! read gll 
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, trim(model_tag), gll)

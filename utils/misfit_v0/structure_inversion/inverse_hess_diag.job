@@ -1,0 +1,40 @@
+#!/bin/bash
+#SBATCH -J inverse_hess_diag
+#SBATCH -o inverse_hess_diag.job.o%j
+#SBATCH -N 1
+#SBATCH -n 20
+#SBATCH -p compute
+#SBATCH -t 01:30:00
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+wkdir=$(pwd)
+sem_utils=~/seiscode/sem_utils/
+event_list=event.txt
+nproc=256
+mesh_dir=$wkdir/mesh/DATABASES_MPI
+hess_dir=$wkdir/hess_sum
+
+nbin=5000
+threshold_percentage=0.90
+
+mpiexec="mpirun -np 20"
+#mpiexec="ibrun"
+
+# invese Hessian diagonals
+for kernel_tag in dlnvs
+do
+  echo ====== $kernel_tag
+
+  $mpiexec $sem_utils/bin/xsem_inverse_hess_diag_water_level \
+    $nproc $mesh_dir \
+    $hess_dir ${kernel_tag}_hess_diag \
+    $nbin $threshold_percentage \
+    $hess_dir ${kernel_tag}_inv_hess_diag
+done
+
+echo
+echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

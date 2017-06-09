@@ -81,7 +81,8 @@ program xsem_add_dmodel
     ! read gll 
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, trim(model_tag), gll)
     ! get max amplitude 
-    print *, iproc, minval(gll), maxval(gll), maxval(abs(gll))
+    !print *, iproc, minval(gll), maxval(gll), maxval(abs(gll))
+    write(*, "(I5,3E15.5)") iproc, minval(gll), maxval(gll), maxval(abs(gll))
   enddo
 
 end program

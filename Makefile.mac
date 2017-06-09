@@ -99,8 +99,9 @@ program = \
 	xsem_add_crust_to_1d_gll \
 	xsem_mesh_get_slice_center \
 	xsem_model_gll_reduce_amplitude \
-	xsem_make_gll_depth_taper_linear
-
+	xsem_make_gll_depth_taper_linear \
+	xsem_gll_tiso_to_dvpv_dvsv_eps_gamma \
+	xsem_gll_get_value_range
 
 
 #------------------------------------------

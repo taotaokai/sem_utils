@@ -2,40 +2,24 @@
 # Make jobs files for slurm 
 # structure inversion
 
-wkdir=$(pwd)
-sem_utils=/home1/03244/ktao/seiscode/sem_utils
+control_file=${1:?[arg]need control_file}
+event_id=${2:?[arg]need event_id}
 
-nnode=14
-nproc=256
-queue="compute"
-mpiexec="mpirun -np $nproc"
-#mpiexec="ibrun"
-syn_timelimit=02:00:00
-misfit_timelimit=03:00:00
-adj_timelimit=04:00:00
+# source control_file
+source $control_file
 
-event_id=${1:?[arg]need event_id}
-
-# link the required directories to your wkdir
-specfem_dir=$wkdir/specfem3d_globe # bin/x...
-mesh_dir=$wkdir/mesh # DATABASES_MPI/proc*_reg1_solver_data.bin
-mesh_perturb_dir=$wkdir/mesh_perturb # DATABASES_MPI/proc*_reg1_solver_data.bin
-#model_dir=$wkdir/mesh/DATABASES_MPI # proc*_reg1_vph,vpv,vsv,vsh,eta,rho.bin
-#!!! model files should reside in mesh_dir/DATABASES_MPI
-data_dir=$wkdir/events # <event_id>/data,dis
-utils_dir=$wkdir/utils # sem_utils/utils/misfit_v0
-
-# get the full path
-specfem_dir=$(readlink -f $specfem_dir)
-mesh_dir=$(readlink -f $mesh_dir)
-mesh_perturb_dir=$(readlink -f $mesh_perturb_dir)
-#model_dir=$(readlink -f $model_dir)
-data_dir=$(readlink -f $data_dir)
-utils_dir=$(readlink -f $utils_dir)
-
+## link the required directories to your iter_dir
+#sem_build_dir=$iter_dir/specfem3d_globe # bin/x...
+mesh_dir=$iter_dir/mesh # DATABASES_MPI/proc*_reg1_solver_data.bin
+mesh_perturb_dir=$iter_dir/mesh_perturb # DATABASES_MPI/proc*_reg1_solver_data.bin
+##model_dir=$iter_dir/mesh/DATABASES_MPI # proc*_reg1_vph,vpv,vsv,vsh,eta,rho.bin
+##!!! model files should reside in mesh_dir/DATABASES_MPI
+#data_dir=$iter_dir/events # <event_id>/data,dis
+utils_dir=$sem_utils_dir/utils/misfit_v0 # sem_utils/utils/misfit_v0
+ 
 #====== define variables
 # directories
-event_dir=$wkdir/$event_id
+event_dir=$iter_dir/$event_id
 misfit_dir=$event_dir/misfit
 figure_dir=$misfit_dir/figure
 slurm_dir=$event_dir/slurm
@@ -49,16 +33,16 @@ kernel_job=$slurm_dir/kernel.job
 perturb_job=$slurm_dir/perturb.job
 search_job=$slurm_dir/search.job
 #hess_diag_job=$slurm_dir/hess_diag.job
-hess_model_product_job=$slurm_dir/hess_model_product.job
-hess_kernel_job=$slurm_dir/hess_kernel.job
-#hessian
+#hess_model_product_job=$slurm_dir/hess_model_product.job
+#hess_kernel_job=$slurm_dir/hess_kernel.job
+# hessian-random model product
 misfit_random_dir=$event_dir/misfit_random
 misfit_random_job=$slurm_dir/misfit_random.job
 kernel_random_job=$slurm_dir/kernel_random.job
 perturb_random_job=$slurm_dir/perturb_random.job
 
 # database file
-mkdir -p $misfit_dir
+#mkdir -p $misfit_dir
 db_file=$misfit_dir/misfit.pkl
 db_random_file=$misfit_random_dir/misfit.pkl
 # station file
@@ -88,10 +72,10 @@ cat <<EOF > $syn_job
 #!/bin/bash
 #SBATCH -J ${event_id}.syn
 #SBATCH -o $syn_job.o%j
-#SBATCH -N $nnode
-#SBATCH -n $nproc
-#SBATCH -p $queue
-#SBATCH -t $syn_timelimit
+#SBATCH -N $slurm_nnode
+#SBATCH -n $slurm_nproc
+#SBATCH -p $slurm_partition
+#SBATCH -t $slurm_timelimit_forward
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -106,7 +90,6 @@ mkdir -p $event_dir/DATA
 cd $event_dir/DATA
 
 cp $cmt_file $event_dir/DATA/CMTSOLUTION
-#cp $data_dir/$event_id/data/STATIONS .
 
 cp $mesh_dir/DATA/Par_file .
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
@@ -126,14 +109,15 @@ cp -L DATA/Par_file OUTPUT_FILES
 cp -L DATA/STATIONS OUTPUT_FILES
 cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
-${mpiexec} $specfem_dir/bin/xspecfem3D
+${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
 
 mkdir $event_dir/\$out_dir/sac
 mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 
+chmod a+w -R $event_dir/forward_saved_frames
 rm -rf $event_dir/forward_saved_frames
 mv $event_dir/DATABASES_MPI $event_dir/forward_saved_frames
-#chmod a-w -R $event_dir/forward_saved_frames
+chmod a-w -R $event_dir/forward_saved_frames
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -148,8 +132,8 @@ cat <<EOF > $misfit_job
 #SBATCH -o $misfit_job.o%j
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -p $queue
-#SBATCH -t $misfit_timelimit
+#SBATCH -p $slurm_partition
+#SBATCH -t $slurm_timelimit_misfit
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -190,18 +174,6 @@ ls *Z.adj | sed 's/..Z\.adj$//' |\
 grep -f $event_dir/adj_kernel/grep_pattern $event_dir/DATA/STATIONS \
   > $event_dir/adj_kernel/STATIONS_ADJOINT
 
-### #------ adjoint source for hessian simulation
-### rm -rf $event_dir/adj_hess
-### mkdir -p $event_dir/adj_hess
-### $utils_dir/output_adj_hess.py $db_file $event_dir/adj_hess
-### 
-### # make STATIONS_ADJOINT
-### cd $event_dir/adj_hess
-### ls *Z.adj | sed 's/..Z\.adj$//' |\
-###   awk -F"." '{printf "%s[ ]*%s.%s[ ]\n",\$1,\$2,\$3}' > grep_pattern
-### grep -f $event_dir/adj_hess/grep_pattern $event_dir/DATA/STATIONS \
-###   > $event_dir/adj_hess/STATIONS_ADJOINT
-
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
@@ -213,10 +185,10 @@ cat <<EOF > $kernel_job
 #!/bin/bash
 #SBATCH -J ${event_id}.kernel
 #SBATCH -o $kernel_job.o%j
-#SBATCH -N $nnode
-#SBATCH -n $nproc
-#SBATCH -p $queue
-#SBATCH -t $adj_timelimit
+#SBATCH -N $slurm_nnode
+#SBATCH -n $slurm_nproc
+#SBATCH -p $slurm_partition
+#SBATCH -t $slurm_timelimit_adjoint
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -255,7 +227,7 @@ cp -L DATA/STATIONS_ADJOINT OUTPUT_FILES
 cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
 cd $event_dir
-${mpiexec} $specfem_dir/bin/xspecfem3D
+${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
 
 mkdir $event_dir/\$out_dir/sac
 mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
@@ -269,142 +241,15 @@ echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 EOF
 
-##====== hessian simulation
-#cat <<EOF > $hess_job
-##!/bin/bash
-##SBATCH -J ${event_id}.hess
-##SBATCH -o $hess_job.o%j
-##SBATCH -N $nnode
-##SBATCH -n $nproc
-##SBATCH -p $queue
-##SBATCH -t 02:00:00
-##SBATCH --mail-user=kai.tao@utexas.edu
-##SBATCH --mail-type=begin
-##SBATCH --mail-type=end
-#
-#echo
-#echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
-#echo
-#
-#out_dir=output_hess
-#
-#cd $event_dir/DATA
-#
-#sed -i "/^SIMULATION_TYPE/s/=.*/= 3/" Par_file
-#sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
-#sed -i "/^ANISOTROPIC_KL/s/=.*/= .true./" Par_file
-#sed -i "/^SAVE_TRANSVERSE_KL_ONLY/s/=.*/= .false./" Par_file
-#sed -i "/^APPROXIMATE_HESS_KL/s/=.*/= .false./" Par_file
-#
-#cp -f $event_dir/adj_hess/STATIONS_ADJOINT $event_dir/DATA/
-#rm -rf $event_dir/SEM
-#ln -s $event_dir/adj_hess $event_dir/SEM
-#
-#cd $event_dir
-#
-#rm -rf \$out_dir OUTPUT_FILES
-#mkdir \$out_dir
-#ln -sf \$out_dir OUTPUT_FILES
-#
-#cp $mesh_dir/OUTPUT_FILES/addressing.txt OUTPUT_FILES
-#cp -L DATA/Par_file OUTPUT_FILES
-#cp -L DATA/STATIONS_ADJOINT OUTPUT_FILES
-#cp -L DATA/CMTSOLUTION OUTPUT_FILES
-#
-#cd $event_dir
-#${mpiexec} $specfem_dir/bin/xspecfem3D
-#
-#mkdir $event_dir/\$out_dir/sac
-#mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
-#
-#mkdir $event_dir/\$out_dir/kernel
-#mv $event_dir/DATABASES_MPI/*reg1_cijkl_kernel.bin $event_dir/\$out_dir/kernel/
-#mv $event_dir/DATABASES_MPI/*reg1_rho_kernel.bin $event_dir/\$out_dir/kernel/
-#
-#echo
-#echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
-#echo
-#EOF
-
-##====== kernel preconditioning
-#cat <<EOF > $precond_job
-##!/bin/bash
-##SBATCH -J ${event_id}.precond
-##SBATCH -o ${precond_job}.o%j
-##SBATCH -N 1
-##SBATCH -n 24
-##SBATCH -p $queue
-##SBATCH -t 01:00:00
-##SBATCH --mail-user=kai.tao@utexas.edu
-##SBATCH --mail-type=begin
-##SBATCH --mail-type=end
-#
-#echo
-#echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
-#echo
-#
-#out_dir=$event_dir/kernel
-#mkdir \$out_dir
-#
-#echo "====== convert cijkl to aijkl kernel [\$(date)]"
-#${mpiexec} $sem_utils/bin/xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
-#  $nproc $mesh_dir/DATABASES_MPI $mesh_dir/DATABASES_MPI \
-#  $event_dir/output_kernel/kernel \
-#  \$out_dir
-#
-#echo "====== reduce aijkl kernel [\$(date)]"
-##${mpiexec} $sem_utils/bin/xsem_kernel_aijkl_to_vti_3pars \
-##  $nproc $mesh_dir/DATABASES_MPI \
-##  \$out_dir \
-##  \$out_dir
-#${mpiexec} $sem_utils/bin/xsem_kernel_aijkl_to_vti_3pars \
-#  $nproc $mesh_dir/DATABASES_MPI \
-#  \$out_dir \
-#  \$out_dir
-#
-#
-##echo "====== random kernel to hessian diagonal [\$(date)]"
-##${mpiexec} $sem_utils/bin/xsem_hess_diag_sum_random_adjoint_kernel \
-##  $nproc $mesh_dir/DATABASES_MPI \
-##  $mesh_dir/DATABASES_MPI \
-##  $event_dir/output_hess/kernel \
-##  \$out_dir
-#
-##echo "====== smooth hess diagonal [\$(date)]"
-##sigma_h=20
-##sigma_v=20
-##
-##model_tags=sum_hess_diag
-##
-##${mpiexec} $sem_utils/bin/xsem_smooth \
-##  $nproc $mesh_dir/DATABASES_MPI \$out_dir \
-##  \$model_tags \$sigma_h \$sigma_v \$out_dir "_smooth"
-#
-##echo "====== kernel precondition [\$(date)]"
-##eps=0.00001
-##
-##kernel_tags=vp2_kernel,vsv2_kernel,vsh2_kernel
-##hess_tag=sum_hess_diag_smooth
-##
-##${mpiexec} $sem_utils/bin/xsem_kernel_divide_hess_water_level \
-##  $nproc $mesh_dir/DATABASES_MPI \$out_dir \
-##  \$kernel_tags \$out_dir \$hess_tag \
-##  \$eps \$out_dir "_precond"
-#
-#echo
-#echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
-#echo
-#EOF
-
 #====== perturb: forward simulation of perturbed model
 cat <<EOF > $perturb_job
 #!/bin/bash
 #SBATCH -J ${event_id}.perturb
 #SBATCH -o $perturb_job.o%j
-#SBATCH -N $nnode
-#SBATCH -n $nproc
-#SBATCH -p $queue
-#SBATCH -t $syn_timelimit
+#SBATCH -N $slurm_nnode
+#SBATCH -n $slurm_nproc
+#SBATCH -p $slurm_partition
+#SBATCH -t $slurm_timelimit_forward
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -425,7 +270,7 @@ do
  
   rm -rf $event_dir/DATABASES_MPI
   mkdir $event_dir/DATABASES_MPI
-  ln -s $wkdir/mesh_\${dmodel}/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
+  ln -s $iter_dir/mesh_\${dmodel}/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
   
   cd $event_dir
 
@@ -433,12 +278,12 @@ do
   mkdir \$out_dir
   ln -sf \$out_dir OUTPUT_FILES
   
-  cp $wkdir/mesh_\${dmodel}/OUTPUT_FILES/addressing.txt OUTPUT_FILES
+  cp $iter_dir/mesh_\${dmodel}/OUTPUT_FILES/addressing.txt OUTPUT_FILES
   cp -L DATA/Par_file OUTPUT_FILES
   cp -L DATA/STATIONS OUTPUT_FILES
   cp -L DATA/CMTSOLUTION OUTPUT_FILES
   
-  ${mpiexec} $specfem_dir/bin/xspecfem3D
+  ${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
   
   mkdir $event_dir/\$out_dir/sac
   mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
@@ -457,8 +302,8 @@ cat <<EOF > $search_job
 #SBATCH -o $search_job.o%j
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -p $queue
-#SBATCH -t $misfit_timelimit
+#SBATCH -p $slurm_partition
+#SBATCH -t $slurm_timelimit_misfit
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -466,13 +311,6 @@ cat <<EOF > $search_job
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
-
-#$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvp/sac vp
-#$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsv/sac vsv
-#$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_dvsh/sac vsh
-
-#$utils_dir/grid_search_dvsh.py $misfit_par $db_file $misfit_dir/grid_search_dvsh.txt
-#$utils_dir/grid_search_dvp_dvsv.py $misfit_par $db_file $misfit_dir/grid_search_dvp_dvsv.txt
 
 $utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_perturb/sac model
 
@@ -491,10 +329,10 @@ cat <<EOF > $perturb_random_job
 #!/bin/bash
 #SBATCH -J ${event_id}.perturb_random
 #SBATCH -o $perturb_random_job.o%j
-#SBATCH -N $nnode
-#SBATCH -n $nproc
-#SBATCH -p $queue
-#SBATCH -t $syn_timelimit
+#SBATCH -N $slurm_nnode
+#SBATCH -n $slurm_nproc
+#SBATCH -p $slurm_partition
+#SBATCH -t $slurm_timelimit_forward
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -514,7 +352,7 @@ do
  
   rm -rf $event_dir/DATABASES_MPI
   mkdir $event_dir/DATABASES_MPI
-  ln -s $wkdir/mesh_\${dmodel}/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
+  ln -s $iter_dir/mesh_\${dmodel}/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
   
   cd $event_dir
 
@@ -522,12 +360,12 @@ do
   mkdir \$out_dir
   ln -sf \$out_dir OUTPUT_FILES
   
-  cp $wkdir/mesh_\${dmodel}/OUTPUT_FILES/addressing.txt OUTPUT_FILES
+  cp $iter_dir/mesh_\${dmodel}/OUTPUT_FILES/addressing.txt OUTPUT_FILES
   cp -L DATA/Par_file OUTPUT_FILES
   cp -L DATA/STATIONS OUTPUT_FILES
   cp -L DATA/CMTSOLUTION OUTPUT_FILES
   
-  ${mpiexec} $specfem_dir/bin/xspecfem3D
+  ${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
   
   mkdir $event_dir/\$out_dir/sac
   mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
@@ -546,8 +384,8 @@ cat <<EOF > $misfit_random_job
 #SBATCH -o $misfit_random_job.o%j
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -p $queue
-#SBATCH -t $misfit_timelimit
+#SBATCH -p $slurm_partition
+#SBATCH -t $slurm_timelimit_misfit
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -595,10 +433,10 @@ cat <<EOF > $kernel_random_job
 #!/bin/bash
 #SBATCH -J ${event_id}.kernel_random
 #SBATCH -o $kernel_random_job.o%j
-#SBATCH -N $nnode
-#SBATCH -n $nproc
-#SBATCH -p $queue
-#SBATCH -t $adj_timelimit
+#SBATCH -N $slurm_nnode
+#SBATCH -n $slurm_nproc
+#SBATCH -p $slurm_partition
+#SBATCH -t $slurm_timelimit_adjoint
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -633,7 +471,7 @@ cp -L DATA/STATIONS_ADJOINT OUTPUT_FILES
 cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
 cd $event_dir
-${mpiexec} $specfem_dir/bin/xspecfem3D
+${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
 
 mkdir $event_dir/\$out_dir/sac
 mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac

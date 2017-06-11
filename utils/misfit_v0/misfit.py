@@ -4870,6 +4870,7 @@ class Misfit(object):
       dist_lim=None,
       plot_az0=0,
       plot_adj=False, # whether plot adjoint source
+      align_time=False, # whether align the phase according to cc time shift
       ):
     """ 
     Plot record section in azimuthal bins
@@ -5248,6 +5249,9 @@ class Misfit(object):
         syn = station['syn']
         obs = station['obs']
 
+        if align_time:
+          cc_tshift = window['cc']['cc_tshift']
+
         # get plot time 
         dist_degree = meta['dist_degree']
         reduced_time = dist_degree * plot_rayp
@@ -5292,8 +5296,12 @@ class Misfit(object):
         y = syn[plot_idx]/Amax_syn
         idx = abs(y) > plot_clip+1.0e-3
         y[idx] = np.nan
-        ax_1comp.plot(t_plot, plot_flip*plot_dy*y+dist_degree, \
-            'r-', linewidth=0.5)
+        if align_time:
+          ax_1comp.plot(t_plot + cc_tshift , plot_flip*plot_dy*y+dist_degree, \
+              'r-', linewidth=0.5)
+        else:
+          ax_1comp.plot(t_plot, plot_flip*plot_dy*y+dist_degree, \
+              'r-', linewidth=0.5)
 
         # mark measure window range
         ax_1comp.plot(win_t0, dist_degree, 'k|', markersize=8)

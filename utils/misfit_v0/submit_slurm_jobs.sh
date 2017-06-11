@@ -1,29 +1,26 @@
 #!/bin/bash
-# submit squential jobs files for slurm 
 
-wkdir=$(pwd)
+# submit sequential slurm jobs
 
-event_id=${1:?[arg]need event_id}
-work_flow=${2:?[arg]need work_flow (e.g. syn,misfit,kernel,hess)}
-job_dep=${3:--1} # dependent jobs
-
-event_dir=$wkdir/$event_id
+slurm_dir=${1:?[arg]need slurm_dir (contain *.job)}
+job_names=${2:?[arg]need job names, comma seperated (e.g. syn,misfit,kernel)}
+job_dep=${3:--1} # dependent job ID's
 
 job_id=$job_dep
-for work in ${work_flow//,/ }
+for work in ${job_names//,/ }
 do 
 
   echo
   echo "====== job: $work"
 
-  job_file=$event_dir/slurm/$work.job
+  job_file=$slurm_dir/${work}.job
 
   if [ ! -f $job_file ];then
     echo "[ERROR] job file ($job_file) does NOT exist!"
     exit -1
   fi
 
-  log_file=$job_file.submit
+  log_file=${job_file}.submit
 
   sbatch --dependency=afterok:$job_id $job_file | tee $log_file
 

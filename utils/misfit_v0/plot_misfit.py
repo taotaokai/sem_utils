@@ -54,6 +54,7 @@ for win in window_list_P_wave:
       min_SNR=par.plot_min_SNR,
       dist_lim=par.plot_dist_lim,
       plot_az0=par.plot_az0,
+      align_time=par.plot_align_time,
       )
 
 window_list_S_wave = par.make_window_list_S_wave(evdp_km)
@@ -75,6 +76,7 @@ for win in window_list_S_wave:
       min_SNR=par.plot_min_SNR,
       dist_lim=par.plot_dist_lim,
       plot_az0=par.plot_az0,
+      align_time=par.plot_align_time,
       )
 
 window_list_surface_wave = par.make_window_list_surface_wave(evdp_km)
@@ -96,4 +98,5 @@ for win in window_list_surface_wave:
       min_SNR=par.plot_min_SNR,
       dist_lim=par.plot_dist_lim,
       plot_az0=par.plot_az0,
+      align_time=par.plot_align_time,
       )

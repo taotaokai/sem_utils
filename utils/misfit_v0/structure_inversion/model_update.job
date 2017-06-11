@@ -2,8 +2,8 @@
 #SBATCH -J model_update 
 #SBATCH -o model_update.job.o%j
 #SBATCH -N 1
-#SBATCH -n 24
-#SBATCH -p normal
+#SBATCH -n 20
+#SBATCH -p compute
 #SBATCH -t 00:30:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
@@ -14,17 +14,20 @@ echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
 echo
 
 wkdir=$(pwd)
-sem_utils=/home1/03244/ktao/seiscode/sem_utils
-ref_dir=/work/03244/ktao/lonestar/NEChina/mesh_REF/DATABASES_MPI
+sem_utils=~/seiscode/sem_utils
+ref_dir=~/NAmer/mesh_REF/DATABASES_MPI
 
-nproc=336
+#mpiexec="ibrun" # for lonestar5
+mpiexec="mpirun -np 20"
+
+nproc=256
 mesh_dir=mesh/DATABASES_MPI
 model_dir=model
 dmodel_dir=kernel_sum
 dmodel_suffix="_dmodel_scale"
 
 #======
-step_length=1.706
+step_length=1.68
 
 min_dlnvs=-0.12
 max_dlnvs=0.10
@@ -43,7 +46,7 @@ output_dmodel=1
 out_dir=model_updated
 mkdir $out_dir
 
-ibrun $sem_utils/bin/xsem_add_dmodel_dlnvs_kappa_thomsen_elliptic \
+${mpiexec} $sem_utils/bin/xsem_add_dmodel_dlnvs_kappa_thomsen_elliptic \
   $nproc $mesh_dir \
   $model_dir $dmodel_dir $dmodel_suffix \
   $step_length \
@@ -59,7 +62,7 @@ ref_dir=$(readlink -f $ref_dir)
 ls $ref_dir/proc*_reg1_vsv.bin | awk -F"/" '{a=$NF;gsub(/\.bin/,"_ref.bin",a); printf "ln -s %s %s/%s\n",$0,outdir,a}' outdir=$out_dir > $out_dir/link_vsv_ref_sh
 bash $out_dir/link_vsv_ref_sh
 
-ibrun $sem_utils/bin/xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll \
+${mpiexec} $sem_utils/bin/xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll \
   $nproc $mesh_dir $out_dir x $out_dir
 
 # use reference rho model

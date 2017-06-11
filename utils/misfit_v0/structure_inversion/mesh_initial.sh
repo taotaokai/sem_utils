@@ -1,6 +1,6 @@
 #!/bin/bash
 
-base_dir=~/NEChina
+base_dir=~/NAmer
 
 wkdir=$(pwd)
 
@@ -21,6 +21,6 @@ fi
 
 rm -rf $mesh_dir
 
-$sem_utils/utils/sem_mesh.sh $mesh_dir $par_dir $sem_dir
+$sem_utils/utils/sem_mesh.sh $mesh_dir $par_dir $sem_dir "mpirun -np 256"
 
 ln -s $model_dir $mesh_dir/DATA/GLL

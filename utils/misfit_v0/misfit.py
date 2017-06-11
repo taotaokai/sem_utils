@@ -4968,7 +4968,7 @@ class Misfit(object):
     plot_rayp, plot_c = np.linalg.lstsq(A, winc_all)[0]
     # round to the integer
     plot_rayp = np.round(plot_rayp)
-    plot_rayp = 16 # taok: temporary use
+    #plot_rayp = 16 # taok: temporary use
     # get time window relative to the regressed window central time
     plot_t0 = np.min(winb_all - plot_rayp*dist_all)
     plot_t1 = np.max(wine_all - plot_rayp*dist_all)

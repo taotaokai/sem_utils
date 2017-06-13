@@ -24,6 +24,8 @@ subroutine selfdoc()
   print '(a)', "NOTE"
   print '(a)', ""
   print '(a)', "  1. can be run in parallel"
+  print '(a)', "  2. Thomsen's parameters: esp = (C11/C33 - 1)/2; gamma = (C66/C44 -1)/2; delta = (C13 + 2*C44)/C33 - 1"
+  print '(a)', "     delta is different from the origional definition by Thomsen, but same to the first order of delta"
 end subroutine
 
 

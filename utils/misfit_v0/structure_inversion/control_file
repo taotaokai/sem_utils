@@ -1,0 +1,120 @@
+#!/bin/bash
+
+# User defined control parameters
+
+# project root directory
+base_dir=$(readlink -f ~/NAmer)
+
+# current stage and iteration number
+stage_dir=stage01.structure
+iter_num=2
+
+#------ Data directories
+# sem_config/: DATA/, setup/, initial_model/
+sem_config_dir=${base_dir}/sem_config
+# specfem_globe/: bin/xmeshfem3D,xspecfem3D
+sem_build_dir=${base_dir}/specfem3d_globe
+# sem_utils/: utils/, utils/misfit_v0/...
+sem_utils_dir=$base_dir/sem_utils
+# mesh_REF dir
+mesh_REF_dir=$base_dir/mesh_REF
+#init_model_dir=$(readlink -f ${sem_config_dir}/initial_model)
+# events/<gcmtID>/data,dis
+data_dir=$base_dir/events
+# $source_dir/iter??/CMTSOLUTION_updated/<gcmtID>.cmt
+source_dir=$base_dir/stage00.source
+# current iteration directory: need model/ and misfit_par/
+iter_num=$(printf "%02d" $iter_num)
+iter_dir=$base_dir/$stage_dir/iter${iter_num}
+model_dir=${iter_dir}/model
+misfit_par_dir=${iter_dir}/misfit_par
+# previous iteration directory
+iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
+prev_iter_dir=${base_dir}/${stage_dir}/${iter_minus_one}
+
+#------ slurm jobs
+# number of SEM slices
+sem_nproc=256
+# number of MPI processors
+slurm_nnode=14
+slurm_nproc=256
+# mpi executable
+#slurm_mpiexec="ibrun" # on lonestar 5
+slurm_mpiexec="mpirun -np $slurm_nproc"
+# slurm partition
+#slurm_partition="normal" # on lonestar 5
+slurm_partition="compute" # on cgas
+# time limit
+slurm_timelimit_mesh=00:10:00 # mesh
+slurm_timelimit_forward=03:00:00 # forward
+slurm_timelimit_adjoint=03:00:00 # adjoint
+slurm_timelimit_misfit=00:30:00 # misfit
+
+#------ kernel precondition
+# smooth the hessian*random 
+hess_smooth_1sigma_h=80 # horizontal smoothing 1 sigma (km)
+hess_smooth_1sigma_v=80 # vertical smoothing 1 sigma (km)
+# waterlevel for inverse hessian diagonals 
+hess_inverse_nbin=5000
+hess_inverse_threshold_percentage=0.90
+# kernel mask around source and receiver points
+source_mask_1sigma_km=200
+receiver_mask_1sigma_km=50
+# conjugate gradient
+cg_type=HS
+# dmodel scale factor
+dmodel_max_dlnvs=0.01
+
+#----- update model
+model_update_min_dlnvs=-0.12
+model_update_max_dlnvs=0.10
+model_update_min_kappa=1.65
+model_update_max_kappa=2.0
+model_update_min_eps=-0.05
+model_update_max_eps=0.07
+model_update_min_gamma=-0.05
+model_update_max_gamma=0.07
+
+##-- preconditioning
+## depth weighting (xsem_make_depth_mask)
+## the parameters are determined from the depth bins of volume integral
+## of kernel amplitudes (xsem_depth_pdf)
+#use_depth_mask=1
+#depth_stop=10
+#depth_pass=500
+#depth_mask_type="linear"
+##-- L-BFGS (xsem_get_dmodel_lbfgs) 
+#use_lbfgs=1
+#nstep_lbfgs=1
+##-- steepest descent (xsem_get_dmodel_steepest_descent)
+#sd_scale_factor=1.0 # kernel scaling factor in steepest-descent
+##-- thresholding model update direction (xsem_thresholding)
+#use_threshold=1
+#threshold_corner=0.9 #corner ratio to threshold kernel amplitudes
+#threshold_rmax=0.1 # maximum ratio exceeding corner amplitude
+##-- make new model (xem_add_dmodel_***_to_tiso)
+##used model tags for model update
+##used_kernel_names=mu_kernel
+##maximum model relative perturbation ratio
+#max_dlnv_allowed=0.03
+#force_max_dlnv_allowed=1
+##fix density model
+#fix_rho=1
+
+#-----------------------------------------------------------------------#
+# Do not edit below                                                     #
+#-----------------------------------------------------------------------#
+## validate parameters
+#if [ ! -d ${init_model_dir} ]
+#then
+#    echo "[ERROR] initial model directory ${init_model_dir} doesn't exit"
+#    exit -1
+#fi
+#
+#if [ ! -d ${prev_mesh_dir} ]
+#then
+#    echo "[WARNING] ${prev_mesh_dir} doesn't exit, use initial mesh instead"
+#    prev_mesh_dir=${init_model_dir}
+#fi
+
+#END

@@ -66,6 +66,8 @@ cg_type=HS
 dmodel_max_dlnvs=0.01
 
 #----- update model
+model_drho_dvsv_ratio=0.33 # used to scale dvsv to drho, since we do not invert for rho.
+
 model_update_min_dlnvs=-0.12
 model_update_max_dlnvs=0.10
 model_update_min_kappa=1.65

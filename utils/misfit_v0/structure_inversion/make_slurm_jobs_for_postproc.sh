@@ -114,8 +114,8 @@ do
     $event_dir/output_kernel/kernel \
     $out_dir
 
-  echo "------ reduce aijkl kernel to dlnvs,kappa,eps,gamma kernel [\$(date)]"
-  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_dlnvs_kappa_thomsen_elliptic \
+  echo "------ reduce aijkl kernel to dvpv,dvsv,eps,gamma,delta kernel [\$(date)]"
+  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_dvpv_dvsv_thomsen \
     $sem_nproc $mesh_dir $model_dir $out_dir $out_dir
   
   echo "------ make kernel mask [\$(date)]"
@@ -147,7 +147,8 @@ do
 done
 
 # preconditioned kernel
-for kernel_tag in dlnvs kappa eps gamma rhoprime
+#for kernel_tag in dlnvs kappa eps gamma rhoprime
+for kernel_tag in dvpv dvsv eps gamma delta rhoprime
 do
   echo ====== preconditioned kernel: \$kernel_tag
 

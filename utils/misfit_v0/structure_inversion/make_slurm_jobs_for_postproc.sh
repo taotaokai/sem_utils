@@ -423,27 +423,36 @@ ${slurm_mpiexec} $sem_utils_dir/bin/xsem_make_dmodel_random \
   \$out_dir dlnv_random
 
 #====== add dmodel
-model_names=dlnvs
-${slurm_mpiexec} $sem_utils_dir/bin/xsem_math \
-  $sem_nproc $mesh_dir \
-  $model_dir \$model_names \
-  \$out_dir dlnv_random \
-  "add" \
-  \$out_dir \$model_names
+
+#if [ x$parameterization_type == x1 ]
+#then
+
+for model_name in dvpv dvsv eps gamma delta
+do
+  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_math \
+    $sem_nproc $mesh_dir \
+    $model_dir \$model_name \
+    \$out_dir dlnv_random \
+    "add" \
+    \$out_dir \$model_name
+done
+
+#fi
 
 #====== convert to gll model
-# use the same kappa,eps,gamma,rho as in the current model
-ln -sf $model_dir/*kappa.bin \$out_dir
-ln -sf $model_dir/*eps.bin   \$out_dir
-ln -sf $model_dir/*gamma.bin \$out_dir
-ln -sf $model_dir/*rho.bin   \$out_dir
 
 # convert to gll model
-ls $mesh_REF_dir/proc*_reg1_vsv.bin | awk -F"/" '{a=\$NF;gsub(/\.bin/,"_ref.bin",a); printf "ln -s %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir > \$out_dir/link_vsv_ref_sh
-bash \$out_dir/link_vsv_ref_sh
+for model_name in vpv vsv rho
+do
+  ls $mesh_REF_dir/proc*_reg1_\${model_name}.bin | awk -F"/" '{a=\$NF;gsub(/\.bin/,"_ref.bin",a); printf "ln -s %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir > \$out_dir/link_\${model_name}_ref_sh
+  bash \$out_dir/link_\${model_name}_ref_sh
+done
 
-${slurm_mpiexec} $sem_utils_dir/bin/xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll \
-  $sem_nproc $mesh_dir \$out_dir x \$out_dir
+$mpiexec $sem_utils/bin/xsem_gll_tiso_to_dvpv_dvsv_thomsen \
+  $sem_nproc $mesh_dir \$out_dir \$out_dir 1
+
+$mpiexec $sem_utils/bin/xsem_gll_scale_dvsv_to_rho \
+  $sem_nproc $mesh_dir \$out_dir \$out_dir $model_drho_dvsv_ratio
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

@@ -255,6 +255,7 @@ class Misfit(object):
     setup_event
     setup_station
     read_obs_syn
+    read_perturbed_waveform
     delete_window
     add_window_body_wave
     add_window_surface_wave
@@ -263,6 +264,7 @@ class Misfit(object):
     output_adj
     make_cmt_dxs/dmt
     waveform_der_dxs/dmt
+    waveform_der_dmodel
     cc_perturbed_seisomgram
     grid_cc
 
@@ -5355,474 +5357,21 @@ class Misfit(object):
 #======================================================
 #
 
-  def output_adj_hess_part1(self,
-      out_dir='adj',
-      syn_band_code='MX'):
-    """
-    Output adjoint sources for the estimation of approximated Hessian diagonals for CC0 misfit.
-
-    This only output adjoint source of Part 1, that is, only the random part.
-
-    We need run adjoint simulations for Part 1 and 2 separately.
-
-    There are actually two more terms in the Hessian related to the recorded waveforms.
-    However if the recorded and modelled waveforms are similar (cc0 close to 1), then
-    the difference can be ignored (for hessian) and simplified to Part 2.
-
-    Notes
-    -----
-    For the objective function as the normalized zero-lag correlation ceofficient, 
-    the approximated Hessian can be seperated into two parts:
-
-    Part 1:
-        H = - CC0 * norm(wFu)^(-2) * (wFdu1, wFdu2)
-          = - Nw^-1 * Aw * (wFdu1, wFdu2)
-        , where CC0 > 0 is the zero-lag correlation coefficient of (wFd, wFu)
-        and the corresponding adjoint source is
-
-        adj = sqrt(CC0) * norm(wFu)^(-1) * conj(F)(transpose(w)r) 
-        , where r is a radome time series such that E(r*transpose(r)) = i.d.
-        , for example, standard normal distribution N(0,1)
-
-        This follows the idea of random phase encoding method.
-
-    Part 2:
-        H(x,y) = + CC0 * norm(wFu)^(-4) * (wFu, wFdu1) * (wFu, wFdu2)
-               = H1(x) * H2(y)
-        H1 = sqrt(CC0) * norm(wFu)^(-2) * (wFu, wFdu1)
-        , the cooresponding adjoint source is
-
-        adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(transpose(w)wFu)
-    """
-    syn_orientation_codes = ['E', 'N', 'Z']
-    event = self.data['event']
-
-    #------ loop each station
-    station_dict = self.data['station']
-    for station_id in station_dict:
-      station = station_dict[station_id]
-      # skip rejected statations
-      if station['stat']['code'] < 1:
-        continue
-
-      # waveform
-      waveform = station['waveform']
-      time_sample = waveform['time_sample']
-      syn_starttime = time_sample['starttime']
-      syn_delta = time_sample['delta']
-      syn_nt = time_sample['nt']
-      syn_nl = time_sample['nl']
-      syn_nr = time_sample['nr']
-
-      syn = waveform['syn']
-
-      #------ loop each window
-      adj = np.zeros((3, syn_nt))
-      # normal distribution
-      rand = np.random.randn(3, syn_nt)
-
-      window_dict = station['window']
-      for window_id in window_dict:
-        # window parameters
-        window = window_dict[window_id]
-        # skip bad windows
-        if window['stat']['code'] < 1:
-          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
-          continue
-        if window['weight'] < 1.0e-3:
-          continue
-
-        #------ window parameters 
-        # filter
-        filter_dict = window['filter']
-        filter_a = filter_dict['a']
-        filter_b = filter_dict['b']
-        # taper
-        win_func = window['taper']['win']
-        # polarity projection 
-        proj_matrix = window['polarity']['proj_matrix']
-        # CC0
-        cc0 = window['cc']['CC0']
-
-        #------ Part 1: random adjoint source
-        # adj = sqrt(CC0) * norm(wFu)^(-1) * conj(F)(transpose(w)r) 
-        wr = np.dot(np.transpose(proj_matrix), rand) * win_func
-        Fwr = signal.filtfilt(filter_b, filter_a, wr[:,::-1])
-        Fwr = Fwr[:,::-1]
-
-        #------ Part 2: synthetic related adjoint source
-        # adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(transpose(w)wFu)
-        Fu = signal.filtfilt(filter_b, filter_a, syn)
-        wFu = np.dot(proj_matrix, Fu) * win_func
-        norm_wFu = np.sqrt(np.sum(wFu**2))
-        #wwFu = np.dot(np.transpose(proj_matrix), wFu) * win_func 
-        #FwwFu = signal.filtfilt(filter_b, filter_a, wwFu[:,::-1])
-        #FwwFu = FwwFu[:,::-1]
-
-        #------ Part 1: make adjoint source for the current window
-        adj_w = np.sqrt(cc0)/norm_wFu * Fwr
-
-        #------ Part 1: add into total adjoint source
-        # chi = sum(chi_w * window_weight, over all w[indow])
-        adj += np.sqrt(window['weight']) * adj_w
-
-      #endfor window_id in window_dict:
-
-      #------ output adjoint source
-      # without padding
-      npts = syn_nt - syn_nl - syn_nr
-      starttime = syn_starttime + syn_nl*syn_delta
-      # time samples for ascii output, referred to origin time
-      syn_times = np.arange(npts)*syn_delta
-      b = starttime - event['t0']
-      syn_times += b
-
-      # loop ENZ
-      tr = Trace()
-      for i in range(3):
-        tr.data = adj[i, syn_nl:(syn_nl+npts)]
-        tr.stats.starttime = starttime
-        tr.stats.delta = syn_delta
-
-        out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
-            out_dir, station_id, syn_band_code,
-            syn_orientation_codes[i])
-
-        # sac format
-        tr.write(out_file + '.adj.sac', 'sac')
-
-        # ascii format (needed by SEM)
-        # time is relative to event origin time: t0
-        with open(out_file+'.adj','w') as fp:
-          for j in range(npts):
-            fp.write("{:16.9e}  {:16.9e}\n".format(
-              syn_times[j], adj[i,syn_nl+j]))
-
-    #endfor station_id in station_dict:
-
-#
-#======================================================
-#
-
-  def output_adj_hess_part2(self,
-      out_dir='adj',
-      syn_band_code='MX'):
-    """
-    Output adjoint sources for the estimation of approximated Hessian diagonals for CC0 misfit.
-
-    This only output adjoint source of Part 2, which is related to the synthetics.
-
-    We need run adjoint simulations for Part 1 and 2 separately.
-
-    There are actually two more terms in the Hessian related to the recorded waveforms.
-    However if the recorded and modelled waveforms are similar (cc0 close to 1), then
-    the difference can be ignored (for hessian) and simplified to Part 2.
-
-    Notes
-    -----
-    For the objective function as the normalized zero-lag correlation ceofficient, 
-    the approximated Hessian can be seperated into two parts:
-
-    Part 1:
-        H = - CC0 * norm(wFu)^(-2) * (wFdu1, wFdu2)
-          = - Nw^-1 * Aw * (wFdu1, wFdu2)
-        , where CC0 > 0 is the zero-lag correlation coefficient of (wFd, wFu)
-        and the corresponding adjoint source is
-
-        adj = sqrt(CC0) * norm(wFu)^(-1) * conj(F)(transpose(w)r) 
-        , where r is a radome time series such that E(r*transpose(r)) = i.d.
-        , for example, standard normal distribution N(0,1)
-
-        This follows the idea of random phase encoding method.
-
-    Part 2:
-        H(x,y) = + CC0 * norm(wFu)^(-4) * (wFu, wFdu1) * (wFu, wFdu2)
-               = H1(x) * H2(y)
-        H1 = sqrt(CC0) * norm(wFu)^(-2) * (wFu, wFdu1)
-        , the cooresponding adjoint source is
-
-        adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(transpose(w)wFu)
-    """
-    syn_orientation_codes = ['E', 'N', 'Z']
-    event = self.data['event']
-
-    #------ loop each station
-    station_dict = self.data['station']
-    for station_id in station_dict:
-      station = station_dict[station_id]
-      # skip rejected statations
-      if station['stat']['code'] < 1:
-        continue
-
-      # waveform
-      waveform = station['waveform']
-      time_sample = waveform['time_sample']
-      syn_starttime = time_sample['starttime']
-      syn_delta = time_sample['delta']
-      syn_nt = time_sample['nt']
-      syn_nl = time_sample['nl']
-      syn_nr = time_sample['nr']
-
-      syn = waveform['syn']
-
-      #------ loop each window
-      adj = np.zeros((3, syn_nt))
-      # normal distribution
-      #rand = np.random.randn(3, syn_nt)
-
-      window_dict = station['window']
-      for window_id in window_dict:
-        # window parameters
-        window = window_dict[window_id]
-        # skip bad windows
-        if window['stat']['code'] < 1:
-          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
-          continue
-        if window['weight'] < 1.0e-3:
-          continue
-
-        #------ window parameters 
-        # filter
-        filter_dict = window['filter']
-        filter_a = filter_dict['a']
-        filter_b = filter_dict['b']
-        # taper
-        win_func = window['taper']['win']
-        # polarity projection 
-        proj_matrix = window['polarity']['proj_matrix']
-        # CC0
-        cc0 = window['cc']['CC0']
-
-        #------ Part 1: random adjoint source
-        # adj = sqrt(CC0) * norm(wFu)^(-1) * conj(F)(transpose(w)r) 
-        #wr = np.dot(np.transpose(proj_matrix), rand) * win_func
-        #Fwr = signal.filtfilt(filter_b, filter_a, wr[:,::-1])
-        #Fwr = Fwr[:,::-1]
-        #adj_w = np.sqrt(cc0)/norm_wFu * Fwr
-
-        #------ Part 2: synthetic related adjoint source
-        # adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(transpose(w)wFu)
-        Fu = signal.filtfilt(filter_b, filter_a, syn)
-        wFu = np.dot(proj_matrix, Fu) * win_func
-        norm_wFu = np.sqrt(np.sum(wFu**2))
-        wwFu = np.dot(np.transpose(proj_matrix), wFu) * win_func 
-        FwwFu = signal.filtfilt(filter_b, filter_a, wwFu[:,::-1])
-        FwwFu = FwwFu[:,::-1]
-        adj_w = np.sqrt(cc0) * norm_wFu**(-2) * FwwFu
-
-        #------ add into total adjoint source
-        # chi = sum(chi_w * window_weight, over all w[indow])
-        adj += np.sqrt(window['weight']) * adj_w
-
-      #endfor window_id in window_dict:
-
-      #------ output adjoint source
-      # without padding
-      npts = syn_nt - syn_nl - syn_nr
-      starttime = syn_starttime + syn_nl*syn_delta
-      # time samples for ascii output, referred to origin time
-      syn_times = np.arange(npts)*syn_delta
-      b = starttime - event['t0']
-      syn_times += b
-
-      # loop ENZ
-      tr = Trace()
-      for i in range(3):
-        tr.data = adj[i, syn_nl:(syn_nl+npts)]
-        tr.stats.starttime = starttime
-        tr.stats.delta = syn_delta
-
-        out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
-            out_dir, station_id, syn_band_code,
-            syn_orientation_codes[i])
-
-        # sac format
-        tr.write(out_file + '.adj.sac', 'sac')
-
-        # ascii format (needed by SEM)
-        # time is relative to event origin time: t0
-        with open(out_file+'.adj','w') as fp:
-          for j in range(npts):
-            fp.write("{:16.9e}  {:16.9e}\n".format(
-              syn_times[j], adj[i,syn_nl+j]))
-
-    #endfor station_id in station_dict:
-
-
-#
-#======================================================
-#
-
-  def hess_diag_dmodel(self, model_name):
-    """
-    Output approximated Hessian diagonals for one model perturbation i.e. H(dm, dm).
-
-    There are actually two more terms in the Hessian related to the recorded waveforms.
-    However if the recorded and modelled waveforms are similar (cc0 close to 1), then
-    the difference can be ignored (for hessian) and simplified to Part 2.
-
-    Notes
-    -----
-    For the objective function as the normalized zero-lag correlation ceofficient, 
-    the approximated Hessian can be seperated into two parts:
-
-    Part 1:
-        H = - CC0 * norm(wFu)^(-2) * (wFdu1, wFdu2)
-          = - Nw^-1 * Aw * (wFdu1, wFdu2)
-        , where CC0 > 0 is the zero-lag correlation coefficient of (wFd, wFu)
-
-    Part 2:
-        H(x,y) = + CC0 * norm(wFu)^(-4) * (wFu, wFdu1) * (wFu, wFdu2)
-               = H1(x) * H2(y)
-    """
-    event = self.data['event']
-
-    #------ loop each station
-    station_dict = self.data['station']
-    for station_id in station_dict:
-      station = station_dict[station_id]
-      # skip rejected statations
-      if station['stat']['code'] < 1:
-        continue
-
-      # initial waveform
-      waveform = station['waveform']
-      time_sample = waveform['time_sample']
-      syn_starttime = time_sample['starttime']
-      syn_delta = time_sample['delta']
-      syn_nt = time_sample['nt']
-      syn_nl = time_sample['nl']
-      syn_nr = time_sample['nr']
-      syn = waveform['syn']
-
-      # perturbed waveform  
-      waveform_der = station['waveform_der']
-      du = waveform_der[model_name]['du']
-
-      #------ loop each window
-      window_dict = station['window']
-      for window_id in window_dict:
-        # window parameters
-        window = window_dict[window_id]
-        # skip bad windows
-        if window['stat']['code'] < 1:
-          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
-          continue
-
-        #------ window parameters 
-        # filter
-        filter_dict = window['filter']
-        filter_a = filter_dict['a']
-        filter_b = filter_dict['b']
-        # taper
-        win_func = window['taper']['win']
-        # polarity projection 
-        proj_matrix = window['polarity']['proj_matrix']
-        # CC0
-        cc0 = window['cc']['CC0']
-
-        #------ hessian for current window
-        Fu = signal.filtfilt(filter_b, filter_a, syn)
-        wFu = np.dot(proj_matrix, Fu) * win_func
-        norm2_wFu = np.sum(wFu**2)
-
-        Fdu = signal.filtfilt(filter_b, filter_a, du)
-        wFdu = np.dot(proj_matrix, Fdu) * win_func
-
-        hess_win = -1.0 * cc0/norm2_wFu * (np.sum(wFdu**2) - np.sum(wFu*wFdu)**2/norm2_wFu)
-
-        #------ record hess
-        if 'hess_diag' not in window:
-          window['hess_diag'] = {}
-        window['hess_diag'][model_name] = hess_win
-
-      #endfor window_id in window_dict:
-    #endfor station_id in station_dict:
-  #enddef hess_diag_dmodel
-
-#
-#======================================================
-#
-
-  def output_hess_diag(self, model_name, out_file='hess_diag.txt'):
-    """
-    Output hess diag
-
-    """
-    event = self.data['event']
-    station_dict = self.data['station']
-
-    f = open(out_file, 'w')
-    f.write("#station window hess_diag(%s)\n" % (model_name))
-
-    #------ loop each station
-    for station_id in station_dict:
-      station = station_dict[station_id]
-      # skip rejected statations
-      if station['stat']['code'] < 1:
-        continue
-
-      #------ loop each window
-      window_dict = station['window']
-      for window_id in window_dict:
-        # window parameters
-        window = window_dict[window_id]
-        # skip bad windows
-        if window['stat']['code'] < 1:
-          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
-          continue
-        # write out hess_diag
-        hess_diag = window['hess_diag'][model_name]
-
-        f.write("{:15s} {:15s} {:12.5e}\n".format(
-          station_id, window_id, hess_diag))
-
-    f.close()
-  #enddef 
-
-#
-#======================================================
-#
-
-  def output_adj_hess_model_product(self,
+  def read_perturbed_waveform(self,
+      syn_dir='output_perturb/sac',
+      syn_band_code='MX',
+      syn_suffix='.sem.sac',
       model_name='perturb',
-      out_dir='adj',
-      syn_band_code='MX'):
-    """
-    Output adjoint sources for calculating Hessian-model product H * dm.
-
-    Notes
-    -----
-    For the objective function as the normalized zero-lag correlation ceofficient, 
-    the approximate Hessian for one data window is (ignore second order derivative in u)
-
-    Hw = - Nw^-1 * Aw * (wFdu1, wFdu2)
-         + 3 * Nw^-1 * Aw * norm(wFu)^-2 * (wFu, wFdu1) * (wFu, wFdu2)
-         - Nw^-1 * norm(wFu)^-2 * (wFu, wFdu1) * (wFd, wFdu2)
-         - Nw^-1 * norm(wFu)^-2 * (wFu, wFdu2) * (wFd, wFdu1)
-
-    , where Nw = norm(wFu)*norm(wFd), Aw = (wFu, wFd)/norm(wFu)^2
-    and norm(.) = sqrt((., .)), (.,.) is inner product. Notice Aw/Nw = cc0/norm(wFu)^2
-
-    If the recorded and modelled waveforms are close enough (cc0 close to 1), then
-    the last three terms in Hw can be simplified to one term (wFd ~ Aw * wFu):  
-
-        + Nw^-1 * Aw * norm(wFu)^-2 * (wFu, wFdu1) * (wFu, wFdu2)
-
-    For the Hessian-model product H(., dm) let du2 = Du(m; dm) = u(m+dm) - u(m)
-    then the adjoint source is (simplified)
-
-    r = - Nw^-1 * Aw * wFdu2 + Nw^-1 * Aw * norm(wFu)^-2 * (wFu, wFdu2) * wFu
-
-    adj_w = conj(F)(transpose(w) * r)
-
-    The total hessian is sum(weight * Hw) and the total adjoint source is sum(weight * adj_w)
-
+      sac_dir=None):
+    """ 
+    read in perturbed seismograms
+    
     """
     syn_orientation_codes = ['E', 'N', 'Z']
-    event = self.data['event']
 
-    #------ loop each station
+    event = self.data['event']
+    t0 = event['t0']
+
     station_dict = self.data['station']
     for station_id in station_dict:
       station = station_dict[station_id]
@@ -5830,7 +5379,109 @@ class Misfit(object):
       if station['stat']['code'] < 1:
         continue
 
-      # waveform
+      #------ time samples
+      waveform = station['waveform']
+
+      if 'syn' not in waveform:
+        raise Exception("%s: initial syn is not stored in waveform!" % (station_id))
+
+      time_sample = waveform['time_sample']
+      starttime = time_sample['starttime']
+      dt = time_sample['delta']
+      nt = time_sample['nt']
+      nl = time_sample['nl'] # npts of left padding
+      nr = time_sample['nr'] # npts of right padding
+      sem_nt = nt-nl-nr # number of time sample number in SEM simulation 
+      t = np.arange(nt) * dt + (starttime - t0) #referred to t0
+
+      #------ get file paths of syn seismograms
+      syn_files = [ '{:s}/{:s}.{:2s}{:1s}{:s}'.format(
+        syn_dir, station_id, syn_band_code, x, syn_suffix)
+        for x in syn_orientation_codes ]
+
+      #------ read in syn seismograms
+      syn_st  = read(syn_files[0])
+      syn_st += read(syn_files[1])
+      syn_st += read(syn_files[2])
+
+      #------ check the same time samples as original syn
+      if not is_equal( [ (tr.stats.starttime, tr.stats.delta, tr.stats.npts) \
+          for tr in syn_st ] ):
+        raise Exception('%s: not equal time samples in'\
+            ' synthetic seismograms.' % (station_id))
+      tr = syn_st[0]
+
+      if tr.stats.delta != dt:
+        raise Exception("%s: not the same dt for diff-srcloc!" % (station_id))
+
+      tr_starttime =  tr.stats.starttime - nl*dt
+      if tr_starttime != starttime:
+        raise Exception("%s: not the same starttime for diff-srcloc!" % (station_id))
+
+      if tr.stats.npts != sem_nt:
+        raise Exception("%s: not the same npts for diff-srcloc!" % (station_id))
+
+      #------ store perturbed waveform
+      syn_ENZ = np.zeros((3, nt))
+      for i in range(3):
+        syn_ENZ[i,nl:(nl+sem_nt)] = syn_st[i].data
+      waveform[model_name] = syn_ENZ
+
+      # DEBUG: check du
+      #print(dchi
+      #for i in range(3):
+      #  plt.subplot(311+i)
+      #  #plt.plot(t,grn0[i,:],'k', t,syn_ENZ[i,:],'r', t,dg[i,:], 'b')
+      #  plt.plot(t, du[i,:], 'k')
+      #plt.show()
+      #if sac_dir:
+      #  for i in range(3):
+      #    tr.data = syn_ENZ[i,:]
+      #    tr.stats.starttime = starttime
+      #    tr.stats.delta = dt
+      #    tr.stats.npts = nt
+      #    out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
+      #        sac_dir, station_id, syn_band_code,
+      #        syn_orientation_codes[i])
+      #    tr.write(out_file, 'sac')
+
+#
+#======================================================
+#
+
+  def output_adj_for_perturbed_waveform(self,
+      plot=False,
+      out_dir='adj',
+      model_name='perturb',
+      syn_band_code='MX',
+      ):
+    """ 
+    calculate adjoint sources (dchi_du) for perturbed waveform
+
+    Notes
+    -----
+    chi : misfit functional (normalized zero-lag correlation coef.)
+    u : synthetic waveform
+
+    """
+    #------
+    syn_orientation_codes = ['E', 'N', 'Z']
+
+    event = self.data['event']
+    station_dict = self.data['station']
+
+    tr = Trace()
+
+    #====== loop each station
+    for station_id in station_dict:
+      station = station_dict[station_id]
+      # skip rejected statations
+      if station['stat']['code'] < 1:
+        continue
+
+      meta = station['meta']
+      window_dict = station['window']
+
       waveform = station['waveform']
       time_sample = waveform['time_sample']
       syn_starttime = time_sample['starttime']
@@ -5839,22 +5490,31 @@ class Misfit(object):
       syn_nl = time_sample['nl']
       syn_nr = time_sample['nr']
 
-      syn = waveform['syn']
+      # time samples for ascii output, referred to origin time
+      # without padding
+      npts = syn_nt - syn_nl - syn_nr
+      starttime = syn_starttime + syn_nl*syn_delta
+      syn_times = np.arange(npts)*syn_delta
+      b = starttime - event['t0']
+      syn_times += b
 
-      du = station['waveform_der'][model_name]['du']
+      # get obs and perturbed syn
+      obs = waveform['obs']
+      if model_name in waveform:
+        syn = waveform[model_name]
+      else:
+        error_str = "%s: No synthetics found for %s" % (station_id, model_name)
+        raise Exception(error_str)
 
       #------ loop each window
-      adj = np.zeros((3, syn_nt))
+      # sum of adjoint sources from all windows
+      dchi_du = np.zeros((3, syn_nt))
 
-      window_dict = station['window']
       for window_id in window_dict:
         # window parameters
         window = window_dict[window_id]
-        # skip bad windows
-        if window['stat']['code'] < 1:
-          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
-          continue
-        if window['weight'] < 1.0e-3:
+        # skip windows not used in adjoint source from the unperturbed waveform
+        if window['stat']['code'] != 1:
           continue
 
         #------ window parameters 
@@ -5866,43 +5526,64 @@ class Misfit(object):
         win_func = window['taper']['win']
         # polarity projection 
         proj_matrix = window['polarity']['proj_matrix']
-        # CC0
-        cc0 = window['cc']['CC0']
+        # window weight
+        weight = window['weight']
+        # misfit type
+        misfit_type = window['misfit_type']
 
-        #------ make adjoint source
-        # r = - Nw^-1 * Aw * wFdu + Nw^-1 * Aw * norm(wFu)^-2 * (wFu, wFdu) * wFu
-        #   = - cc0/norm(wFu)^2 * (wFdu - norm(wFu)^-2*(wFu, wFdu)*wFu)
-        # adj_w = conj(F)(transpose(w) * r)
-        Fu = signal.filtfilt(filter_b, filter_a, syn)
-        wFu = np.dot(proj_matrix, Fu) * win_func
-        norm_wFu = np.sqrt(np.sum(wFu**2))
+        #------ filter obs, syn
+        #NOTE: use lfilter (causal filter) to avoid contamination from the right
+        # end of the signal, but with asymmetric response and 
+        # peak shift ~ 1/4 min. period (e.g. 0.01-0.1Hz -> 2.5s peak shift)
+        # , however the duration of the filter response is determined by the
+        # max. period (e.g. 0.01-0.1Hz -> ~50s). So the time window chosen 
+        # should not be affected by the relatively small peak shift.
+        #-- F * d
+        obs_filt = signal.filtfilt(filter_b, filter_a, obs)
+        #-- F * u (u = S*grn)
+        syn_filt = signal.filtfilt(filter_b, filter_a, syn)
 
-        Fdu = signal.filtfilt(filter_b, filter_a, du)
-        wFdu = np.dot(proj_matrix, Fdu) * win_func
+        #------ apply window taper and polarity projection
+        # obs = w * F * d
+        obs_filt_win = np.dot(proj_matrix, obs_filt) * win_func 
+        # syn = w * F * u (u = S*g)
+        syn_filt_win = np.dot(proj_matrix, syn_filt) * win_func 
 
-        adj_w = -cc0/norm_wFu**2 * (wFdu - wFu*np.sum(wFu*wFdu)/norm_wFu**2)
-        adj_w = np.dot(np.transpose(proj_matrix), adj_w) * win_func
-        adj_w = signal.filtfilt(filter_b, filter_a, adj_w[:,::-1])
-        adj_w = adj_w[:,::-1]
+        #------ measure CC time shift (between w*F*d and w*F*u)
+        obs_norm = np.sqrt(np.sum(obs_filt_win**2))
+        syn_norm = np.sqrt(np.sum(syn_filt_win**2))
+        # window normalization factor (without dt)
+        Nw = obs_norm * syn_norm
+        #-- zero-lag normalized cc coeff.
+        CC0 = np.sum(obs_filt_win*syn_filt_win)
+        CC0 /= Nw
 
-        #------ add into total adjoint source
-        adj += window['weight'] * adj_w
+        #------ measure adjoint source
+        Aw = CC0 * obs_norm / syn_norm # window amplitude raito
+        if misfit_type == 'cc0':
+          # misfit: zero-lag cross-correlation
+          # adjoint source: dchiw_du (misfit functional: zero-lag cc coef.)
+          # dchiw_du = conj(F * [S]) * w * [ w * F * d - A * w * F * S * g] / N, 
+          # , where A = CC0(un-normalized) / norm(u)**2, N = norm(d)*norm(u)
+          #-- dchiw_du
+          #NOTE: *dt is put back to Nw
+          dchiw_du1 = win_func * (obs_filt_win - Aw*syn_filt_win) / Nw / syn_delta
+          # apply conj(F), equivalent to conj(F*conj(adj))
+          # for two-pass filter (zero phase) conj(F) = F
+          dchiw_du = signal.filtfilt(filter_b, filter_a, dchiw_du1[:,::-1])
+          dchiw_du = dchiw_du[:,::-1]
+        else:
+          error_str = "%s:%s: unknown misfit type (%s)" % (station_id, window_id, misfit_type)
+          raise Exception(error_str)
 
-      #endfor window_id in window_dict:
+        # add into total dchi_du
+        dchi_du += weight * dchiw_du
+      #------ end for window_id in windows:
 
-      #------ output adjoint source
-      # without padding
-      npts = syn_nt - syn_nl - syn_nr
-      starttime = syn_starttime + syn_nl*syn_delta
-      # time samples for ascii output, referred to origin time
-      syn_times = np.arange(npts)*syn_delta
-      b = starttime - event['t0']
-      syn_times += b
-
+      #====== output adjoint source for this station
       # loop ENZ
-      tr = Trace()
       for i in range(3):
-        tr.data = adj[i, syn_nl:(syn_nl+npts)]
+        tr.data = dchi_du[i, syn_nl:(syn_nl+npts)]
         tr.stats.starttime = starttime
         tr.stats.delta = syn_delta
 
@@ -5918,8 +5599,580 @@ class Misfit(object):
         with open(out_file+'.adj','w') as fp:
           for j in range(npts):
             fp.write("{:16.9e}  {:16.9e}\n".format(
-              syn_times[j], adj[i,syn_nl+j]))
+              syn_times[j], dchi_du[i,syn_nl+j]))
 
     #endfor station_id in station_dict:
+  #enddef measure_windows_for_one_station(self,
+
+##
+##======================================================
+##
+#
+#  def output_adj_hess_part1(self,
+#      out_dir='adj',
+#      syn_band_code='MX'):
+#    """
+#    Output adjoint sources for the estimation of approximated Hessian diagonals for CC0 misfit.
+#
+#    This only output adjoint source of Part 1, that is, only the random part.
+#
+#    We need run adjoint simulations for Part 1 and 2 separately.
+#
+#    There are actually two more terms in the Hessian related to the recorded waveforms.
+#    However if the recorded and modelled waveforms are similar (cc0 close to 1), then
+#    the difference can be ignored (for hessian) and simplified to Part 2.
+#
+#    Notes
+#    -----
+#    For the objective function as the normalized zero-lag correlation ceofficient, 
+#    the approximated Hessian can be seperated into two parts:
+#
+#    Part 1:
+#        H = - CC0 * norm(wFu)^(-2) * (wFdu1, wFdu2)
+#          = - Nw^-1 * Aw * (wFdu1, wFdu2)
+#        , where CC0 > 0 is the zero-lag correlation coefficient of (wFd, wFu)
+#        and the corresponding adjoint source is
+#
+#        adj = sqrt(CC0) * norm(wFu)^(-1) * conj(F)(transpose(w)r) 
+#        , where r is a radome time series such that E(r*transpose(r)) = i.d.
+#        , for example, standard normal distribution N(0,1)
+#
+#        This follows the idea of random phase encoding method.
+#
+#    Part 2:
+#        H(x,y) = + CC0 * norm(wFu)^(-4) * (wFu, wFdu1) * (wFu, wFdu2)
+#               = H1(x) * H2(y)
+#        H1 = sqrt(CC0) * norm(wFu)^(-2) * (wFu, wFdu1)
+#        , the cooresponding adjoint source is
+#
+#        adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(transpose(w)wFu)
+#    """
+#    syn_orientation_codes = ['E', 'N', 'Z']
+#    event = self.data['event']
+#
+#    #------ loop each station
+#    station_dict = self.data['station']
+#    for station_id in station_dict:
+#      station = station_dict[station_id]
+#      # skip rejected statations
+#      if station['stat']['code'] < 1:
+#        continue
+#
+#      # waveform
+#      waveform = station['waveform']
+#      time_sample = waveform['time_sample']
+#      syn_starttime = time_sample['starttime']
+#      syn_delta = time_sample['delta']
+#      syn_nt = time_sample['nt']
+#      syn_nl = time_sample['nl']
+#      syn_nr = time_sample['nr']
+#
+#      syn = waveform['syn']
+#
+#      #------ loop each window
+#      adj = np.zeros((3, syn_nt))
+#      # normal distribution
+#      rand = np.random.randn(3, syn_nt)
+#
+#      window_dict = station['window']
+#      for window_id in window_dict:
+#        # window parameters
+#        window = window_dict[window_id]
+#        # skip bad windows
+#        if window['stat']['code'] < 1:
+#          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+#          continue
+#        if window['weight'] < 1.0e-3:
+#          continue
+#
+#        #------ window parameters 
+#        # filter
+#        filter_dict = window['filter']
+#        filter_a = filter_dict['a']
+#        filter_b = filter_dict['b']
+#        # taper
+#        win_func = window['taper']['win']
+#        # polarity projection 
+#        proj_matrix = window['polarity']['proj_matrix']
+#        # CC0
+#        cc0 = window['cc']['CC0']
+#
+#        #------ Part 1: random adjoint source
+#        # adj = sqrt(CC0) * norm(wFu)^(-1) * conj(F)(transpose(w)r) 
+#        wr = np.dot(np.transpose(proj_matrix), rand) * win_func
+#        Fwr = signal.filtfilt(filter_b, filter_a, wr[:,::-1])
+#        Fwr = Fwr[:,::-1]
+#
+#        #------ Part 2: synthetic related adjoint source
+#        # adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(transpose(w)wFu)
+#        Fu = signal.filtfilt(filter_b, filter_a, syn)
+#        wFu = np.dot(proj_matrix, Fu) * win_func
+#        norm_wFu = np.sqrt(np.sum(wFu**2))
+#        #wwFu = np.dot(np.transpose(proj_matrix), wFu) * win_func 
+#        #FwwFu = signal.filtfilt(filter_b, filter_a, wwFu[:,::-1])
+#        #FwwFu = FwwFu[:,::-1]
+#
+#        #------ Part 1: make adjoint source for the current window
+#        adj_w = np.sqrt(cc0)/norm_wFu * Fwr
+#
+#        #------ Part 1: add into total adjoint source
+#        # chi = sum(chi_w * window_weight, over all w[indow])
+#        adj += np.sqrt(window['weight']) * adj_w
+#
+#      #endfor window_id in window_dict:
+#
+#      #------ output adjoint source
+#      # without padding
+#      npts = syn_nt - syn_nl - syn_nr
+#      starttime = syn_starttime + syn_nl*syn_delta
+#      # time samples for ascii output, referred to origin time
+#      syn_times = np.arange(npts)*syn_delta
+#      b = starttime - event['t0']
+#      syn_times += b
+#
+#      # loop ENZ
+#      tr = Trace()
+#      for i in range(3):
+#        tr.data = adj[i, syn_nl:(syn_nl+npts)]
+#        tr.stats.starttime = starttime
+#        tr.stats.delta = syn_delta
+#
+#        out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
+#            out_dir, station_id, syn_band_code,
+#            syn_orientation_codes[i])
+#
+#        # sac format
+#        tr.write(out_file + '.adj.sac', 'sac')
+#
+#        # ascii format (needed by SEM)
+#        # time is relative to event origin time: t0
+#        with open(out_file+'.adj','w') as fp:
+#          for j in range(npts):
+#            fp.write("{:16.9e}  {:16.9e}\n".format(
+#              syn_times[j], adj[i,syn_nl+j]))
+#
+#    #endfor station_id in station_dict:
+#
+##
+##======================================================
+##
+#
+#  def output_adj_hess_part2(self,
+#      out_dir='adj',
+#      syn_band_code='MX'):
+#    """
+#    Output adjoint sources for the estimation of approximated Hessian diagonals for CC0 misfit.
+#
+#    This only output adjoint source of Part 2, which is related to the synthetics.
+#
+#    We need run adjoint simulations for Part 1 and 2 separately.
+#
+#    There are actually two more terms in the Hessian related to the recorded waveforms.
+#    However if the recorded and modelled waveforms are similar (cc0 close to 1), then
+#    the difference can be ignored (for hessian) and simplified to Part 2.
+#
+#    Notes
+#    -----
+#    For the objective function as the normalized zero-lag correlation ceofficient, 
+#    the approximated Hessian can be seperated into two parts:
+#
+#    Part 1:
+#        H = - CC0 * norm(wFu)^(-2) * (wFdu1, wFdu2)
+#          = - Nw^-1 * Aw * (wFdu1, wFdu2)
+#        , where CC0 > 0 is the zero-lag correlation coefficient of (wFd, wFu)
+#        and the corresponding adjoint source is
+#
+#        adj = sqrt(CC0) * norm(wFu)^(-1) * conj(F)(transpose(w)r) 
+#        , where r is a radome time series such that E(r*transpose(r)) = i.d.
+#        , for example, standard normal distribution N(0,1)
+#
+#        This follows the idea of random phase encoding method.
+#
+#    Part 2:
+#        H(x,y) = + CC0 * norm(wFu)^(-4) * (wFu, wFdu1) * (wFu, wFdu2)
+#               = H1(x) * H2(y)
+#        H1 = sqrt(CC0) * norm(wFu)^(-2) * (wFu, wFdu1)
+#        , the cooresponding adjoint source is
+#
+#        adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(transpose(w)wFu)
+#    """
+#    syn_orientation_codes = ['E', 'N', 'Z']
+#    event = self.data['event']
+#
+#    #------ loop each station
+#    station_dict = self.data['station']
+#    for station_id in station_dict:
+#      station = station_dict[station_id]
+#      # skip rejected statations
+#      if station['stat']['code'] < 1:
+#        continue
+#
+#      # waveform
+#      waveform = station['waveform']
+#      time_sample = waveform['time_sample']
+#      syn_starttime = time_sample['starttime']
+#      syn_delta = time_sample['delta']
+#      syn_nt = time_sample['nt']
+#      syn_nl = time_sample['nl']
+#      syn_nr = time_sample['nr']
+#
+#      syn = waveform['syn']
+#
+#      #------ loop each window
+#      adj = np.zeros((3, syn_nt))
+#      # normal distribution
+#      #rand = np.random.randn(3, syn_nt)
+#
+#      window_dict = station['window']
+#      for window_id in window_dict:
+#        # window parameters
+#        window = window_dict[window_id]
+#        # skip bad windows
+#        if window['stat']['code'] < 1:
+#          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+#          continue
+#        if window['weight'] < 1.0e-3:
+#          continue
+#
+#        #------ window parameters 
+#        # filter
+#        filter_dict = window['filter']
+#        filter_a = filter_dict['a']
+#        filter_b = filter_dict['b']
+#        # taper
+#        win_func = window['taper']['win']
+#        # polarity projection 
+#        proj_matrix = window['polarity']['proj_matrix']
+#        # CC0
+#        cc0 = window['cc']['CC0']
+#
+#        #------ Part 1: random adjoint source
+#        # adj = sqrt(CC0) * norm(wFu)^(-1) * conj(F)(transpose(w)r) 
+#        #wr = np.dot(np.transpose(proj_matrix), rand) * win_func
+#        #Fwr = signal.filtfilt(filter_b, filter_a, wr[:,::-1])
+#        #Fwr = Fwr[:,::-1]
+#        #adj_w = np.sqrt(cc0)/norm_wFu * Fwr
+#
+#        #------ Part 2: synthetic related adjoint source
+#        # adj = sqrt(CC0) * norm(wFu)^(-2) * conj(F)(transpose(w)wFu)
+#        Fu = signal.filtfilt(filter_b, filter_a, syn)
+#        wFu = np.dot(proj_matrix, Fu) * win_func
+#        norm_wFu = np.sqrt(np.sum(wFu**2))
+#        wwFu = np.dot(np.transpose(proj_matrix), wFu) * win_func 
+#        FwwFu = signal.filtfilt(filter_b, filter_a, wwFu[:,::-1])
+#        FwwFu = FwwFu[:,::-1]
+#        adj_w = np.sqrt(cc0) * norm_wFu**(-2) * FwwFu
+#
+#        #------ add into total adjoint source
+#        # chi = sum(chi_w * window_weight, over all w[indow])
+#        adj += np.sqrt(window['weight']) * adj_w
+#
+#      #endfor window_id in window_dict:
+#
+#      #------ output adjoint source
+#      # without padding
+#      npts = syn_nt - syn_nl - syn_nr
+#      starttime = syn_starttime + syn_nl*syn_delta
+#      # time samples for ascii output, referred to origin time
+#      syn_times = np.arange(npts)*syn_delta
+#      b = starttime - event['t0']
+#      syn_times += b
+#
+#      # loop ENZ
+#      tr = Trace()
+#      for i in range(3):
+#        tr.data = adj[i, syn_nl:(syn_nl+npts)]
+#        tr.stats.starttime = starttime
+#        tr.stats.delta = syn_delta
+#
+#        out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
+#            out_dir, station_id, syn_band_code,
+#            syn_orientation_codes[i])
+#
+#        # sac format
+#        tr.write(out_file + '.adj.sac', 'sac')
+#
+#        # ascii format (needed by SEM)
+#        # time is relative to event origin time: t0
+#        with open(out_file+'.adj','w') as fp:
+#          for j in range(npts):
+#            fp.write("{:16.9e}  {:16.9e}\n".format(
+#              syn_times[j], adj[i,syn_nl+j]))
+#
+#    #endfor station_id in station_dict:
+#
+#
+##
+##======================================================
+##
+#
+#  def hess_diag_dmodel(self, model_name):
+#    """
+#    Output approximated Hessian diagonals for one model perturbation i.e. H(dm, dm).
+#
+#    There are actually two more terms in the Hessian related to the recorded waveforms.
+#    However if the recorded and modelled waveforms are similar (cc0 close to 1), then
+#    the difference can be ignored (for hessian) and simplified to Part 2.
+#
+#    Notes
+#    -----
+#    For the objective function as the normalized zero-lag correlation ceofficient, 
+#    the approximated Hessian can be seperated into two parts:
+#
+#    Part 1:
+#        H = - CC0 * norm(wFu)^(-2) * (wFdu1, wFdu2)
+#          = - Nw^-1 * Aw * (wFdu1, wFdu2)
+#        , where CC0 > 0 is the zero-lag correlation coefficient of (wFd, wFu)
+#
+#    Part 2:
+#        H(x,y) = + CC0 * norm(wFu)^(-4) * (wFu, wFdu1) * (wFu, wFdu2)
+#               = H1(x) * H2(y)
+#    """
+#    event = self.data['event']
+#
+#    #------ loop each station
+#    station_dict = self.data['station']
+#    for station_id in station_dict:
+#      station = station_dict[station_id]
+#      # skip rejected statations
+#      if station['stat']['code'] < 1:
+#        continue
+#
+#      # initial waveform
+#      waveform = station['waveform']
+#      time_sample = waveform['time_sample']
+#      syn_starttime = time_sample['starttime']
+#      syn_delta = time_sample['delta']
+#      syn_nt = time_sample['nt']
+#      syn_nl = time_sample['nl']
+#      syn_nr = time_sample['nr']
+#      syn = waveform['syn']
+#
+#      # perturbed waveform  
+#      waveform_der = station['waveform_der']
+#      du = waveform_der[model_name]['du']
+#
+#      #------ loop each window
+#      window_dict = station['window']
+#      for window_id in window_dict:
+#        # window parameters
+#        window = window_dict[window_id]
+#        # skip bad windows
+#        if window['stat']['code'] < 1:
+#          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+#          continue
+#
+#        #------ window parameters 
+#        # filter
+#        filter_dict = window['filter']
+#        filter_a = filter_dict['a']
+#        filter_b = filter_dict['b']
+#        # taper
+#        win_func = window['taper']['win']
+#        # polarity projection 
+#        proj_matrix = window['polarity']['proj_matrix']
+#        # CC0
+#        cc0 = window['cc']['CC0']
+#
+#        #------ hessian for current window
+#        Fu = signal.filtfilt(filter_b, filter_a, syn)
+#        wFu = np.dot(proj_matrix, Fu) * win_func
+#        norm2_wFu = np.sum(wFu**2)
+#
+#        Fdu = signal.filtfilt(filter_b, filter_a, du)
+#        wFdu = np.dot(proj_matrix, Fdu) * win_func
+#
+#        hess_win = -1.0 * cc0/norm2_wFu * (np.sum(wFdu**2) - np.sum(wFu*wFdu)**2/norm2_wFu)
+#
+#        #------ record hess
+#        if 'hess_diag' not in window:
+#          window['hess_diag'] = {}
+#        window['hess_diag'][model_name] = hess_win
+#
+#      #endfor window_id in window_dict:
+#    #endfor station_id in station_dict:
+#  #enddef hess_diag_dmodel
+#
+##
+##======================================================
+##
+#
+#  def output_hess_diag(self, model_name, out_file='hess_diag.txt'):
+#    """
+#    Output hess diag
+#
+#    """
+#    event = self.data['event']
+#    station_dict = self.data['station']
+#
+#    f = open(out_file, 'w')
+#    f.write("#station window hess_diag(%s)\n" % (model_name))
+#
+#    #------ loop each station
+#    for station_id in station_dict:
+#      station = station_dict[station_id]
+#      # skip rejected statations
+#      if station['stat']['code'] < 1:
+#        continue
+#
+#      #------ loop each window
+#      window_dict = station['window']
+#      for window_id in window_dict:
+#        # window parameters
+#        window = window_dict[window_id]
+#        # skip bad windows
+#        if window['stat']['code'] < 1:
+#          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+#          continue
+#        # write out hess_diag
+#        hess_diag = window['hess_diag'][model_name]
+#
+#        f.write("{:15s} {:15s} {:12.5e}\n".format(
+#          station_id, window_id, hess_diag))
+#
+#    f.close()
+#  #enddef 
+#
+##
+##======================================================
+##
+#
+#  def output_adj_hess_model_product(self,
+#      model_name='perturb',
+#      out_dir='adj',
+#      syn_band_code='MX'):
+#    """
+#    Output adjoint sources for calculating Hessian-model product H * dm.
+#
+#    Notes
+#    -----
+#    For the objective function as the normalized zero-lag correlation ceofficient, 
+#    the approximate Hessian for one data window is (ignore second order derivative in u)
+#
+#    Hw = - Nw^-1 * Aw * (wFdu1, wFdu2)
+#         + 3 * Nw^-1 * Aw * norm(wFu)^-2 * (wFu, wFdu1) * (wFu, wFdu2)
+#         - Nw^-1 * norm(wFu)^-2 * (wFu, wFdu1) * (wFd, wFdu2)
+#         - Nw^-1 * norm(wFu)^-2 * (wFu, wFdu2) * (wFd, wFdu1)
+#
+#    , where Nw = norm(wFu)*norm(wFd), Aw = (wFu, wFd)/norm(wFu)^2
+#    and norm(.) = sqrt((., .)), (.,.) is inner product. Notice Aw/Nw = cc0/norm(wFu)^2
+#
+#    If the recorded and modelled waveforms are close enough (cc0 close to 1), then
+#    the last three terms in Hw can be simplified to one term (wFd ~ Aw * wFu):  
+#
+#        + Nw^-1 * Aw * norm(wFu)^-2 * (wFu, wFdu1) * (wFu, wFdu2)
+#
+#    For the Hessian-model product H(., dm) let du2 = Du(m; dm) = u(m+dm) - u(m)
+#    then the adjoint source is (simplified)
+#
+#    r = - Nw^-1 * Aw * wFdu2 + Nw^-1 * Aw * norm(wFu)^-2 * (wFu, wFdu2) * wFu
+#
+#    adj_w = conj(F)(transpose(w) * r)
+#
+#    The total hessian is sum(weight * Hw) and the total adjoint source is sum(weight * adj_w)
+#
+#    """
+#    syn_orientation_codes = ['E', 'N', 'Z']
+#    event = self.data['event']
+#
+#    #------ loop each station
+#    station_dict = self.data['station']
+#    for station_id in station_dict:
+#      station = station_dict[station_id]
+#      # skip rejected statations
+#      if station['stat']['code'] < 1:
+#        continue
+#
+#      # waveform
+#      waveform = station['waveform']
+#      time_sample = waveform['time_sample']
+#      syn_starttime = time_sample['starttime']
+#      syn_delta = time_sample['delta']
+#      syn_nt = time_sample['nt']
+#      syn_nl = time_sample['nl']
+#      syn_nr = time_sample['nr']
+#
+#      syn = waveform['syn']
+#
+#      du = station['waveform_der'][model_name]['du']
+#
+#      #------ loop each window
+#      adj = np.zeros((3, syn_nt))
+#
+#      window_dict = station['window']
+#      for window_id in window_dict:
+#        # window parameters
+#        window = window_dict[window_id]
+#        # skip bad windows
+#        if window['stat']['code'] < 1:
+#          warnings.warn("Window %s not measured for adj, SKIP" % window_id)
+#          continue
+#        if window['weight'] < 1.0e-3:
+#          continue
+#
+#        #------ window parameters 
+#        # filter
+#        filter_dict = window['filter']
+#        filter_a = filter_dict['a']
+#        filter_b = filter_dict['b']
+#        # taper
+#        win_func = window['taper']['win']
+#        # polarity projection 
+#        proj_matrix = window['polarity']['proj_matrix']
+#        # CC0
+#        cc0 = window['cc']['CC0']
+#
+#        #------ make adjoint source
+#        # r = - Nw^-1 * Aw * wFdu + Nw^-1 * Aw * norm(wFu)^-2 * (wFu, wFdu) * wFu
+#        #   = - cc0/norm(wFu)^2 * (wFdu - norm(wFu)^-2*(wFu, wFdu)*wFu)
+#        # adj_w = conj(F)(transpose(w) * r)
+#        Fu = signal.filtfilt(filter_b, filter_a, syn)
+#        wFu = np.dot(proj_matrix, Fu) * win_func
+#        norm_wFu = np.sqrt(np.sum(wFu**2))
+#
+#        Fdu = signal.filtfilt(filter_b, filter_a, du)
+#        wFdu = np.dot(proj_matrix, Fdu) * win_func
+#
+#        adj_w = -cc0/norm_wFu**2 * (wFdu - wFu*np.sum(wFu*wFdu)/norm_wFu**2)
+#        adj_w = np.dot(np.transpose(proj_matrix), adj_w) * win_func
+#        adj_w = signal.filtfilt(filter_b, filter_a, adj_w[:,::-1])
+#        adj_w = adj_w[:,::-1]
+#
+#        #------ add into total adjoint source
+#        adj += window['weight'] * adj_w
+#
+#      #endfor window_id in window_dict:
+#
+#      #------ output adjoint source
+#      # without padding
+#      npts = syn_nt - syn_nl - syn_nr
+#      starttime = syn_starttime + syn_nl*syn_delta
+#      # time samples for ascii output, referred to origin time
+#      syn_times = np.arange(npts)*syn_delta
+#      b = starttime - event['t0']
+#      syn_times += b
+#
+#      # loop ENZ
+#      tr = Trace()
+#      for i in range(3):
+#        tr.data = adj[i, syn_nl:(syn_nl+npts)]
+#        tr.stats.starttime = starttime
+#        tr.stats.delta = syn_delta
+#
+#        out_file = '{:s}/{:s}.{:2s}{:1s}'.format(
+#            out_dir, station_id, syn_band_code,
+#            syn_orientation_codes[i])
+#
+#        # sac format
+#        tr.write(out_file + '.adj.sac', 'sac')
+#
+#        # ascii format (needed by SEM)
+#        # time is relative to event origin time: t0
+#        with open(out_file+'.adj','w') as fp:
+#          for j in range(npts):
+#            fp.write("{:16.9e}  {:16.9e}\n".format(
+#              syn_times[j], adj[i,syn_nl+j]))
+#
+#    #endfor station_id in station_dict:
 
 #END class misfit

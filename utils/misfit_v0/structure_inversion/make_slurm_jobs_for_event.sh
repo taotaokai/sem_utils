@@ -391,24 +391,15 @@ echo
 
 cd $event_dir
 
-rm -rf $misfit_random_dir
-mkdir -p $misfit_random_dir
-$utils_dir/read_data.py \
-  $misfit_par \
-  $db_random_file \
-  $event_dir/DATA/CMTSOLUTION \
-  $data_dir/$event_id/data/channel.txt \
-  $event_dir/output_syn_random/sac \
-  $data_dir/$event_id/dis
-
-$utils_dir/measure_misfit.py $misfit_par $db_random_file
-
-$utils_dir/output_misfit.py $db_random_file $misfit_random_dir/misfit.txt
-
-#------ adjoint source for kernel simulation
+# make adjoint source
 rm -rf $event_dir/adj_kernel_random
 mkdir -p $event_dir/adj_kernel_random
-$utils_dir/output_adj.py $misfit_par $db_random_file $event_dir/adj_kernel_random
+
+$utils_dir/output_adj_for_perturbed_waveform.py \
+  $misfit_par \
+  $db_file \
+  $event_dir/output_syn_random/sac \
+  $event_dir/adj_kernel_random
 
 # make STATIONS_ADJOINT
 cd $event_dir/adj_kernel_random

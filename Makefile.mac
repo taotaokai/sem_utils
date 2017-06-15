@@ -101,7 +101,8 @@ program = \
 	xsem_model_gll_reduce_amplitude \
 	xsem_make_gll_depth_taper_linear \
 	xsem_gll_tiso_to_dvpv_dvsv_eps_gamma \
-	xsem_gll_get_value_range
+	xsem_gll_get_value_range \
+	xsem_gll_random_perturb_dvpv_dvsv_thomsen
 
 
 #------------------------------------------

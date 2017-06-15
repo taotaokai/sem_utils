@@ -105,7 +105,8 @@ program = \
 	xsem_gll_tiso_to_dvpv_dvsv_eps_gamma \
 	xsem_gll_tiso_to_dvpv_dvsv_thomsen \
 	xsem_kernel_aijkl_to_dvpv_dvsv_thomsen \
-	xsem_gll_scale_dvsv_to_rho
+	xsem_gll_scale_dvsv_to_rho \
+	xsem_gll_random_perturb_dvpv_dvsv_thomsen
 
 
 #------------------------------------------

@@ -345,32 +345,27 @@ cd $event_dir/DATA
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .true./" Par_file
  
-for dmodel in perturb_random
-do
+out_dir=output_syn_random
 
-  out_dir=output_\${dmodel}
- 
-  rm -rf $event_dir/DATABASES_MPI
-  mkdir $event_dir/DATABASES_MPI
-  ln -s $iter_dir/mesh_\${dmodel}/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
-  
-  cd $event_dir
+rm -rf $event_dir/DATABASES_MPI
+mkdir $event_dir/DATABASES_MPI
+ln -s $iter_dir/mesh_random/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
 
-  rm -rf \$out_dir OUTPUT_FILES
-  mkdir \$out_dir
-  ln -sf \$out_dir OUTPUT_FILES
-  
-  cp $iter_dir/mesh_\${dmodel}/OUTPUT_FILES/addressing.txt OUTPUT_FILES
-  cp -L DATA/Par_file OUTPUT_FILES
-  cp -L DATA/STATIONS OUTPUT_FILES
-  cp -L DATA/CMTSOLUTION OUTPUT_FILES
-  
-  ${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
-  
-  mkdir $event_dir/\$out_dir/sac
-  mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
+cd $event_dir
 
-done
+rm -rf \$out_dir OUTPUT_FILES
+mkdir \$out_dir
+ln -sf \$out_dir OUTPUT_FILES
+
+cp $iter_dir/mesh_random/OUTPUT_FILES/addressing.txt OUTPUT_FILES
+cp -L DATA/Par_file OUTPUT_FILES
+cp -L DATA/STATIONS OUTPUT_FILES
+cp -L DATA/CMTSOLUTION OUTPUT_FILES
+
+${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
+
+mkdir $event_dir/\$out_dir/sac
+mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -403,7 +398,7 @@ $utils_dir/read_data.py \
   $db_random_file \
   $event_dir/DATA/CMTSOLUTION \
   $data_dir/$event_id/data/channel.txt \
-  $event_dir/output_perturb_random/sac \
+  $event_dir/output_syn_random/sac \
   $data_dir/$event_id/dis
 
 $utils_dir/measure_misfit.py $misfit_par $db_random_file

@@ -25,4 +25,4 @@ done
 
 cd $out_dir
 ls *.txt > list
-$utils/plot_hist.sh list misfit_hist.pdf
+$utils/plot_hist.py list misfit_hist.pdf

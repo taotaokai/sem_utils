@@ -16,13 +16,15 @@ do
     output_fig=${win}.pdf
     input_figs=$(ls figure/*_${win}.pdf)
     err=$?
+    echo $input_figs
     if [ $err -ne 0 ]
     then
       echo "[ERROR] cannot find input figures"
     else
-      rm $output_fig
+      #rm $output_fig
       pdf_merge.sh $output_fig $input_figs
     fi
+    #exit -1
   done
 
 done

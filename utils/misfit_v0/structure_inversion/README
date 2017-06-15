@@ -18,8 +18,8 @@ $utils_dir/submit_slurm_jobs.sh slurm mesh
 # 2. synthetics
 # if you cannot submit a certain job for all event due to the job limit, 
 # then make a sub list from event.txt, e.g. to_run.txt,
-# after these jobs are done, run the rest events and so on.
-# node failure is not unusual, check if all jobs are finished OK.
+# after these jobs finish, run the remaining events and so on.
+# node failure is not unusual, check if all jobs are finished succesfully.
 
 # syn
 $utils_dir/submit_slurm_jobs_for_event.sh to_run.txt syn

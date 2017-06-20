@@ -25,8 +25,9 @@ subroutine selfdoc()
   print '(a)', "  1. can be run in parallel"
   print '(a)', "  2. vp0, vs0: voigt average reference models"
   print '(a)', "  3. vp^2 = (1 + alpha)*vp0^2, vs^2 = (1 + beta)*vs0^2"
-  print '(a)', "  4. vp^2 = 4/5*vph^2 + 1/5*vpv^2, vs^2 = 1/3*vsh^2 + 2/3*vsv^2"
-  print '(a)', "  4. phi = (vph^2 - vpv^2)/vp^2, xi = (vsh^2 - vsv^2)/vs^2"
+  print '(a)', "  4. For weak anisotropy (Panning & Romanowicz, 2016) "
+  print '(a)', "     vp^2 = 4/5*vph^2 + 1/5*vpv^2, vs^2 = 1/3*vsh^2 + 2/3*vsv^2"
+  print '(a)', "     phi = (vph^2 - vpv^2)/vp^2, xi = (vsh^2 - vsv^2)/vs^2"
 end subroutine
 
 

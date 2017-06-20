@@ -25,7 +25,7 @@ subroutine selfdoc()
   print '(a)', "  1. can be run in parallel"
   print '(a)', "  2. vp0, vs0: voigt average reference models"
   print '(a)', "  3. vp^2 = (1 + alpha)*vp0^2, vs^2 = (1 + beta)*vs0^2"
-  print '(a)', "  4. vp^2 = 2/3*vph^2 + 1/3*vpv^2, vs^2 = 1/3*vsh^2 + 2/3*vsv^2"
+  print '(a)', "  4. vp^2 = 4/5*vph^2 + 1/5*vpv^2, vs^2 = 1/3*vsh^2 + 2/3*vsv^2"
   print '(a)', "  4. phi = (vph^2 - vpv^2)/vp^2, xi = (vsh^2 - vsv^2)/vs^2"
 end subroutine
 
@@ -132,12 +132,12 @@ program xsem_gll_tiso_to_alpha_beta_phi_xi
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vsh', vsh)
 
     ! voigt average
-    vp2 = (2*vph**2 + vpv**2)/3
+    vp2 = (4*vph**2 + vpv**2)/5
     vs2 = (2*vsv**2 + vsh**2)/3
 
     ! isotropic perturbation
-    alpha = vp2/vp0**2 - 1.0
-    beta = vs2/vs0**2 - 1.0
+    alpha = sqrt(vp2)/vp0 - 1.0
+    beta = sqrt(vs2)/vs0 - 1.0
 
     ! P and S anisotropy
     phi = (vph**2 - vpv**2)/vp2

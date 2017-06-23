@@ -161,12 +161,12 @@ program xsem_gll_tiso_to_alpha_beta_phi_xi
     enddo
 
     vp = (1.0 + alpha) * vp0
-    vph = sqrt(1.0 + 0.2*phi) * vp
-    vpv = sqrt(1.0 - 0.8*phi) * vp
+    vph = sqrt(1.0 + 1.0_dp/5.0_dp*phi) * vp
+    vpv = sqrt(1.0 - 4.0_dp/5.0_dp*phi) * vp
 
     vs = (1.0 + beta) * vs0
-    vsv = sqrt(1.0 - 1.0/3.0*xi) * vs
-    vsh = sqrt(1.0 + 2.0/3.0*xi) * vs
+    vsv = sqrt(1.0 - 1.0_dp/3.0_dp*xi) * vs
+    vsh = sqrt(1.0 + 2.0_dp/3.0_dp*xi) * vs
 
     ! write models
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, 'vph', vph)

@@ -105,8 +105,8 @@ program xsem_gll_random_perturb_model
 
   ! intialize arrays 
   call sem_utils_delimit_string(model_name_list, ',', model_names, nmodel)
-  allocate(rand(NGLLX,NGLLY,NGLLZ,nspec,nmodel))
-  allocate(model(NGLLX,NGLLY,NGLLZ,nspec,nmodel))
+  allocate(rand(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
+  allocate(model(nmodel,NGLLX,NGLLY,NGLLZ,nspec))
 
   !====== randomly perturb model
 
@@ -125,9 +125,7 @@ program xsem_gll_random_perturb_model
     ! randomly perturb model
     call RANDOM_NUMBER(rand)
     rand = min_value + (max_value-min_value)*rand ! restrict to min/max value
-    do imodel = 1, nmodel
-      model(:,:,:,:,imodel) = model(:,:,:,:,imodel) + rand(:,:,:,:,imodel)
-    enddo
+    model = model + rand
 
     ! write out models
     call sem_io_write_gll_file_n(out_dir, iproc, iregion, model_names, nmodel, model)

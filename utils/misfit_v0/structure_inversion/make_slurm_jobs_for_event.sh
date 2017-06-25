@@ -11,7 +11,7 @@ source $control_file
 ## link the required directories to your iter_dir
 #sem_build_dir=$iter_dir/specfem3d_globe # bin/x...
 mesh_dir=$iter_dir/mesh # DATABASES_MPI/proc*_reg1_solver_data.bin
-mesh_perturb_dir=$iter_dir/mesh_perturb # DATABASES_MPI/proc*_reg1_solver_data.bin
+#mesh_perturb_dir=$iter_dir/mesh_perturb # DATABASES_MPI/proc*_reg1_solver_data.bin
 ##model_dir=$iter_dir/mesh/DATABASES_MPI # proc*_reg1_vph,vpv,vsv,vsh,eta,rho.bin
 ##!!! model files should reside in mesh_dir/DATABASES_MPI
 #data_dir=$iter_dir/events # <event_id>/data,dis
@@ -36,10 +36,10 @@ search_job=$slurm_dir/search.job
 #hess_model_product_job=$slurm_dir/hess_model_product.job
 #hess_kernel_job=$slurm_dir/hess_kernel.job
 # hessian-random model product
+syn_random_job=$slurm_dir/syn_random.job
 misfit_random_dir=$event_dir/misfit_random
 misfit_random_job=$slurm_dir/misfit_random.job
 kernel_random_job=$slurm_dir/kernel_random.job
-perturb_random_job=$slurm_dir/perturb_random.job
 
 # database file
 #mkdir -p $misfit_dir
@@ -324,11 +324,11 @@ EOF
 
 #///////////////////////// Hessian simulation
 
-#====== perturb_random: forward simulation of randomly perturbed model
-cat <<EOF > $perturb_random_job
+#====== syn_random: forward simulation of randomly perturbed model
+cat <<EOF > $syn_random_job
 #!/bin/bash
-#SBATCH -J ${event_id}.perturb_random
-#SBATCH -o $perturb_random_job.o%j
+#SBATCH -J ${event_id}.syn_random
+#SBATCH -o $syn_random_job.o%j
 #SBATCH -N $slurm_nnode
 #SBATCH -n $slurm_nproc
 #SBATCH -p $slurm_partition

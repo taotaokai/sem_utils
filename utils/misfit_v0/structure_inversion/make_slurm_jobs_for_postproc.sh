@@ -420,42 +420,26 @@ mkdir \$out_dir
 min_value=-0.01
 max_value=0.01
 
-${slurm_mpiexec} $sem_utils_dir/bin/xsem_gll_random_perturb_dvpv_dvsv_thomsen \
+${slurm_mpiexec} $sem_utils_dir/bin/xsem_gll_random_perturb_model \
   $sem_nproc $mesh_dir/DATABASES_MPI $model_dir \
-  \$min_value \$max_value \
+  alpha,beta,xi \$min_value \$max_value \
   \$out_dir
-
-#for model_name in dvpv dvsv eps gamma delta
-#do
-#
-#  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_make_dmodel_random \
-#    $sem_nproc $mesh_dir/DATABASES_MPI \
-#    \$min_value \$max_value \
-#    \$out_dir dlnv_random
-#
-#  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_math \
-#    $sem_nproc $mesh_dir/DATABASES_MPI \
-#    $model_dir \$model_name \
-#    \$out_dir dlnv_random \
-#    "add" \
-#    \$out_dir \$model_name
-#
-#done
 
 #====== convert to gll model
 
 # link reference model
-for model_name in vpv vsv rho
-do
-  ls $mesh_REF_dir/DATABASES_MPI/proc*_reg1_\${model_name}.bin | awk -F"/" '{a=\$NF;gsub(/\.bin/,"_ref.bin",a); printf "ln -s %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir > \$out_dir/link_\${model_name}_ref_sh
-  bash \$out_dir/link_\${model_name}_ref_sh
-done
+cat /dev/null > \$out_dir/link_sh
 
-$slurm_mpiexec $sem_utils_dir/bin/xsem_gll_tiso_to_dvpv_dvsv_thomsen \
-  $sem_nproc $mesh_dir/DATABASES_MPI \$out_dir \$out_dir 1
+ls $mesh_REF_dir/DATABASES_MPI/proc*_reg1_vpv.bin | awk -F"/" '{a=\$NF;gsub(/v\.bin/,"0.bin",a); printf "ln -s %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir >> \$out_dir/link_sh
 
-$slurm_mpiexec $sem_utils_dir/bin/xsem_gll_scale_dvsv_to_rho \
-  $sem_nproc $mesh_dir/DATABASES_MPI \$out_dir \$out_dir $model_drho_dvsv_ratio
+ls $mesh_REF_dir/DATABASES_MPI/proc*_reg1_vsv.bin | awk -F"/" '{a=\$NF;gsub(/v\.bin/,"0.bin",a); printf "ln -s %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir >> \$out_dir/link_sh
+
+ls $mesh_REF_dir/DATABASES_MPI/proc*_reg1_rho.bin | awk -F"/" '{a=\$NF;gsub(/\.bin/,"0.bin",a); printf "ln -s %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir >> \$out_dir/link_sh
+
+bash \$out_dir/link_sh
+
+$slurm_mpiexec $sem_utils_dir/bin/xsem_gll_alpha_beta_xi_to_tiso_scale_phi_eta_rho_to_xi \
+  $sem_nproc $mesh_dir/DATABASES_MPI \$out_dir $model_scale_phi_to_vs $model_scale_eta_to_vs $model_scale_rho_to_vs \$out_dir
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -522,7 +506,8 @@ cat <<EOF > $hess_sum_job
 #SBATCH -N $slurm_nnode
 #SBATCH -n $slurm_nproc
 #SBATCH -p $slurm_partition
-#SBATCH -t $slurm_timelimit_misfit
+##SBATCH -t $slurm_timelimit_misfit
+#SBATCH -t 12:00:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -536,7 +521,7 @@ for event_id in \$(awk -F"|" 'NF&&\$1!~/#/{print \$9}' $event_list)
 do
   echo "====== process \$event_id"
 
-  event_dir=$iter_dir/$event_id
+  event_dir=$iter_dir/\$event_id
 
   #--- kernel
   out_dir=\$event_dir/kernel
@@ -586,12 +571,9 @@ awk -F"|" 'NF&&\$1!~/#/{printf "%s/%s/kernel\\n", a,\$9}' \
 awk -F"|" 'NF&&\$1!~/#/{printf "%s/%s/kernel_random\\n", a,\$9}' \
   a="$iter_dir" $event_list > $iter_dir/kernel_random_dir.list
 
-out_dir=$iter_dir/hess_sum
-rm -rf \$out_dir
-mkdir \$out_dir
+rm -rf $hess_dir
+mkdir $hess_dir
 
-#for kernel_tag in dlnvs kappa eps gamma rhoprime
-#for kernel_tag in dlnvs
 for kernel_tag in dvpv dvsv eps gamma delta rhoprime
 do
   echo ====== \$kernel_tag
@@ -600,49 +582,55 @@ do
     $sem_nproc $mesh_dir/DATABASES_MPI \
     $iter_dir/kernel_dir.list \${kernel_tag}_kernel \
     0 "xxx" \
-    \$out_dir \${kernel_tag}_kernel
+    $hess_dir \${kernel_tag}_kernel
 
   $slurm_mpiexec $sem_utils_dir/bin/xsem_sum_event_kernels_1 \
     $sem_nproc $mesh_dir/DATABASES_MPI \
     $iter_dir/kernel_random_dir.list \${kernel_tag}_kernel \
     0 "xxx" \
-    \$out_dir \${kernel_tag}_kernel_random
+    $hess_dir \${kernel_tag}_kernel_random
 
   #--- Hess*random ~  kernel_random - kernel
   $slurm_mpiexec $sem_utils_dir/bin/xsem_math \
     $sem_nproc $mesh_dir/DATABASES_MPI \
-    \$out_dir \${kernel_tag}_kernel \
-    \$out_dir \${kernel_tag}_kernel_random \
+    $hess_dir \${kernel_tag}_kernel \
+    $hess_dir \${kernel_tag}_kernel_random \
     "sub" \
-    $out_dir \${kernel_tag}_hess_random
+    $hess_dir \${kernel_tag}_hess_random
 
 done
 
 # approximated Hessian diagonals
-#for kernel_tag in dlnvs
-#for kernel_tag in dlnvs
 for kernel_tag in dvpv dvsv eps gamma delta rhoprime
 do
   echo ====== \$kernel_tag
 
   $slurm_mpiexec $sem_utils_dir/bin/xsem_math \
     $sem_nproc $mesh_dir/DATABASES_MPI \
-    \$out_dir \${kernel_tag}_hess_random \
-    \$out_dir \${kernel_tag}_hess_random \
+    $hess_dir \${kernel_tag}_hess_random \
+    $hess_dir \${kernel_tag}_hess_random \
     "mul" \
-    \$out_dir \${kernel_tag}_hess_random_diag_sq
+    $hess_dir \${kernel_tag}_hess_random_diag_sq
 
-  $slurm_mpiexec $sem_utils_dir/bin/xsem_smooth \
-    $sem_nproc $mesh_dir/DATABASES_MPI \
-    \$out_dir \${kernel_tag}_hess_random_diag_sq \
-    $hess_smooth_1sigma_h $hess_smooth_1sigma_v \
-    \$out_dir "_smooth"
+done
 
-  $slurm_mpiexec $sem_utils/bin/xsem_math_unary \
+model_tags=dvpv_hess_random_diag_sq,dvsv_hess_random_diag_sq,eps_hess_random_diag_sq,gamma_hess_random_diag_sq,delta_hess_random_diag_sq,rhoprime_hess_random_diag_sq
+
+$slurm_mpiexec $sem_utils_dir/bin/xsem_smooth \
+  $sem_nproc $mesh_dir/DATABASES_MPI \
+  $hess_dir \${model_tags} \
+  $hess_smooth_1sigma_h $hess_smooth_1sigma_v \
+  $hess_dir "_smooth"
+
+for kernel_tag in dvpv dvsv eps gamma delta rhoprime
+do
+  echo ====== \$kernel_tag
+
+  $slurm_mpiexec $sem_utils_dir/bin/xsem_math_unary \
     $sem_nproc $mesh_dir/DATABASES_MPI \
-    \$out_dir \${kernel_tag}_hess_random_diag_sq_smooth \
+    $hess_dir \${kernel_tag}_hess_random_diag_sq_smooth \
     "sqrt" \
-    \$out_dir \${kernel_tag}_hess_diag
+    $hess_dir \${kernel_tag}_hess_diag
 
   $slurm_mpiexec $sem_utils_dir/bin/xsem_inverse_hess_diag_water_level \
     $sem_nproc $mesh_dir/DATABASES_MPI \

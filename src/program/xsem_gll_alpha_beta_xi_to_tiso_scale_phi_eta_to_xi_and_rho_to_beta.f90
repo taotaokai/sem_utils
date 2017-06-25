@@ -1,7 +1,7 @@
 subroutine selfdoc()
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_gll_alpha_beta_xi_to_tiso_scale_phi_eta_rho_to_xi"
+  print '(a)', "  xsem_gll_alpha_beta_xi_to_tiso_scale_phi_eta_to_xi_and_rho_to_beta"
   print '(a)', "    - convert GLL (alpha,beta,xi) to (vph,vpv,vsv,vsh,eta,rho) "
   print '(a)', "      based on reference model (vp0,vs0,rho0) and scaling factors"
   print '(a)', ""
@@ -24,15 +24,15 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  1. can be run in parallel"
   print '(a)', "  2. vp0, vs0: voigt average reference models; rho0: reference density model"
-  print '(a)', "  3. vp^2 = (1 + alpha)*vp0^2, vs^2 = (1 + beta)*vs0^2"
+  print '(a)', "  3. vp = (1 + alpha)*vp0, vs = (1 + beta)*vs0"
+  print '(a)', "     phi = (vph^2 - vpv^2)/vp^2, xi = (vsh^2 - vsv^2)/vs^2"
   print '(a)', "  4. For weak anisotropy (Panning & Romanowicz, 2016) "
   print '(a)', "     vp^2 = 4/5*vph^2 + 1/5*vpv^2, vs^2 = 1/3*vsh^2 + 2/3*vsv^2"
-  print '(a)', "     phi = (vph^2 - vpv^2)/vp^2, xi = (vsh^2 - vsv^2)/vs^2"
-  print '(a)', "  5. scaling: phi = scale_phi * xi, eta = 1 - scale_eta*xi, rho = (1 + scale_rho*beta)*rho0"
+  print '(a)', "  5. scaling: phi = scale_phi*xi, 1-eta = scale_eta*xi, 1-rho/rho0 = scale_rho*beta"
 end subroutine
 
 
-program xsem_gll_tiso_to_alpha_beta_phi_xi
+program xsem_gll_alpha_beta_xi
 
   use sem_constants
   use sem_io

@@ -105,8 +105,9 @@ program = \
 	xsem_gll_random_perturb_dvpv_dvsv_thomsen \
 	xsem_gll_tiso_to_alpha_beta_phi_xi \
 	xsem_gll_scale_rho_to_beta \
-	xsem_gll_alpha_beta_xi_to_tiso_scale_phi_eta_rho_to_xi \
-	xsem_gll_random_perturb_model
+	xsem_gll_random_perturb_model \
+	xsem_gll_alpha_beta_xi_to_tiso_scale_phi_eta_to_xi_and_rho_to_beta \
+	xsem_kernel_aijkl_to_tiso_in_alpha_beta_xi_scale_phi_eta_to_xi
 
 
 #------------------------------------------

@@ -534,13 +534,9 @@ do
     \$event_dir/output_kernel/kernel \
     \$out_dir
 
-  #echo "------ reduce aijkl kernel to dlnvs,kappa,eps,gamma kernel [\$(date)]"
-  #${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_dlnvs_kappa_thomsen_elliptic \
-  #  $sem_nproc $mesh_dir/DATABASES_MPI $model_dir \$out_dir \$out_dir
-
-  echo "------ reduce aijkl kernel to dvpv,dvsv,eps,gamma,delta kernel [\$(date)]"
-  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_dvpv_dvsv_thomsen \
-    $sem_nproc $mesh_dir/DATABASES_MPI $model_dir \$out_dir \$out_dir
+  echo "------ reduce aijkl kernel to alpha,beta,xi kernel [\$(date)]"
+  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_tiso_in_alpha_beta_xi_scale_phi_eta_to_xi \
+    $sem_nproc $mesh_dir/DATABASES_MPI $model_dir \$out_dir $model_scale_phi_to_xi $model_scale_eta_to_xi \$out_dir
 
   #--- kernel_random
   out_dir=\$event_dir/kernel_random
@@ -553,13 +549,9 @@ do
     \$event_dir/output_kernel_random/kernel \
     \$out_dir
 
-  #echo "------ reduce aijkl kernel to dlnvs,kappa,eps,gamma kernel [\$(date)]"
-  #${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_dlnvs_kappa_thomsen_elliptic \
-  #  $sem_nproc $mesh_dir/DATABASES_MPI $model_random_dir \$out_dir \$out_dir
-
-  echo "------ reduce aijkl kernel to dvpv,dvsv,eps,gamma,delta kernel [\$(date)]"
-  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_dvpv_dvsv_thomsen \
-    $sem_nproc $mesh_dir/DATABASES_MPI $model_random_dir \$out_dir \$out_dir
+  echo "------ reduce aijkl kernel to alpha,beta,xi kernel [\$(date)]"
+  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_tiso_in_alpha_beta_xi_scale_phi_eta_to_xi \
+    $sem_nproc $mesh_dir/DATABASES_MPI $model_random_dir \$out_dir $model_scale_phi_to_xi $model_scale_eta_to_xi \$out_dir
 
 done
 
@@ -574,7 +566,7 @@ awk -F"|" 'NF&&\$1!~/#/{printf "%s/%s/kernel_random\\n", a,\$9}' \
 rm -rf $hess_dir
 mkdir $hess_dir
 
-for kernel_tag in dvpv dvsv eps gamma delta rhoprime
+for kernel_tag in alpha beta xi rhoprime
 do
   echo ====== \$kernel_tag
 
@@ -601,7 +593,7 @@ do
 done
 
 # approximated Hessian diagonals
-for kernel_tag in dvpv dvsv eps gamma delta rhoprime
+for kernel_tag in alpha beta xi rhoprime
 do
   echo ====== \$kernel_tag
 
@@ -614,7 +606,7 @@ do
 
 done
 
-model_tags=dvpv_hess_random_diag_sq,dvsv_hess_random_diag_sq,eps_hess_random_diag_sq,gamma_hess_random_diag_sq,delta_hess_random_diag_sq,rhoprime_hess_random_diag_sq
+model_tags=alpha_hess_random_diag_sq,beta_hess_random_diag_sq,xi_hess_random_diag_sq,rhoprime_hess_random_diag_sq
 
 $slurm_mpiexec $sem_utils_dir/bin/xsem_smooth \
   $sem_nproc $mesh_dir/DATABASES_MPI \
@@ -622,7 +614,7 @@ $slurm_mpiexec $sem_utils_dir/bin/xsem_smooth \
   $hess_smooth_1sigma_h $hess_smooth_1sigma_v \
   $hess_dir "_smooth"
 
-for kernel_tag in dvpv dvsv eps gamma delta rhoprime
+for kernel_tag in alpha beta xi rhoprime
 do
   echo ====== \$kernel_tag
 

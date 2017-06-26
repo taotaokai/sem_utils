@@ -11,7 +11,7 @@ event_list=$(readlink -f $event_list)
  
 #====== define directories
 mesh_dir=$iter_dir/mesh # DATABASES_MPI/proc*_reg1_solver_data.bin
-hess_dir=$iter_dir/hess_sum # DATABASES_MPI/proc*_reg1_solver_data.bin
+#hess_dir=$iter_dir/hess_sum
 mesh_perturb_dir=$iter_dir/mesh_perturb # DATABASES_MPI/proc*_reg1_solver_data.bin
 #model_dir=$iter_dir/model # proc*_reg1_vph,vpv,vsv,vsh,eta,rho,dlnvs,kappa,eta,gamma.bin
 model_random_dir=$iter_dir/model_random # for model with small random perturbations
@@ -88,8 +88,8 @@ cat <<EOF > $kernel_sum_job
 #!/bin/bash
 #SBATCH -J kernel_sum
 #SBATCH -o ${kernel_sum_job}.o%j
-#SBATCH -N $slurm_nnode
-#SBATCH -n $slurm_nproc
+#SBATCH -N 1
+#SBATCH -n $nproc_per_node
 #SBATCH -p $slurm_partition
 #SBATCH -t $slurm_timelimit_misfit
 #SBATCH --mail-user=kai.tao@utexas.edu
@@ -111,32 +111,32 @@ do
   echo "------ convert cijkl to aijkl kernel [\$(date)]"
   ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
     $sem_nproc $mesh_dir/DATABASES_MPI $model_dir \
-    $event_dir/output_kernel/kernel \
-    $out_dir
+    \$event_dir/output_kernel/kernel \
+    \$out_dir
 
-  echo "------ reduce aijkl kernel to dvpv,dvsv,eps,gamma,delta kernel [\$(date)]"
-  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_dvpv_dvsv_thomsen \
-    $sem_nproc $mesh_dir/DATABASES_MPI $model_dir $out_dir $out_dir
-  
+  echo "------ reduce aijkl kernel to alpha,beta,xi kernel [\$(date)]"
+  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_tiso_in_alpha_beta_xi_scale_phi_eta_to_xi \
+    $sem_nproc $mesh_dir/DATABASES_MPI $model_dir \$out_dir $model_scale_phi_to_xi $model_scale_eta_to_xi \$out_dir
+
   echo "------ make kernel mask [\$(date)]"
   awk 'NR==6{print \$0, a}' a=$source_mask_1sigma_km \$event_dir/output_kernel/source.vtk > \$out_dir/source.xyz
   awk 'NR>=6&&NF==3{print \$0, a}' a=$receiver_mask_1sigma_km \$event_dir/output_kernel/receiver.vtk >> \$out_dir/source.xyz
   ${slurm_mpiexec} $sem_utils_dir/bin/xsem_make_gaussian_mask \
     $sem_nproc $mesh_dir/DATABASES_MPI \
-    $out_dir/source.xyz \
-    $out_dir "mask"
+    \$out_dir/source.xyz \
+    \$out_dir "mask"
 done
 
 #====== sum up event kernels
 echo "====== sum up event kernels [\$(date)]"
 awk -F"|" 'NF&&\$1!~/#/{printf "%s/%s/kernel\\n", a,\$9}' \
-  a="$iter_dir" \$event_list > kernel_dir.list
+  a="$iter_dir" $event_list > kernel_dir.list
 
 out_dir=$iter_dir/kernel_sum
 mkdir \$out_dir
 
 # raw kernel
-for kernel_tag in dlnvs kappa eps gamma rhoprime
+for kernel_tag in alpha beta xi rhoprime
 do
   echo ====== raw kernel: \$kernel_tag
   ${slurm_mpiexec} $sem_utils_dir/bin/xsem_sum_event_kernels_1 \
@@ -147,8 +147,7 @@ do
 done
 
 # preconditioned kernel
-#for kernel_tag in dlnvs kappa eps gamma rhoprime
-for kernel_tag in dvpv dvsv eps gamma delta rhoprime
+for kernel_tag in alpha beta xi
 do
   echo ====== preconditioned kernel: \$kernel_tag
 
@@ -163,7 +162,7 @@ do
   ${slurm_mpiexec} $sem_utils_dir/bin/xsem_math \
     $sem_nproc $mesh_dir/DATABASES_MPI \
     \$out_dir \${kernel_tag}_kernel_mask \
-    $hess_dir dlnvs_inv_hess_diag \
+    $hess_dir \${kernel_tag}_inv_hess_diag \
     "mul" \
     \$out_dir \${kernel_tag}_kernel_precond
 done
@@ -439,7 +438,7 @@ ls $mesh_REF_dir/DATABASES_MPI/proc*_reg1_rho.bin | awk -F"/" '{a=\$NF;gsub(/\.b
 bash \$out_dir/link_sh
 
 $slurm_mpiexec $sem_utils_dir/bin/xsem_gll_alpha_beta_xi_to_tiso_scale_phi_eta_rho_to_xi \
-  $sem_nproc $mesh_dir/DATABASES_MPI \$out_dir $model_scale_phi_to_vs $model_scale_eta_to_vs $model_scale_rho_to_vs \$out_dir
+  $sem_nproc $mesh_dir/DATABASES_MPI \$out_dir $model_scale_phi_to_xi $model_scale_eta_to_xi $model_scale_rho_to_beta \$out_dir
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -538,6 +537,14 @@ do
   ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_tiso_in_alpha_beta_xi_scale_phi_eta_to_xi \
     $sem_nproc $mesh_dir/DATABASES_MPI $model_dir \$out_dir $model_scale_phi_to_xi $model_scale_eta_to_xi \$out_dir
 
+  echo "------ make kernel mask [\$(date)]"
+  awk 'NR==6{print \$0, a}' a=$source_mask_1sigma_km \$event_dir/output_kernel/source.vtk > \$out_dir/source.xyz
+  awk 'NR>=6&&NF==3{print \$0, a}' a=$receiver_mask_1sigma_km \$event_dir/output_kernel/receiver.vtk >> \$out_dir/source.xyz
+  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_make_gaussian_mask \
+    $sem_nproc $mesh_dir/DATABASES_MPI \
+    \$out_dir/source.xyz \
+    \$out_dir "mask"
+
   #--- kernel_random
   out_dir=\$event_dir/kernel_random
   rm -rf \$out_dir
@@ -552,6 +559,8 @@ do
   echo "------ reduce aijkl kernel to alpha,beta,xi kernel [\$(date)]"
   ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_tiso_in_alpha_beta_xi_scale_phi_eta_to_xi \
     $sem_nproc $mesh_dir/DATABASES_MPI $model_random_dir \$out_dir $model_scale_phi_to_xi $model_scale_eta_to_xi \$out_dir
+
+  ln -sf \$event_dir/kernel/*_mask.bin \$event_dir/kernel_random/
 
 done
 
@@ -573,22 +582,22 @@ do
   $slurm_mpiexec $sem_utils_dir/bin/xsem_sum_event_kernels_1 \
     $sem_nproc $mesh_dir/DATABASES_MPI \
     $iter_dir/kernel_dir.list \${kernel_tag}_kernel \
-    0 "xxx" \
-    $hess_dir \${kernel_tag}_kernel
+    1 "mask" \
+    $hess_dir \${kernel_tag}_kernel_mask
 
   $slurm_mpiexec $sem_utils_dir/bin/xsem_sum_event_kernels_1 \
     $sem_nproc $mesh_dir/DATABASES_MPI \
     $iter_dir/kernel_random_dir.list \${kernel_tag}_kernel \
-    0 "xxx" \
-    $hess_dir \${kernel_tag}_kernel_random
+    1 "mask" \
+    $hess_dir \${kernel_tag}_kernel_random_mask
 
   #--- Hess*random ~  kernel_random - kernel
   $slurm_mpiexec $sem_utils_dir/bin/xsem_math \
     $sem_nproc $mesh_dir/DATABASES_MPI \
-    $hess_dir \${kernel_tag}_kernel \
-    $hess_dir \${kernel_tag}_kernel_random \
+    $hess_dir \${kernel_tag}_kernel_mask \
+    $hess_dir \${kernel_tag}_kernel_random_mask \
     "sub" \
-    $hess_dir \${kernel_tag}_hess_random
+    $hess_dir \${kernel_tag}_hess_random_mask
 
 done
 
@@ -599,14 +608,15 @@ do
 
   $slurm_mpiexec $sem_utils_dir/bin/xsem_math \
     $sem_nproc $mesh_dir/DATABASES_MPI \
-    $hess_dir \${kernel_tag}_hess_random \
-    $hess_dir \${kernel_tag}_hess_random \
+    $hess_dir \${kernel_tag}_hess_random_mask \
+    $hess_dir \${kernel_tag}_hess_random_mask \
     "mul" \
-    $hess_dir \${kernel_tag}_hess_random_diag_sq
+    $hess_dir \${kernel_tag}_hess_random_mask_diag_sq
 
 done
 
-model_tags=alpha_hess_random_diag_sq,beta_hess_random_diag_sq,xi_hess_random_diag_sq,rhoprime_hess_random_diag_sq
+#model_tags=alpha_hess_random_diag_sq,beta_hess_random_diag_sq,xi_hess_random_diag_sq,rhoprime_hess_random_diag_sq
+model_tags=alpha_hess_random_mask_diag_sq,beta_hess_random_mask_diag_sq,xi_hess_random_mask_diag_sq,rhoprime_hess_random_mask_diag_sq
 
 $slurm_mpiexec $sem_utils_dir/bin/xsem_smooth \
   $sem_nproc $mesh_dir/DATABASES_MPI \
@@ -620,15 +630,15 @@ do
 
   $slurm_mpiexec $sem_utils_dir/bin/xsem_math_unary \
     $sem_nproc $mesh_dir/DATABASES_MPI \
-    $hess_dir \${kernel_tag}_hess_random_diag_sq_smooth \
+    $hess_dir \${kernel_tag}_hess_random_mask_diag_sq_smooth \
     "sqrt" \
-    $hess_dir \${kernel_tag}_hess_diag
+    $hess_dir \${kernel_tag}_hess_mask_diag
 
   $slurm_mpiexec $sem_utils_dir/bin/xsem_inverse_hess_diag_water_level \
     $sem_nproc $mesh_dir/DATABASES_MPI \
-    $hess_dir \${kernel_tag}_hess_diag \
+    $hess_dir \${kernel_tag}_hess_mask_diag \
     $hess_inverse_nbin $hess_inverse_threshold_percentage \
-    $hess_dir \${kernel_tag}_inv_hess_diag
+    $hess_dir \${kernel_tag}_inv_hess_mask_diag
 
 done
 

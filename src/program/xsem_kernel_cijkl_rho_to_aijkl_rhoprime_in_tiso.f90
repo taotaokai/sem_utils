@@ -94,7 +94,7 @@ program xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso
   if (command_argument_count() /= nargs) then
     if (myrank == 0) then
       call selfdoc()
-      print *, "[ERROR] xsem_reduce_kernel_cijkl_to_lamda_mu: check your inputs."
+      print *, "[ERROR] check your inputs."
       call abort_mpi()
     endif 
   endif

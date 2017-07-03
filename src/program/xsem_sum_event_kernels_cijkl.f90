@@ -76,8 +76,8 @@ program xsem_sum_event_kernels_cijkl
   ! mask
   real(dp), allocatable :: mask(:,:,:,:)
   ! kernel gll 
-  real(dp), allocatable :: cijkl_kernel(21,:,:,:,:)
-  real(dp), allocatable :: cijkl_kernel_sum(21,:,:,:,:)
+  real(dp), allocatable :: cijkl_kernel(:,:,:,:,:)
+  real(dp), allocatable :: cijkl_kernel_sum(:,:,:,:,:)
 
   !===== start MPI
 

@@ -1,13 +1,13 @@
 subroutine selfdoc()
   print '(a)', "NAME"
   print '(a)', ""
-  print '(a)', "  xsem_gll_tiso_to_alpha_beta_phi_xi"
+  print '(a)', "  xsem_gll_vph_vpv_vsv_vsh_to_alpha_beta_phi_xi"
   print '(a)', "    - convert GLL(vph,vpv,vsv,vsh) model into (alpha,beta,phi,xi)"
   print '(a)', "      based on 1D reference model (vp0,vs0)"
   print '(a)', ""
   print '(a)', "SYNOPSIS"
   print '(a)', ""
-  print '(a)', "  xsem_gll_tiso_to_alpha_beta_phi_xi \"
+  print '(a)', "  xsem_gll_vph_vpv_vsv_vsh_to_alpha_beta_phi_xi \"
   print '(a)', "    <nproc> <mesh_dir> <model_dir> <out_dir>"
   print '(a)', ""
   print '(a)', "DESCRIPTION"
@@ -25,13 +25,13 @@ subroutine selfdoc()
   print '(a)', "  1. can be run in parallel"
   print '(a)', "  2. vp0, vs0: voigt average reference models"
   print '(a)', "  3. vp = (1 + alpha)*vp0, vs = (1 + beta)*vs0"
-  print '(a)', "  4. For weak anisotropy (Panning & Romanowicz, 2016) "
+  print '(a)', "  4. For weak anisotropy (Panning & Romanowicz, 2006) "
   print '(a)', "     vp^2 = 4/5*vph^2 + 1/5*vpv^2, vs^2 = 1/3*vsh^2 + 2/3*vsv^2"
-  print '(a)', "     phi = (vph^2 - vpv^2)/vp^2, xi = (vsh^2 - vsv^2)/vs^2"
+  print '(a)', "     , and phi = (vph^2 - vpv^2)/vp^2, xi = (vsh^2 - vsv^2)/vs^2"
 end subroutine
 
 
-program xsem_gll_tiso_to_alpha_beta_phi_xi
+program xsem_gll_vph_vpv_vsv_vsh_to_alpha_beta_phi_xi
 
   use sem_constants
   use sem_io

@@ -174,7 +174,7 @@ program xsem_add_dmodel
     ! enforce isotropic elements
     do ispec = 1, nspec
       if (.not. mesh_data%ispec_is_tiso(ispec)) then
-        dmodel(:,:,:,ispec) = 1.0
+        dmodel(:,:,:,ispec) = 0.0
       endif
     enddo
     call sem_io_write_gll_file_1(out_dir, iproc, iregion, "eta"//trim(out_suffix), dmodel)

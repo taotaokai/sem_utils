@@ -36,15 +36,13 @@ search_job=$slurm_dir/search.job
 #hess_model_product_job=$slurm_dir/hess_model_product.job
 #hess_kernel_job=$slurm_dir/hess_kernel.job
 # hessian-random model product
-syn_random_job=$slurm_dir/syn_random.job
-misfit_random_dir=$event_dir/misfit_random
-misfit_random_job=$slurm_dir/misfit_random.job
-kernel_random_job=$slurm_dir/kernel_random.job
+hess_syn_job=$slurm_dir/hess_syn.job
+hess_misfit_job=$slurm_dir/hess_misfit.job
+hess_kernel_job=$slurm_dir/hess_kernel.job
 
 # database file
 #mkdir -p $misfit_dir
 db_file=$misfit_dir/misfit.pkl
-db_random_file=$misfit_random_dir/misfit.pkl
 # station file
 station_file=$event_dir/DATA/STATIONS
 if [ ! -f "$station_file" ]
@@ -324,11 +322,11 @@ EOF
 
 #///////////////////////// Hessian simulation
 
-#====== syn_random: forward simulation of randomly perturbed model
-cat <<EOF > $syn_random_job
+#====== hess_syn: forward simulation of randomly perturbed model
+cat <<EOF > $hess_syn_job
 #!/bin/bash
-#SBATCH -J ${event_id}.syn_random
-#SBATCH -o $syn_random_job.o%j
+#SBATCH -J ${event_id}.hess_syn
+#SBATCH -o $hess_syn_job.o%j
 #SBATCH -N $slurm_nnode
 #SBATCH -n $slurm_nproc
 #SBATCH -p $slurm_partition
@@ -344,39 +342,46 @@ echo
 cd $event_dir/DATA
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .true./" Par_file
+
+for tag in ${hess_model_names}
+do
+
+  echo ====== \$tag
  
-out_dir=output_syn_random
+  out_dir=output_syn_\${tag}
+  
+  rm -rf $event_dir/DATABASES_MPI
+  mkdir $event_dir/DATABASES_MPI
+  ln -s $iter_dir/mesh_\${tag}/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
+  
+  cd $event_dir
+  
+  rm -rf \$out_dir OUTPUT_FILES
+  mkdir \$out_dir
+  ln -sf \$out_dir OUTPUT_FILES
+  
+  cp $iter_dir/mesh_\${tag}/OUTPUT_FILES/addressing.txt OUTPUT_FILES
+  cp -L DATA/Par_file OUTPUT_FILES
+  cp -L DATA/STATIONS OUTPUT_FILES
+  cp -L DATA/CMTSOLUTION OUTPUT_FILES
+  
+  ${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
+  
+  mkdir $event_dir/\$out_dir/sac
+  mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 
-rm -rf $event_dir/DATABASES_MPI
-mkdir $event_dir/DATABASES_MPI
-ln -s $iter_dir/mesh_random/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
-
-cd $event_dir
-
-rm -rf \$out_dir OUTPUT_FILES
-mkdir \$out_dir
-ln -sf \$out_dir OUTPUT_FILES
-
-cp $iter_dir/mesh_random/OUTPUT_FILES/addressing.txt OUTPUT_FILES
-cp -L DATA/Par_file OUTPUT_FILES
-cp -L DATA/STATIONS OUTPUT_FILES
-cp -L DATA/CMTSOLUTION OUTPUT_FILES
-
-${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
-
-mkdir $event_dir/\$out_dir/sac
-mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
+done
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 EOF
 
-#====== misfit_random
-cat <<EOF > $misfit_random_job
+#====== hess_misfit
+cat <<EOF > $hess_misfit_job
 #!/bin/bash
-#SBATCH -J ${event_id}.misfit_random
-#SBATCH -o $misfit_random_job.o%j
+#SBATCH -J ${event_id}.hess_misfit
+#SBATCH -o $hess_misfit_job.o%j
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH -p $slurm_partition
@@ -391,22 +396,29 @@ echo
 
 cd $event_dir
 
-# make adjoint source
-rm -rf $event_dir/adj_kernel_random
-mkdir -p $event_dir/adj_kernel_random
+for tag in ${hess_model_names}
+do
 
-$utils_dir/output_adj_for_perturbed_waveform.py \
-  $misfit_par \
-  $db_file \
-  $event_dir/output_syn_random/sac \
-  $event_dir/adj_kernel_random
+  echo ====== \$tag
 
-# make STATIONS_ADJOINT
-cd $event_dir/adj_kernel_random
-ls *Z.adj | sed 's/..Z\.adj$//' |\
-  awk -F"." '{printf "%s[ ]*%s.%s[ ]\n",\$1,\$2,\$3}' > grep_pattern
-grep -f $event_dir/adj_kernel_random/grep_pattern $event_dir/DATA/STATIONS \
-  > $event_dir/adj_kernel_random/STATIONS_ADJOINT
+  # make adjoint source
+  rm -rf $event_dir/adj_kernel_\${tag}
+  mkdir -p $event_dir/adj_kernel_\${tag}
+  
+  $utils_dir/output_adj_for_perturbed_waveform.py \
+    $misfit_par \
+    $db_file \
+    $event_dir/output_syn_\${tag}/sac \
+    $event_dir/adj_kernel_\${tag}
+  
+  # make STATIONS_ADJOINT
+  cd $event_dir/adj_kernel_\${tag}
+  ls *Z.adj | sed 's/..Z\.adj$//' |\
+    awk -F"." '{printf "%s[ ]*%s.%s[ ]\n",\$1,\$2,\$3}' > grep_pattern
+  grep -f $event_dir/adj_kernel_\${tag}/grep_pattern $event_dir/DATA/STATIONS \
+    > $event_dir/adj_kernel_\${tag}/STATIONS_ADJOINT
+
+done
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -415,10 +427,10 @@ echo
 EOF
 
 #====== kernel simulation for randomly perturbed model
-cat <<EOF > $kernel_random_job
+cat <<EOF > $hess_kernel_job
 #!/bin/bash
-#SBATCH -J ${event_id}.kernel_random
-#SBATCH -o $kernel_random_job.o%j
+#SBATCH -J ${event_id}.hess_kernel
+#SBATCH -o $hess_kernel_job.o%j
 #SBATCH -N $slurm_nnode
 #SBATCH -n $slurm_nproc
 #SBATCH -p $slurm_partition
@@ -431,40 +443,47 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
-out_dir=output_kernel_random
+for tag in ${hess_model_names}
+do
 
-cd $event_dir/DATA
-chmod u+w Par_file
-sed -i "/^SIMULATION_TYPE/s/=.*/= 3/" Par_file
-sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
-sed -i "/^ANISOTROPIC_KL/s/=.*/= .true./" Par_file
-sed -i "/^SAVE_TRANSVERSE_KL_ONLY/s/=.*/= .false./" Par_file
-sed -i "/^APPROXIMATE_HESS_KL/s/=.*/= .false./" Par_file
+  echo ====== \${tag}
 
-cp -f $event_dir/adj_kernel_random/STATIONS_ADJOINT $event_dir/DATA/
-rm -rf $event_dir/SEM
-ln -s $event_dir/adj_kernel_random $event_dir/SEM
+  out_dir=output_kernel_\${tag}
+  
+  cd $event_dir/DATA
+  chmod u+w Par_file
+  sed -i "/^SIMULATION_TYPE/s/=.*/= 3/" Par_file
+  sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
+  sed -i "/^ANISOTROPIC_KL/s/=.*/= .true./" Par_file
+  sed -i "/^SAVE_TRANSVERSE_KL_ONLY/s/=.*/= .false./" Par_file
+  sed -i "/^APPROXIMATE_HESS_KL/s/=.*/= .false./" Par_file
+  
+  cp -f $event_dir/adj_kernel_\${tag}/STATIONS_ADJOINT $event_dir/DATA/
+  rm -rf $event_dir/SEM
+  ln -s $event_dir/adj_kernel_\${tag} $event_dir/SEM
+  
+  cd $event_dir
+  
+  rm -rf \$out_dir OUTPUT_FILES
+  mkdir \$out_dir
+  ln -sf \$out_dir OUTPUT_FILES
+  
+  cp $mesh_dir/OUTPUT_FILES/addressing.txt OUTPUT_FILES
+  cp -L DATA/Par_file OUTPUT_FILES
+  cp -L DATA/STATIONS_ADJOINT OUTPUT_FILES
+  cp -L DATA/CMTSOLUTION OUTPUT_FILES
+  
+  cd $event_dir
+  ${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
+  
+  mkdir $event_dir/\$out_dir/sac
+  mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
+  
+  mkdir $event_dir/\$out_dir/kernel
+  mv $event_dir/DATABASES_MPI/*reg1_cijkl_kernel.bin $event_dir/\$out_dir/kernel/
+  mv $event_dir/DATABASES_MPI/*reg1_rho_kernel.bin $event_dir/\$out_dir/kernel/
 
-cd $event_dir
-
-rm -rf \$out_dir OUTPUT_FILES
-mkdir \$out_dir
-ln -sf \$out_dir OUTPUT_FILES
-
-cp $mesh_dir/OUTPUT_FILES/addressing.txt OUTPUT_FILES
-cp -L DATA/Par_file OUTPUT_FILES
-cp -L DATA/STATIONS_ADJOINT OUTPUT_FILES
-cp -L DATA/CMTSOLUTION OUTPUT_FILES
-
-cd $event_dir
-${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
-
-mkdir $event_dir/\$out_dir/sac
-mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
-
-mkdir $event_dir/\$out_dir/kernel
-mv $event_dir/DATABASES_MPI/*reg1_cijkl_kernel.bin $event_dir/\$out_dir/kernel/
-mv $event_dir/DATABASES_MPI/*reg1_rho_kernel.bin $event_dir/\$out_dir/kernel/
+done
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

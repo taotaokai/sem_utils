@@ -24,5 +24,14 @@ done
 #cp $wkdir/misfit_par.py $out_dir/
 
 cd $out_dir
+
+# concantenate all misfit files 
+tmp=$(mktemp -p .)
 ls *.txt > list
-$utils/plot_hist.py list misfit_hist.pdf
+for fname in $(cat list)
+do
+  cat $fname >> $tmp
+done
+
+$utils/plot_hist.py $tmp misfit_hist.pdf
+rm $tmp

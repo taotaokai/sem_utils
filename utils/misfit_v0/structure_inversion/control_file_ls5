@@ -27,7 +27,7 @@ iter_num=$(printf "%02d" $iter_num)
 iter_dir=$base_dir/$stage_dir/iter${iter_num}
 model_dir=${iter_dir}/model
 misfit_par_dir=${iter_dir}/misfit_par
-hess_dir=${iter_dir}/hess_sum # proc*_reg1_<model_tag>_inv_hess_diag.bin
+hess_dir=${iter_dir}/hess # proc*_reg1_inv_hess_diag.bin
 # previous iteration directory
 iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
 prev_iter_dir=${base_dir}/${stage_dir}/${iter_minus_one}
@@ -51,29 +51,35 @@ slurm_partition="normal" # on lonestar 5
 slurm_timelimit_mesh=00:10:00 # mesh
 slurm_timelimit_forward=01:30:00 # forward
 slurm_timelimit_adjoint=03:30:00 # adjoint
-slurm_timelimit_misfit=01:30:00 # misfit,kernel_sum
+slurm_timelimit_misfit=03:30:00 # misfit,kernel_sum
 
-#------ kernel precondition
+#------ hess and kernel
+# model names to evaluate Hess*dmodel product
+#hess_model_names="random_alpha random_beta"
+hess_model_names="random"
 # smooth the hessian*random 
 hess_smooth_1sigma_h=80 # horizontal smoothing 1 sigma (km)
 hess_smooth_1sigma_v=80 # vertical smoothing 1 sigma (km)
 # waterlevel for inverse hessian diagonals 
 hess_inverse_nbin=5000
-hess_inverse_threshold_percentage=0.90
+hess_inverse_threshold_percentage=0.80
 # kernel mask around source and receiver points
 # for each event 'e': sum(Me*He, e)*dm = -1 * sum(Me*Ke, e)
 # the masked Hessian diagonals are approximated by its application on a random model perturbation dm
 # sum(Me*He, e)*dm = sum(Me*dKe, e), diag(sum(Me*He, e)) ~ |sum(Me*dKe, e)|
-source_mask_1sigma_km=200
-receiver_mask_1sigma_km=50
+source_mask_1sigma_km=50
+receiver_mask_1sigma_km=10
+# kernel smoothing
+kernel_smooth_1sigma_h=30 # horizontal smoothing 1 sigma (km)
+kernel_smooth_1sigma_v=15 # vertical smoothing 1 sigma (km)
 # conjugate gradient
 cg_type=HS
 # dmodel scale factor
 dmodel_max_dlnvs=0.01
 
 #----- update model
-model_scale_phi_to_xi=1.5
-model_scale_eta_to_xi=2.5
+#model_scale_phi_to_xi=1.5
+#model_scale_eta_to_xi=2.5
 model_scale_rho_to_beta=0.33
 model_update_min_dlnvs=-0.12
 model_update_max_dlnvs=0.10

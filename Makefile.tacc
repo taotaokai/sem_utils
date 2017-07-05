@@ -108,10 +108,15 @@ program = \
 	xsem_gll_scale_dvsv_to_rho \
 	xsem_gll_random_perturb_model \
 	xsem_gll_random_perturb_dvpv_dvsv_thomsen \
-	xsem_gll_tiso_to_alpha_beta_phi_xi \
 	xsem_gll_scale_rho_to_beta \
 	xsem_gll_alpha_beta_xi_to_tiso_scale_phi_eta_to_xi_and_rho_to_beta \
-	xsem_kernel_aijkl_to_tiso_in_alpha_beta_xi_scale_phi_eta_to_xi
+	xsem_kernel_aijkl_to_tiso_in_alpha_beta_xi_scale_phi_eta_to_xi \
+	xsem_kernel_aijkl_to_single_component \
+	xsem_gll_alpha_beta_phi_xi_to_vph_vpv_vsv_vsh \
+	xsem_gll_vph_vpv_vsv_vsh_to_alpha_beta_phi_xi \
+	xsem_kernel_aijkl_to_tiso_in_alpha_beta_phi_xi_eta \
+	xsem_scale_dmodel_alpha_beta_phi_xi_eta \
+	xsem_add_dmodel_alpha_beta_phi_xi_eta
 
 
 #------------------------------------------

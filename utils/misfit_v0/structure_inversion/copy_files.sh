@@ -3,17 +3,18 @@
 # copy files from previous iter_dir
 
 source_dir=${1:?[arg]need previous iter_dir}
+target_dir=${1:?[arg]need current iter_dir}
 
 source_dir=$(readlink -f $source_dir)
 
 #cp -a $source_dir/old .
-cp -a $source_dir/*.txt .
-cp -a $source_dir/*.job .
-cp -a $source_dir/*.sh .
-cp -a $source_dir/*.py .
-cp -a $source_dir/misfit_par .
+cp -a $source_dir/*.txt $target_dir/
+cp -a $source_dir/*.job $target_dir/
+cp -a $source_dir/*.sh $target_dir/
+cp -a $source_dir/*.py $target_dir/
+cp -a $source_dir/misfit_par $target_dir/
+cp -a $source_dir/control_file $target_dir/
 
-find $source_dir -maxdepth 1 -type l | xargs -I@ cp -a @ .
+find $source_dir -maxdepth 1 -type l | xargs -I@ cp -a @ $target_dir/
 
-rm model
-ln -sf $source_dir/model_updated model
+ln -sf $source_dir/model_updated $target_dir/model

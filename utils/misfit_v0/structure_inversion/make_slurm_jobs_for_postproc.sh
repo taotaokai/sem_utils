@@ -352,8 +352,8 @@ cat <<EOF > $model_update_job
 #!/bin/bash
 #SBATCH -J model_update
 #SBATCH -o ${model_update_job}.o%j
-#SBATCH -N $slurm_nnode
-#SBATCH -n $slurm_nproc
+#SBATCH -N 1
+#SBATCH -n $nproc_per_node
 #SBATCH -p $slurm_partition
 #SBATCH -t $slurm_timelimit_misfit
 #SBATCH --mail-user=kai.tao@utexas.edu
@@ -374,7 +374,7 @@ $sem_utils_dir/utils/misfit_v0/plot_grid_search_1d.py list > grid_search.out
 step_length=\$(awk -F"=" '{print \$2}' grid_search.out)
 
 
-dmodel_dir=$iter_dir/kernel_sum
+dmodel_dir=$iter_dir/kernel
 dmodel_suffix="_dmodel_scale"
 
 output_dmodel=1
@@ -385,11 +385,11 @@ ${slurm_mpiexec} $sem_utils_dir/bin/xsem_add_dmodel_alpha_beta_phi_xi_eta \
   $sem_nproc $mesh_dir/DATABASES_MPI \
   $model_dir \$dmodel_dir \$dmodel_suffix \
   \$step_length \
-  \$model_update_min_alpha \$model_update_max_alpha \
-  \$model_update_min_beta \$model_update_max_beta \
-  \$model_update_min_phi   \$model_update_max_phi \
-  \$model_update_min_xi \$model_update_max_xi \
-  \$model_update_min_eta \$model_update_max_eta \
+  $model_update_min_alpha $model_update_max_alpha \
+  $model_update_min_beta  $model_update_max_beta  \
+  $model_update_min_phi   $model_update_max_phi   \
+  $model_update_min_xi    $model_update_max_xi    \
+  $model_update_min_eta   $model_update_max_eta   \
   \$output_dmodel \
   \$out_dir
 

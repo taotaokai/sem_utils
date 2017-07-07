@@ -10,10 +10,11 @@ slice_list=${4:?[arg]need slice_list}
 model_names=${5:?[arg]need model names, e.g. vsv,vsh,vpv,vph,rho,eta}
 nc_dir=${6:?[arg]need output directory for .nc files}
 job_file=${7:?[arg]need output job_file}
-mpi_exec=${8:?[arg]need mpi_exec, e.g. ibrun or mpirun}
+#mpi_exec=${6:?[arg]need mpi_exec, e.g. ibrun or mpirun}
 
 # on TACC:lonestar5
-#mpi_exec=ibrun
+mpi_exec=ibrun
+flag_ellipticity=1
 
 # check input parameters
 sem_utils=$(readlink -f $sem_utils)
@@ -69,13 +70,13 @@ mkdir $nc_dir
 EOF
 
 grep -v "^#" $slice_list |\
-while read lat0 lon0 azimuth theta0 theta1 ntheta r0 r1 nr flag_ellipticity fname
+while read lat0 lon0 azimuth theta0 theta1 ntheta r0 r1 nr fname
 do
 
 cat<<EOF >> $job_file
 echo
 echo \$(date)
-echo "# $fname: $lat0 $lon0 $azimuth $theta0 $theta1 $ntheta $r0 $r1 $nr $flag_ellipticity"
+echo "# $fname: $lat0 $lon0 $azimuth $theta0 $theta1 $ntheta $r0 $r1 $nr "
 echo
 ${mpi_exec} \
     $sem_utils/bin/xsem_slice_gcircle \

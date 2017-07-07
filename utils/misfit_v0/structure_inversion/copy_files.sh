@@ -3,9 +3,11 @@
 # copy files from previous iter_dir
 
 source_dir=${1:?[arg]need previous iter_dir}
-target_dir=${1:?[arg]need current iter_dir}
+target_dir=${2:?[arg]need current iter_dir}
 
 source_dir=$(readlink -f $source_dir)
+
+mkdir $target_dir
 
 #cp -a $source_dir/old .
 cp -a $source_dir/*.txt $target_dir/

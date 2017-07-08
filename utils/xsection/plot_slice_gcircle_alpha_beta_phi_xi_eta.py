@@ -17,12 +17,14 @@ from mpl_toolkits.basemap import Basemap
 #------ user inputs
 nc_file = sys.argv[1]
 title = sys.argv[2]
-out_fig = sys.argv[3]
+model_tags = sys.argv[3]
+out_fig = sys.argv[4]
 
+model_names = model_tags.split(',')
 #model_names = ['eps', 'gamma', 'kappa', 'dlnvs']
 #model_names = ['gamma', 'kappa', 'dlnvs']
 #model_names = ['kappa', 'dlnvs']
-model_names = ['eta', 'xi', 'phi']
+#model_names = ['xi', 'beta', 'alpha']
 
 # earth parameters 
 R_earth_meter = 6371000.0
@@ -223,37 +225,46 @@ for irow in range(nrow):
   # contourfill relative difference 
   if tag in ['alpha', 'beta']:
     cmap = plt.cm.get_cmap("jet_r")
-    #cmap = plt.cm.get_cmap("seismic_r")
-
     zz = model[tag]*100
+
     levels = np.concatenate((np.arange(-6,0,1), np.arange(1,6.1,1)))
     cs = ax.contour(xx, yy, zz, levels=levels, colors=('k',), linewidths=(0.1,))
     plt.clabel(cs, fmt='%2.1f', colors='k', fontsize=5)
 
-    #levels = np.concatenate((np.arange(-6,0,0.5), np.array([-0.25, 0.25]), np.arange(0.5,6.1,0.5)))
     levels = np.concatenate((np.arange(-6,0,0.5), np.arange(0.5,6.1,0.5)))
-    #levels = np.linspace(-5.0,5.0,1000)
     cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=levels, extend="both")
     cs.cmap.set_over('black')
     cs.cmap.set_under('purple')
-    cb = plt.colorbar(cs, cax=cax, ticks=np.arange(-6,6.1,1), orientation="vertical")
+
+    levels = np.arange(-6,6.1,1)
+    cb = plt.colorbar(cs, cax=cax, ticks=levels, orientation="vertical")
     #cb.set_label('%', fontsize=10)
     cb.ax.set_title('(%)', fontsize=10)
-  if tag == 'eta':
+
+  if tag in ['eta',]:
     cmap = plt.cm.get_cmap("jet")
     zz = model[tag]
-    cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=np.arange(0.9,1.1,0.05), extend="both")
+
+    levels = np.arange(0.9, 1.101, 0.01)
+    cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=levels, extend="both")
     cs.cmap.set_over('purple')
     cs.cmap.set_under('black')
-    cb = plt.colorbar(cs, cax=cax, orientation="vertical")
+
+    levels = np.arange(0.9, 1.101, 0.05)
+    cb = plt.colorbar(cs, cax=cax, orientation="vertical", ticks=levels)
     #cb.set_label('vp/vs', fontsize=10)
+
   if tag in ['phi','xi']:
     cmap = plt.cm.get_cmap("jet")
     zz = model[tag]*100
-    cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=np.arange(-10,10.001,1.0), extend="both")
+
+    levels = np.arange(-10, 10.01, 1)
+    cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=levels, extend="both")
     cs.cmap.set_over('purple')
     cs.cmap.set_under('black')
-    cb = plt.colorbar(cs, cax=cax, orientation="vertical")
+
+    levels = np.arange(-10, 10.01, 2)
+    cb = plt.colorbar(cs, cax=cax, orientation="vertical", ticks=levels)
     cb.ax.set_title("(%)", fontsize=10)
   
   # plot seismicity

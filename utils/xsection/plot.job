@@ -14,7 +14,7 @@ sem_utils=~/seiscode/sem_utils
 #rm -rf figure/*
 mkdir figure
 
-title=stage05.iter10
+title=stage10.iter01
 
 srun -n1 $sem_utils/utils/xsection/plot_slice_gcircle_dlnvs_kappa_thomsen_elliptic.sh nc slice_gcircle.list ${title} figure &
 

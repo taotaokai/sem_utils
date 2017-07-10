@@ -19,5 +19,5 @@ do
   out_fig=$out_dir/${nc_tag}.pdf
 
   $sem_utils/utils/xsection/plot_slice_sphere_alpha_beta_phi_xi_eta.py \
-    $nc_dir/${nc_tag}.nc "$title ($depth km)" $out_fig
+    $nc_dir/${nc_tag}.nc "$title ($depth km)" $model_names $out_fig
 done

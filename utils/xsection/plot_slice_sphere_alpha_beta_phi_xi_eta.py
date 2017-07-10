@@ -95,9 +95,9 @@ for irow in range(nrow):
   if model_tag in ['alpha', 'beta']:
     zz = zz * 100 # use percentage
 
-    levels = np.concatenate((np.arange(-6,0,1), np.arange(1,6.1,1)))
-    cs = m.contour(xx, yy, zz, levels=levels, colors=('k',), linewidths=(0.1,))
-    plt.clabel(cs, fmt='%1.0f', colors='k', fontsize=3)
+    #levels = np.concatenate((np.arange(-6,0,1), np.arange(1,6.1,1)))
+    #cs = m.contour(xx, yy, zz, levels=levels, colors=('k',), linewidths=(0.1,))
+    #plt.clabel(cs, fmt='%1.0f', colors='k', fontsize=3)
 
     levels = np.concatenate((np.arange(-6,0,0.5), np.arange(0.5,6.1,0.5)))
     cmap = plt.cm.get_cmap("jet_r")
@@ -135,6 +135,7 @@ for irow in range(nrow):
     #  levels = np.arange(-z_max, z_max+dz/2, dz)
     #  #dz = round_to_1(dz)
     #  #levels = np.arange(np.min(zz), np.max(zz)+dz/2, dz)
+    zz = zz*100.0
     levels = np.arange(-10, 10.01, 1)
     cmap = plt.cm.get_cmap("jet")
     cs = m.contourf(xx, yy, zz, cmap=cmap, levels=levels, extend="both")
@@ -144,7 +145,7 @@ for irow in range(nrow):
     # colorbar for contourfill
     levels = np.arange(-10, 10.01, 2)
     cb = m.colorbar(cs,location='right',pad="5%", format="%.2f", ticks=levels)
-    #cb.set_label('% mean')
+    cb.set_label('(%)')
     ax.set_title("{:s}".format(model_tag))
 
   else:

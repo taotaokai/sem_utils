@@ -7,7 +7,7 @@ base_dir=$(readlink -f ~/NEChina)
 
 # current stage and iteration number
 stage_dir=stage10.structure
-iter_num=0
+iter_num=1
 
 #------ Data directories
 # sem_config/: DATA/, setup/, initial_model/
@@ -30,7 +30,7 @@ misfit_par_dir=${iter_dir}/misfit_par
 hess_dir=${iter_dir}/hess # proc*_reg1_inv_hess_diag.bin
 # previous iteration directory
 iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
-prev_iter_dir=${base_dir}/${stage_dir}/${iter_minus_one}
+prev_iter_dir=${base_dir}/${stage_dir}/iter${iter_minus_one}
 
 #------ slurm jobs
 # cluster cpu/node
@@ -81,14 +81,17 @@ dmodel_max_dlnvs=0.01
 #model_scale_phi_to_xi=1.5
 #model_scale_eta_to_xi=2.5
 model_scale_rho_to_beta=0.33
-model_update_min_dlnvs=-0.12
-model_update_max_dlnvs=0.10
-model_update_min_kappa=1.65
-model_update_max_kappa=2.0
-model_update_min_eps=-0.05
-model_update_max_eps=0.07
-model_update_min_gamma=-0.05
-model_update_max_gamma=0.07
+
+model_update_min_alpha=-0.10
+model_update_max_alpha=0.10
+model_update_min_beta=-0.10
+model_update_max_beta=0.10
+model_update_min_phi=-0.10
+model_update_max_phi=0.10
+model_update_min_xi=-0.10
+model_update_max_xi=0.10
+model_update_min_eta=0.80
+model_update_max_eta=1.10
 
 ##-- preconditioning
 ## depth weighting (xsem_make_depth_mask)

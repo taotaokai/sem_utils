@@ -19,4 +19,5 @@ cp -a $source_dir/control_file $target_dir/
 
 find $source_dir -maxdepth 1 -type l | xargs -I@ cp -a @ $target_dir/
 
+rm $target_dir/model
 ln -sf $source_dir/model_updated $target_dir/model

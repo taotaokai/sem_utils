@@ -170,6 +170,44 @@ for irow in range(nrow):
   #  x, y = m(l[0], l[1])
   #  ax.plot(x, y, 'k-', lw=0.05)
 
+  #-- plot geological blocks 
+  block_line_file = 'zhangpz_block.txt'
+  block_lines = []
+  with open(block_line_file, 'r') as f:
+    lon = []
+    lat = []
+    for l in f.readlines():
+      if not l.startswith('>'):
+        x = l.split()
+        lon.append(float(x[0]))
+        lat.append(float(x[1]))
+      else:
+        block_lines.append([lon, lat])
+        lon = []
+        lat = []
+  for l in block_lines:
+    x, y = m(l[0], l[1])
+    ax.plot(x, y, lw=0.2, color='gray')
+
+  #-- plot plate_boundary
+  pb_line_file = 'zhangpz_pb.txt'
+  pb_lines = []
+  with open(pb_line_file, 'r') as f:
+    lon = []
+    lat = []
+    for l in f.readlines():
+      if not l.startswith('>'):
+        x = l.split()
+        lon.append(float(x[0]))
+        lat.append(float(x[1]))
+      else:
+        pb_lines.append([lon, lat])
+        lon = []
+        lat = []
+  for l in pb_lines:
+    x, y = m(l[0], l[1])
+    ax.plot(x, y, lw=1.0, color='red')
+
   #--- plot seismicity
   catalog_file = 'isc_d50km.txt'
   with open(catalog_file, 'r') as f:
@@ -188,6 +226,16 @@ for irow in range(nrow):
     markersize = 2
 
   ax.plot(x, y, 'w.', markersize=markersize)
+
+  #--- plot Holocene volcanoes
+  volcano_file= 'volcanoes.list'
+  with open(volcano_file, 'r') as f:
+    lines = [ l.split('|') for l in f.readlines() if not l.startswith('#') ] 
+    volcano_lats = np.array([float(x[4]) for x in lines])
+    volcano_lons = np.array([float(x[5]) for x in lines])
+
+  x, y = m(volcano_lons, volcano_lats)
+  ax.plot(x, y, '^', color='purple', markersize=2)
 
 #------ save figure
 #plt.show()

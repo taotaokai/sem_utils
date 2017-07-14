@@ -7,7 +7,7 @@ base_dir=$(readlink -f ~/NEChina)
 
 # current stage and iteration number
 stage_dir=stage10.structure
-iter_num=1
+iter_num=3
 
 #------ Data directories
 # sem_config/: DATA/, setup/, initial_model/
@@ -48,21 +48,26 @@ slurm_mpiexec="ibrun" # on lonestar 5
 slurm_partition="normal" # on lonestar 5
 #slurm_partition="compute" # on cgas
 # time limit
-slurm_timelimit_mesh=00:10:00 # mesh
+slurm_timelimit_mesh=00:30:00 # mesh
 slurm_timelimit_forward=01:30:00 # forward
-slurm_timelimit_adjoint=03:30:00 # adjoint
+slurm_timelimit_adjoint=03:00:00 # adjoint
 slurm_timelimit_misfit=03:30:00 # misfit,kernel_sum
+# for hessian simulation
+slurm_timelimit_hess_forward=02:00:00 # misfit,kernel_sum
+slurm_timelimit_hess_misfit=03:30:00 # misfit,kernel_sum
+slurm_timelimit_hess_adjoint=04:30:00 # misfit,kernel_sum
 
 #------ hess and kernel
 # model names to evaluate Hess*dmodel product
 #hess_model_names="random_alpha random_beta"
-hess_model_names="random"
+#hess_model_names="random"
+hess_model_names="perturb_alpha_0.01_grid_5.0deg_200km perturb_beta_0.01_grid_5.0deg_200km"
 # smooth the hessian*random 
 hess_smooth_1sigma_h=80 # horizontal smoothing 1 sigma (km)
 hess_smooth_1sigma_v=80 # vertical smoothing 1 sigma (km)
 # waterlevel for inverse hessian diagonals 
 hess_inverse_nbin=5000
-hess_inverse_threshold_percentage=0.80
+hess_inverse_threshold_percentage=0.90
 # kernel mask around source and receiver points
 # for each event 'e': sum(Me*He, e)*dm = -1 * sum(Me*Ke, e)
 # the masked Hessian diagonals are approximated by its application on a random model perturbation dm

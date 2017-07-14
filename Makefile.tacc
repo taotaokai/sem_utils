@@ -116,7 +116,8 @@ program = \
 	xsem_gll_vph_vpv_vsv_vsh_to_alpha_beta_phi_xi \
 	xsem_kernel_aijkl_to_tiso_in_alpha_beta_phi_xi_eta \
 	xsem_scale_dmodel_alpha_beta_phi_xi_eta \
-	xsem_add_dmodel_alpha_beta_phi_xi_eta
+	xsem_add_dmodel_alpha_beta_phi_xi_eta \
+	xsem_make_gauss_point_from_list
 
 
 #------------------------------------------

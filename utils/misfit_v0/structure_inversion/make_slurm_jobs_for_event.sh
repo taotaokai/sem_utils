@@ -330,7 +330,7 @@ cat <<EOF > $hess_syn_job
 #SBATCH -N $slurm_nnode
 #SBATCH -n $slurm_nproc
 #SBATCH -p $slurm_partition
-#SBATCH -t $slurm_timelimit_forward
+#SBATCH -t $slurm_timelimit_hess_forward
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -385,7 +385,7 @@ cat <<EOF > $hess_misfit_job
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH -p $slurm_partition
-#SBATCH -t $slurm_timelimit_misfit
+#SBATCH -t $slurm_timelimit_hess_misfit
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -434,7 +434,7 @@ cat <<EOF > $hess_kernel_job
 #SBATCH -N $slurm_nnode
 #SBATCH -n $slurm_nproc
 #SBATCH -p $slurm_partition
-#SBATCH -t $slurm_timelimit_adjoint
+#SBATCH -t $slurm_timelimit_hess_adjoint
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end

@@ -27,6 +27,9 @@ ls *_vsv.bin | rename.sh "s/_vsv/_vs0/"
 
 ln -sf $sem_utils/utils/xsection/isc_d50km.txt .
 ln -sf $sem_utils/utils/xsection/fault_lines.txt .
+ln -sf $sem_utils/utils/xsection/volcanoes.list .
+ln -sf $sem_utils/utils/xsection/zhangpz_pb.txt .
+ln -sf $sem_utils/utils/xsection/zhangpz_block.txt .
 
 cd $wkdir
 ## make list
@@ -34,8 +37,10 @@ cd $wkdir
 #sem_utils/utils/xsection/make_list_slice_sphere.sh slice_sphere.list
 
 # make sbatch jobs
-$sem_utils/utils/xsection/make_sbatch_slice_gcircle.sh $sem_utils mesh/DATABASES_MPI/ model slice_gcircle.list  vp0,vs0,alpha,beta,phi,xi,eta nc slice_gcircle.job "ibrun"
-$sem_utils/utils/xsection/make_sbatch_slice_sphere.sh $sem_utils mesh/DATABASES_MPI/ model slice_sphere.list vp0,vs0,alpha,beta,phi,xi,eta nc slice_sphere.job "ibrun"
+#$sem_utils/utils/xsection/make_sbatch_slice_gcircle.sh $sem_utils mesh/DATABASES_MPI/ model slice_gcircle.list  vp0,vs0,alpha,beta,phi,xi,eta nc slice_gcircle.job "ibrun"
+#$sem_utils/utils/xsection/make_sbatch_slice_sphere.sh $sem_utils mesh/DATABASES_MPI/ model slice_sphere.list vp0,vs0,alpha,beta,phi,xi,eta nc slice_sphere.job "ibrun"
 
 #$sem_utils/utils/xsection/make_sbatch_slice_gcircle.sh $sem_utils mesh/DATABASES_MPI/ model slice_gcircle.list  alpha,beta,phi,xi,eta nc slice_gcircle.job "ibrun"
 #$sem_utils/utils/xsection/make_sbatch_slice_sphere.sh $sem_utils mesh/DATABASES_MPI/ model slice_sphere.list alpha,beta,phi,xi,eta nc slice_sphere.job "ibrun"
+
+$sem_utils/utils/xsection/make_sbatch_slice_gcircle.sh $sem_utils mesh/DATABASES_MPI/ model slice_gcircle_for_NChina_lithos.list  vp0,vs0,alpha,beta,phi,xi,eta nc slice_gcircle_for_NChina_lithos.job "ibrun"

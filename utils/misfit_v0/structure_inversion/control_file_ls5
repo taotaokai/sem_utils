@@ -53,9 +53,9 @@ slurm_timelimit_forward=01:30:00 # forward
 slurm_timelimit_adjoint=03:00:00 # adjoint
 slurm_timelimit_misfit=03:30:00 # misfit,kernel_sum
 # for hessian simulation
-slurm_timelimit_hess_forward=02:00:00 # misfit,kernel_sum
-slurm_timelimit_hess_misfit=03:30:00 # misfit,kernel_sum
-slurm_timelimit_hess_adjoint=04:30:00 # misfit,kernel_sum
+slurm_timelimit_hess_forward=02:00:00
+slurm_timelimit_hess_misfit=03:30:00
+slurm_timelimit_hess_adjoint=04:30:00
 
 #------ hess and kernel
 # model names to evaluate Hess*dmodel product

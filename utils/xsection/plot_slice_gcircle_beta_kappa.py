@@ -156,6 +156,11 @@ with open(catalog_file, 'r') as f:
   eq_lats = np.array([float(x[2]) for x in lines])
   eq_lons = np.array([float(x[3]) for x in lines])
   eq_deps = 1000.0 * np.array([float(x[4]) for x in lines])
+# limit earthquake depth
+idx = eq_deps < 410
+eq_lats = eq_lats[idx]
+eq_lons = eq_lons[idx]
+eq_deps = eq_deps[idx]
 
 eq_x, eq_y, eq_z = pyproj.transform(lla, ecef, eq_lons, eq_lats, -1.0*eq_deps, radians=False)
 
@@ -242,22 +247,22 @@ for irow in range(nrow):
 
   # overlay Vp/Vs ratio every dtheta degree
   dtheta = theta[1] - theta[0]
-  ndtheta = int(np.round(np.deg2rad(5)/dtheta))
+  ndtheta = int(np.round(np.deg2rad(1)/dtheta))
 
   for itheta in range(0, len(theta), ndtheta):
     theta1 = theta[itheta]
     kappa1 = kappa[:,itheta]
 
     dkappa1 = kappa1-1.8
-    dkappa1 = 0.3*dkappa1/np.max(np.abs(dkappa1))
+    dkappa1 = dkappa1/np.max(np.abs(dkappa1))
 
     x1 = np.sin(theta1) * radius
     y1 = np.cos(theta1) * radius
     dz = radius[-1]*(ndtheta*dtheta)
     dx = np.cos(theta1)*dz
     dy = -1.0*np.sin(theta1)*dz
-    ax.plot(x1+dx*dkappa1, y1+dy*dkappa1, 'k', lw=0.2)
-    ax.plot(x1, y1, 'k', lw=0.1)
+    ax.plot(x1+dx*dkappa1, y1+dy*dkappa1, 'r', lw=1.5)
+    ax.plot(x1, y1, 'w', lw=1.0)
  
   # plot seismicity
   ax.plot(eq_x, eq_y, 'w+', markersize=2)
@@ -273,7 +278,8 @@ for irow in range(nrow):
   #  #cb.ax.set_position([ll, b + 0.1*h, ww, h*0.8])
  
   # mark certain depths 
-  for depth in [40, 220, 410, 670, 900]:
+  #for depth in [40, 220, 410, 670, 900]:
+  for depth in [40, 220, 410]:
     x = np.sin(theta) * (R_earth_km - depth)
     y = np.cos(theta) * (R_earth_km - depth)
     ax.plot(x, y, 'k', lw=0.5)

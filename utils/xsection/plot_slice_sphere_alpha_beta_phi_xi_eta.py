@@ -55,7 +55,8 @@ lons = fh.variables['longitude'][:]
 slice_depth = fh.variables['depth'][:]
 
 model = {}
-for tag in model_names:
+#for tag in model_names:
+for tag in ['vp0', 'vs0', 'alpha', 'beta', 'phi', 'xi', 'eta']:
   model[tag] = fh.variables[tag][:]
 
 #------ plot map and xsection surface trace and marker
@@ -90,9 +91,9 @@ for irow in range(nrow):
   
   # contourf model
   xx, yy = m(lons2, lats2)
-  zz = np.transpose(model[model_tag])
 
   if model_tag in ['alpha', 'beta']:
+    zz = np.transpose(model[model_tag])
     zz = zz * 100 # use percentage
 
     #levels = np.concatenate((np.arange(-6,0,1), np.arange(1,6.1,1)))
@@ -112,6 +113,7 @@ for irow in range(nrow):
     ax.set_title("{:s}".format(model_tag))
 
   elif model_tag in ['eta']:
+    zz = np.transpose(model[model_tag])
     cmap = plt.cm.get_cmap("jet")
 
     levels = np.arange(0.9, 1.101, 0.01)
@@ -126,15 +128,7 @@ for irow in range(nrow):
     ax.set_title("{:s}".format(model_tag))
 
   elif model_tag in ['phi', 'xi']:
-    #dz = (np.max(zz) - np.min(zz))/10
-    #if dz < np.finfo(np.float).eps:
-    #  levels = (0, )
-    #else:
-    #  z_max = round_to_1(np.max(np.abs(zz)))
-    #  dz = 2.0*z_max/10
-    #  levels = np.arange(-z_max, z_max+dz/2, dz)
-    #  #dz = round_to_1(dz)
-    #  #levels = np.arange(np.min(zz), np.max(zz)+dz/2, dz)
+    zz = np.transpose(model[model_tag])
     zz = zz*100.0
     levels = np.arange(-10, 10.01, 1)
     cmap = plt.cm.get_cmap("jet")
@@ -145,7 +139,26 @@ for irow in range(nrow):
     # colorbar for contourfill
     levels = np.arange(-10, 10.01, 2)
     cb = m.colorbar(cs,location='right',pad="5%", format="%.2f", ticks=levels)
-    cb.set_label('(%)')
+    cb.ax.set_title('(%)', fontsize=10)
+    ax.set_title("{:s}".format(model_tag))
+
+  elif model_tag in ['kappa']:
+    vp = (1.0 + model['alpha'])*model['vp0']
+    vs = (1.0 + model['beta'])*model['vs0']
+    kappa0 = model['vp0']/model['vs0']
+    zz = np.transpose(vp/vs/kappa0 - 1.0)
+    zz = zz*100.0
+
+    levels = np.linspace(-5, 5, 100)
+    cmap = plt.cm.get_cmap("jet")
+    cs = m.contourf(xx, yy, zz, cmap=cmap, levels=levels, extend="both")
+    cs.cmap.set_over('purple')
+    cs.cmap.set_under('black')
+
+    # colorbar for contourfill
+    levels = np.arange(-5, 5.01, 1)
+    cb = m.colorbar(cs,location='right',pad="5%", format="%.2f", ticks=levels)
+    cb.ax.set_title('(%%) x %.3f'%(np.mean(kappa0)), fontsize=10)
     ax.set_title("{:s}".format(model_tag))
 
   else:

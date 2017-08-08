@@ -13,8 +13,8 @@ lon1=150
 nlon=601
 
 #---- depths(km): 5, 10, 20:20:1000 
-seq 5 5 10 > depth.list
-seq 20 20 900 >> depth.list
+echo 5 > depth.list
+seq 10 10 900 >> depth.list
 
 #---- make list
 echo "# spherical slices:" > $out_file

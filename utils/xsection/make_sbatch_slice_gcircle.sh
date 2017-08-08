@@ -14,7 +14,7 @@ job_file=${7:?[arg]need output job_file}
 
 # on TACC:lonestar5
 mpi_exec=ibrun
-flag_ellipticity=1
+#flag_ellipticity=1
 
 # check input parameters
 sem_utils=$(readlink -f $sem_utils)
@@ -70,13 +70,13 @@ mkdir $nc_dir
 EOF
 
 grep -v "^#" $slice_list |\
-while read lat0 lon0 azimuth theta0 theta1 ntheta r0 r1 nr fname
+while read lat0 lon0 azimuth theta0 theta1 ntheta r0 r1 nr flag_ellipticity fname
 do
 
 cat<<EOF >> $job_file
 echo
 echo \$(date)
-echo "# $fname: $lat0 $lon0 $azimuth $theta0 $theta1 $ntheta $r0 $r1 $nr "
+echo "# $fname: $lat0 $lon0 $azimuth $theta0 $theta1 $ntheta $r0 $r1 $nr $flag_ellipticity "
 echo
 ${mpi_exec} \
     $sem_utils/bin/xsem_slice_gcircle \

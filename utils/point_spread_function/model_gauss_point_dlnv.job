@@ -1,0 +1,72 @@
+#!/bin/bash
+#SBATCH -J model_gauss_point_dlnv
+#SBATCH -o model_gauss_point_dlnv.job.o%j
+#SBATCH -N 1
+#SBATCH -n 24
+#SBATCH -p normal
+#SBATCH -t 00:30:00
+#SBATCH --mail-user=kai.tao@utexas.edu
+#SBATCH --mail-type=begin
+#SBATCH --mail-type=end
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+wkdir=$(pwd)
+sem_utils=/home1/03244/ktao/seiscode/sem_utils
+ref_dir=mesh_REF/DATABASES_MPI
+
+nproc=336
+mesh_dir=mesh_REF/DATABASES_MPI
+
+model_dir=model
+
+dmodel_tag=0.01_grid_5.0deg_200km
+dmodel_name=dlnv
+
+#====== make dmodel
+dmodel_dir=model_dlnv_${dmodel_tag}
+xyz_list=xyz_${dmodel_tag}.list
+mkdir $dmodel_dir
+
+ibrun $sem_utils/bin/xsem_make_gauss_point_from_list $nproc $mesh_dir $xyz_list $dmodel_dir $dmodel_name
+
+#====== add dmodel
+for model_name in alpha beta
+do
+
+  out_dir=model_perturb_${model_name}_${dmodel_tag}
+  mkdir $out_dir
+  
+  cd $wkdir/$out_dir
+  ln -sf $wkdir/$model_dir/*_alpha.bin .
+  ln -sf $wkdir/$model_dir/*_beta.bin .
+  ln -sf $wkdir/$model_dir/*_phi.bin .
+  ln -sf $wkdir/$model_dir/*_xi.bin .
+  ln -sf $wkdir/$model_dir/*_eta.bin .
+  ln -sf $wkdir/$model_dir/*_rho.bin .
+
+  rm *_${model_name}.bin
+
+  cd $wkdir
+  ref_dir=$(readlink -f $ref_dir)
+  ls $ref_dir/proc*_reg1_vpv.bin | awk -F"/" '{a=$NF;gsub(/v\.bin/,"0.bin",a); printf "ln -sf %s %s/%s\n",$0,outdir,a}' outdir=$out_dir > $out_dir/link_sh
+  ls $ref_dir/proc*_reg1_vsv.bin | awk -F"/" '{a=$NF;gsub(/v\.bin/,"0.bin",a); printf "ln -sf %s %s/%s\n",$0,outdir,a}' outdir=$out_dir >> $out_dir/link_sh
+  bash $out_dir/link_sh
+  
+  cd $wkdir
+  ibrun $sem_utils/bin/xsem_math \
+    $nproc $mesh_dir \
+    $model_dir $model_name \
+    $dmodel_dir $dmodel_name \
+    "add" \
+    $out_dir $model_name
+  
+  ibrun $sem_utils/bin/xsem_gll_alpha_beta_phi_xi_to_vph_vpv_vsv_vsh $nproc $mesh_dir $out_dir $out_dir
+
+done
+
+echo
+echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

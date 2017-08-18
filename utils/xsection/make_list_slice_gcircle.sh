@@ -78,7 +78,7 @@ $sem_utils/bin/xmap_gcircle \
 #done >> $out_file
 
 # trench parallel gcircles
-echo "#TK trench parallel gcircles:" >> $out_file
+echo "#TK trench parallel gcircles:" > $out_file
 
 az=26.5; theta0=-20; theta1=20; ntheta=401
 cat trench_parallel_center.list |\

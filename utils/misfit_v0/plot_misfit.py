@@ -4,7 +4,7 @@
 Plot synthetic and observed seismograms
 """
 import sys
-import importlib.util
+import importlib
 from misfit import Misfit
 
 # read command line args

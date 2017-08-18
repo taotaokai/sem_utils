@@ -4,7 +4,7 @@
 """
 import sys
 import os
-import importlib.util
+import importlib
 from misfit import Misfit
 
 # read command line args

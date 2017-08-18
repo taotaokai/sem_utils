@@ -3,7 +3,7 @@
 """Process misfit
 """
 import sys
-import importlib.util
+import importlib
 from misfit import Misfit
 
 # read command line args

@@ -102,11 +102,13 @@ ax = fig.add_axes([0.2, 0.75, 0.6, 0.2])
 m = Basemap(ax=ax, projection='tmerc', resolution='l',
     llcrnrlat=map_lat_min, llcrnrlon=map_lon_min, 
     urcrnrlat=map_lat_max, urcrnrlon=map_lon_max,
-    lat_0=map_lat_center, lon_0=map_lon_center)
+    lat_0=map_lat_center, lon_0=map_lon_center,
+    )
 m.drawcoastlines(linewidth=0.2)
 m.drawcountries(linewidth=0.2)
 m.drawparallels(map_parallels, linewidth=0.1, labels=[1,0,0,0], fontsize=8)
 m.drawmeridians(map_meridians, linewidth=0.1, labels=[0,0,0,1], fontsize=8)
+#m.shadedrelief()
 
 # initialize pyproj objects
 geod = pyproj.Geod(ellps='WGS84')
@@ -132,10 +134,39 @@ v1 = v1 / np.sqrt(np.sum(v1**2))
 v_axis = np.cross(v0, v1)
 v_axis = v_axis / np.sqrt(np.sum(v_axis**2))
 
-#--- plot fault lines
-fault_line_file = 'fault_lines.txt'
-fault_lines = []
-with open(fault_line_file, 'r') as f:
+##--- plot fault lines
+#fault_line_file = 'fault_lines.txt'
+#fault_lines = []
+#with open(fault_line_file, 'r') as f:
+#  lon = []
+#  lat = []
+#  for l in f.readlines():
+#    if not l.startswith('>'):
+#      x = l.split()
+#      lon.append(float(x[0]))
+#      lat.append(float(x[1]))
+#    else:
+#      fault_lines.append([lon, lat])
+#      lon = []
+#      lat = []
+#for l in fault_lines:
+#  x, y = m(l[0], l[1])
+#  ax.plot(x, y, 'k-', lw=0.1)
+
+#--- plot Holocene volcanoes
+volcano_file= 'volcanoes.list'
+with open(volcano_file, 'r') as f:
+  lines = [ l.split('|') for l in f.readlines() if not l.startswith('#') ]
+  volcano_lats = np.array([float(x[4]) for x in lines])
+  volcano_lons = np.array([float(x[5]) for x in lines])
+
+x, y = m(volcano_lons, volcano_lats)
+ax.plot(x, y, '^', color='red', markersize=8, markeredgecolor=None)
+
+#-- plot geological blocks 
+block_line_file = 'zhangpz_block.txt'
+block_lines = []
+with open(block_line_file, 'r') as f:
   lon = []
   lat = []
   for l in f.readlines():
@@ -144,12 +175,31 @@ with open(fault_line_file, 'r') as f:
       lon.append(float(x[0]))
       lat.append(float(x[1]))
     else:
-      fault_lines.append([lon, lat])
+      block_lines.append([lon, lat])
       lon = []
       lat = []
-for l in fault_lines:
+for l in block_lines:
   x, y = m(l[0], l[1])
-  ax.plot(x, y, 'k-', lw=0.1)
+  ax.plot(x, y, lw=0.2, color='gray')
+
+#-- plot plate_boundary
+pb_line_file = 'zhangpz_pb.txt'
+pb_lines = []
+with open(pb_line_file, 'r') as f:
+  lon = []
+  lat = []
+  for l in f.readlines():
+    if not l.startswith('>'):
+      x = l.split()
+      lon.append(float(x[0]))
+      lat.append(float(x[1]))
+    else:
+      pb_lines.append([lon, lat])
+      lon = []
+      lat = []
+for l in pb_lines:
+  x, y = m(l[0], l[1])
+  ax.plot(x, y, lw=1.0, color='red')
 
 #--- plot seismicity
 catalog_file = 'isc_d50km.txt'

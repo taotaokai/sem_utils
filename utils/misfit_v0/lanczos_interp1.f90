@@ -29,9 +29,12 @@ real(kind=8), intent(out) :: xi(0:ni-1)
 
 integer, parameter :: dp = kind(0.d0)
 real(dp), parameter :: PI = 4 * atan(1.0_dp)
+!real(dp) :: PI
 integer :: i, j, i0, i1
 real(dp) :: ii, s
 real(dp) :: PI_s, PI_s_na, sinc_s, sinc_s_na
+
+!PI = 4*atan(1.0_dp)
 
 xi = 0.0_dp
 do i = 0, ni-1

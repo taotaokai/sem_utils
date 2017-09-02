@@ -29,7 +29,7 @@ subroutine selfdoc()
   print '(a)', "  (float) lon0, lon1:  begin/end longitudes (degrees)"
   print '(a)', "    valid range: [-180, 180] "
   print '(a)', "  (integer) nlon:  number of longitudinal grids"
-  print '(a)', "  (float) depth:  depth(0: r=6371) of the spherical slice (km)"
+  print '(a)', "  (float) depth:  depth below WGS84 ellipsoid (km)"
   print '(a)', "  (string) out_file:  output file name (netcdf format)"
   print '(a)', ""
   print '(a)', "NOTES"
@@ -85,7 +85,7 @@ program xsem_slice_sphere
 
   !-- interpolation points 
   integer :: ipoint, npoint
-  real(dp) :: dlon, dlat, radius
+  real(dp) :: dlon, dlat, alt 
   real(dp) :: vr(3)
   real(dp), allocatable :: lon(:), lat(:)
   integer :: ilon, ilat, idx
@@ -212,7 +212,8 @@ program xsem_slice_sphere
   lat1 = lat1 * DEGREES_TO_RADIANS
   lon0 = lon0 * DEGREES_TO_RADIANS
   lon1 = lon1 * DEGREES_TO_RADIANS
-  radius = (6371.0 - depth) / R_EARTH_KM
+  !radius = (6371.0 - depth) / R_EARTH_KM
+  alt = -1000.0*depth
 
   ! get grid intervals
   dlon = (lon1 - lon0) / (nlon - 1)
@@ -229,10 +230,10 @@ program xsem_slice_sphere
   do ilat = 1, nlat
     do ilon = 1, nlon
       idx = ilon + nlon * (ilat - 1)
-      call geographic_lla2ecef(lat(ilat), lon(ilon), 0.0d0, &
+      call geographic_lla2ecef(lat(ilat), lon(ilon), alt, &
                                     vr(1), vr(2), vr(3)) 
-      vr = vr / sqrt(sum(vr**2))
-      xyz(:,idx) = vr * radius
+      !vr = vr / sqrt(sum(vr**2))
+      xyz(:,idx) = vr/R_EARTH ! non-dimensionalized by R_EARTH 
     enddo
   enddo
 

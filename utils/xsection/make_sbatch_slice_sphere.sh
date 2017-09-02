@@ -53,9 +53,9 @@ cat <<EOF > $job_file
 #SBATCH -J slice_sphere
 #SBATCH -o ${job_file}.o%j
 #SBATCH -N 5
-#SBATCH -n 120
+#SBATCH -n 336
 #SBATCH -p normal
-#SBATCH -t 02:00:00
+#SBATCH -t 09:00:00
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end

@@ -13,10 +13,9 @@ sem_utils=~/seiscode/sem_utils
 
 #rm -rf figure/*
 
-title=stage10.iter04
+title=stage10.iter06
 
 mkdir figure_alpha_beta figure_phi_xi_eta
-awk '$1!~/#/&&$7<=220' slice_sphere.list > slice_sphere_220km.list
 
 srun -n1 $sem_utils/utils/xsection/plot_slice_gcircle_alpha_beta_phi_xi_eta.sh nc slice_gcircle.list ${title} xi,beta,alpha figure_alpha_beta &
 srun -n1 $sem_utils/utils/xsection/plot_slice_sphere_alpha_beta_phi_xi_eta.sh nc slice_sphere.list ${title} beta,alpha figure_alpha_beta &

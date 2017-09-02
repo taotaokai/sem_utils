@@ -26,7 +26,7 @@ do
 
   #------ check if any error in the last log file
   slurm_log=$(ls $event_dir/slurm/${work_type}.job.o* 2>/dev/null | sort | tail -n1)
-  grep -i -e "error" -e "cancelled" $slurm_log > /dev/null
+  grep -i -e "error" -e "cancelled" -e "bad" $slurm_log > /dev/null
   stat=$?
   # if error found
   if [ $stat -eq 0 ]; then

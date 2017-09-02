@@ -41,5 +41,4 @@ sem_utils/utils/xsection/make_list_slice_sphere.sh slice_sphere.list
 $sem_utils/utils/xsection/make_sbatch_slice_gcircle.sh $sem_utils mesh/DATABASES_MPI/ model slice_gcircle.list  vp0,vs0,alpha,beta,phi,xi,eta nc slice_gcircle.job "ibrun"
 $sem_utils/utils/xsection/make_sbatch_slice_sphere.sh $sem_utils mesh/DATABASES_MPI/ model slice_sphere.list vp0,vs0,alpha,beta,phi,xi,eta nc slice_sphere.job "ibrun"
 
-#$sem_utils/utils/xsection/make_sbatch_slice_gcircle.sh $sem_utils mesh/DATABASES_MPI/ model slice_gcircle_for_NChina_lithos.list  vp0,vs0,alpha,beta,phi,xi,eta nc slice_gcircle_for_NChina_lithos.job "ibrun"
 $sem_utils/utils/xsection/make_sbatch_slice_gcircle.sh $sem_utils mesh/DATABASES_MPI/ model slice_gcircle_NCC.list  vp0,vs0,alpha,beta,phi,xi,eta nc_NCC slice_gcircle_NCC.job "ibrun"

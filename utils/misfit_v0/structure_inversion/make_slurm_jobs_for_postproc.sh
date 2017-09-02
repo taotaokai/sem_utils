@@ -371,7 +371,7 @@ ls */misfit/grid_search_dmodel.txt | awk -F"/" '{printf "cp %s grid_search_dmode
 cd $iter_dir/grid_search_dmodel
 ls *.txt > list
 $sem_utils_dir/utils/misfit_v0/plot_grid_search_1d.py list > grid_search.out
-step_length=\$(awk -F"=" '{print \$2}' grid_search.out)
+step_length=\$(grep "optimal step_length" $iter_dir/grid_search_dmodel/grid_search.out | awk -F"=" '{print \$2}')
 
 
 dmodel_dir=$iter_dir/kernel

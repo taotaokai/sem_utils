@@ -54,7 +54,7 @@ cat <<EOF > $job_file
 #SBATCH -J slice_gcircle
 #SBATCH -o ${job_file}.o%j
 #SBATCH -N 1
-#SBATCH -n 24
+#SBATCH -n 68
 #SBATCH -p normal
 #SBATCH -t 01:30:00
 #SBATCH --mail-user=kai.tao@utexas.edu

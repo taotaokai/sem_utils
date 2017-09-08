@@ -92,7 +92,8 @@ xsection_lats = fh.variables['latitude'][:]
 xsection_lons = fh.variables['longitude'][:]
 
 model = {}
-for tag in model_names:
+#for tag in model_names:
+for tag in ['vp0', 'vs0', 'alpha', 'beta', 'xi', 'phi', 'eta']:
   model[tag] = fh.variables[tag][:]
 
 #------ plot map and xsection surface trace and marker
@@ -287,6 +288,33 @@ for irow in range(nrow):
     cs.cmap.set_under('purple')
 
     levels = np.arange(-6,6.1,1)
+    cb = plt.colorbar(cs, cax=cax, ticks=levels, orientation="vertical")
+    #cb.set_label('%', fontsize=10)
+    cb.ax.set_title('(%)', fontsize=10)
+
+  if tag in ['kappa']:
+    cmap = plt.cm.get_cmap("jet_r")
+
+    vp0 = model['vp0']
+    vp = vp0 * (1.0 + model['alpha'])
+    vs0 = model['vs0']
+    vs = vs0 * (1.0 + model['beta'])
+
+    kappa0 = vp0/vs0
+    kappa = vp/vs
+    zz = 100 * (kappa/kappa0 - 1.0)
+
+    #levels = np.arange(-5,5.1,1)
+    levels = np.concatenate((np.arange(-5,0,1), np.arange(1,5.1,1)))
+    cs = ax.contour(xx, yy, zz, levels=levels, colors=('k',), linewidths=(0.1,))
+    plt.clabel(cs, fmt='%2.1f', colors='k', fontsize=5)
+
+    levels = np.linspace(-5,5.1,100)
+    cs = ax.contourf(xx, yy, zz, cmap=cmap, levels=levels, extend="both")
+    cs.cmap.set_over('black')
+    cs.cmap.set_under('purple')
+
+    levels = np.arange(-5,5.1,1)
     cb = plt.colorbar(cs, cax=cax, ticks=levels, orientation="vertical")
     #cb.set_label('%', fontsize=10)
     cb.ax.set_title('(%)', fontsize=10)

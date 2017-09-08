@@ -10,10 +10,10 @@ model_names=${4:?[arg]need model names (e.g. xi,beta,alpha)}
 out_dir=${5:?[arg]need out_dir}
 
 awk 'NF&&$1!~/#/' $slice_list |\
-while read lat0 lon0 azimuth theta0 theta1 ntheta r0 r1 nr nc_tag 
+while read lat0 lon0 azimuth theta0 theta1 ntheta r0 r1 nr flag_ellipticity nc_tag 
 do
   echo
-  echo "#====== $nc_tag: $lat0 $lon0 $azimuth $theta0 $theta1 $ntheta $r0 $r1 $nr"
+  echo "#====== $nc_tag: $lat0 $lon0 $azimuth $theta0 $theta1 $ntheta $r0 $r1 $nr $flag_ellipticity"
   echo
 
   out_fig=$out_dir/${nc_tag}.pdf

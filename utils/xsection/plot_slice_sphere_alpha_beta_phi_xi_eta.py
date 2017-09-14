@@ -80,14 +80,15 @@ for irow in range(nrow):
   
   model_tag = model_names[irow]
 
-  m = Basemap(ax=ax, projection='tmerc', resolution='l',
+  m = Basemap(ax=ax, projection='tmerc',
+      resolution='l', area_thresh=30000,
       llcrnrlat=map_lat_min, llcrnrlon=map_lon_min, 
       urcrnrlat=map_lat_max, urcrnrlon=map_lon_max,
       lat_0=map_lat_center, lon_0=map_lon_center)
   m.drawcoastlines(linewidth=0.2)
   m.drawcountries(linewidth=0.2)
-  m.drawparallels(map_parallels, linewidth=0.1, labels=[1,0,0,0], fontsize=8)
-  m.drawmeridians(map_meridians, linewidth=0.1, labels=[0,0,0,1], fontsize=8)
+  m.drawparallels(map_parallels, linewidth=0.1, labels=[1,0,0,0], fontsize=12)
+  m.drawmeridians(map_meridians, linewidth=0.1, labels=[0,0,0,1], fontsize=12)
   
   # contourf model
   xx, yy = m(lons2, lats2)
@@ -248,7 +249,7 @@ for irow in range(nrow):
     volcano_lons = np.array([float(x[5]) for x in lines])
 
   x, y = m(volcano_lons, volcano_lats)
-  ax.plot(x, y, '^', color='purple', markersize=2)
+  ax.plot(x, y, '^', markeredgecolor='red', markerfacecolor='none', markersize=5, markeredgewidth=1)
 
 #------ save figure
 #plt.show()

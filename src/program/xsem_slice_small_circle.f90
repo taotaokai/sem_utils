@@ -26,8 +26,8 @@ subroutine selfdoc()
   print '(a)', "  (string) model_tags: comma delimited string, e.g. vsv,vsh,rho "
   print '(a)', "  (float) lat0,lon0: origin point on the small circle (degrees)"
   print '(a)', "  (float) lat_rot,lon_rot: rotation pole location (degrees)"
-  print '(a)', "  (float) theta0, theta1: begin/end angles along great circle (degrees)"
-  print '(a)', "  (integer) ntheta: number of grids along the great cicle"
+  print '(a)', "  (float) theta0, theta1: begin/end angles along the small circle in degrees of the Earth radius, NOT the rotation angle!!"
+  print '(a)', "  (integer) ntheta: number of grids along the small circle"
   print '(a)', "  (float) radius0,radius1: begin/end radius (km)"
   print '(a)', "  (integer) nradius: number of grids along the radius"
   print '(a)', "  (int) flag_ellipticity: (0/1) 0: spherical; 1: WGS84 ellipsoid"
@@ -91,7 +91,7 @@ program xsem_vertical_slice
   real(dp) :: v0(3), vrot(3), vr(3), rotmat(3,3)
   real(dp) :: lat0_geocentric
   real(dp) :: dtheta, dradius
-  real(dp), allocatable :: theta(:), radius(:), lat(:), lon(:)
+  real(dp), allocatable :: theta(:), rotation_angle(:), radius(:), lat(:), lon(:)
   integer :: itheta, iradius, idx
   real(dp), allocatable :: xyz(:,:)
   integer, allocatable :: idoubling(:)
@@ -138,6 +138,7 @@ program xsem_vertical_slice
   ! slice geometry
   integer :: lat0_varid, lon0_varid
   integer :: lat_rot_varid, lon_rot_varid
+  integer :: rotation_angle_varid
   character(len=*), parameter :: lat0_name = "latitude_orig"
   character(len=*), parameter :: lat0_units = "degree"
   character(len=*), parameter :: lon0_name = "longitude_orig"
@@ -146,6 +147,8 @@ program xsem_vertical_slice
   character(len=*), parameter :: lat_rot_units = "degree"
   character(len=*), parameter :: lon_rot_name = "longitude_rotation"
   character(len=*), parameter :: lon_rot_units = "degree"
+  character(len=*), parameter :: rotation_angle_name = "rotation_angle"
+  character(len=*), parameter :: rotation_angle_units = "degree"
   ! data: x,y,z(ntheta, nradius)
   integer :: x_varid, y_varid, z_varid
   real(sp), dimension(:,:), allocatable :: x_var, y_var, z_var
@@ -250,11 +253,14 @@ program xsem_vertical_slice
   theta = [ (theta0 + i * dtheta, i=0,ntheta-1) ]
   radius = [ (radius0 + i * dradius, i=0,nradius-1 ) ]
 
+  allocate(rotation_angle(ntheta))
+  rotation_angle = theta/sin(acos(sum(vrot*v0)))
+
   npoint = nradius * ntheta
   allocate(xyz(3, npoint))
 
   do itheta = 1, ntheta
-    call rotation_matrix(vrot, theta(itheta), rotmat)
+    call rotation_matrix(vrot, rotation_angle(itheta), rotmat)
     vr = matmul(rotmat, v0)
 
     if (flag_ellipticity == 0) then
@@ -485,6 +491,9 @@ program xsem_vertical_slice
     call check( nf90_def_var(ncid, lon_rot_name, NF90_DOUBLE, lon_rot_varid) )
     call check( nf90_put_att(ncid, lon_rot_varid, UNITS,      lon_rot_units) )
 
+    call check( nf90_def_var(ncid, rotation_angle_name, NF90_DOUBLE, rotation_angle_varid) )
+    call check( nf90_put_att(ncid, rotation_angle_varid, UNITS,      rotation_angle_units) )
+
     !-- define data variables.
     dimids = [theta_dimid, radius_dimid]
     ! x,y,z(ntheta,nradius)
@@ -520,6 +529,7 @@ program xsem_vertical_slice
     call check( nf90_put_var(ncid, lon0_varid, lon0 * RADIANS_TO_DEGREES) )
     call check( nf90_put_var(ncid, lat_rot_varid, lat_rot * RADIANS_TO_DEGREES) )
     call check( nf90_put_var(ncid, lon_rot_varid, lon_rot * RADIANS_TO_DEGREES) )
+    call check( nf90_put_var(ncid, rotation_angle_varid, rotation_angle * RADIANS_TO_DEGREES) )
 
     ! write data: x,y,z
     allocate(x_var(ntheta, nradius), y_var(ntheta, nradius), z_var(ntheta, nradius))

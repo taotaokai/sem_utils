@@ -491,9 +491,6 @@ program xsem_vertical_slice
     call check( nf90_def_var(ncid, lon_rot_name, NF90_DOUBLE, lon_rot_varid) )
     call check( nf90_put_att(ncid, lon_rot_varid, UNITS,      lon_rot_units) )
 
-    call check( nf90_def_var(ncid, rotation_angle_name, NF90_DOUBLE, rotation_angle_varid) )
-    call check( nf90_put_att(ncid, rotation_angle_varid, UNITS,      rotation_angle_units) )
-
     !-- define data variables.
     dimids = [theta_dimid, radius_dimid]
     ! x,y,z(ntheta,nradius)
@@ -503,6 +500,11 @@ program xsem_vertical_slice
     call check( nf90_put_att(ncid, y_varid, UNITS, y_units) )
     call check( nf90_def_var(ncid, z_name, NF90_REAL, dimids, z_varid) )
     call check( nf90_put_att(ncid, z_varid, UNITS, z_units) )
+
+    !dimids1 = [theta_dimid]
+    call check( nf90_def_var(ncid, rotation_angle_name, NF90_DOUBLE, theta_dimid, rotation_angle_varid) )
+    call check( nf90_put_att(ncid, rotation_angle_varid, UNITS,      rotation_angle_units) )
+
     ! model values(ntheta,nradius)
     allocate(model_varids(nmodel))
     do imodel = 1, nmodel

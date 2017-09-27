@@ -37,6 +37,7 @@ shared = gll_library geographic_mod kdtree2
 program = \
 	xlatlonhkm_to_vtk \
 	xsem_slice_gcircle \
+	xsem_slice_small_circle \
 	xsem_slice_sphere \
 	xmap_gcircle \
 	xsem_interp_mesh \

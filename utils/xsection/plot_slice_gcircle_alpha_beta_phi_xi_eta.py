@@ -60,7 +60,7 @@ def rotation_matrix(v_axis, theta):
   one_minus_cost = 1.0 - cost
 
   # normalize v_axis to unit vector
-  v = v_axis / sum(v_axis**2)**0.5
+  v_axis = v_axis / sum(v_axis**2)**0.5
 
   # rotation matrix
   R = np.zeros((3,3))

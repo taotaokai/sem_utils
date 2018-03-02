@@ -1098,10 +1098,23 @@ class Misfit(object):
       # check if the origin time in sac files are consistent with event['t0']
       syn_origin_time = tr.stats.starttime + \
           (tr.stats.sac['o'] - tr.stats.sac['b'])
+
       if abs(syn_origin_time - event['t0']) > 1.0e-6:
         err = "Inconsistent origin time between sac headers (%s) and event['t0'] (%s)" \
             % (syn_origin_time, event['t0'])
         raise Exception(err)
+
+      ## used only for NKNT
+      #shift_syn = 0.0
+      #if abs(syn_origin_time - event['t0']) > 1.0e-6:
+      #  warn_str = "Inconsistent origin time between sac headers (%s) and event['t0'] (%s), shift synthetic to align at event['t0']" \
+      #      % (syn_origin_time, event['t0'])
+      #  warnings.warn(warn_str, UserWarning)
+      #  shift_syn = event['t0'] - syn_origin_time
+      #  syn_origin_time = event['t0']
+      #syn_starttime = tr.stats.starttime - nl*syn_delta + shift_syn
+      # above used only for NKNT
+
       syn_starttime = tr.stats.starttime - nl*syn_delta
       syn_times = np.arange(nt) * syn_delta
 
@@ -4898,7 +4911,10 @@ class Misfit(object):
     """
     #------ check parameters
     plot_time = np.array([begin_time, end_time])
-    plot_flip = -1
+
+    # in case reverse the distance axis
+    #plot_flip = -1
+    plot_flip = 1
 
     plot_azbin = float(azbin)
     if plot_azbin <= 0:

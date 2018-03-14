@@ -118,7 +118,8 @@ program = \
 	xsem_gll_scale \
 	xsem_inverse_hess_diag_water_level \
 	xsem_make_gaussian_mask \
-	xsem_gll_scale_dvsv_to_rho
+	xsem_gll_scale_dvsv_to_rho \
+	xsem_gll_vph_vpv_vsv_vsh_to_vp0_vs0_phi_xi
 
 
 #------------------------------------------

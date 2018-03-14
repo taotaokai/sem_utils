@@ -114,6 +114,7 @@ program = \
 	xsem_kernel_aijkl_to_single_component \
 	xsem_gll_alpha_beta_phi_xi_to_vph_vpv_vsv_vsh \
 	xsem_gll_vph_vpv_vsv_vsh_to_alpha_beta_phi_xi \
+	xsem_gll_vph_vpv_vsv_vsh_to_vp0_vs0_phi_xi \
 	xsem_kernel_aijkl_to_tiso_in_alpha_beta_phi_xi_eta \
 	xsem_scale_dmodel_alpha_beta_phi_xi_eta \
 	xsem_add_dmodel_alpha_beta_phi_xi_eta \

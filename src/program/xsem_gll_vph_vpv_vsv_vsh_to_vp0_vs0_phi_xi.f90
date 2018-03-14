@@ -124,8 +124,8 @@ program xsem_gll_vph_vpv_vsv_vsh_to_vp0_vs0_phi_xi
     vp0 = sqrt((4*vph**2 + vpv**2)/5)
     vs0 = sqrt((2*vsv**2 + vsh**2)/3)
     ! P and S anisotropy
-    phi = (vph**2 - vpv**2)/vp2
-    xi = (vsh**2 - vsv**2)/vs2
+    phi = (vph**2 - vpv**2)/vp0**2
+    xi = (vsh**2 - vsv**2)/vs0**2
 
     ! enforce isotropy for element with ispec_is_tiso = .false.
     do ispec = 1, nspec

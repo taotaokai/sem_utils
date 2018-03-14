@@ -1,0 +1,58 @@
+#!/bin/bash
+
+# User defined control parameters
+
+# project root directory
+base_dir=$(readlink -f ~/NEChina_teleseis)
+
+# current stage and iteration number
+stage_dir=stage00.source
+iter_num=0
+
+#------ Data directories
+# sem_config/: DATA/, setup/, initial_model/
+sem_config_dir=${base_dir}/sem_config
+# specfem_globe/: bin/xmeshfem3D,xspecfem3D
+sem_build_dir=${base_dir}/specfem3d_globe
+# sem_utils/utils/misfit_v0
+sem_utils_dir=~/seiscode/sem_utils/utils/misfit_v0
+# events/<gcmtID>/data,dis
+data_dir=$base_dir/events
+# mesh/DATABASES_MPI/*solver_data.bin,..
+mesh_dir=$base_dir/mesh
+# initial source dir
+#source_dir=$base_dir/backup/stage08.source
+# current iteration directory: need model/ and misfit_par/
+iter_num=$(printf "%02d" $iter_num)
+iter_dir=$base_dir/$stage_dir/iter${iter_num}
+#model_dir=${iter_dir}/model
+misfit_par_dir=${iter_dir}/misfit_par
+#precond_dir=${iter_dir}/preconditioner # proc*_reg1_inv_hess_diag.bin
+# previous iteration directory
+iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
+prev_iter_dir=${base_dir}/${stage_dir}/iter${iter_minus_one}
+
+#------ slurm jobs
+# cluster cpu/node
+nproc_per_node=24 # on lonestar5
+#nproc_per_node=68 # on stampede2
+#nproc_per_node=20 # on cgas
+# number of SEM slices
+sem_nproc=384
+# number of MPI processors
+#slurm_nnode=14 # lonestar5
+slurm_nnode=16 # stampede2
+slurm_nproc=384
+# mpi executable
+slurm_mpiexec="ibrun" # on lonestar5,stampede2
+#slurm_mpiexec="mpirun -np $slurm_nproc"
+# slurm partition
+slurm_partition="normal" # on lonestar 5
+#slurm_partition="compute" # on cgas
+# time limit
+slurm_timelimit_mesh=00:10:00 # mesh
+slurm_timelimit_forward=02:30:00 # forward
+slurm_timelimit_adjoint=05:00:00 # adjoint
+slurm_timelimit_misfit=05:00:00 # misfit,kernel_sum
+
+#----- update model

@@ -18,13 +18,14 @@ sem_build_dir=${base_dir}/specfem3d_globe
 sem_utils_dir=~/seiscode/sem_utils/utils/misfit_v0
 # events/<gcmtID>/data,dis
 data_dir=$base_dir/events
-# mesh/DATABASES_MPI/*solver_data.bin,..
-mesh_dir=$base_dir/mesh
 # initial source dir
 #source_dir=$base_dir/backup/stage08.source
 # current iteration directory: need model/ and misfit_par/
 iter_num=$(printf "%02d" $iter_num)
 iter_dir=$base_dir/$stage_dir/iter${iter_num}
+# mesh/DATABASES_MPI/*solver_data.bin,..
+mesh_dir=$iter_dir/mesh
+source_dir=$iter_dir/CMTSOLUTION_initial
 #model_dir=${iter_dir}/model
 misfit_par_dir=${iter_dir}/misfit_par
 #precond_dir=${iter_dir}/preconditioner # proc*_reg1_inv_hess_diag.bin
@@ -50,9 +51,10 @@ slurm_mpiexec="ibrun" # on lonestar5,stampede2
 slurm_partition="normal" # on lonestar 5
 #slurm_partition="compute" # on cgas
 # time limit
-slurm_timelimit_mesh=00:10:00 # mesh
-slurm_timelimit_forward=02:30:00 # forward
-slurm_timelimit_adjoint=05:00:00 # adjoint
-slurm_timelimit_misfit=05:00:00 # misfit,kernel_sum
+slurm_timelimit_mesh=00:30:00 # mesh
+slurm_timelimit_forward=04:00:00 # forward
+slurm_timelimit_adjoint=04:00:00 # adjoint for source
+slurm_timelimit_misfit=05:00:00 # misfit
+slurm_timelimit_search=05:00:00 # grid search
 
 #----- update model

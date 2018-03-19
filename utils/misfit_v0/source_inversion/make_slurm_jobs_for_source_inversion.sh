@@ -4,28 +4,15 @@
 
 wkdir=$(pwd)
 
-nnode=14
-nproc=256
-queue=compute
-mpiexec="mpirun -np $nproc"
-
-event_id=${1:?[arg]need event_id}
-
-# link the required directories to your wkdir
-specfem_dir=$wkdir/specfem3d_globe
-mesh_dir=$wkdir/mesh
-data_dir=$wkdir/events
-utils_dir=$wkdir/utils
-
-# get the full path
-specfem_dir=$(readlink -f $specfem_dir)
-mesh_dir=$(readlink -f $mesh_dir)
-data_dir=$(readlink -f $data_dir)
-utils_dir=$(readlink -f $utils_dir)
+control_file=${1:?[arg]need control_file}
+event_id=${2:?[arg]need event_id}
+ 
+# source control_file
+source $control_file
 
 #====== define variables
 # directories
-event_dir=$wkdir/$event_id
+event_dir=$iter_dir/$event_id
 misfit_dir=$event_dir/misfit
 figure_dir=$misfit_dir/figure
 slurm_dir=$event_dir/slurm
@@ -59,13 +46,13 @@ cat <<EOF > $green_job
 #!/bin/bash
 #SBATCH -J ${event_id}.green
 #SBATCH -o ${green_job}.o%j
-#SBATCH -N $nnode
-#SBATCH -n $nproc
-#SBATCH -p $queue
-#SBATCH -t 01:10:00
-#SBATCH --mail-user=kai.tao@utexas.edu
-#SBATCH --mail-type=begin
-#SBATCH --mail-type=end
+#SBATCH -N $slurm_nnode
+#SBATCH -n $slurm_nproc
+#SBATCH -p $slurm_partition
+#SBATCH -t $slurm_timelimit_forward
+##SBATCH --mail-user=kai.tao@utexas.edu
+##SBATCH --mail-type=begin
+##SBATCH --mail-type=end
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -102,7 +89,7 @@ cp -L DATA/Par_file OUTPUT_FILES
 cp -L DATA/STATIONS OUTPUT_FILES
 cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
-$mpiexec $specfem_dir/bin/xspecfem3D
+$slurm_mpiexec $sem_build_dir/bin/xspecfem3D
 
 mkdir $event_dir/\$out_dir/sac
 mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
@@ -120,11 +107,11 @@ cat <<EOF > $misfit_job
 #SBATCH -o $misfit_job.o%j
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -p $queue
-#SBATCH -t 12:50:00
-#SBATCH --mail-user=kai.tao@utexas.edu
-#SBATCH --mail-type=begin
-#SBATCH --mail-type=end
+#SBATCH -p $slurm_partition
+#SBATCH -t $slurm_timelimit_misfit
+##SBATCH --mail-user=kai.tao@utexas.edu
+##SBATCH --mail-type=begin
+##SBATCH --mail-type=end
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -135,7 +122,7 @@ cd $event_dir
 chmod u+w -R $misfit_dir
 rm -rf $misfit_dir
 mkdir -p $misfit_dir
-$utils_dir/read_data.py \
+$sem_utils_dir/read_data.py \
   $misfit_par \
   $db_file \
   $cmt_file \
@@ -143,20 +130,20 @@ $utils_dir/read_data.py \
   $event_dir/output_green/sac \
   $data_dir/$event_id/dis
 
-$utils_dir/measure_misfit.py $misfit_par $db_file
+$sem_utils_dir/measure_misfit.py $misfit_par $db_file
 
-$utils_dir/output_misfit.py $db_file $misfit_dir/misfit.txt
+$sem_utils_dir/output_misfit.py $db_file $misfit_dir/misfit.txt
 
 chmod u+w $figure_dir
 rm -rf $figure_dir
 mkdir -p $figure_dir
-$utils_dir/plot_misfit.py $misfit_par $db_file $figure_dir
+$sem_utils_dir/plot_misfit.py $misfit_par $db_file $figure_dir
 
 #------ adjoint source for kernel simulation
 chmod u+w $event_dir/SEM
 rm -rf $event_dir/SEM
 mkdir -p $event_dir/SEM
-$utils_dir/output_adj.py $misfit_par $db_file $event_dir/SEM
+$sem_utils_dir/output_adj.py $misfit_par $db_file $event_dir/SEM
 
 # make STATIONS_ADJOINT
 cd $event_dir/SEM
@@ -176,13 +163,13 @@ cat <<EOF > $srcfrechet_job
 #!/bin/bash
 #SBATCH -J ${event_id}.srcfrechet
 #SBATCH -o $srcfrechet_job.o%j
-#SBATCH -N $nnode
-#SBATCH -n $nproc
-#SBATCH -p $queue
-#SBATCH -t 02:30:00
-#SBATCH --mail-user=kai.tao@utexas.edu
-#SBATCH --mail-type=begin
-#SBATCH --mail-type=end
+#SBATCH -N $slurm_nnode
+#SBATCH -n $slurm_nproc
+#SBATCH -p $slurm_partition
+#SBATCH -t $slurm_timelimit_adjoint
+##SBATCH --mail-user=kai.tao@utexas.edu
+##SBATCH --mail-type=begin
+##SBATCH --mail-type=end
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -212,7 +199,7 @@ cp -L DATA/STATIONS_ADJOINT OUTPUT_FILES
 cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
 cd $event_dir
-$mpiexec $specfem_dir/bin/xspecfem3D
+$slurm_mpiexec $sem_build_dir/bin/xspecfem3D
 
 mv DATABASES_MPI/*.sem OUTPUT_FILES
 
@@ -229,10 +216,10 @@ cat <<EOF > $dgreen_job
 #!/bin/bash
 #SBATCH -J ${event_id}.dgreen
 #SBATCH -o $dgreen_job.o%j
-#SBATCH -N $nnode
-#SBATCH -n $nproc
-#SBATCH -p $queue
-#SBATCH -t 02:30:00
+#SBATCH -N $slurm_nnode
+#SBATCH -n $slurm_nproc
+#SBATCH -p $slurm_partition
+#SBATCH -t $slurm_timelimit_forward
 #SBATCH --mail-user=kai.tao@utexas.edu
 #SBATCH --mail-type=begin
 #SBATCH --mail-type=end
@@ -242,8 +229,8 @@ echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
 # make perturbed CMTSOLUTION
-$utils_dir/make_dcmt.py $cmt_file $misfit_dir/srcfrechet 0.001 $misfit_dir/dcmt
-$utils_dir/add_dcmt.py $cmt_file $misfit_dir/dcmt 1.0 0.0 0.0 $misfit_dir/CMTSOLUTION.perturb
+$sem_utils_dir/source_inversion/make_dcmt.py $cmt_file $misfit_dir/srcfrechet 0.001 $misfit_dir/dcmt
+$sem_utils_dir/source_inversion/add_dcmt.py $cmt_file $misfit_dir/dcmt 1.0 0.0 0.0 $misfit_dir/CMTSOLUTION.perturb
 
 #for tag in dxs dmt
 for tag in perturb
@@ -272,7 +259,7 @@ do
   cp -L DATA/CMTSOLUTION OUTPUT_FILES
   
   cd $event_dir
-  $mpiexec $specfem_dir/bin/xspecfem3D
+  $slurm_mpiexec $sem_build_dir/bin/xspecfem3D
 
   mkdir $event_dir/\$out_dir/sac
   mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
@@ -292,11 +279,11 @@ cat <<EOF > $search_job
 #SBATCH -o $search_job.o%j
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -p $queue
-#SBATCH -t 01:30:00
-#SBATCH --mail-user=kai.tao@utexas.edu
-#SBATCH --mail-type=begin
-#SBATCH --mail-type=end
+#SBATCH -p $slurm_partition
+#SBATCH -t $slurm_timelimit_search
+##SBATCH --mail-user=kai.tao@utexas.edu
+##SBATCH --mail-type=begin
+##SBATCH --mail-type=end
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -305,10 +292,10 @@ echo
 cd $event_dir 
 
 # read derivatives of green's fuction 
-$utils_dir/waveform_der_source.py $misfit_par $db_file $event_dir/output_perturb/sac xs_mt
+$sem_utils_dir/source_inversion/waveform_der_source.py $misfit_par $db_file $event_dir/output_perturb/sac xs_mt
 
 # grid search of source model
-$utils_dir/grid_search_source.py $misfit_par $db_file $misfit_dir/grid_search_source.txt $misfit_dir/grid_search_source.pdf
+$sem_utils_dir/source_inversion/grid_search_source.py $misfit_par $db_file $misfit_dir/grid_search_source.txt $misfit_dir/grid_search_source.pdf
 
 # get optimal model
 xs_mt_step_opt=\$(grep xs_mt_step_opt $misfit_dir/grid_search_source.txt | tail -n1 | awk '{print \$3}')
@@ -319,7 +306,7 @@ echo xs_mt_step_opt = \$xs_mt_step_opt
 echo dt0_opt = \$dt0_opt
 echo dtau_opt = \$dtau_opt
 
-$utils_dir/add_dcmt.py $cmt_file $misfit_dir/dcmt \$xs_mt_step_opt \$dt0_opt \$dtau_opt $misfit_dir/CMTSOLUTION.updated
+$sem_utils_dir/source_inversion/add_dcmt.py $cmt_file $misfit_dir/dcmt \$xs_mt_step_opt \$dt0_opt \$dtau_opt $misfit_dir/CMTSOLUTION.updated
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

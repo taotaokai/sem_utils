@@ -5024,11 +5024,15 @@ class Misfit(object):
     lat_range = max_lat - min_lat
     min_lat -= 0.1*lat_range
     max_lat += 0.1*lat_range
+    if min_lat < -90.0: min_lat = -90.0
+    if max_lat > 90.0: max_lat = 90.0
     min_lon = min(min(stlo_all), evlo)
     max_lon = max(max(stlo_all), evlo)
     lon_range = max_lon - min_lon
     min_lon -= 0.1*lon_range
     max_lon += 0.1*lon_range
+    if min_lon < -180.0: min_lon = -180.0
+    if max_lon > 180.0: max_lon = 180.0
     lat_0 = np.mean(stla_all)
     lon_0 = np.mean(stlo_all)
     #

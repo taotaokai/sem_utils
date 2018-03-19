@@ -29,10 +29,10 @@ $utils_dir/submit_slurm_jobs_for_event.sh to_run.txt misfit
 $utils_dir/submit_slurm_jobs_for_event.sh to_run.txt kernel
 
 # 2.1 hess (If you decide to use hess_sum/ from previous iteration by creating a symbolic link, skip this step)
-$utils_dir/submit_slurm_jobs.sh slurm model_random,mesh_random
-$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt syn_random
-$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt misfit_random
-$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt kernel_random
+$utils_dir/submit_slurm_jobs.sh slurm model_random,mesh_hess
+$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt hess_syn
+$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt hess_misfit
+$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt hess_kernel
 $utils_dir/submit_slurm_jobs.sh slurm hess_sum
 
 # 3. post-processing

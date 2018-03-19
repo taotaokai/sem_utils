@@ -277,10 +277,8 @@ ${slurm_mpiexec} $sem_utils_dir/bin/xsem_math \
 #====== convert to gll model
 
 # link reference model
-ls $mesh_REF_dir/DATABASES_MPI/proc*_reg1_vpv.bin | awk -F"/" '{a=\$NF;gsub(/v\.bin/,"0.bin",a); printf "ln -sf %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir > \$out_dir/link_sh
-ls $mesh_REF_dir/DATABASES_MPI/proc*_reg1_vsv.bin | awk -F"/" '{a=\$NF;gsub(/v\.bin/,"0.bin",a); printf "ln -sf %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir >> \$out_dir/link_sh
-ls $mesh_REF_dir/DATABASES_MPI/proc*_reg1_rho.bin | awk -F"/" '{a=\$NF;gsub(/\.bin/,"0.bin",a); printf "ln -sf %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir >> \$out_dir/link_sh
-bash \$out_dir/link_sh
+ln -sf $model_REF_dir/proc*_reg1_v[ps]0.bin \$out_dir
+ln -sf $model_REF_dir/proc*_reg1_rho0.bin \$out_dir
 
 $slurm_mpiexec $sem_utils_dir/bin/xsem_gll_alpha_beta_phi_xi_to_vph_vpv_vsv_vsh \
   $sem_nproc $mesh_dir/DATABASES_MPI \$out_dir  \$out_dir
@@ -394,10 +392,8 @@ ${slurm_mpiexec} $sem_utils_dir/bin/xsem_add_dmodel_alpha_beta_phi_xi_eta \
   \$out_dir
 
 # link reference model
-ls $mesh_REF_dir/DATABASES_MPI/proc*_reg1_vpv.bin | awk -F"/" '{a=\$NF;gsub(/v\.bin/,"0.bin",a); printf "ln -sf %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir > \$out_dir/link_sh
-ls $mesh_REF_dir/DATABASES_MPI/proc*_reg1_vsv.bin | awk -F"/" '{a=\$NF;gsub(/v\.bin/,"0.bin",a); printf "ln -sf %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir >> \$out_dir/link_sh
-ls $mesh_REF_dir/DATABASES_MPI/proc*_reg1_rho.bin | awk -F"/" '{a=\$NF;gsub(/\.bin/,"0.bin",a); printf "ln -sf %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir >> \$out_dir/link_sh
-bash \$out_dir/link_sh
+ln -sf $model_REF_dir/proc*_reg1_v[ps]0.bin \$out_dir
+ln -sf $model_REF_dir/proc*_reg1_rho0.bin \$out_dir
 
 # convert to gll model
 $slurm_mpiexec $sem_utils_dir/bin/xsem_gll_alpha_beta_phi_xi_to_vph_vpv_vsv_vsh \
@@ -454,9 +450,7 @@ ln -sf $model_dir/proc*_reg1_rho.bin \$out_dir/
 #====== convert to gll model
 
 # link reference model
-ls $mesh_REF_dir/DATABASES_MPI/proc*_reg1_vpv.bin | awk -F"/" '{a=\$NF;gsub(/v\.bin/,"0.bin",a); printf "ln -sf %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir > \$out_dir/link_sh
-ls $mesh_REF_dir/DATABASES_MPI/proc*_reg1_vsv.bin | awk -F"/" '{a=\$NF;gsub(/v\.bin/,"0.bin",a); printf "ln -sf %s %s/%s\\n",\$0,outdir,a}' outdir=\$out_dir >> \$out_dir/link_sh
-bash \$out_dir/link_sh
+ln -sf $model_REF_dir/proc*_reg1_v[ps]0.bin \$out_dir
 
 $slurm_mpiexec $sem_utils_dir/bin/xsem_gll_alpha_beta_phi_xi_to_vph_vpv_vsv_vsh \
   $sem_nproc $mesh_dir/DATABASES_MPI \$out_dir  \$out_dir

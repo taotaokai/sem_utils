@@ -16,6 +16,6 @@ do
   event_dir=$wkdir/$event_id
   slurm_dir=$event_dir/slurm
 
-  $utils_dir/submit_slurm_jobs.sh $slurm_dir $job_names $job_dep 
+  $utils_dir/submit_slurm_jobs_sequential.sh $slurm_dir $job_names $job_dep 
 
 done

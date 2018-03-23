@@ -90,8 +90,8 @@ print("cc(dchi_dmt,mt) = ", cc)
 #print("cc(dchi_dmt_ortho,mt) = ", cc)
 
 #====== get gradient for xs_ratio and mt_ratio
-# xs = R_earth * xs_ratio
-# mt = m0 * mt_ratio
+# xs_ratio = xs / R_earth # this normalization does NOT make too much sense
+# mt_ratio = mt / m0
 
 dchi_dxs_ratio = R_earth * dchi_dxs
 

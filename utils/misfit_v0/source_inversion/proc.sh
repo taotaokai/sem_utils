@@ -31,10 +31,12 @@ do
   cmt_file=$source_dir/${event_id}.cmt
   echo ------ use: $(readlink -f $cmt_file)
   if [ ! -f "$cmt_file" ]; then
-    echo "[ERROR] $cmt_file not found"
-    exit -1
+    echo "[WARN] $cmt_file does NOT exist!"
+    #exit -1
   fi
-  cp $cmt_file $event_dir/DATA/CMTSOLUTION.init
+  #ln -sf $cmt_file $event_dir/DATA/CMTSOLUTION.init
+  rm $event_dir/DATA/CMTSOLUTION.init
+  cp -L $cmt_file $event_dir/DATA/CMTSOLUTION.init
 
   # copy misfit_par file
   cp $misfit_par_dir/${event_id}_misfit_par.py $event_dir/DATA/misfit_par.py

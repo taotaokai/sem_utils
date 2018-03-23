@@ -3371,7 +3371,7 @@ class Misfit(object):
     event = self.data['event']
     if 'tau' in dm:
       tau = dm['tau'] + event['tau']
-      if any(tau <= 0):
+      if any(tau < 0):
         error_str = "dm['dtau'] has invalid values (event['tau']=%f)!" \
             % event['tau']
         raise Exception(error_str)

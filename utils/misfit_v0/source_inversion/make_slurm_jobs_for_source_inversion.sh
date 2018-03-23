@@ -27,8 +27,8 @@ search_job=$slurm_dir/search.job
 cmt_file=$event_dir/DATA/CMTSOLUTION.init
 if [ ! -f "$cmt_file" ]
 then
-  echo "[ERROR] $cmt_file does NOT exist!"
-  exit -1
+  echo "[WARN] $cmt_file does NOT exist!"
+  #exit -1
 fi
 # database file
 mkdir -p $misfit_dir
@@ -93,6 +93,17 @@ $slurm_mpiexec $sem_build_dir/bin/xspecfem3D
 
 mkdir $event_dir/\$out_dir/sac
 mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
+
+# modify CMTSOLUTION.init with the source location actually used
+tmpfile=\$(mktemp)
+grep -A4 "position of the source that will be used:" $event_dir/\$out_dir/output_solver.txt > \$tmpfile
+x=\$(grep "x(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
+y=\$(grep "y(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
+z=\$(grep "z(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
+
+sed -i "s/x(m).*/x(m):              \$x/"  $cmt_file
+sed -i "s/y(m).*/y(m):              \$y/"  $cmt_file
+sed -i "s/z(m).*/z(m):              \$z/"  $cmt_file
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -263,6 +274,30 @@ do
 
   mkdir $event_dir/\$out_dir/sac
   mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
+
+  # modify CMTSOLUTION.perturb with the source location actually used
+  tmpfile=\$(mktemp)
+  grep -A4 "position of the source that will be used:" $event_dir/\$out_dir/output_solver.txt > \$tmpfile
+  x1=\$(grep "x(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
+  y1=\$(grep "y(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
+  z1=\$(grep "z(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
+  
+  sed -i "s/x(m).*/x(m):              \$x1/"  \$dcmt_file
+  sed -i "s/y(m).*/y(m):              \$y1/"  \$dcmt_file
+  sed -i "s/z(m).*/z(m):              \$z1/"  \$dcmt_file
+
+  # modify dcmt file
+  x0=\$(grep "x(m)" $cmt_file | awk '{printf "%+15.8E", \$2}')
+  y0=\$(grep "y(m)" $cmt_file | awk '{printf "%+15.8E", \$2}')
+  z0=\$(grep "z(m)" $cmt_file | awk '{printf "%+15.8E", \$2}')
+
+  dx=\$(echo \$x1 \$x0 | awk '{printf "%+15.8E", \$1-\$2}')
+  dy=\$(echo \$y1 \$y0 | awk '{printf "%+15.8E", \$1-\$2}')
+  dz=\$(echo \$z1 \$z0 | awk '{printf "%+15.8E", \$1-\$2}')
+
+  sed -i "s/dx(m).*/dx(m):              \$dx/"  $misfit_dir/dcmt
+  sed -i "s/dy(m).*/dy(m):              \$dy/"  $misfit_dir/dcmt
+  sed -i "s/dz(m).*/dz(m):              \$dz/"  $misfit_dir/dcmt
 
 done
   

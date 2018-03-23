@@ -3,6 +3,7 @@
 """calculate cc for step sizes
 """
 import sys
+import warnings
 import importlib.util
 import datetime
 import numpy as np 
@@ -51,6 +52,9 @@ xs_mt_step_opt = 0.5
 
 niter = 0
 tau0 = misfit.data['event']['tau']
+#if tau0 <= 0.0:
+#  warnings.warn("replace zero tau0 to 1.0!")
+#  tau0 = 1.0
 f = open(out_file, 'w')
 with PdfPages(out_figure) as pdf:
   while niter < 4:

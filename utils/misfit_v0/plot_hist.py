@@ -41,9 +41,9 @@ max_dt = 10
 
 #----- surface RZ
 
-# get arrays of dt(syn-obs), cc 
+# get arrays of dt(Tobs-Tsyn), cc 
 data_type = "surface_RZ"
-data = [ [ float(x[2]), float(x[3]), -1.0*float(x[5]) ] for x in lines if (x[1]=='surface_R' or x[1]=='surface_Z') ]
+data = [ [ float(x[2]), float(x[3]), float(x[5]) ] for x in lines if (x[1]=='surface_R' or x[1]=='surface_Z') ]
 
 weight = np.array([ x[0] for x in data ])
 cc = np.array([ x[1] for x in data ])
@@ -76,7 +76,7 @@ ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
 ax.hist(dt, nbins, histtype='step')
-ax.set_xlabel('dt_cc (s): syn-obs')
+ax.set_xlabel('dt_cc (s): Tobs-Tsyn')
 ax.set_ylabel('No. of windows')
 ax.set_xlim([-max_dt, max_dt])
 title_str = "%s %.3f$\pm$%.3f" % (data_type, np.mean(dt), np.std(dt))
@@ -85,9 +85,9 @@ ax.set_title(title_str)
 
 #----- surface T
 
-# get arrays of dt(syn-obs), cc 
+# get arrays of dt(Tobs-Tsyn), cc 
 data_type = "surface_T"
-data = [ [ float(x[2]), float(x[3]), -1.0*float(x[5]) ] for x in lines if x[1]=='surface_T' ]
+data = [ [ float(x[2]), float(x[3]), float(x[5]) ] for x in lines if x[1]=='surface_T' ]
 
 weight = np.array([ x[0] for x in data ])
 cc = np.array([ x[1] for x in data ])
@@ -120,7 +120,7 @@ ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
 ax.hist(dt, nbins, histtype='step')
-ax.set_xlabel('dt_cc (s): syn-obs')
+ax.set_xlabel('dt_cc (s): Tobs-Tsyn')
 ax.set_ylabel('No. of windows')
 ax.set_xlim([-max_dt, max_dt])
 title_str = "%s %.3f$\pm$%.3f" % (data_type, np.mean(dt), np.std(dt))
@@ -129,9 +129,9 @@ ax.set_title(title_str)
 
 #----- body wave P-SV
 
-# get arrays of dt(syn-obs), cc 
+# get arrays of dt(Tobs-Tsyn), cc 
 data_type = "body P-SV"
-data = [ [ float(x[2]), float(x[3]), -1.0*float(x[5]) ] 
+data = [ [ float(x[2]), float(x[3]), float(x[5]) ] 
          for x in lines if ('surface' not in x[1]) & ('_T' not in x[1]) ]
 
 weight = np.array([ x[0] for x in data ])
@@ -165,7 +165,7 @@ ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
 ax.hist(dt, nbins, histtype='step')
-ax.set_xlabel('dt_cc (s): syn-obs')
+ax.set_xlabel('dt_cc (s): Tobs-Tsyn')
 ax.set_ylabel('No. of windows')
 ax.set_xlim([-max_dt, max_dt])
 title_str = "%s %.3f$\pm$%.3f" % (data_type, np.mean(dt), np.std(dt))
@@ -173,9 +173,9 @@ ax.set_title(title_str)
 
 #----- body wave SH
 
-# get arrays of dt(syn-obs), cc 
+# get arrays of dt(Tobs-Tsyn), cc 
 data_type = "body SH"
-data = [ [ float(x[2]), float(x[3]), -1.0*float(x[5]) ] 
+data = [ [ float(x[2]), float(x[3]), float(x[5]) ] 
          for x in lines if ('_T' in x[1]) ]
 
 weight = np.array([ x[0] for x in data ])
@@ -209,7 +209,7 @@ ax_origin = ax_origin_subplot*subplot_size + subplot_origin
 ax_size = ax_size_subplot*subplot_size
 ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
 ax.hist(dt, nbins, histtype='step')
-ax.set_xlabel('dt_cc (s): syn-obs')
+ax.set_xlabel('dt_cc (s): Tobs-Tsyn')
 ax.set_ylabel('No. of windows')
 ax.set_xlim([-max_dt, max_dt])
 title_str = "%s %.3f$\pm$%.3f" % (data_type, np.mean(dt), np.std(dt))
@@ -218,9 +218,9 @@ ax.set_title(title_str)
 
 ##----- All
 #
-## get arrays of dt(syn-obs), cc 
+## get arrays of dt(Tobs-Tsyn), cc 
 #data_type = "all"
-#data = [ [ float(x[2]), float(x[3]), -1.0*float(x[5]) ] for x in lines ]
+#data = [ [ float(x[2]), float(x[3]), float(x[5]) ] for x in lines ]
 #
 #weight = np.array([ x[0] for x in data ])
 #cc = np.array([ x[1] for x in data ])
@@ -253,7 +253,7 @@ ax.set_title(title_str)
 #ax_size = ax_size_subplot*subplot_size
 #ax = fig.add_axes(np.concatenate((ax_origin, ax_size)))
 #ax.hist(dt, nbins, histtype='step')
-#ax.set_xlabel('dt_cc (s): syn-obs')
+#ax.set_xlabel('dt_cc (s): Tobs-Tsyn')
 #ax.set_ylabel('No. of windows')
 #ax.set_xlim([-max_dt, max_dt])
 #title_str = "%s %.3f$\pm$%.3f" % (data_type, np.mean(dt), np.std(dt))

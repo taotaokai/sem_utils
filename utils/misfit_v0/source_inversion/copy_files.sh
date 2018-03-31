@@ -10,7 +10,7 @@ find $source_dir -maxdepth 1 -type l | xargs -I@ cp -a @ .
 
 rm CMTSOLUTION_initial
 #ln -s $(readlink -f $source_dir/CMTSOLUTION_updated) CMTSOLUTION_initial
-cp -L $(readlink -f $source_dir/CMTSOLUTION_updated) CMTSOLUTION_initial
+cp -rL $(readlink -f $source_dir/CMTSOLUTION_updated) CMTSOLUTION_initial
 #ln -s $(readlink -f $source_dir/mesh) mesh
 
 rm mesh; ln -s $(readlink -f $source_dir/mesh) mesh

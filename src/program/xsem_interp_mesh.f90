@@ -9,8 +9,8 @@ subroutine selfdoc()
   print '(a)', "SYNOPSIS"
   print '(a)', ""
   print '(a)', "  xsem_interp_mesh \ "
-  print '(a)', "    <old_mesh_dir> <old_model_dir> <nproc_old> "
-  print '(a)', "    <new_mesh_dir> <nproc_new> <model_tags> <output_dir> "
+  print '(a)', "    <nproc_old> <old_mesh_dir> <old_model_dir> "
+  print '(a)', "    <nproc_new> <new_mesh_dir> <model_tags> <output_dir> "
   print '(a)', ""
   print '(a)', "DESCRIPTION"
   print '(a)', ""
@@ -122,11 +122,11 @@ program xsem_interp_mesh
   do i = 1, nargs
     call get_command_argument(i, args(i), status=ier)
   enddo
-  read(args(1), '(a)') old_mesh_dir
-  read(args(2), '(a)') old_model_dir
-  read(args(3), *) nproc_old
-  read(args(4), '(a)') new_mesh_dir
-  read(args(5), *) nproc_new
+  read(args(1), *) nproc_old
+  read(args(2), '(a)') old_mesh_dir
+  read(args(3), '(a)') old_model_dir
+  read(args(4), *) nproc_new
+  read(args(5), '(a)') new_mesh_dir
   read(args(6), '(a)') model_tags
   read(args(7), '(a)') output_dir
 

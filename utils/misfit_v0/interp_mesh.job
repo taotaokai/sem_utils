@@ -1,0 +1,12 @@
+#!/bin/bash
+#SBATCH -J interp
+#SBATCH -o interp.job.o%j
+#SBATCH -n 256
+#SBATCH -t 01:05:00
+
+mkdir model_cut_edges_of_FWEA18
+mpirun -np 256 ~/seiscode/sem_utils/bin/xsem_interp_mesh2 \
+    336 mesh_FWEA18/DATABASES_MPI model_FWEA18 \
+    256 mesh_cut_edges_of_FWEA18/DATABASES_MPI  mesh_cut_edges_of_FWEA18/DATABASES_MPI \
+    rho,vpv,vph,vsv,vsh,eta \
+    model_cut_edges_of_FWEA18

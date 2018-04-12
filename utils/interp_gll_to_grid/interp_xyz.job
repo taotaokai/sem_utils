@@ -1,0 +1,28 @@
+#!/bin/bash
+#SBATCH -J interp_xyz
+#SBATCH -o interp_xyz.job.o%j
+#SBATCH -n 336
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+wkdir=$(pwd)
+sem_utils=~/seiscode/sem_utils
+
+nproc=336
+mesh_dir=mesh/DATABASES_MPI
+model_dir=model
+model_tags=vp0,vs0,alpha,beta,phi,xi,eta
+xyz_list=xyz.lst
+out_list=model_grid.lst
+
+mpirun -np 336 $sem_utils/bin/xsem_interp_xyz \
+  $mesh_dir $nproc \
+  $model_dir $model_tags \
+  $xyz_list \
+  $out_list
+
+echo
+echo "Done: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

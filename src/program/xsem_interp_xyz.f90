@@ -328,7 +328,7 @@ program xsem_interp_xyz
     endif
 
     ! write header line
-    write(IOUT, '("# x y z misloc ")', advance='no')
+    write(IOUT, '("# x y z status misloc ")', advance='no')
     do imodel = 1, nmodel
       write(IOUT, '(a,2x)', advance='no') trim(model_names(imodel))
     enddo

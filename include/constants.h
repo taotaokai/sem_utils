@@ -209,9 +209,9 @@
 ! default crustal model
 ! (used as default when CRUSTAL flag is set for simulation)
 !-- uncomment for using Crust1.0
-! integer, parameter :: ITYPE_CRUSTAL_MODEL = ICRUST_CRUST1
+  integer, parameter :: ITYPE_CRUSTAL_MODEL = ICRUST_CRUST1
 !-- uncomment for using Crust2.0
-  integer, parameter :: ITYPE_CRUSTAL_MODEL = ICRUST_CRUST2
+! integer, parameter :: ITYPE_CRUSTAL_MODEL = ICRUST_CRUST2
 !-- uncomment for using General Crustmaps instead
 ! integer, parameter :: ITYPE_CRUSTAL_MODEL = ICRUST_CRUSTMAPS
 !-- uncomment for using EPcrust instead (European regional model)
@@ -266,7 +266,7 @@
 ! use this t0 as earliest starting time rather than the automatically calculated one
 ! (must be positive and bigger than the automatically one to be effective;
 !  simulation will start at t = - t0)
-  double precision, parameter :: USER_T0 = 10.0d0
+  double precision, parameter :: USER_T0 = 15.0d0
 
 ! distance threshold (in km) above which we consider that a receiver
 ! is located outside the mesh and therefore excluded from the station list
@@ -294,7 +294,8 @@
 !Mxz(N*m):          4.200000e+26
 !Myz(N*m):         -2.480000e+27
 !```
-  logical, parameter :: USE_ECEF_CMTSOLUTION = .true.
+! logical, parameter :: USE_ECEF_CMTSOLUTION = .true.
+  logical, parameter :: USE_ECEF_CMTSOLUTION = .false.
 
 !!-----------------------------------------------------------
 !!
@@ -332,6 +333,10 @@
 ! to suppress element stretching at 410/660 internal topography
 ! (i.e. creates mesh without 410/660 topography for Harvard model (s362ani,..))
   logical,parameter :: SUPPRESS_INTERNAL_TOPOGRAPHY = .false.
+
+! ktao: (S362ani) use external topo map for 410-/660-km instead of s362ani topo
+! need topo map file "DATA/s362ani/external_topo_410_660.txt"
+  logical,parameter :: USE_EXTERNAL_TOPO_410_660 = .false.
 
 !!-----------------------------------------------------------
 !!
@@ -827,19 +832,19 @@
 ! (values are chosen for 3D models to have RMOHO_FICTICIOUS at 35 km
 !  and RMIDDLE_CRUST to become 15 km with stretching function stretch_tab)
   double precision, parameter :: MAX_RATIO_CRUST_STRETCHING = 0.75d0
-  double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = 5000.d0 ! moho up to 35km
+! double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = 5000.d0 ! moho up to 35km
   double precision, parameter :: R80_STRETCH_ADJUSTMENT = -40000.d0 ! r80 down to 120km
 
 ! adapted regional moho stretching
 ! 1 chunk simulations, 3-layer crust
-  logical, parameter :: REGIONAL_MOHO_MESH = .false.
+  logical, parameter :: REGIONAL_MOHO_MESH = .true.
   logical, parameter :: REGIONAL_MOHO_MESH_EUROPE = .false. ! used only for fixing time step
   logical, parameter :: REGIONAL_MOHO_MESH_ASIA = .false.   ! used only for fixing time step
-  logical, parameter :: HONOR_DEEP_MOHO = .false.
+  logical, parameter :: HONOR_DEEP_MOHO = .true.
 !!-- uncomment for e.g. Europe case, where deep moho is rare
-!  double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = -15000.d0  ! moho mesh boundary down to 55km
+! double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = -15000.d0  ! moho mesh boundary down to 55km
 !!-- uncomment for deep moho cases, e.g. Asia case (Himalayan moho)
-!  double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = -20000.d0  ! moho mesh boundary down to 60km
+  double precision, parameter :: RMOHO_STRETCH_ADJUSTMENT = -20000.d0  ! moho mesh boundary down to 60km
 
 !!-----------------------------------------------------------
 !!
@@ -849,7 +854,7 @@
 
 ! to suppress the crustal layers
 ! (replaced by an extension of the mantle: R_EARTH is not modified, but no more crustal doubling)
-  logical, parameter :: SUPPRESS_CRUSTAL_MESH = .true.
+  logical, parameter :: SUPPRESS_CRUSTAL_MESH = .false.
 
 ! to inflate the central cube (set to 0.d0 for a non-inflated cube)
   double precision, parameter :: CENTRAL_CUBE_INFLATE_FACTOR = 0.41d0

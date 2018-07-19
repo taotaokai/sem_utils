@@ -1166,9 +1166,11 @@ class Misfit(object):
         # repeat twice to avoid numerical inaccuries
         tr.detrend(type='linear')
         tr.detrend(type='linear')
-        # repeat lowpass filter twice to make sharper edge
-        tr.filter('lowpass', freq=0.8*syn_nyq, corners=10, zerophase=True)
-        tr.filter('lowpass', freq=0.8*syn_nyq, corners=10, zerophase=True)
+        obs_nyq = 0.5/obs_delta
+        if obs_nyq >= 0.8*syn_nyq:
+          # repeat lowpass filter twice to make sharper edge
+          tr.filter('lowpass', freq=0.8*syn_nyq, corners=10, zerophase=True)
+          tr.filter('lowpass', freq=0.8*syn_nyq, corners=10, zerophase=True)
         # interpolation: windowed sinc reconstruction
         obs_ENZ[i,:] = lanczos_interp1(tr.data, obs_delta,
             syn_times+(syn_starttime-obs_starttime), na=40)
@@ -4910,7 +4912,7 @@ class Misfit(object):
 
     """
     #------ check parameters
-    plot_time = np.array([begin_time, end_time])
+    #plot_time = np.array([begin_time, end_time])
 
     # in case reverse the distance axis
     #plot_flip = -1
@@ -4988,12 +4990,14 @@ class Misfit(object):
     # round to the integer
     plot_rayp = np.round(plot_rayp)
     #plot_rayp = 16 # taok: temporary use
-    # get time window relative to the regressed window central time
-    plot_t0 = np.min(winb_all - plot_rayp*dist_all)
-    plot_t1 = np.max(wine_all - plot_rayp*dist_all)
-    # modify the plot time rage
-    plot_time[0] += plot_t0
-    plot_time[1] += plot_t1
+    # KT KT this should be decided for each azimuthal bin. So I moved 
+    #       the following 6 lines into the "plot azimuthal bin" section. 
+    ## get time window relative to the regressed window central time
+    #plot_t0 = np.min(winb_all - plot_rayp*dist_all)
+    #plot_t1 = np.max(wine_all - plot_rayp*dist_all)
+    ## modify the plot time rage
+    #plot_time[0] += plot_t0
+    #plot_time[1] += plot_t1
 
     #------ calculate traveltime curves (only for body wave)
     phase_names = plot_window_id.split('_')[0]
@@ -5192,6 +5196,16 @@ class Misfit(object):
       ax_size = [0.43, 0.90]
       #ax_size = [0.3, 0.90]
       ax_1comp = fig.add_axes(ax_origin + ax_size)
+
+      #-- xlim setting
+      win_all = [ data_azbin[key]['window'] for key in data_azbin ]
+      winb_all = np.array([ win['taper']['starttime'] - event['t0'] for win in win_all ])
+      wine_all = np.array([ win['taper']['endtime'] - event['t0'] for win in win_all ])
+      dist_all = np.array([ data_azbin[key]['meta']['dist_degree'] for key in data_azbin ])
+      # get time window relative to the regressed window central time
+      plot_t0 = np.min(winb_all - plot_rayp*dist_all)
+      plot_t1 = np.max(wine_all - plot_rayp*dist_all)
+      plot_time = np.array([begin_time+plot_t0, end_time+plot_t1])
 
       #-- ylim setting
       y = [ data_azbin[key]['meta']['dist_degree'] for key in data_azbin ]

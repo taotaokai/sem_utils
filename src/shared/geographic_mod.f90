@@ -20,7 +20,7 @@ module geographic
   real(dp), parameter :: wgs84_f = 1.0/wgs84_invf
   real(dp), parameter :: wgs84_one_minus_f = 1.0 - wgs84_f
   real(dp), parameter :: wgs84_b = wgs84_a * wgs84_one_minus_f
-  real(dp), parameter :: wgs84_sq_one_minus_f = sqrt(wgs84_one_minus_f)
+  real(dp), parameter :: wgs84_sq_one_minus_f = wgs84_one_minus_f**2
   real(dp), parameter :: wgs84_e2 = 1.0 - wgs84_sq_one_minus_f
   real(dp), parameter :: wgs84_ep2 = 1.0/wgs84_sq_one_minus_f - 1.0
 
@@ -165,7 +165,7 @@ real(dp) function geographic_geocentric_lat(lat)
 
   ! convert from geodetic to geocentric latitude
   ! tan(phi_geocentric) = (1-f)^2 * tan(phi_geodetic)
-  geographic_geocentric_lat = atan(wgs84_sq_one_minus_f*lat)
+  geographic_geocentric_lat = atan(wgs84_sq_one_minus_f*tan(lat))
 
 end function
 

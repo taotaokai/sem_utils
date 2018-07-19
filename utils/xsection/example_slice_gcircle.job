@@ -1,0 +1,24 @@
+#!/bin/bash
+#SBATCH -J slice_gcircle
+#SBATCH -o slice_gcircle.job.o%j
+#SBATCH -n 144
+#SBATCH -t 01:30:00
+
+echo
+echo "Start: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo
+
+mkdir nc
+
+ml swap intel gcc
+ml netcdf
+
+echo
+echo $(date)
+echo "# B201105101526A_az145: 43.350 131.072 145 0 12.00 121 5671.00 6371.00 71 1 "
+echo
+mpirun     /home1/tao/seiscode/sem_utils/bin/xsem_slice_gcircle     144     /data3/tao/NEChina/EARA2014/mesh_REF_stage09.iter16.polyfit_um.linfit_mtz.vp_vs_voigt/DATABASES_MPI     /data3/tao/NEChina/EARA2014/xsection_B201105101526A_az145_REF_stage09.iter16.polyfit_um.linfit_mtz.vp_vs_voigt/model     vp0,vs0,vpv,vph,vsv,vsh     43.350 131.072 145     0 12.00 121     5671.00 6371.00 71     1     nc/B201105101526A_az145.nc
+
+echo
+echo "End: JOB_ID=${SLURM_JOB_ID} [$(date)]"
+echo

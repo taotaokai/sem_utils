@@ -1017,7 +1017,7 @@ class Misfit(object):
     Parameters
     ----------
     left_pad: 
-      time length to pad before synthetics 
+      time length to pad before starttime of synthetics (in case of short epi-distances)
 
     obs_pretime: 
       pre-event time length of obs (for noise assessment)
@@ -1784,11 +1784,12 @@ class Misfit(object):
     misfit_type:
       cc0: zero-lag cross-correlation misfit
       ccdt: cross-correlation traveltime
+      phcc: phase correlation (for ambient noise correlogram)
     weight_param : SNR, CCmax, CC0, cc_tshift
 
     Notes
     -----
-    chi : misfit functional (normalized zero-lag correlation coef.)
+    chi : misfit value (normalized zero-lag correlation coef.)
     u : synthetic waveform
 
     """
@@ -2039,6 +2040,26 @@ class Misfit(object):
           # for two-pass filter (zero phase) conj(F) = F
           dchiw_du = signal.filtfilt(filter_b, filter_a, dchiw_du1[:,::-1])
           dchiw_du = dchiw_du[:,::-1]
+        elif misfit_type == 'phcc':
+          # misfit: weighted phase correlation
+          norm_N = np.sum(obs_filt_win**2)
+          fft_wFu = np.fft.rfft(syn_filt_win)
+          fft_wFd = np.fft.rfft(obs_filt_win)
+          abs_fft_wFu = np.sum(np.abs(fft_wFu)**2, axis=0, keepdims=True)**0.5
+          abs_fft_wFd = np.sum(np.abs(fft_wFd)**2, axis=0, keepdims=True)**0.5
+          abs_fft_wFu_wl = np.copy(abs_fft_wFu)
+          wl_thred = 0.01*np.max(abs_fft_wFu) #FIXME water-level coef. 0.01 is hard coded here!
+          abs_fft_wFu_wl[abs_fft_wFu<wl_thred] = wl_thred
+          trans_H = abs_fft_wFd/abs_fft_wFu_wl
+          dchiw_du = trans_H / norm_N * (
+              fft_wFd -
+              fft_wFu*np.real(np.sum(fft_wFd*np.conj(fft_wFu),axis=0,keepdims=True))/abs_fft_wFu_wl**2)
+          dchiw_du = np.fft.irfft(dchiw_du)*win_func
+          dchiw_du = signal.filtfilt(filter_b, filter_a, dchiw_du[:,::-1])
+          dchiw_du = dchiw_du[:,::-1]
+          # phase correlation value
+          HwFu = np.fft.irfft(trans_H*fft_wFu)
+          phcc = np.sum(obs_filt_win*HwFu)/N
         elif misfit_type == 'ccdt':
           # misfit: cross-correlation traveltime difference -1*|ccdtau|^2
           # adjoint source: dchiw_du = ccdt * dtau/du
@@ -2101,6 +2122,8 @@ class Misfit(object):
         window['cc'] = cc_dict
         window['weight'] = weight
         window['misfit_type'] = misfit_type
+        if misfit_type == 'phcc':
+          window['phcc'] = phcc
         window['stat'] = {'code': 1, 
             'msg': "measure adj on "+UTCDateTime.now().isoformat()}
 

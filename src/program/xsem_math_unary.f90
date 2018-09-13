@@ -143,6 +143,10 @@ program xsem_vertical_slice
       case ('zero')
         ! output a gll with zeros, no need to read input gll files
         model = 0.0
+      case ('one')
+        ! output a gll with ones, no need to read input gll files
+        ! for example, we want to set eta = 1.0
+        model = 1.0
       case ('sqrt')
         call sem_io_read_gll_file_n(model_dir, iproc, iregion, model_name_list, nmodel, model)
         model = sqrt(model)

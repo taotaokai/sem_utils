@@ -126,10 +126,10 @@ program xsem_add_model_plume
   plume_lat = plume_lat * DEGREES_TO_RADIANS
   plume_lon = plume_lon * DEGREES_TO_RADIANS
 
-  ! normalize length by R_EARTH_KM
-  plume_r0 = plume_r0 / R_EARTH_KM
-  plume_r1 = plume_r1 / R_EARTH_KM
-  plume_sigma = plume_sigma / R_EARTH_KM
+  ! normalize length by EARTH_R_KM
+  plume_r0 = plume_r0 / EARTH_R_KM
+  plume_r1 = plume_r1 / EARTH_R_KM
+  plume_sigma = plume_sigma / EARTH_R_KM
 
   ! unit directional vector of slab origin
   if (flag_ellipticity == 0) then

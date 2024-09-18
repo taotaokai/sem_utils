@@ -199,13 +199,13 @@ program xsem_interp_IRIS_netcdf
             
             ! get lat,lon,depth
             if (flag_ellipticity == 1) then
-              xyz = xyz * R_EARTH
+              xyz = xyz * EARTH_R
               call geographic_ecef2lla(xyz(1), xyz(2), xyz(3), lat, lon, depth)
               depth = -1.0 * depth 
             else
               lon = atan2(xyz(2), xyz(1))
               lat = atan2(xyz(3), sqrt(xyz(1)**2 + xyz(2)**2) )
-              depth = R_EARTH * (1.0 - sqrt(sum(xyz**2)))
+              depth = EARTH_R * (1.0 - sqrt(sum(xyz**2)))
             endif
 
             ! change units to degrees, km

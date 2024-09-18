@@ -132,8 +132,8 @@ program xsem_make_kernel_mask
   !===== loop each mesh slice
 
   ! non-dimensionalization
-  depth_stop = depth_stop / R_EARTH_KM
-  depth_pass = depth_pass / R_EARTH_KM
+  depth_stop = depth_stop / EARTH_R_KM
+  depth_pass = depth_pass / EARTH_R_KM
   depth_width = depth_pass - depth_stop
 
   do iproc = myrank, (nproc-1), nrank

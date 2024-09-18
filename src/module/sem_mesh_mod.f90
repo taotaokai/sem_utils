@@ -8,8 +8,8 @@ module sem_mesh
   use sem_constants, only: GAUSSALPHA, GAUSSBETA
   use sem_constants, only: NGLLX, NGLLY, NGLLZ, NGNOD
   use sem_constants, only: MIDX, MIDY, MIDZ
-  use sem_constants, only: R_EARTH_KM
-  use sem_constants, only: REGIONAL_MOHO_MESH
+  use sem_constants, only: EARTH_R_KM
+  use sem_constants, only: EARTH_REGIONAL_MOHO_MESH
   use sem_constants, only: IFLAG_CRUST, IFLAG_670_220, IFLAG_DUMMY
 
   use sem_io, only: sem_io_open_file_for_read
@@ -167,10 +167,10 @@ subroutine sem_mesh_read(basedir, iproc, iregion, mesh_data)
 
   close(IIN)
 
-  ! separate crustal mesh layers for REGIONAL_MOHO_MESH 
+  ! separate crustal mesh layers for EARTH_REGIONAL_MOHO_MESH 
   ! 3-layer crust: 10(third layer), 11, 12(shallowest layer)
-  if (REGIONAL_MOHO_MESH) then
-    print *, "# separate crustal mesh into 3 layers for REGIONAL_MOHO_MESH=", REGIONAL_MOHO_MESH
+  if (EARTH_REGIONAL_MOHO_MESH) then
+    print *, "# separate crustal mesh into 3 layers for EARTH_REGIONAL_MOHO_MESH=", EARTH_REGIONAL_MOHO_MESH
     num = 0
     do ispec = 1, nspec
       if (mesh_data%idoubling(ispec) == IFLAG_CRUST) then
@@ -191,7 +191,7 @@ subroutine sem_mesh_read(basedir, iproc, iregion, mesh_data)
       iglob = mesh_data%ibool(MIDX, MIDY, MIDZ, ispec)
       ! element center coordinate
       xyz_center = mesh_data%xyz_glob(:,iglob)
-      depth = (1.0 - sqrt(sum(mesh_data%xyz_glob(:,iglob)**2))) * R_EARTH_KM
+      depth = (1.0 - sqrt(sum(mesh_data%xyz_glob(:,iglob)**2))) * EARTH_R_KM
 
       ! this is dangerous due to 410 undulation
       if (depth < 410) then
@@ -316,7 +316,7 @@ subroutine sem_mesh_locate_kdtree2( &
 ! type(sem_mesh_location) location_result(npoint): location results
 !
 !-notes:
-! 1. max_search_dist and max_misloc should be normalized by R_EARTH in sem_constants
+! 1. max_search_dist and max_misloc should be normalized by EARTH_R in sem_constants
 
   use kdtree2_module
 

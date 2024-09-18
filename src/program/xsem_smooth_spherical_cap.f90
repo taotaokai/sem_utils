@@ -153,8 +153,8 @@ program xsem_smooth
   !====== smoothing parameters 
   ! non-dimensionalize smoothing scales 
   ! get sigma squared
-  sigma2_h = (sigma_h / R_EARTH_KM)**2
-  sigma2_r = (sigma_r / R_EARTH_KM)**2
+  sigma2_h = (sigma_h / EARTH_R_KM)**2
+  sigma2_r = (sigma_r / EARTH_R_KM)**2
 
   ! typical element size at surface
   ! read from values_from_mesher.h

@@ -64,7 +64,7 @@ program xsem_add_model_llsvp
 
   ! llsvp geometry
   real(dp) :: llsvp_v(3), llsvp_xyz0(3)
-  real(dp), parameter :: r_cmb = 1.0 - 2891.0/R_EARTH_KM
+  real(dp), parameter :: r_cmb = 1.0 - 2891.0/EARTH_R_KM
 
   ! model names
   integer :: nmodel
@@ -122,8 +122,8 @@ program xsem_add_model_llsvp
   llsvp_lat = llsvp_lat * DEGREES_TO_RADIANS
   llsvp_lon = llsvp_lon * DEGREES_TO_RADIANS
 
-  ! normalize length by R_EARTH_KM
-  llsvp_sigma = llsvp_sigma / R_EARTH_KM
+  ! normalize length by EARTH_R_KM
+  llsvp_sigma = llsvp_sigma / EARTH_R_KM
 
   ! unit directional vector of slab origin
   if (flag_ellipticity == 0) then

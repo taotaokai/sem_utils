@@ -130,15 +130,15 @@ program xsem_add_model_stagnant_slab_with_gap
   endif
 
   ! slab origin point (bottom joint point between dipping and flat plane)
-  origin_radius = 1.0 - origin_depth/R_EARTH_KM
+  origin_radius = 1.0 - origin_depth/EARTH_R_KM
   origin_vec(1) = cos(origin_lat)*cos(origin_lon)*origin_radius
   origin_vec(2) = cos(origin_lat)*sin(origin_lon)*origin_radius
   origin_vec(3) = sin(origin_lat)*origin_radius
 
-  ! non-dimenionalize length by R_EARTH_KM
-  slab_half_width = slab_half_width/R_EARTH_KM
-  flat_slab_angular_width = flat_slab_len/R_EARTH_KM
-  flat_slab_thickness = flat_slab_thickness/R_EARTH_KM
+  ! non-dimenionalize length by EARTH_R_KM
+  slab_half_width = slab_half_width/EARTH_R_KM
+  flat_slab_angular_width = flat_slab_len/EARTH_R_KM
+  flat_slab_thickness = flat_slab_thickness/EARTH_R_KM
 
   dipping_slab_thickness = cos(slab_dip)*flat_slab_thickness
 

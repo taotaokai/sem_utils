@@ -157,9 +157,9 @@ program xsem_vertical_slice
     print "(a,'_1 * ',a,'_2 = ',E15.7)", &
       trim(model_names_1(imodel)), &
       trim(model_names_2(imodel)), &
-      sum(inner_product(imodel,:)) * R_EARTH_KM**3
+      sum(inner_product(imodel,:)) * EARTH_R_KM**3
   enddo
 
-  print "('sum = ',E15.7)", sum(inner_product) * R_EARTH_KM**3
+  print "('sum = ',E15.7)", sum(inner_product) * EARTH_R_KM**3
 
 end program

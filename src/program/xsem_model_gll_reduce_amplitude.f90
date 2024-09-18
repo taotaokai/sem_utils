@@ -79,7 +79,7 @@ program xsem_model_gll_reduce_amplitude
   !===== read command line arguments
   if (command_argument_count() /= nargs) then
     call selfdoc()
-    stop("[ERROR] check your inputs.")
+    stop "[ERROR] check your inputs." 
   endif
 
   do i = 1, nargs
@@ -101,18 +101,18 @@ program xsem_model_gll_reduce_amplitude
 
   ! validate inputs
   if ( .not.(depth_stop1<depth_pass1 .and. depth_pass1<depth_pass2 .and. depth_pass2<depth_stop2)) then
-    stop("[ERROR] violate condition depth_stop1<depth_pass1<depth_pass2<depth_stop2 ")
+    stop "[ERROR] violate condition depth_stop1<depth_pass1<depth_pass2<depth_stop2 "
   endif
 
   !===== loop each mesh slice
 
   ! non-dimensionalization
-  depth_stop1 = depth_stop1 / R_EARTH_KM
-  depth_pass1 = depth_pass1 / R_EARTH_KM
+  depth_stop1 = depth_stop1 / EARTH_R_KM
+  depth_pass1 = depth_pass1 / EARTH_R_KM
   depth_width1 = depth_pass1 - depth_stop1
 
-  depth_stop2 = depth_stop2 / R_EARTH_KM
-  depth_pass2 = depth_pass2 / R_EARTH_KM
+  depth_stop2 = depth_stop2 / EARTH_R_KM
+  depth_pass2 = depth_pass2 / EARTH_R_KM
   depth_width2 = depth_stop2 - depth_pass2
 
   do iproc = 0, (nproc-1)

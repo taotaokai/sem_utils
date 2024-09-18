@@ -136,7 +136,7 @@ program xsem_pdf
       do iz = 1, NGLLZ
         do iy = 1, NGLLY
           do ix = 1, NGLLX
-            z_gll(ix,iy,iz,ispec) = R_EARTH_KM * (1.0 - sqrt(sum( &
+            z_gll(ix,iy,iz,ispec) = EARTH_R_KM * (1.0 - sqrt(sum( &
               mesh_data%xyz_glob(:, mesh_data%ibool(ix,iy,iz,ispec))**2)))
           enddo
         enddo

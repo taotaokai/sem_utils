@@ -107,10 +107,10 @@ program xsem_add_model_horizontal_layer
   !===== geometric parameters of plume
 
   ! change unit: degree -> radians
-  ! normalize length by R_EARTH_KM
-  layer_r0 = layer_r0 / R_EARTH_KM
-  layer_r1 = layer_r1 / R_EARTH_KM
-  layer_taperwidth = layer_taperwidth / R_EARTH_KM
+  ! normalize length by EARTH_R_KM
+  layer_r0 = layer_r0 / EARTH_R_KM
+  layer_r1 = layer_r1 / EARTH_R_KM
+  layer_taperwidth = layer_taperwidth / EARTH_R_KM
   layer_r0_add_taper = layer_r0 + layer_taperwidth
   layer_r1_sub_taper = layer_r1 - layer_taperwidth
 

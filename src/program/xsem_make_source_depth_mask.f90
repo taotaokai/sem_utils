@@ -146,8 +146,8 @@ program xsem_make_source_depth_mask
   !===== loop each mesh slice
 
   ! non-dimensionalization
-  source_gaussa = source_gaussa / R_EARTH_KM
-  depth_gaussa = depth_gaussa / R_EARTH_KM
+  source_gaussa = source_gaussa / EARTH_R_KM
+  depth_gaussa = depth_gaussa / EARTH_R_KM
 
   do iproc = myrank, (nproc-1), nrank
 

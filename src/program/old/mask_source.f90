@@ -18,7 +18,7 @@ program make_sources_mask
 
   !---- parameters 
   integer, parameter :: NGLLCUBE = 125
-  real(RK), parameter :: R_EARTH_KM = 6371.0
+  real(RK), parameter :: EARTH_R_KM = 6371.0
 
   !---- declare variables
   integer :: ier
@@ -112,7 +112,7 @@ program make_sources_mask
 !---- loop each mesh slice
 
   ! non-dimensionalize
-  mask_width = mask_width / R_EARTH_KM
+  mask_width = mask_width / EARTH_R_KM
 
   do islice = 1, nslice
 

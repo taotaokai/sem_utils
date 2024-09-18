@@ -11,7 +11,7 @@ end subroutine
 program mask_kernel 
 
   use constants,only: CUSTOM_REAL,MAX_STRING_LEN,IIN,IOUT, &
-    NPROCTOT_VAL,NGLLCUBE,R_EARTH_KM,PI
+    NPROCTOT_VAL,NGLLCUBE,EARTH_R_KM,PI
 
   use sem_IO
 
@@ -79,9 +79,9 @@ program mask_kernel
   allocate(mask(NGLLX,NGLLY,NGLLZ,NSPEC))
 
   ! non-dimensionalize
-  source_width = source_width / SNGL(R_EARTH_KM)
-  r_stop = 1 - depth_stop/SNGL(R_EARTH_KM)
-  r_pass = 1 - depth_pass/SNGL(R_EARTH_KM)
+  source_width = source_width / SNGL(EARTH_R_KM)
+  r_stop = 1 - depth_stop/SNGL(EARTH_R_KM)
+  r_pass = 1 - depth_pass/SNGL(EARTH_R_KM)
 
   print *, 'after non-dimensinalize'
   print *, 'source_width=', source_width

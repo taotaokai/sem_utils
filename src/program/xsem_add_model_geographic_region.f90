@@ -111,9 +111,9 @@ program xsem_add_model_horizontal_layer
   lon0 = lon0 * DEGREES_TO_RADIANS
   lon1 = lon1 * DEGREES_TO_RADIANS
 
-  ! normalize length by R_EARTH_KM
-  r0 = r0 / R_EARTH_KM
-  r1 = r1 / R_EARTH_KM
+  ! normalize length by EARTH_R_KM
+  r0 = r0 / EARTH_R_KM
+  r1 = r1 / EARTH_R_KM
 
   !===== parse model tags
 

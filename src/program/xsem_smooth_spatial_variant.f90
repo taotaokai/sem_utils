@@ -181,8 +181,8 @@ program xsem_smooth_spatial_variant
     call sem_io_read_gll_file_1(sigma_h_v_dir, iproc_target, iregion, sigma_v_tag, sigma_v2)
     ! non-dimensionalize smoothing scales 
     ! get sigma squared
-    sigma_h2 = (sigma_h2 / R_EARTH_KM)**2
-    sigma_v2 = (sigma_v2 / R_EARTH_KM)**2
+    sigma_h2 = (sigma_h2 / EARTH_R_KM)**2
+    sigma_v2 = (sigma_v2 / EARTH_R_KM)**2
     ! maximum distance square between the contributing element center and target element center
     do ispec = 1, nspec_target
       max_search_dist2(ispec) = 10.0 * max(maxval(sigma_h2(:,:,:,ispec)), maxval(sigma_v2(:,:,:,ispec)))

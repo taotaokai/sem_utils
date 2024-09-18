@@ -118,8 +118,8 @@ program xsem_make_kernel_gll
   !===== loop each mesh slice
 
   ! non-dimensionalization
-  depth1 = depth1 / R_EARTH_KM
-  depth2 = depth2 / R_EARTH_KM
+  depth1 = depth1 / EARTH_R_KM
+  depth2 = depth2 / EARTH_R_KM
   depth_width = depth2 - depth1
 
   dvalue = value2 - value1

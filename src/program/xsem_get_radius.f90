@@ -95,7 +95,7 @@ program xsem_get_radius
           iglob = mesh_data%ibool(MIDX,MIDY,MIDZ,ispec)
           r_center = sqrt(sum(mesh_data%xyz_glob(:,iglob)**2))
 
-          write(*,"(*(E18.8))"), r, r_center, model_gll(:,igllx,iglly,igllz,ispec)
+          write(*,"(*(E18.8))") r, r_center, model_gll(:,igllx,iglly,igllz,ispec)
 
         enddo ! igllx
       enddo ! iglly

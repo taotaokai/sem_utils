@@ -17,7 +17,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
-  print '(a)', "  (string) input_list: list of x,y,z, gauss_width_km, model_value (x,y,z normalized by R_EARTH)"
+  print '(a)', "  (string) input_list: list of x,y,z, gauss_width_km, model_value (x,y,z normalized by EARTH_R)"
   print '(a)', "  (string) out_dir: out_dir/proc*_reg1_<out_name>.bin"
   print '(a)', "  (string) out_name: tag in file name proc*_reg1_<out_name>.bin"
   print '(a)', ""
@@ -114,7 +114,7 @@ program xsem_make_gauss_point_from_list
   do isrc = 1, nsource
     read(lines(isrc), *) source_xyz(1, isrc), source_xyz(2, isrc), source_xyz(3, isrc), gauss_width(isrc), peak_value(isrc)
     ! non-dimensionalize
-    gauss_width(isrc) = gauss_width(isrc)/R_EARTH_KM
+    gauss_width(isrc) = gauss_width(isrc)/EARTH_R_KM
   enddo
 
   !===== loop each mesh slice

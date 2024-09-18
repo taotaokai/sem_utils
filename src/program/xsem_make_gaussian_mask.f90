@@ -18,7 +18,7 @@ subroutine selfdoc()
   print '(a)', ""
   print '(a)', "  (int) nproc:  number of mesh slices"
   print '(a)', "  (string) mesh_dir:  directory holds proc*_reg1_solver_data.bin"
-  print '(a)', "  (string) source_xyz_list: list of source locations (x,y,z)(normalized by R_EARTH) and gauss_width(km) "
+  print '(a)', "  (string) source_xyz_list: list of source locations (x,y,z)(normalized by EARTH_R) and gauss_width(km) "
   print '(a)', "  (string) out_dir: out_dir/proc*_reg1_<out_name>.bin"
   print '(a)', "  (string) out_name: tag in file name proc*_reg1_<out_name>.bin"
   print '(a)', ""
@@ -116,7 +116,7 @@ program xsem_make_kernel_mask
   !===== loop each mesh slice
 
   ! non-dimensionalize
-  gauss_width = abs(gauss_width)/R_EARTH_KM
+  gauss_width = abs(gauss_width)/EARTH_R_KM
 
   do iproc = myrank, (nproc-1), nrank
 

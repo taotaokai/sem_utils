@@ -110,7 +110,7 @@ program xsem_make_dmodel_cosine
   allocate(dmodel(NGLLX,NGLLY,NGLLZ,nspec))
 
   ! non-dimensionalize 
-  wave_number = TWO_PI/(wave_length/R_EARTH_KM)
+  wave_number = TWO_PI/(wave_length/EARTH_R_KM)
   norm = (nx**2 + ny**2 + nz**2)**0.5
   nx = nx/norm
   ny = ny/norm

@@ -212,7 +212,7 @@ program xsem_slice_sphere
   lat1 = lat1 * DEGREES_TO_RADIANS
   lon0 = lon0 * DEGREES_TO_RADIANS
   lon1 = lon1 * DEGREES_TO_RADIANS
-  !radius = (6371.0 - depth) / R_EARTH_KM
+  !radius = (6371.0 - depth) / EARTH_R_KM
   alt = -1000.0*depth
 
   ! get grid intervals
@@ -233,7 +233,7 @@ program xsem_slice_sphere
       call geographic_lla2ecef(lat(ilat), lon(ilon), alt, &
                                     vr(1), vr(2), vr(3)) 
       !vr = vr / sqrt(sum(vr**2))
-      xyz(:,idx) = vr/R_EARTH ! non-dimensionalized by R_EARTH 
+      xyz(:,idx) = vr/EARTH_R ! non-dimensionalized by EARTH_R 
     enddo
   enddo
 

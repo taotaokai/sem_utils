@@ -137,11 +137,11 @@ program xsem_vertical_slice
   slab_dip = slab_dip * DEGREES_TO_RADIANS
   slab_strike = slab_strike * DEGREES_TO_RADIANS
 
-  ! normalize length by R_EARTH_KM
-  slab_thick = slab_thick / R_EARTH_KM
+  ! normalize length by EARTH_R_KM
+  slab_thick = slab_thick / EARTH_R_KM
 
   ! radius of slab bottom depth
-  slab_bottom_radius = 1.d0 - slab_bottom_depth / R_EARTH_KM
+  slab_bottom_radius = 1.d0 - slab_bottom_depth / EARTH_R_KM
 
   print *, "# slab_bottom_radius=", slab_bottom_radius
 
@@ -183,8 +183,8 @@ program xsem_vertical_slice
   slab_lower_dist = slab_upper_dist - slab_thick
 
   ! MOW top/bottom radius
-  mow_top_radius = 1.0 - mow_top_depth / R_EARTH_KM
-  mow_bottom_radius = 1.0 - mow_bottom_depth / R_EARTH_KM
+  mow_top_radius = 1.0 - mow_top_depth / EARTH_R_KM
+  mow_bottom_radius = 1.0 - mow_bottom_depth / EARTH_R_KM
 
   ! angles between MOW vertices and slab normal vector
   theta_v0_slab_normal = acos((slab_upper_dist - slab_thick*mow_xi0) &

@@ -89,8 +89,8 @@
 
   ! cosine taper is used
   ! normalized radii
-  real(kind=CUSTOM_REAL),parameter :: R_STOP = 1.0 - 300.0/R_EARTH_KM ! shallower than 300 km is zero
-  real(kind=CUSTOM_REAL),parameter :: R_PASS = 1.0 - 400.0/R_EARTH_KM ! deeper than 400 km is one
+  real(kind=CUSTOM_REAL),parameter :: R_STOP = 1.0 - 300.0/EARTH_R_KM ! shallower than 300 km is zero
+  real(kind=CUSTOM_REAL),parameter :: R_PASS = 1.0 - 400.0/EARTH_R_KM ! deeper than 400 km is one
 
 !!-----------------------------------------------------------
 !!
@@ -106,11 +106,11 @@
 
   ! normalized radii
   ! top at 50km depth
-  !real(kind=CUSTOM_REAL),parameter :: R_TOP = (6371.0 - 50.0 ) / R_EARTH_KM ! shallow depth
-  real(kind=CUSTOM_REAL),parameter :: R_TOP = (6371.0 - 300.0 ) / R_EARTH_KM ! shallow depth
+  !real(kind=CUSTOM_REAL),parameter :: R_TOP = (6371.0 - 50.0 ) / EARTH_R_KM ! shallow depth
+  real(kind=CUSTOM_REAL),parameter :: R_TOP = (6371.0 - 300.0 ) / EARTH_R_KM ! shallow depth
   ! bottom at 100km depth
-  !real(kind=CUSTOM_REAL),parameter :: R_BOTTOM = (6371.0 - 100.0 ) / R_EARTH_KM ! deep depth
-  real(kind=CUSTOM_REAL),parameter :: R_BOTTOM = (6371.0 - 1000.0 ) / R_EARTH_KM ! deep depth
+  !real(kind=CUSTOM_REAL),parameter :: R_BOTTOM = (6371.0 - 100.0 ) / EARTH_R_KM ! deep depth
+  real(kind=CUSTOM_REAL),parameter :: R_BOTTOM = (6371.0 - 1000.0 ) / EARTH_R_KM ! deep depth
 
 !!-----------------------------------------------------------
 !!

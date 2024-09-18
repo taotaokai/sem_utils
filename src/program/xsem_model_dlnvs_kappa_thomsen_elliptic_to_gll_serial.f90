@@ -62,7 +62,7 @@ program xsem_model_dlnvs_kappa_thomsen_to_gll
   !===== read command line arguments
   if (command_argument_count() /= nargs) then
     call selfdoc()
-    stop("[ERROR] check your inputs.")
+    stop "[ERROR] check your inputs."
   endif
 
   do i = 1, nargs

@@ -147,11 +147,11 @@ program xsem_vertical_slice
   integer :: x_varid, y_varid, z_varid
   real(sp), dimension(:,:), allocatable :: x_var, y_var, z_var
   character(len=*), parameter :: x_name = "x"
-  character(len=*), parameter :: x_units = "R_EARTH"
+  character(len=*), parameter :: x_units = "EARTH_R"
   character(len=*), parameter :: y_name = "y"
-  character(len=*), parameter :: y_units = "R_EARTH"
+  character(len=*), parameter :: y_units = "EARTH_R"
   character(len=*), parameter :: z_name = "z"
-  character(len=*), parameter :: z_units = "R_EARTH"
+  character(len=*), parameter :: z_units = "EARTH_R"
   ! data: model values (units is not determined)
   integer, allocatable :: model_varids(:)
   real(sp), allocatable :: model_var(:,:)
@@ -212,8 +212,8 @@ program xsem_vertical_slice
   theta0 = theta0 * DEGREES_TO_RADIANS
   theta1 = theta1 * DEGREES_TO_RADIANS
 
-  radius0 = radius0 / R_EARTH_KM
-  radius1 = radius1 / R_EARTH_KM
+  radius0 = radius0 / EARTH_R_KM
+  radius1 = radius1 / EARTH_R_KM
 
   ! unit radial vector v0 from earth's center to the origin point on the great circle
   if (flag_ellipticity == 0) then
@@ -509,7 +509,7 @@ program xsem_vertical_slice
 
     ! write coordinate variables
     call check( nf90_put_var(ncid, theta_varid, theta * RADIANS_TO_DEGREES) )
-    call check( nf90_put_var(ncid, radius_varid, radius * R_EARTH_KM) )
+    call check( nf90_put_var(ncid, radius_varid, radius * EARTH_R_KM) )
     call check( nf90_put_var(ncid, lat_varid, lat * RADIANS_TO_DEGREES) )
     call check( nf90_put_var(ncid, lon_varid, lon * RADIANS_TO_DEGREES) )
 

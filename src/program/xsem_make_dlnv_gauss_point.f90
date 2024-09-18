@@ -98,15 +98,15 @@ program xsem_make_dlnv_gauss_point
   ! from geodesic to ECEF coordinates, non-dimensionalized
   if (flag_ellipticity /= 0) then
     call geographic_lla2ecef(origin_lat,origin_lon,-1.0*origin_depth*1000.0, origin_xyz(1),origin_xyz(2),origin_xyz(3)) 
-    origin_xyz = origin_xyz/R_EARTH
+    origin_xyz = origin_xyz/EARTH_R
   else
-    origin_xyz(1) = (R_EARTH_KM - origin_depth) * cos(origin_lat) * cos(origin_lon)
-    origin_xyz(2) = (R_EARTH_KM - origin_depth) * cos(origin_lat) * sin(origin_lon)
-    origin_xyz(3) = (R_EARTH_KM - origin_depth) * sin(origin_lat)
-    origin_xyz = origin_xyz/R_EARTH_KM
+    origin_xyz(1) = (EARTH_R_KM - origin_depth) * cos(origin_lat) * cos(origin_lon)
+    origin_xyz(2) = (EARTH_R_KM - origin_depth) * cos(origin_lat) * sin(origin_lon)
+    origin_xyz(3) = (EARTH_R_KM - origin_depth) * sin(origin_lat)
+    origin_xyz = origin_xyz/EARTH_R_KM
   endif
   
-  one_sigma = one_sigma/R_EARTH_KM
+  one_sigma = one_sigma/EARTH_R_KM
   one_sigma2 = one_sigma**2
 
   !===== loop each mesh slice

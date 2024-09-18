@@ -101,7 +101,7 @@ program xlatlonhkm_to_vtk
     enddo
   elseif (flag_ellipticity == 0) then
     do ipoint = 1, npoint
-      r = R_EARTH + height(ipoint)
+      r = EARTH_R + height(ipoint)
       cos_lat_r = cos(lat(ipoint)) * r
       x(ipoint) = cos(lon(ipoint)) * cos_lat_r
       y(ipoint) = sin(lon(ipoint)) * cos_lat_r
@@ -110,9 +110,9 @@ program xlatlonhkm_to_vtk
   endif
 
   ! non-dimensinalize ECEF xyz
-  x = x / R_EARTH
-  y = y / R_EARTH
-  z = z / R_EARTH
+  x = x / EARTH_R
+  y = y / EARTH_R
+  z = z / EARTH_R
 
   !===== output unstructrued VTK ascii file 
   open(IOUT, file=trim(out_file), status='unknown', &

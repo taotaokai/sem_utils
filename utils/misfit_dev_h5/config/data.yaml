@@ -1,0 +1,53 @@
+data:
+  stations_path: 'stations' # 'test'  # path to folder of stationxml files
+  waveforms_path: 'waveforms' #'test' # path to folder of miniseed files
+  indexdb_path: 'waveforms/timeseries.sqlite' # path to mseedindex db file
+
+    # stations_path: 'test/' # 'test'  # path to folder of stationxml files
+    # waveforms_path: 'test/' #'test' # path to folder of miniseed files
+    # indexdb_path: 'test/timeseries.sqlite' # path to mseedindex db file
+
+  enforce_3comp: False # True: either Z12 or ZNE, False: either Z or Z12 or ZNE
+
+  # https://docs.obspy.org/packages/autogen/obspy.core.stream.Stream.html#obspy.core.stream.Stream._cleanup
+  # merge matching traces misaligned by less than misalignment_threshold times the sampling interval 
+  # default is 0.01, but data from network IV have timing error up to 0.04 
+  misalignment_threshold: 0.1 # of sampling interval 
+
+  sampling_rate_Hz: 10 # Hz, resample data
+
+  # keep only one 3-comp data for each net.sta
+  band_code_priority: ['B', 'H']
+  location_code_priority: ['', '00', '01', '*']
+  
+  time_window:
+    before_first_arrival_seconds: 500 # sec 
+    # after_first_arrival_seconds: 1500 # sec
+    after_origin_time_seconds: 1500 # sec
+
+  remove_response:
+    ## to determine frequency filter
+    ref_freq_Hz: 1 # reference frequency
+    cutoff_threshold: 0.1 # relative to the response amplitude at reference frequency
+    # response amplitude between [flc, frc] should be greater than cutoff_threshold * max(response amplitude)
+    left_cutoff_taper_width_Hz: 0.01  # lc_taper
+    right_cutoff_taper_width_Hz: 0.1  # rc_taper
+    # flimit = [flc, flc+lc_taper, frc-rc_taper, fhc]
+    max_left_cutoff_frequency_Hz: 0.05 # require flc < max_flc
+    min_right_cutoff_frequency_Hz: 1   # require frc > min_frc
+
+
+misfit:
+  objective_function: 'cc0'
+  time_window: [
+    {'type': 'body',    'phase':'p,P',      'orientation':'Z', 'twin':[-50, 50], 'flimit':[0.01, 0.03], 'evdp':[0, ]},
+    {'type': 'body',    'phase':'p,P',      'orientation':'R', 'twin':[-50, 50], 'flimit':[0.01, 0.03], },
+    {'type': 'body',    'phase':'s,S',      'orientation':'R', 'twin':[-50, 50], 'flimit':[0.01, 0.03], },
+    {'type': 'surface', 'phase':'Rayleigh', 'orientation':'Z', 'slowness':[15, 30], 'twin':[-50, 50], 'flimit':[0.01, 0.03], 'evdp':[0, 100]},
+    {'type': 'surface', 'phase':'Rayleigh', 'orientation':'R', 'slowness':[15, 30], 'twin':[-50, 50], 'flimit':[0.01, 0.03], 'evdp':[0, 100]},
+    {'type': 'surface', 'phase':'Love',     'orientation':'T', 'slowness':[15, 30], 'twin':[-50, 50], 'flimit':[0.01, 0.03], 'evdp':[0, 100]},
+  ]
+    # before_first_arrival_seconds: 200 # sec 
+    # after_first_arrival_seconds: 1200 # sec
+
+inversion:

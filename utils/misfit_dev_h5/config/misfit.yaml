@@ -1,0 +1,9 @@
+objective_function: 'cc0'
+time_window: [
+  {'type': 'body',    'phase':'p,P',      'orientation':'Z', 'twin':[-50, 50], 'flimit':[0.01, 0.03], 'evdp':[0, ]},
+  {'type': 'body',    'phase':'p,P',      'orientation':'R', 'twin':[-50, 50], 'flimit':[0.01, 0.03], },
+  {'type': 'body',    'phase':'s,S',      'orientation':'R', 'twin':[-50, 50], 'flimit':[0.01, 0.03], },
+  {'type': 'surface', 'phase':'Rayleigh', 'orientation':'Z', 'slowness':[15, 30], 'twin':[-50, 50], 'flimit':[0.01, 0.03], 'evdp':[0, 100]},
+  {'type': 'surface', 'phase':'Rayleigh', 'orientation':'R', 'slowness':[15, 30], 'twin':[-50, 50], 'flimit':[0.01, 0.03], 'evdp':[0, 100]},
+  {'type': 'surface', 'phase':'Love',     'orientation':'T', 'slowness':[15, 30], 'twin':[-50, 50], 'flimit':[0.01, 0.03], 'evdp':[0, 100]},
+]

@@ -1,0 +1,44 @@
+# stations_path: 'stations' # 'test'  # path to folder of stationxml files
+# waveforms_path: 'waveforms' #'test' # path to folder of miniseed files
+# indexdb_path: 'waveforms/timeseries.sqlite' # path to mseedindex db file
+
+stations_path: '../stations/' # 'test'  # path to folder of stationxml files
+SDS_root: '../SDS/' #'test' # path to folder of miniseed files
+# indexdb_path: 'test/timeseries.sqlite' # path to mseedindex db file
+
+enforce_3comp: False # True: either Z12 or ZNE, False: either Z or Z12 or ZNE
+
+# https://docs.obspy.org/packages/autogen/obspy.core.stream.Stream.html#obspy.core.stream.Stream._cleanup
+# merge matching traces misaligned by less than misalignment_threshold times the sampling interval 
+# default is 0.01, but data from network IV have timing error up to 0.04 
+misalignment_threshold: 0.1 # in unit of sampling interval 
+
+sampling_rate: 1 # Hz, resample data
+
+# keep only one (loc, band) for each (net, sta)
+# channel code = band + instrument + orientation
+# NOTE: instrument code is fixed to 'H' and orientation codes are assumed to be Z,N,E or Z,1,2
+zcomp_pattern: "[BH]HZ" # for matching files of Z component
+band_code_priority: ['H', 'B']
+location_code_priority: ['', '00', '01', '*']
+
+time_window:
+  before_first_arrival_seconds: 500 # sec 
+  # after_first_arrival_seconds: 1500 # sec
+  after_origin_time_seconds: 1500 # sec
+  taper_width: 50 # sec, both sides 
+
+remove_response:
+  output_type: DISP #VEL # either DISP, VEL, ACC, DEF
+  output_unit: meter #m/s # meter, m/s
+  # to determine filter band [flc, fhc]
+  ref_resp_type: VEL # type of response to determine cutoff_threshold
+  ref_freq: 1 # Hz, reference frequency
+  cutoff_threshold: 0.1 # relative to the response amplitude at reference frequency, response amplitude between [flc, fhc] should be greater than cutoff_threshold * max(response amplitude)
+  # require valid frequency range: flc < max_flc, min_fhc < fhc
+  min_lower_cutoff_freq: 0.005 # Hz
+  max_lower_cutoff_freq: 0.05  # Hz, flc < max_flc
+  min_higher_cutoff_freq: 1    # Hz, fhc > min_fhc
+  # filter design: low-stop, low-pass, high-pass, high-stop = [flc, flc+flc_taper, fhc-fhc_taper, fhc]
+  lower_cutoff_taper_width: 0.01  # Hz, width of cutoff taper
+  higher_cutoff_taper_width: 0.05  # Hz, width of cutoff taper

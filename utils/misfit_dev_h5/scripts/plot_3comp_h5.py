@@ -57,11 +57,11 @@ def centerMap(lats,lons,scale):
 
 
 #
-
-
-def plot_seismogram_3comp(data_file_h5,
+def plot_seismogram_3comp(event_h5grp,
                           savefig=False,
                           out_dir='plot',
+                          data_tag='DATA_DISP',
+                          syn_tag='SYN_DISP',
                           # azimuthal_bin=10, # bin size of azimuth (degree)
                           max_bin_az=10, # max azimuthal size of each bin
                           max_bin_sta=20, # max num of stations in each bin
@@ -72,14 +72,8 @@ def plot_seismogram_3comp(data_file_h5,
                           min_SNR=10, # minimum signal-to-noise ratio: 20*log10(Asig/Anoise)
                           noise_twin=[-500,-100], # relative to first arrival
                           ):
-    if tables.is_hdf5_file(data_file_h5):
-      h5f = tables.open_file(data_file_h5, mode="r")
-    else:
-      print(f'[Error] not hdf5 file {data_file_h5}\n')
-      return
 
-    event = h5f.root._v_attrs['event']
-
+    event = event_h5grp._v_attrs['event']
     event_name = event.event_descriptions[0].text
 
     for origin in event.origins:
@@ -110,7 +104,7 @@ def plot_seismogram_3comp(data_file_h5,
 
     #----- find stations which have data in the plotting time window
     stations = []
-    for net_sta_grp in h5f.root:
+    for net_sta_grp in event_h5grp:
         network = net_sta_grp._v_attrs['network']
         station = net_sta_grp._v_attrs['station']
         stnm = f'{network}.{station}'
@@ -127,22 +121,27 @@ def plot_seismogram_3comp(data_file_h5,
         #     phase_list=['p','P'])
         # first_arrival_time = event_origin.time + min([arr.time for arr in arrivals])
         # find the data trace containing the required plotting window
-        h5data = None
+        # h5data = None
         reduced_time = dist_degree * reduce_rayp
         plot_t1 = event_origin.time + min(time_limit) + reduced_time
         plot_t2 = event_origin.time + max(time_limit) + reduced_time
-        for arr in net_sta_grp:
-            tb = UTCDateTime(arr._v_attrs['starttime'])
-            te = UTCDateTime(arr._v_attrs['endtime'])
-            # if tb < plot_t1 and plot_t2 < te:
-            if tb < plot_t1 and plot_t1 < te:
-                h5data = arr
-                break
-        if not h5data:
-            print(f'[WARN] {stnm} [{tb}, {te}] does not cover plot_twin [{plot_t1}, {plot_t2}]')
-            continue
+        # for arr in net_sta_grp:
+        #     tb = UTCDateTime(arr._v_attrs['starttime'])
+        #     te = UTCDateTime(arr._v_attrs['endtime'])
+        #     # if tb < plot_t1 and plot_t2 < te:
+        #     if tb < plot_t1 and plot_t1 < te:
+        #         h5data = arr
+        #         break
+        # if not h5data:
+        #     print(f'[WARN] {stnm} [{tb}, {te}] does not cover plot_twin [{plot_t1}, {plot_t2}]')
+        #     continue
         sta = {}
-        sta['h5data'] = h5data
+        if data_tag in net_sta_grp:
+            sta['h5data'] = net_sta_grp[data_tag]
+        else:
+            continue
+        if syn_tag in net_sta_grp:
+            sta['h5syn'] = net_sta_grp[syn_tag]
         sta['latitude'] = stla
         sta['longitude'] = stlo
         sta['dist_degree'] = dist_degree
@@ -151,6 +150,8 @@ def plot_seismogram_3comp(data_file_h5,
         sta['name'] = stnm
         # sta['first_arrival'] = first_arrival_time
         stations.append(sta)
+
+    if not stations: return
 
     #----- traveltime curve
     print(f'[INFO] calculate traveltime curve')
@@ -312,10 +313,10 @@ def plot_seismogram_3comp(data_file_h5,
         for sta in stations_azimuthal_bin:
             h5data = sta['h5data']
             data_starttime = UTCDateTime(h5data._v_attrs['starttime'])
-            data_endtime = UTCDateTime(h5data._v_attrs['endtime'])
             data_sampling_rate = h5data._v_attrs['sampling_rate']
             data_npts = h5data._v_attrs['npts']
-            data_orientation = h5data._v_attrs['orientation']
+            data_orientation = h5data._v_attrs['component']
+            data_endtime = data_starttime + (data_npts-1) / data_sampling_rate
 
             ind_zcomp = []
             ind_hcomp = []
@@ -457,11 +458,28 @@ def plot_seismogram_3comp(data_file_h5,
 
 
 if __name__ == '__main__':
-    data_file_h5 = 'data.h5'
-    plot_seismogram_3comp(data_file_h5, savefig=True, out_dir='surface_wave',
-                          max_bin_az=10, max_bin_sta=20,
-                          reduce_rayp=30, time_limit=[-500, 500],
-                          min_SNR=10, noise_twin=[-250,-100],
-                          freq_limit=[0.01, 0.03],
-                          dist_limit=[0, 40],
-                          )
+    data_file_h5 = sys.argv[1] #'syn.h5'
+    figure_dir = sys.argv[2] #'figures_syn'
+
+    if tables.is_hdf5_file(data_file_h5):
+      h5f = tables.open_file(data_file_h5, mode="r")
+    else:
+      print(f'[Error] not hdf5 file {data_file_h5}\n')
+      sys.exit()
+
+    for evt_g in h5f.root:
+        event = evt_g._v_attrs['event']
+        event_name = event.event_descriptions[0].text
+        out_dir = os.path.join(figure_dir, event_name)
+        os.makedirs(out_dir, exist_ok=True)
+        print(f'plotting {event_name}')
+        plot_seismogram_3comp(evt_g, savefig=True, out_dir=out_dir,
+                              data_tag='DATA_DISP',
+                              max_bin_az=10, max_bin_sta=20,
+                              reduce_rayp=10,
+                              time_limit=[-100, 250],
+                              min_SNR=10, noise_twin=[-450,-100],
+                              # min_SNR=-10, noise_twin=[-10,0],
+                              freq_limit=[0.02, 0.1],
+                              dist_limit=[0, 40],
+                              )

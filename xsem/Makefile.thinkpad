@@ -1,0 +1,163 @@
+#FC = ifort
+FC = mpif90
+
+RM = \rm -rf
+MKDIR_P = \mkdir -p
+
+obj_dir = obj
+bin_dir = bin
+inc_dir = include
+src_dir = src
+
+# netcdf include/ and lib/
+NETCDF_INC = "/usr/include"
+NETCDF_LIB = "/usr/lib/x86_64-linux-gnu"
+netcdf_mod = ${NETCDF_INC}
+netcdf_lib = ${NETCDF_LIB}
+
+module_dir = ${src_dir}/module
+shared_dir = ${src_dir}/shared
+program_dir = ${src_dir}/program
+
+## ifort
+##FCFLAGS = -g -check bounds -check all
+#FCFLAGS = -O3
+##FCFLAGS += -I $(inc_dir) -I $(netcdf_mod) -module $(obj_dir)
+##LDFLAGS = -L$(netcdf_lib) -lnetcdff
+#FCFLAGS += -I $(inc_dir) -module $(obj_dir)
+#LDFLAGS = -lnetcdff
+
+# gfortran
+FCFLAGS = -g -W -ffree-line-length-none -fbounds-check
+FCFLAGS += -O2
+FCFLAGS += -I$(inc_dir) -J$(obj_dir) -I$(netcdf_mod)
+
+LDFLAGS = -L$(netcdf_lib) -lnetcdff
+
+module = sem_constants_mod sem_io_mod sem_mesh_mod \
+		  sem_parallel_mod sem_utils_mod
+
+shared = gll_library geographic_mod kdtree2
+
+program = \
+	xlatlonhkm_to_vtk \
+	xsem_slice_gcircle \
+	xsem_slice_sphere \
+	xmap_gcircle \
+	xsem_interp_mesh \
+	xsem_interp_mesh2 \
+	xsem_interp_xyz \
+	xsem_add_model_slab_mow \
+	xsem_add_model_plume \
+	xsem_add_model_llsvp \
+	xsem_add_model_horizontal_layer \
+	xsem_add_model_geographic_region \
+	xsem_make_dlnv_stagnant_slab_with_gap \
+	xsem_make_dlnv_stagnant_slab \
+	xsem_make_dlnv_flat_slab \
+	xsem_make_dlnv_gauss_point \
+	xsem_make_gauss_point_from_list \
+	xsem_make_dmodel_random \
+	xsem_make_dmodel_cosine \
+	xsem_create_model_homogeneous \
+	xsem_inner_product \
+	xsem_interp_IRIS_netcdf \
+	xsem_add_model_dlnV \
+	xsem_sum_event_kernels_1 \
+	xsem_sum_event_kernels_1_serial \
+	xsem_sum_event_kernels_cijkl \
+	xsem_make_source_mask \
+	xsem_make_depth_mask \
+	xsem_make_source_depth_mask \
+	xsem_math \
+	xsem_math_serial \
+	xsem_math_unary \
+	xsem_pdf \
+	xsem_depth_pdf \
+	xsem_thresholding \
+	xsem_threshold_percentage \
+	xsem_smooth \
+	xsem_smooth_spherical_cap \
+	xsem_smooth_spatial_variant \
+	xsem_combine_solver_data_in_v5.1 \
+	xsem_diff_relative \
+	xsem_threshold_amplitude \
+	xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll \
+	xsem_model_dlnvs_to_gll \
+	xsem_model_dlnvs_kappa_thomsen_elliptic_to_gll_serial \
+	xsem_model_gll_to_dlnvs_kappa_thomsen \
+	xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
+	xsem_kernel_aijkl_to_iso \
+	xsem_kernel_aijkl_to_dlnvs_kappa_thomsen_elliptic \
+	xsem_kernel_aijkl_to_dlnvs_kappa_thomsen_elliptic_serial \
+	xsem_kernel_divide_hess_water_level \
+	xsem_model_tiso_to_thomsen \
+	xsem_model_tiso_enforce_iso_elem \
+	xsem_model_tiso_enforce_iso_iflag \
+	xsem_mesh_get_idoubling_gll \
+	xsem_mesh_get_ispec_is_tiso_gll \
+	xsem_mesh_color_code_slices \
+	xsem_hess_diag_sum_random_adjoint_kernel \
+	xsem_get_dmodel_steepest_descent \
+	xsem_get_dmodel_lbfgs \
+	xsem_pcg_dmodel \
+	xsem_pcg_dmodel_n \
+	xsem_scale_dmodel \
+	xsem_scale_dmodel_dlnvs_kappa_thomsen_elliptic \
+	xsem_scale_dmodel_dlnvs \
+	xsem_add_dmodel \
+	xsem_add_dmodel_random \
+	xsem_add_dmodel_dlnvs_kappa_thomsen_elliptic \
+	xsem_add_dmodel_dlnvs \
+	xsem_get_radius \
+	xsem_make_1d_gll \
+	xsem_make_gll_from_1d_um_mtz_lm \
+	xsem_add_crust_to_1d_gll \
+	xsem_mesh_get_slice_center \
+	xsem_model_gll_reduce_amplitude \
+	xsem_make_gll_depth_taper_linear \
+	xsem_gll_get_value_range \
+	xsem_gll_scale \
+	xsem_inverse_hess_diag_water_level \
+	xsem_make_gaussian_mask \
+	xsem_gll_scale_dvsv_to_rho \
+	xsem_gll_vph_vpv_vsv_vsh_to_vp0_vs0_phi_xi
+
+
+#------------------------------------------
+module_obj = $(patsubst  %,$(obj_dir)/%.o, $(module))
+shared_obj = $(patsubst  %,$(obj_dir)/%.o, $(shared))
+program_obj = $(patsubst %,$(obj_dir)/%.o, $(program))
+
+.PHONY: all directories clean
+
+all : directories $(program)
+
+directories:
+	$(MKDIR_P) $(bin_dir) $(obj_dir)
+
+$(shared_obj) :
+	$(FC) -c $(shared_dir)/$(patsubst %.o,%.f90,$(@F)) -o $@ $(FCFLAGS)
+
+$(module_obj) : $(shared_obj)
+	$(FC) -c $(module_dir)/$(patsubst %.o,%.f90,$(@F)) -o $@ $(FCFLAGS)
+
+$(program_obj) : $(shared_obj) $(module_obj)
+	$(FC) -c $(program_dir)/$(patsubst %.o,%.f90,$(@F)) -o $@ $(FCFLAGS)
+
+#xsem_slice_gcircle : $(program_obj) $(shared_obj) $(module_obj)
+#	$(FC) -o $(bin_dir)/$@ $@ $(shared_obj) $(module_obj) $(FCFLAGS) $(LDFLAGS)
+
+$(program) : $(program_obj) $(shared_obj) $(module_obj)
+	$(FC) -o $(bin_dir)/$(@F) $(patsubst %,$(obj_dir)/%.o, $(@F)) \
+		$(shared_obj) $(module_obj) $(FCFLAGS) $(LDFLAGS)
+
+# explicit specified dependencies
+#$(module): $(shared)
+#$(OBJ): $(SHARED) $(MOD)
+#$(SHARED) : $(ODIR)/constants_module.o
+
+.PHONY: clean
+
+clean :
+	$(RM)  $(bin_dir) $(obj_dir)

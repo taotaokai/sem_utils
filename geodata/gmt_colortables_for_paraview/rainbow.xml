@@ -1,0 +1,4 @@
+<ColorMap name="makecpt -Crainbow" space="HSV">
+	<Point x="0" o="1" r="0" g="1" b="0.498039215686275"/>
+	<Point x="1" o="1" r="0" g="1" b="0.498039215686275"/>
+</ColorMap>

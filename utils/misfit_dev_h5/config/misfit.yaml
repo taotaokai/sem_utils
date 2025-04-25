@@ -1,0 +1,104 @@
+taup_model: 'ak135'  # for seismic phase arrival time calculation
+gps_ellps: 'WGS84'
+epsg_wgs84: "EPSG:4326"
+epsg_ecef: "EPSG:4978"
+
+data:
+  type: 'VEL'
+  tag: 'DATA_VEL'
+  time_before_first_arrival: 450
+  time_after_origin: 1500
+  # taper_width: 100  # on each side
+  time_before_first_arrival_as_noise: 50  # pre-event time length of obs (for noise assessment)
+
+syn:
+  type: 'DISP'
+  tag: 'SYN_DISP'
+  tag_diff: 'SYN_DISP_DIFF' # for difference (perturbed - original synthetics)
+  band_code: 'MX'
+  sac_suffix: '.sem.sac'
+  # left_pad: 50
+  # right_pad: 50
+  # max_time_after_origin: 1500
+  # is_grn: False # flag if synthetic seismograms are computed with zero half duration;
+  #               # if true, ignore absolute time in syn files, use event['t0'] as the origin time
+
+adj:
+  tag: 'ADJ_SRC'
+  band_code: 'MX'
+  suffix: '.adj' # net.sta.band_code[ENZ].adj
+
+window: [
+  # time window: twin = [b, e], 
+  #              window start = min(arrival times) + b, 
+  #              window end = max(arrival times) + e
+  # butterworth filter: bp = [order, freqmin(Hz), freqmax(Hz)]
+  # event depth range: evdp = [depmin, depmax] in km
+  # epidistance range: gcarc = [distmin, distmax] in degrees
+
+  # direct
+  {'id':'p,P_Z_30-100sec', 'type':'body', 'phase':'p,P', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
+  {'id':'p,P_Z_10-50sec', 'type':'body', 'phase':'p,P', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.02,0.10], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
+#  {'type':'body', 'phase':'p,P', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
+#  {'type':'body', 'phase':'p,P', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
+  {'id':'s,S_Z_30-100sec', 'type':'body', 'phase':'s,S', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
+  {'id':'s,S_R_30-100sec', 'type':'body', 'phase':'s,S', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
+  {'id':'s,S_T_30-100sec', 'type':'body', 'phase':'s,S', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
+#  # surface multiples
+#  {'type':'body', 'phase':'PP', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'PP', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'PP', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'SS', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'SS', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'SS', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'PPP', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'PPP', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'PPP', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'SSS', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'SSS', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'SSS', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
+#
+#  # depth phases
+#  {'type':'body', 'phase':'pP,sP', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[0,180], 'weight':1},
+#  {'type':'body', 'phase':'pP,sP', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[0,180], 'weight':1},
+#  {'type':'body', 'phase':'pP,sP', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[0,180], 'weight':1},
+#  {'type':'body', 'phase':'pS,sS', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[0,180], 'weight':1},
+#  {'type':'body', 'phase':'pS,sS', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[0,180], 'weight':1},
+#  {'type':'body', 'phase':'pS,sS', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[0,180], 'weight':1},
+#  # depth + surface multiples
+#  {'type':'body', 'phase':'pPP,sPP', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'pPP,sPP', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'pPP,sPP', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'pSS,sSS', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'pSS,sSS', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'pSS,sSS', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'pPPP,sPPP', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'pPPP,sPPP', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'pPPP,sPPP', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'pSSS,sSSS', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'pSSS,sSSS', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
+#  {'type':'body', 'phase':'pSSS,sSSS', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
+#
+#  # slowness window: swin = [smin(s/deg), smax(s/deg), min_length]
+#  #                  window start, end = smin * gcarc, smax * gcarc
+#  #                  the window is expanded to at least min_length long
+  {'id':'Surf_Z_30-100sec', 'type':'surf', 'phase':'surf', 'cmp':'Z', 'swin':[10,50,100], 'bp':[4,0.01,0.03], 'evdp':[0,100], 'gcarc':[0,180], 'weight':1},
+  {'id':'Surf_R_30-100sec', 'type':'surf', 'phase':'surf', 'cmp':'R', 'swin':[10,50,100], 'bp':[4,0.01,0.03], 'evdp':[0,100], 'gcarc':[0,180], 'weight':1},
+  {'id':'Surf_T_30-100sec', 'type':'surf', 'phase':'surf', 'cmp':'T', 'swin':[10,50,100], 'bp':[4,0.01,0.03], 'evdp':[0,100], 'gcarc':[0,180], 'weight':1},
+]
+
+window_taper: 0.1
+
+
+misfit:
+  # cc0: zero-lag cross-correlation misfit
+  # ccdt: cross-correlation traveltime
+  # phcc: phase correlation (for ambient noise correlogram)
+  type: 'cc0'
+  cc_deltat: 0.01
+  window_weight: # cosine_sac_taper [lstop, lpass, (hpass, hstop)]
+    "cc_tshift": [-10, -8, 8, 10]
+    "SNR": [10, 15]
+    "CC0": [0.5, 0.7]
+    "CCmax": [0.7, 0.9]
+    # "dist": None,

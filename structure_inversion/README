@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# NOTE: DO NOT run this script directly. Follow the steps and run the commands individually
+
+control_file=control_file
+event_list=event.txt
+
+utils_dir=~/seiscode/sem_utils/utils/misfit_v0
+
+# create slurm jobs for pre-/post-processing
+$utils_dir/structure_inversion/make_slurm_jobs_for_postproc.sh $control_file $event_list
+# create directory and slurm jobs for each event
+$utils_dir/structure_inversion/proc_event.sh $control_file $event_list
+
+# 1. mesh
+$utils_dir/submit_slurm_jobs.sh slurm mesh
+
+# 2. synthetics
+# if you cannot submit a certain job for all event due to the job limit, 
+# then make a sub list from event.txt, e.g. to_run.txt,
+# after these jobs finish, run the remaining events and so on.
+# node failure is not unusual, check if all jobs are finished succesfully.
+
+# syn
+$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt syn
+# misfit
+$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt misfit
+# kernel
+$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt kernel
+
+# 2.1 hess (If you decide to use hess_sum/ from previous iteration by creating a symbolic link, skip this step)
+$utils_dir/submit_slurm_jobs.sh slurm model_random,mesh_hess
+$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt hess_syn
+$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt hess_misfit
+$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt hess_kernel
+$utils_dir/submit_slurm_jobs.sh slurm hess_sum
+
+# 3. post-processing
+$utils_dir/submit_slurm_jobs.sh slurm kernel_sum,pcg_dmodel,model_perturb,mesh_perturb
+
+# 4. line search
+# perturb
+$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt perturb
+# grid search
+$utils_dir/submit_slurm_jobs_for_event.sh to_run.txt search
+
+# 5. update model
+$utils_dir/submit_slurm_jobs.sh slurm model_update

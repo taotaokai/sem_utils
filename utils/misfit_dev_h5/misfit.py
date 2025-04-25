@@ -263,22 +263,21 @@ class Misfit(object):
     |- solver/
     |   |- attrs: name, starttime, dt, nt
     |
+    |- window (table)
+    |   |- net, sta, name, time_win, filter_band, component, proj_matrix,
+    |   |  cc0, AR0, cc_max_tshift, cc_max, ARmax,
+    |   |  Asignal, Anoise, Asyn, SNR, weight,
+    |
     |- waveforms/
     |   |- NET_STA/
     |   |   |- attrs: net,sta,loc,stla,stlo,stel,stdp,channels
     |   |   |         gcarc, az, baz, ttp
     |   |   |- data[enu, nt]
-    |   |   |   |- attrs: channels=[(code,az,dip), ...]
+    |   |   |   |- attrs: channels=[(code,az,dip), ...], filter
     |   |   |- syn[enu, nt]
-    |   |   |- grn[enu, nt]
-    |   |   |- diff_syn/
-    |   |   |   |- structure[enu, nt]
-    |   |   |- diff_grn/
-    |   |   |   |- mt_xs[enu,nt]
-    |   |   |- misfit_table
-    |   |   |   |- name, time_win, filter_band, component, proj_matrix,
-    |   |   |   |  cc0, AR0, cc_max_tshift, cc_max, ARmax,
-    |   |   |   |  Asignal, Anoise, Asyn, SNR, weight,
+    |   |   |- dsyn/
+    |   |   |   |- dmodel[enu, nt]  # structure inversion
+    |   |   |   |- dmt_xs[enu,nt]   # source inversion
     |
 
     Methods:
@@ -949,7 +948,7 @@ class Misfit(object):
 
                 self.h5f.flush()
 
-    def read_syn_sac(self, sac_dir, is_grn=False, cal_diff=False):
+    def read_syn_sac(self, sac_dir, is_grn=False, is_diff=False, tag_diff='diff'):
         """
         sac file naming rule: NET.STA.LOC.CHA , where CHA consists of band_code(e.g. BH or MX) + orientation[E|N|Z]
         syn should be sac files and have sac header b and o set correctly.
@@ -965,8 +964,9 @@ class Misfit(object):
         # time_before_first_arrival = config["data"]["time_before_first_arrival"]
 
         data_tag = config["data"]["tag"]
-        if cal_diff:
-            syn_tag = config["syn"]["tag_diff"]
+        if is_diff:
+            # syn_tag = config["syn"]["tag_diff"]
+            syn_tag = tag_diff
             syn_tag_old = config["syn"]["tag"]
         else:
             syn_tag = config["syn"]["tag"]
@@ -1014,7 +1014,7 @@ class Misfit(object):
                 warnings.warn(msg)
                 continue
 
-            if cal_diff:
+            if is_diff:
                 if syn_tag_old in g_sta:
                     syn_old = g_sta[syn_tag_old]
                 else:
@@ -1181,7 +1181,7 @@ class Misfit(object):
             ca[:] = 0
             for i in range(3):
                 ca[i, :] = np.array(syn_st[i].data, dtype=np.float32)  # * win_func
-            if cal_diff:
+            if is_diff:
                 ca[:] -= syn_old[:]
             dtype = [("name", "S3"), ("azimuth", float), ("dip", float)]
             channels = [

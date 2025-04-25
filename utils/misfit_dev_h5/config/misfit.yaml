@@ -14,7 +14,6 @@ data:
 syn:
   type: 'DISP'
   tag: 'SYN_DISP'
-  tag_diff: 'SYN_DISP_DIFF' # for difference (perturbed - original synthetics)
   band_code: 'MX'
   sac_suffix: '.sem.sac'
   # left_pad: 50
@@ -22,6 +21,7 @@ syn:
   # max_time_after_origin: 1500
   # is_grn: False # flag if synthetic seismograms are computed with zero half duration;
   #               # if true, ignore absolute time in syn files, use event['t0'] as the origin time
+  # tag_diff: 'SYN_DISP_DIFF' # for difference (perturbed - original synthetics)
 
 adj:
   tag: 'ADJ_SRC'

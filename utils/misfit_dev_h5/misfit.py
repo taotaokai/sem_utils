@@ -235,6 +235,7 @@ class Window(pt.IsDescription):
     obs_maxamp = pt.Float32Col(pos=20)
     syn_maxamp = pt.Float32Col(pos=21)
     id = pt.StringCol(128, pos=22)
+    status = pt.BoolCol(pos=23)
 
 
 class Misfit(object):
@@ -966,8 +967,9 @@ class Misfit(object):
         data_tag = config["data"]["tag"]
         if is_diff:
             # syn_tag = config["syn"]["tag_diff"]
-            syn_tag = tag_diff
-            syn_tag_old = config["syn"]["tag"]
+            dsyn_grp = config["syn"]["dsyn_grp"]
+            dsyn_tag = tag_diff
+            syn_tag = config["syn"]["tag"]
         else:
             syn_tag = config["syn"]["tag"]
         syn_type = config["syn"]["type"]
@@ -1015,10 +1017,15 @@ class Misfit(object):
                 continue
 
             if is_diff:
-                if syn_tag_old in g_sta:
-                    syn_old = g_sta[syn_tag_old]
+                if syn_tag in g_sta:
+                    syn = g_sta[syn_tag]
+                    assert syn.attrs['origin_time'] == event['t0']
+                    if is_grn:
+                        if not syn.attrs['is_grn']:
+                            msg = f"{syn._v_pathname}.attrs[is_grn]==False but is_grn is set to True!"
+                            raise ValueError(msg)
                 else:
-                    msg = f"{syn_tag_old} does not exist under {g_sta._v_file.filename}:{g_sta._v_pathname}, skip"
+                    msg = f"{syn_tag} does not exist under {g_sta._v_pathname}, skip"
                     warnings.warn(msg)
                     continue
 
@@ -1170,19 +1177,32 @@ class Misfit(object):
                 syn_st1.plot()
 
             # store synthetic waveforms, e.g. /NET_STA/SYN_DISP[0:nchan, 0:npts]
-            if syn_tag in g_sta:
-                msg = f"{syn_tag} exists in {g_sta._v_name}, overwrite!"
-                warnings.warn(msg)
-                self.h5f.remove_node(g_sta, syn_tag)
             atom = pt.Atom.from_dtype(np.dtype(np.float32))
             filters = pt.Filters(complevel=3, complib="zlib")
             shape = (3, obs_nt)
-            ca = self.h5f.create_carray(g_sta, syn_tag, atom, shape, filters=filters)
+
+            if is_diff:
+                if dsyn_grp not in g_sta:
+                    g_dsyn = self.h5f.create_group(g_sta, dsyn_grp)
+                else: 
+                    g_dsyn = self.h5f.get_node(g_sta, dsyn_grp)
+                if dsyn_tag in g_dsyn:
+                    msg = f"{dsyn_tag} exists in {g_dsyn._v_pathname}, overwrite!"
+                    warnings.warn(msg)
+                    self.h5f.remove_node(g_dsyn, dsyn_tag)
+                ca = self.h5f.create_carray(g_dsyn, dsyn_tag, atom, shape, filters=filters)
+            else:
+                if syn_tag in g_sta:
+                    msg = f"{syn_tag} exists in {g_sta._v_pathname}, overwrite!"
+                    warnings.warn(msg)
+                    self.h5f.remove_node(g_sta, syn_tag)
+                ca = self.h5f.create_carray(g_sta, syn_tag, atom, shape, filters=filters)
+            
             ca[:] = 0
             for i in range(3):
                 ca[i, :] = np.array(syn_st[i].data, dtype=np.float32)  # * win_func
             if is_diff:
-                ca[:] -= syn_old[:]
+                ca[:] -= syn[:]
             dtype = [("name", "S3"), ("azimuth", float), ("dip", float)]
             channels = [
                 (syn_st[0].stats.channel, 90, 0),
@@ -1384,6 +1404,7 @@ class Misfit(object):
                 win_row["endtime"] = win_te.isoformat()
                 win_row["taper"] = win_taper
                 win_row["weight"] = win_weight
+                win_row["status"] = False
 
                 win_row.append()
 
@@ -1591,6 +1612,8 @@ class Misfit(object):
                 cmpnm = win["cmpnm"].decode()
                 if no_Hchan and cmpnm != "Z":
                     warnings.warn("skip non-vertical window since only vertical data present")
+                    win["status"] = False
+                    win.update()
                     continue
                 cmpaz = win["cmpaz"]
                 cmpdip = win["cmpdip"]
@@ -1956,6 +1979,7 @@ class Misfit(object):
                 win["syn_maxamp"] = Amax_syn
                 win["SNR"] = snr
                 win["weight"] = weight
+                win["status"] = True
                 win.update()
 
             # store adjoint source for this station, e.g. /NET_STA/ADJ_DISP[0:nchan, 0:npts]

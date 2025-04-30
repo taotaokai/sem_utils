@@ -22,6 +22,7 @@ syn:
   # is_grn: False # flag if synthetic seismograms are computed with zero half duration;
   #               # if true, ignore absolute time in syn files, use event['t0'] as the origin time
   # tag_diff: 'SYN_DISP_DIFF' # for difference (perturbed - original synthetics)
+  dsyn_grp: 'dSYN'
 
 adj:
   tag: 'ADJ_SRC'

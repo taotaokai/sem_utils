@@ -379,7 +379,7 @@ class Misfit(object):
             y = float(lines[5][1])
             z = float(lines[6][1])
             # convert from ECEF(meters) to lla
-            lon, lat, alt = ecef2gps.transform(x, y, z)
+            lat, lon, alt = ecef2gps.transform(x, y, z)
             dep = -alt / 1000.0
         else:
             tau = float(lines[3][1]) / 1.628  # mimic triangle with gaussian
@@ -2594,12 +2594,12 @@ class Misfit(object):
             raise KeyError(msg)
         g_wav = self.h5f.get_node("/waveform")
 
-        tr = Trace()
         for g_sta in g_wav:
             if adj_tag not in g_sta:
                 continue
             adj_src = g_sta[adj_tag]
 
+            tr = Trace()
             tr.stats.network = g_sta._v_attrs["network"]
             tr.stats.station = g_sta._v_attrs["station"]
             tr.stats.location = g_sta._v_attrs["location"]

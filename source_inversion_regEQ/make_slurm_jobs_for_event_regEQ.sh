@@ -12,7 +12,7 @@ source $control_file
 #====== define variables
 # directories
 event_dir=$iter_dir/$event_id
-mesh_dir=$iter_dir/mesh
+#mesh_dir=$iter_dir/mesh
 misfit_dir=$event_dir/misfit
 figure_dir=$misfit_dir/figure
 slurm_dir=$event_dir/slurm

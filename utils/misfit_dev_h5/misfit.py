@@ -235,7 +235,7 @@ class Window(pt.IsDescription):
     obs_maxamp = pt.Float32Col(pos=20)
     syn_maxamp = pt.Float32Col(pos=21)
     id = pt.StringCol(128, pos=22)
-    status = pt.BoolCol(pos=23)
+    valid = pt.BoolCol(pos=23)
 
 
 class Misfit(object):
@@ -555,7 +555,7 @@ class Misfit(object):
 
             if select_station:
                 match = (stations_df.iloc[:, 0] == net) & (
-                    stations_df.iloc[:, 1] == sta
+                    stations_df.iloc[:, 1] == f"{sta}.{loc}"
                 )
                 if not any(match):
                     msg = f"no match in station file ({station_file}), skip ({l})"
@@ -784,7 +784,7 @@ class Misfit(object):
 
                 if select_station:
                     match = (stations_df.iloc[:, 0] == net) & (
-                        stations_df.iloc[:, 1] == sta
+                        stations_df.iloc[:, 1] == f"{sta}.{loc}"
                     )
                     if not any(match):
                         msg = f"not in station select list, skip ({net}.{sta})"
@@ -1313,6 +1313,20 @@ class Misfit(object):
                 phase_list=phase_list,
             )
 
+            obs_channels = obs.attrs["channels"]
+            obs_Zchan = [cha for cha in obs_channels if cha["name"].decode()[-1] == "Z"]
+            obs_Hchan = [cha for cha in obs_channels if cha["name"].decode()[-1] != "Z"]
+            if len(obs_Zchan) != 1 or obs_Zchan[0]["dip"] != -90:
+                msg = f"{g_sta._v_name} has problematic Z channel info: {obs_Zchan}, skip"
+                raise AssertionError(msg)
+            no_Hchan = False
+            if len(obs_Hchan) == 0:
+                msg = f"{g_sta._v_name} has no horizontal channels"
+                warnings.warn(msg)
+                no_Hchan = True
+            else:
+                assert len(obs_Hchan) == 2
+
             for win in window_cfg:
                 win_id = win["id"]
                 win_type = win["type"]
@@ -1323,6 +1337,11 @@ class Misfit(object):
                 evdp_limit = win["evdp"]
                 gcarc_limit = win["gcarc"]
                 win_weight = win["weight"]
+
+                if no_Hchan and cmpnm != "Z":
+                    msg = f"{g_sta._v_name}: no horizontal channels, skip window ({win})"
+                    warnings.warn(msg)
+                    continue
 
                 if evdp_km < min(evdp_limit) or evdp_km > max(evdp_limit):
                     continue
@@ -1385,7 +1404,7 @@ class Misfit(object):
                     cmpaz = float("nan")
                     cmpdip = float("nan")
                 else:
-                    print("[WARN] %s: unrecognized component, SKIP." % (cmpnm))
+                    warnings.warn("[WARN] %s: unrecognized component, SKIP." % (cmpnm))
                     continue
 
                 #
@@ -1404,7 +1423,7 @@ class Misfit(object):
                 win_row["endtime"] = win_te.isoformat()
                 win_row["taper"] = win_taper
                 win_row["weight"] = win_weight
-                win_row["status"] = False
+                win_row["valid"] = True
 
                 win_row.append()
 
@@ -1979,7 +1998,7 @@ class Misfit(object):
                 win["syn_maxamp"] = Amax_syn
                 win["SNR"] = snr
                 win["weight"] = weight
-                win["status"] = True
+                win["valid"] = True
                 win.update()
 
             # store adjoint source for this station, e.g. /NET_STA/ADJ_DISP[0:nchan, 0:npts]
@@ -2204,6 +2223,10 @@ class Misfit(object):
             nwin_bin = 0
             while bin_idx0 < nwin:
                 winfo, g_sta = windows[bin_idx0]
+                if not winfo["valid"]:
+                    msg = f"invalid window: {winfo}, skip"
+                    warnings.warn(msg)
+                    continue
                 az = (g_sta._v_attrs["azimuth"]) % 360
                 dist_degree = g_sta._v_attrs["dist_degree"]
                 win_SNR = winfo["SNR"]

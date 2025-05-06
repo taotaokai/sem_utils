@@ -125,9 +125,11 @@ print(f'[INFO] event: {event_origin}\n')
 with open(config_yaml, 'r') as file:
     config = yaml.safe_load(file)
 
-config_sampling_rate = config['sampling_rate']
-
 config_zcomp_pattern = config['zcomp_pattern']
+
+config_sampling_rate = config['resample']['sampling_rate']
+config_lowpass_N = config['resample']['filter']['N']
+config_lowpass_Wn = config['resample']['filter']['Wn']
 
 config_output_type = config['remove_response']['output_type']
 config_output_unit = config['remove_response']['output_unit']
@@ -135,11 +137,14 @@ config_ref_resp_type = config['remove_response']['ref_resp_type']
 config_ref_freq = config['remove_response']['ref_freq']
 config_ref_threshold = config['remove_response']['ref_threshold']
 config_max_resp_lc = config['remove_response']['max_resp_lc']
-config_filter_lstop = config['remove_response']['filter']['lstop']
-config_filter_min_lpass = config['remove_response']['filter']['min_lpass']
-config_filter_max_hpass = config['remove_response']['filter']['max_hpass']
-config_filter_gpass = config['remove_response']['filter']['gpass']
-config_filter_gstop = config['remove_response']['filter']['gstop']
+config_min_resp_hc = config['remove_response']['min_resp_hc']
+# config_filter_lstop = config['remove_response']['filter']['lstop']
+# config_filter_min_lpass = config['remove_response']['filter']['min_lpass']
+config_highpass_N = config['remove_response']['filter']['N']
+config_highpass_min_cutoff_freq = config['remove_response']['filter']['min_cutoff_freq']
+# config_filter_max_hpass = config['remove_response']['filter']['max_hpass']
+# config_filter_gpass = config['remove_response']['filter']['gpass']
+# config_filter_gstop = config['remove_response']['filter']['gstop']
 
 time_before_first_arrival = config['time_window']['before_first_arrival_seconds']
 # time_after_first_arrival = config['data']['time_window']['after_first_arrival_seconds']
@@ -333,7 +338,7 @@ for network, station, location, channel in nslc_filtered:
     # frequency samples [1/1000, 1/999, ... , 0.5, 1, 1.1, 1.2, ...] Hz
     ref_freqs = np.hstack((
         1.0/np.arange(1000, 1, -1),
-        np.arange(1, config_sampling_rate/2 + 0.5, 0.1)))
+        np.arange(1, config_sampling_rate, 0.1)))
     for tr in st:
         fs = tr.stats.sampling_rate
         try:
@@ -345,8 +350,14 @@ for network, station, location, channel in nslc_filtered:
             print(f"{err}\n[WARN] failed to evaluate instrument response, {tr.id} ignored. ({station_id})\n")
             traces_to_remove.append(tr)
             continue
+        # print(resp.get_paz())
         flc, fhc = _get_resp_corner_freq(ref_freqs, np.abs(ref_resp), ref_freq=config_ref_freq, threshold_dB=config_ref_threshold)
         tr.stats.resposne_corner_frequency = [flc, fhc]
+        # number of zeros
+        paz = resp.get_paz()
+        nz = sum([1 if z == 0 else 0 for z in paz.zeros])
+        print(f'num. of zero zeros = {nz}')
+
     for tr in traces_to_remove: st.remove(tr)
     if len(st) == 0:
         print(f'[WARN] no trace left, station ignored. ({station_id})\n')
@@ -360,20 +371,25 @@ for network, station, location, channel in nslc_filtered:
     if resp_lc > config_max_resp_lc:
         print(f'[WARN] response lower corner frequency > {config_max_resp_lc} Hz, station ignored. ({station_id})\n')
         continue
-
-    # butter-worth filter pass/stop band
-    lstop = config_filter_lstop
-    lpass = max(resp_lc, config_filter_min_lpass)
-    hpass = min(resp_hc, config_filter_max_hpass)
-    nyq_freq = config_sampling_rate * 0.5
-    hstop = nyq_freq
-    if lpass >= hpass:
-        print(f'[WARN] lpass({lpass}) >= hpass({hpass}), station ignored. ({station_id})\n')
+    if resp_hc < config_min_resp_hc:
+        print(f'[WARN] response higher corner frequency < {config_min_resp_hc} Hz, station ignored. ({station_id})\n')
         continue
-    max_fs = max([tr.stats.sampling_rate for tr in st])
-    butter_N, butter_Wn = scipy.signal.buttord([lpass, hpass], [lstop, hstop], config_filter_gpass, config_filter_gstop, fs=max_fs)
-    print(f'[INFO] filter design pass/stop band: [{lpass}, {hpass}], [{lstop}, {hstop}]\n')
-    print(f'[INFO] filter butter: N, Wn = {butter_N}, {butter_Wn}\n')
+
+
+    # # butter-worth filter pass/stop band
+    # lstop = config_filter_lstop
+    # lpass = max(resp_lc, config_filter_min_lpass)
+    # hpass = min(resp_hc, config_filter_max_hpass)
+    # nyq_freq = config_sampling_rate * 0.5
+    # hstop = nyq_freq
+    # if lpass >= hpass:
+    #     print(f'[WARN] lpass({lpass}) >= hpass({hpass}), station ignored. ({station_id})\n')
+    #     continue
+    # max_fs = max([tr.stats.sampling_rate for tr in st])
+    # butter_N, butter_Wn = scipy.signal.buttord([lpass, hpass], [lstop, hstop], config_filter_gpass, config_filter_gstop, fs=max_fs)
+    # print(f'[INFO] filter design pass/stop band: [{lpass}, {hpass}], [{lstop}, {hstop}]\n')
+    # print(f'[INFO] filter butter: N, Wn = {butter_N}, {butter_Wn}\n')
+    config_highpass_Wn = max(config_highpass_min_cutoff_freq, resp_lc)
 
     # remove trend and apply taper
     st.detrend('linear')
@@ -392,18 +408,20 @@ for network, station, location, channel in nslc_filtered:
     for tr in st:
         fs = tr.stats.sampling_rate
         npts = tr.stats.npts
-        npad = int(2.0 * fs / butter_Wn[0])
+        npad = int(2.0 * fs / config_highpass_Wn)
         # npad = int(2.0 / min(config_lower_corner_taper_width, config_higher_corner_taper_width) * fs)
         # print(f'[INFO] resample npad = {npad}')
         nfft = scipy.fft.next_fast_len(npts + npad)
         freqs = np.fft.rfftfreq(nfft, d=1/fs)
         sig_spectrum = np.fft.rfft(tr.data, nfft)
         # pre-filter
-        filter_sos = scipy.signal.butter(butter_N, butter_Wn, 'bandpass', fs=fs, output='sos')
-        w, filter_h = scipy.signal.freqz_sos(filter_sos, worN=freqs, fs=fs)
-        sig_spectrum *= abs(filter_h)
+        lp_sos = scipy.signal.butter(config_lowpass_N, config_lowpass_Wn, 'lowpass', fs=fs, output='sos')
+        hp_sos = scipy.signal.butter(config_highpass_N, config_highpass_Wn, 'highpass', fs=fs, output='sos')
+        _, h_lp = scipy.signal.freqz_sos(lp_sos, worN=freqs, fs=fs)
+        _, h_hp = scipy.signal.freqz_sos(hp_sos, worN=freqs, fs=fs)
+        sig_spectrum *= abs(h_lp) * abs(h_hp)
         # if _DEBUG:
-        #     plt.loglog(freqs, abs(filter_h))
+        #     plt.loglog(freqs, abs(h_lp) * abs(h_hp))
         #     plt.title('Butterworth filter frequency response')
         #     plt.xlabel('Frequency [Hz]')
         #     plt.ylabel('Amplitude')
@@ -478,7 +496,7 @@ for network, station, location, channel in nslc_filtered:
                 if abs((az1 - az2)%360) < 10:
                     print(f'[WARN] horizontal components\' azimuth angles ({az1}, {az2}) are close to parallel, ignored. ({station_id})\n')
                     traces_to_remove += [tr1, tr2]
-    for tr in traces_to_remove: 
+    for tr in traces_to_remove:
         if tr in st:
             st.remove(tr)
 
@@ -532,7 +550,8 @@ for network, station, location, channel in nslc_filtered:
     ca.attrs['starttime'] = resample_starttime # st[0].stats.starttime.strftime('%Y-%m-%dT%H:%M:%S.%f') # microseconds precision
     ca.attrs['sampling_rate'] = config_sampling_rate
     ca.attrs['npts'] = resample_npts
-    ca.attrs['filter'] = {'type':'butter', 'N':butter_N, 'Wn':butter_Wn}
+    ca.attrs['filter'] = [{'type':'lowpass', 'N':config_lowpass_N, 'Wn':config_lowpass_Wn},
+                          {'type':'highpass', 'N':config_highpass_N, 'Wn':config_highpass_Wn},]
     ca.attrs['response_corner_frequency'] = [resp_lc, resp_hc]
     ca.attrs['type'] = config_output_type
     ca.attrs['unit'] = config_output_unit

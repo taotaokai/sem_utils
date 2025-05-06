@@ -13,8 +13,6 @@ enforce_3comp: False # True: either Z12 or ZNE, False: either Z or Z12 or ZNE
 # default is 0.01, but data from network IV have timing error up to 0.04 
 # misalignment_threshold: 0.1 # in unit of sampling interval 
 
-sampling_rate: 5 # Hz, resample data
-
 # keep only one (loc, band) for each (net, sta)
 # channel code = band + instrument + orientation
 # NOTE: instrument code is fixed to 'H' and orientation codes are assumed to be Z,N,E or Z,1,2
@@ -22,26 +20,30 @@ zcomp_pattern: "[BH]HZ" # for matching files of Z component
 # band_code_priority: ['H', 'B']
 # location_code_priority: ['', '00', '01', '*']
 
+
 time_window:
   before_first_arrival_seconds: 500 # sec 
   # after_first_arrival_seconds: 1500 # sec
   after_origin_time_seconds: 1500 # sec
 
+resample:
+  sampling_rate: 2 # Hz, resample data
+  filter: # butterworth, anti-aliasing (amp < 2e-5 at 1 Hz)
+    type: 'lowpass'
+    N: 15     # filter order
+    Wn: 0.5   # cutoff frequency
+
 remove_response:
   output_type: VEL #VEL # either DISP, VEL, ACC, DEF
   output_unit: meter #m/s # meter, m/s
-  # to determine filter band [flc, fhc]
+  # to determine response passband: [resp_lc, resp_hc]
   ref_resp_type: VEL # type of response to determine corner freqs 
   ref_freq: 1 # Hz, reference frequency
-  # resp. amp within [resp_lc, resp_hc] >= ref_amp * 10**(-thred/20)
-  ref_threshold: 3 # dB, relative to the amplitude at ref_freq
+  # response amplitude within [resp_lc, resp_hc] >= ref_amp * 10**(-1 * thred_dB/20)
+  ref_threshold: 3.01 # dB, relative to the amplitude at ref_freq, -3.01 dB is about half power
   max_resp_lc: 0.05  # Hz, ensure enough low freq. content
-  # min_resp_hc: 1  # Hz
+  min_resp_hc: 1     # Hz, ensure enough high freq. content
   filter: # butterworth, https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.buttord.html#scipy.signal.buttord
-    type: 'butter'
-    lstop: 0.001      # Hz, lower stop frequency
-    min_lpass: 0.005  # Hz, minimum lower pass frequency, in case very small resp_lc, limit lpass to min_lpass, lpass = max(min_lpass, resp_lc)
-    max_hpass: 1      # Hz, maximum higher pass frequency, leave extra margin to the nyquist freq. for higher attenuation near nyquist freq., hpass = min(max_hpass, resp_hc)
-    # hstop: 2.5      # Hz, hstop = 0.5 * sampling_rate
-    gpass: 3          # dB, The maximum loss in the passband
-    gstop: 60         # dB, The minimum attenuation in the stopband
+    type: 'highpass'
+    N: 4
+    min_cutoff_freq: 0.01  # Hz, minimum cutoff frequency, Wn = max(min_cutoff_freq, resp_lc)

@@ -502,7 +502,7 @@ class Misfit(object):
                 msg = "no source information"
                 raise Exception(msg)
 
-        event = tbl_src[-1]
+        event = tbl_src[0]
         event_id = event["id"].decode()
         header = event["header"].decode()
         tau = event["tau"]
@@ -775,7 +775,7 @@ class Misfit(object):
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
-        event = tbl_src[-1]
+        event = tbl_src[0]
         event_t0 = UTCDateTime(event["t0"])
 
         geod = pyproj.Geod(ellps=config["gps_ellps"])
@@ -1047,7 +1047,7 @@ class Misfit(object):
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
-        event = tbl_src[-1]
+        event = tbl_src[0]
         event_t0 = UTCDateTime(event["t0"])
 
         if "/waveform" not in self.h5f:
@@ -1332,7 +1332,7 @@ class Misfit(object):
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
-        event = tbl_src[-1]
+        event = tbl_src[0]
         event_t0 = UTCDateTime(event["t0"])
         evdp_km = event["depth"]
         if evdp_km < 0.0:
@@ -1652,7 +1652,7 @@ class Misfit(object):
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
-        event = tbl_src[-1]
+        event = tbl_src[0]
         event_t0 = UTCDateTime(event["t0"])
 
         if "/channel" not in self.h5f:
@@ -2220,7 +2220,7 @@ class Misfit(object):
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
-        event = tbl_src[-1]
+        event = tbl_src[0]
 
         if "/channel" not in self.h5f:
             msg = '"/channel" does not exist, run read_channel_file first!'
@@ -2698,7 +2698,7 @@ class Misfit(object):
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
-        event = tbl_src[-1]
+        event = tbl_src[0]
         event_t0 = UTCDateTime(event["t0"])
 
         if "/waveform" not in self.h5f:
@@ -2785,7 +2785,7 @@ class Misfit(object):
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
-        event = tbl_src[-1]
+        event = tbl_src[0]
         # evnm = event['id'].decode()
 
         # read source gradient (src_frechet.000001)
@@ -2843,7 +2843,7 @@ class Misfit(object):
 
         event["grad_xs"] = dchi_dxs
         event["grad_mt"] = dchi_dmt
-        tbl_src[-1] = [event]
+        tbl_src[0] = [event]
 
     def make_perturbed_cmtsolution(
         self,
@@ -2869,7 +2869,7 @@ class Misfit(object):
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
-        event = tbl_src[-1]
+        event = tbl_src[0]
         evhd = event["header"].decode()
         evnm = event["id"].decode()
         tau = event["tau"]
@@ -2907,7 +2907,7 @@ class Misfit(object):
 
         event["dxs"] = dxs_scaled
         event["dmt"] = dmt_scaled
-        tbl_src[-1] = [event]
+        tbl_src[0] = [event]
 
         #====== write out differential CMTSOLUTION file
         with open(out_dcmt_file, "w") as fp:
@@ -2961,6 +2961,17 @@ class Misfit(object):
             fp.write("%-18s %+15.8E\n" % ("Mxz(N*m):", mt_perturb[0, 2]))
             fp.write("%-18s %+15.8E\n" % ("Myz(N*m):", mt_perturb[1, 2]))
 
+    def update_source_location(self, x, y, z): 
+        if "/source" not in self.h5f:
+            msg = '"/source" not existing, run read_cmtsolution first!'
+            raise KeyError(msg)
+        tbl_src = self.h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[0]
+        event["xs"] = np.array([x, y, z], dtype=float)
+        tbl_src[0] = [event]
 
 #     #
 #     # ======================================================

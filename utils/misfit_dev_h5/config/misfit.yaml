@@ -1,7 +1,7 @@
 taup_model: 'ak135'  # for seismic phase arrival time calculation
 gps_ellps: 'WGS84'
-epsg_wgs84: "EPSG:4326"
-epsg_ecef: "EPSG:4978"
+# epsg_wgs84: "EPSG:4326"
+# epsg_ecef: "EPSG:4978"
 
 data:
   type: 'VEL'
@@ -9,7 +9,7 @@ data:
   time_before_first_arrival: 450
   time_after_origin: 1500
   # taper_width: 100  # on each side
-  time_before_first_arrival_as_noise: 50  # pre-event time length of obs (for noise assessment)
+  time_before_first_arrival_as_noise: 50  # SNR
 
 syn:
   type: 'DISP'
@@ -30,14 +30,15 @@ adj:
   suffix: '.adj' # net.sta.band_code[ENZ].adj
 
 window: [
+  # Body waves
   # time window: twin = [b, e], 
   #              window start = min(arrival times) + b, 
   #              window end = max(arrival times) + e
-  # butterworth filter: bp = [order, freqmin(Hz), freqmax(Hz)]
+  # butterworth bandpass filter: bp = [order, freqmin(Hz), freqmax(Hz)]
   # event depth range: evdp = [depmin, depmax] in km
   # epidistance range: gcarc = [distmin, distmax] in degrees
 
-  # direct
+  # direct arrivals
   {'id':'p,P_Z_30-100sec', 'type':'body', 'phase':'p,P', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
   {'id':'p,P_Z_10-50sec', 'type':'body', 'phase':'p,P', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.02,0.10], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
 #  {'type':'body', 'phase':'p,P', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
@@ -45,6 +46,7 @@ window: [
   {'id':'s,S_Z_30-100sec', 'type':'body', 'phase':'s,S', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
   {'id':'s,S_R_30-100sec', 'type':'body', 'phase':'s,S', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
   {'id':'s,S_T_30-100sec', 'type':'body', 'phase':'s,S', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
+  {'id':'s,S_T_10-50sec', 'type':'body', 'phase':'s,S', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.02,0.10], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
 #  # surface multiples
 #  {'type':'body', 'phase':'PP', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
 #  {'type':'body', 'phase':'PP', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
@@ -66,6 +68,7 @@ window: [
 #  {'type':'body', 'phase':'pS,sS', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[0,180], 'weight':1},
 #  {'type':'body', 'phase':'pS,sS', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[0,180], 'weight':1},
 #  {'type':'body', 'phase':'pS,sS', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[0,180], 'weight':1},
+#
 #  # depth + surface multiples
 #  {'type':'body', 'phase':'pPP,sPP', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
 #  {'type':'body', 'phase':'pPP,sPP', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
@@ -80,6 +83,7 @@ window: [
 #  {'type':'body', 'phase':'pSSS,sSSS', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
 #  {'type':'body', 'phase':'pSSS,sSSS', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[20,180], 'weight':1},
 #
+#  # Surface waves
 #  # slowness window: swin = [smin(s/deg), smax(s/deg), min_length]
 #  #                  window start, end = smin * gcarc, smax * gcarc
 #  #                  the window is expanded to at least min_length long
@@ -89,7 +93,6 @@ window: [
 ]
 
 window_taper: 0.1
-
 
 misfit:
   # cc0: zero-lag cross-correlation misfit

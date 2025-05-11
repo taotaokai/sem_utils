@@ -238,6 +238,26 @@ class Window(pt.IsDescription):
     valid = pt.BoolCol(pos=23)
 
 
+class Source(pt.IsDescription):
+    header = pt.StringCol(
+        100, pos=0
+    )  # e.g. PDEW 2010 06 18 23 09 34.3000 13.20 93.09 20.0 6.1 5.9 ANDAMAN ISLANDS, INDIA R
+    id = pt.StringCol(20, pos=1)
+    t0 = pt.StringCol(30, pos=2)  # t0
+    tau = pt.Float32Col(pos=3)  # tau
+    latitude = pt.Float32Col(pos=4)
+    longitude = pt.Float32Col(pos=5)
+    depth = pt.Float32Col(pos=6)
+    mt_rtp = pt.Float32Col(shape=(3, 3), pos=7)  # in CMT r,theta,phi coordinates
+    xs = pt.Float32Col(shape=(3), pos=8)  # xs in ECEF coordinate
+    mt = pt.Float32Col(shape=(3, 3), pos=9)  # in ECEF coordinate
+    # force_vector =
+    grad_xs = pt.Float32Col(shape=(3), pos=11)  # dchi_dxs
+    grad_mt = pt.Float32Col(shape=(3, 3), pos=12)  # dchi_dmt
+    dxs = pt.Float32Col(shape=(3), pos=13)  # dxs
+    dmt = pt.Float32Col(shape=(3, 3), pos=14)  # dmt
+
+
 class Misfit(object):
     """Class managing all misfit windows
 
@@ -249,14 +269,11 @@ class Misfit(object):
     |- attrs: iteration_no., stage_type, inversion_type
     |
     |- source/  # point-source CMT representation,
-    |   |- attrs: gcmt_header, event_id, Mw,
-    |   |         moment_tensor[2,3]
-    |   |         location[3]
-    |   |         origin_time
-    |   |         half_duration (or tau)
-    |   |         adj_strain[2,3,nt] # adjoint wavefield at source location
-    |   |         mt_grad[3,3], location_grad[3]
-    |   |         perturb_step_mt_location
+    |   |- attrs: header, id,
+    |   |         t0, tau, xs[3], mt[3,3]
+    |   |         grad_xs[3], grad_mt[3,3]
+    |   |         dCMT: {'dcmt1':{'dxs':dxs[3], 'dmt':dmt[3,3]}, 'dcmt2':{}}
+    |   |         adj_strain[3,3,nt] # adjoint wavefield at source location
     |
     |- structure/
     |   |- attrs: perturb_step
@@ -273,12 +290,12 @@ class Misfit(object):
     |   |- NET_STA/
     |   |   |- attrs: net,sta,loc,stla,stlo,stel,stdp,channels
     |   |   |         gcarc, az, baz, ttp
-    |   |   |- data[enu, nt]
+    |   |   |- DATA[ncha, nt]
     |   |   |   |- attrs: channels=[(code,az,dip), ...], filter
-    |   |   |- syn[enu, nt]
-    |   |   |- dsyn/
+    |   |   |- SYN[ENU, nt]
+    |   |   |- dSYN/
     |   |   |   |- dmodel[enu, nt]  # structure inversion
-    |   |   |   |- dmt_xs[enu,nt]   # source inversion
+    |   |   |   |- dcmt1[enu,nt]   # source inversion
     |
 
     Methods:
@@ -303,9 +320,9 @@ class Misfit(object):
 
     """
 
-    def __init__(self, h5_file, mode="r"):
+    def __init__(self, h5_file, mode="r", **kwargs):
         try:
-            self.h5f = pt.open_file(h5_file, mode=mode)
+            self.h5f = pt.open_file(h5_file, mode=mode, **kwargs)
         except Exception as e:
             self.h5f = None
             raise e
@@ -370,8 +387,8 @@ class Misfit(object):
         # GPS_ELLPS = self.h5f.root._v_attrs["config"]["gps_ellps"]
         # ecef = pyproj.Proj(proj="geocent", ellps=GPS_ELLPS)
         # lla = pyproj.Proj(proj="latlong", ellps=GPS_ELLPS)
-        gps2ecef = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:4978") # GPS to ECEF
-        ecef2gps = pyproj.Transformer.from_crs("EPSG:4978", "EPSG:4326") # ECEF to GPS
+        gps2ecef = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:4978")  # GPS to ECEF
+        ecef2gps = pyproj.Transformer.from_crs("EPSG:4978", "EPSG:4326")  # ECEF to GPS
 
         if ECEF:
             tau = float(lines[3][1])
@@ -443,20 +460,33 @@ class Misfit(object):
 
         src_path = f"/source"
         if src_path not in self.h5f:
-            g_src = self.h5f.create_group("/", "source")
+            tbl_src = self.h5f.create_table("/", "source", Source)
         else:
-            g_src = self.h5f.get_node(src_path)
+            tbl_src = self.h5f.get_node(src_path)
+        src_row = tbl_src.row
+        src_row["header"] = " ".join(header)
+        src_row["id"] = event_id
+        src_row["t0"] = t0.isoformat()
+        src_row["tau"] = tau
+        src_row["xs"] = [x, y, z]
+        src_row["mt"] = mt_xyz
+        src_row["mt_rtp"] = mt_rtp
+        src_row["latitude"] = lat
+        src_row["longitude"] = lon
+        src_row["depth"] = dep
+        src_row.append()
+        tbl_src.flush()
 
-        g_src._v_attrs["id"] = event_id
-        g_src._v_attrs["header"] = " ".join(header)
-        g_src._v_attrs["longitude"] = lon
-        g_src._v_attrs["latitude"] = lat
-        g_src._v_attrs["depth"] = dep
-        g_src._v_attrs["t0"] = t0
-        g_src._v_attrs["tau"] = tau
-        g_src._v_attrs["xs"] = np.array([x, y, z])
-        g_src._v_attrs["mt"] = mt_xyz
-        g_src._v_attrs["mt_rtp"] = mt_rtp
+        # g_src._v_attrs["id"] = event_id
+        # g_src._v_attrs["header"] = " ".join(header)
+        # g_src._v_attrs["longitude"] = lon
+        # g_src._v_attrs["latitude"] = lat
+        # g_src._v_attrs["depth"] = dep
+        # g_src._v_attrs["t0"] = t0
+        # g_src._v_attrs["tau"] = tau
+        # g_src._v_attrs["xs"] = np.array([x, y, z])
+        # g_src._v_attrs["mt"] = mt_xyz
+        # g_src._v_attrs["mt_rtp"] = mt_rtp
 
     def write_cmtsolution(self, out_file, ECEF=True):
         """
@@ -467,11 +497,14 @@ class Misfit(object):
             msg = "no source information"
             raise Exception(msg)
         else:
-            g_src = self.h5f.get_node(src_path)
+            tbl_src = self.h5f.get_node(src_path)
+            if tbl_src.nrows == 0:
+                msg = "no source information"
+                raise Exception(msg)
 
-        event = g_src._v_attrs
-        event_id = event["id"]
-        header = event["header"]
+        event = tbl_src[-1]
+        event_id = event["id"].decode()
+        header = event["header"].decode()
         tau = event["tau"]
 
         if ECEF:
@@ -517,11 +550,15 @@ class Misfit(object):
             net,sta,loc,bi,components,stla,stlo,stel,stdp
         """
         # config = self.h5f.root._v_attrs["config"]
-        if "/source" not in self.h5f:
-            raise KeyError("/source does not exist, run read_cmtsolutin first")
-        g_src = self.h5f.get_node("/source")
-        event = g_src._v_attrs
-        origin_time = event["t0"]
+
+        # if "/source" not in self.h5f:
+        #     raise KeyError("/source does not exist, run read_cmtsolutin first")
+        # tbl_src = self.h5f.get_node("/source")
+        # if tbl_src.nrows == 0:
+        #     msg = "no source information"
+        #     raise Exception(msg)
+        # event = tbl_src[-1]
+        # origin_time = UTCDateTime(event["t0"])
 
         if "/channel" in self.h5f:
             self.h5f.remove_node("/", "channel")
@@ -732,8 +769,12 @@ class Misfit(object):
 
         if "/source" not in self.h5f:
             raise KeyError("/source does not exist, run read_cmtsolutin first")
-        g_src = self.h5f.get_node("/source")
-        event = g_src._v_attrs
+        tbl_src = self.h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[-1]
+        event_t0 = UTCDateTime(event["t0"])
 
         geod = pyproj.Geod(ellps=config["gps_ellps"])
         R_earth = (geod.a + geod.b) / 2
@@ -885,11 +926,11 @@ class Misfit(object):
                     distance_in_degree=dist_degree,
                     phase_list=["ttp"],
                 )
-                first_arrtime = event["t0"] + min([arr.time for arr in ttp])
+                first_arrtime = event_t0 + min([arr.time for arr in ttp])
 
                 # check if data has enough length
                 t0 = first_arrtime - time_before_first_arrival
-                t1 = event["t0"] + time_after_origin
+                t1 = event_t0 + time_after_origin
                 if data_starttime > t0 or data_endtime < t1:
                     msg = f"{g_sta_obs._v_name}: timespan [{data_starttime}, {data_endtime}] does not cover required [{t0}, {t1}], skip"
                     warnings.warn(msg)
@@ -949,7 +990,14 @@ class Misfit(object):
 
                 self.h5f.flush()
 
-    def read_syn_sac(self, sac_dir, is_grn=False, is_diff=False, tag_diff='diff'):
+    def read_syn_sac(
+        self,
+        sac_dir,
+        is_grn=False,
+        is_diff=False,
+        tag_diff="diff",
+        diff_src="/source/dxs_dmt",
+    ):
         """
         sac file naming rule: NET.STA.LOC.CHA , where CHA consists of band_code(e.g. BH or MX) + orientation[E|N|Z]
         syn should be sac files and have sac header b and o set correctly.
@@ -991,8 +1039,12 @@ class Misfit(object):
 
         if "/source" not in self.h5f:
             raise KeyError("/source does not exist, run read_cmtsolutin first")
-        g_src = self.h5f.get_node("/source")
-        event = g_src._v_attrs
+        tbl_src = self.h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[-1]
+        event_t0 = UTCDateTime(event["t0"])
 
         if "/waveform" not in self.h5f:
             msg = '"/waveform" not existing, run read_data_h5 first!'
@@ -1019,9 +1071,9 @@ class Misfit(object):
             if is_diff:
                 if syn_tag in g_sta:
                     syn = g_sta[syn_tag]
-                    assert syn.attrs['origin_time'] == event['t0']
+                    assert syn.attrs["origin_time"] == event_t0
                     if is_grn:
-                        if not syn.attrs['is_grn']:
+                        if not syn.attrs["is_grn"]:
                             msg = f"{syn._v_pathname}.attrs[is_grn]==False but is_grn is set to True!"
                             raise ValueError(msg)
                 else:
@@ -1040,24 +1092,24 @@ class Misfit(object):
             obs_tb = obs_data.attrs["starttime"]
             obs_nt = obs_data.attrs["npts"]
             obs_te = obs_tb + (obs_nt - 1) * obs_dt
-            obs_filter = obs_data.attrs["filter"]
-            butter_N = obs_filter["N"]
-            butter_Wn = obs_filter["Wn"]
+            obs_filters = obs_data.attrs["filter"]
+
+            # butter_N = obs_filter["N"]
+            # butter_Wn = obs_filter["Wn"]
             # obs_taper = obs_data.attrs['taper']
             # times = np.arange(obs_nt) * obs_dt
             # e = (obs_nt - 1) * obs_dt
             # win_func = cosine_sac_taper(times, obs_taper)
 
             # read in synthetic seismograms
+
+            syn_st = Stream()
             syn_sac_files = [
                 os.path.join(
                     sac_dir, f"{net}.{sta}.{loc}.{syn_band_code}{comp}{syn_sac_suffix}"
                 )
                 for comp in syn_components
             ]
-
-            syn_st = Stream()
-
             read_sac_ok = True
             for sac_file in syn_sac_files:
                 if not os.path.isfile(sac_file):
@@ -1078,14 +1130,9 @@ class Misfit(object):
                     read_sac_ok = False
                     break
                 syn_st += st1
-
             if not read_sac_ok:
                 continue
 
-            # except Exception as e:
-            #     msg = f"Error reading {syn_sac_files} (Details: {e})"
-            #     warnings.warn(msg, UserWarning)
-            #     continue
             if len(syn_st) != 3:
                 msg = f"Not exactly 3 components found ! ({syn_st}), skip"
                 warnings.warn(msg)
@@ -1103,19 +1150,26 @@ class Misfit(object):
             solver_tb = tr.stats.starttime
             solver_te = solver_tb + (solver_nt - 1) * solver_dt
 
-            if is_grn: # for green function, use event['t0'] for the o time
-                solver_tb = event['t0'] - (tr.stats.sac['o'] - tr.stats.sac['b'])
+            if is_grn:  # for green function, use event['t0'] for the o time
+                solver_tb = event_t0 - (tr.stats.sac["o"] - tr.stats.sac["b"])
+            if is_diff and (
+                solver_tb != syn.attrs["solver_tb"]
+                or solver_nt != syn.attrs["solver_nt"]
+                or solver_dt != syn.attrs["solver_dt"]
+            ):
+                msg = f"perturbed synthetics ({syn_sac_files}) do not have equal time samples as the initial synthetics."
+                raise Exception(msg)
 
-            # check if the origin time in sac files are consistent with event['t0']
-            syn_origin_time = solver_tb + (tr.stats.sac['o'] - tr.stats.sac['b'])
-            if abs(syn_origin_time - event['t0']) > 1.0e-6:
-                err = f"{g_sta._v_name}: Inconsistent origin time between sac headers ({syn_origin_time}) and event['t0'] ({event['t0']})"
+            # check if the origin time in sac files is consistent with event['t0']
+            syn_origin_time = solver_tb + (tr.stats.sac["o"] - tr.stats.sac["b"])
+            if abs(syn_origin_time - event_t0) > 1.0e-6:
+                err = f"{g_sta._v_name}: Inconsistent origin time between sac headers ({syn_origin_time}) and event['t0'] ({event_t0})"
                 raise Exception(err)
 
             # use_tb = max(first_arrtime - left_pad, solver_tb - left_pad, obs_tb)
             # use_te = min(solver_te, obs_te)
 
-            # synthetic seismograms will be interpolated onto the same time samples as observed seis.
+            # synthetic seismograms will be interpolated onto the same time samples as observed data
             # obs_idx0 = max(0, int((solver_tb - obs_tb) * obs_fs + 1))
             # obs_idx1 = min(obs_nt, int((solver_te - obs_tb) * obs_fs))
 
@@ -1141,13 +1195,24 @@ class Misfit(object):
             # apply the same filter used on the observed seismograms
             t0 = solver_tb - nt_lpad * solver_dt
             nt = solver_nt + nt_lpad + nt_rpad
-            npad = int(2.0 / min(butter_Wn) * solver_fs)
+
+            min_cutoff_freq = min([filter["Wn"] for filter in obs_filters])
+            npad = int(2.0 / min_cutoff_freq * solver_fs)
             nfft = scipy.fft.next_fast_len(nt + npad)
             freqs = np.fft.rfftfreq(nfft, d=solver_dt)
-            sos = scipy.signal.butter(
-                butter_N, butter_Wn, "bandpass", fs=solver_fs, output="sos"
-            )
-            _, filter_h = scipy.signal.freqz_sos(sos, worN=freqs, fs=solver_fs)
+            filter_h = np.ones_like(freqs)
+            for filter in obs_filters:
+                sos = scipy.signal.butter(
+                    filter["N"],
+                    filter["Wn"],
+                    btype=filter["type"],
+                    fs=solver_fs,
+                    output="sos",
+                )
+                _, h = scipy.signal.freqz_sos(sos, worN=freqs, fs=solver_fs)
+                filter_h *= abs(h)
+
+            valid_te = solver_te - min_cutoff_freq  # avoid filter response from edge
 
             if _DEBUG:
                 syn_st1 = syn_st.copy()
@@ -1184,20 +1249,24 @@ class Misfit(object):
             if is_diff:
                 if dsyn_grp not in g_sta:
                     g_dsyn = self.h5f.create_group(g_sta, dsyn_grp)
-                else: 
+                else:
                     g_dsyn = self.h5f.get_node(g_sta, dsyn_grp)
                 if dsyn_tag in g_dsyn:
                     msg = f"{dsyn_tag} exists in {g_dsyn._v_pathname}, overwrite!"
                     warnings.warn(msg)
                     self.h5f.remove_node(g_dsyn, dsyn_tag)
-                ca = self.h5f.create_carray(g_dsyn, dsyn_tag, atom, shape, filters=filters)
+                ca = self.h5f.create_carray(
+                    g_dsyn, dsyn_tag, atom, shape, filters=filters
+                )
             else:
                 if syn_tag in g_sta:
                     msg = f"{syn_tag} exists in {g_sta._v_pathname}, overwrite!"
                     warnings.warn(msg)
                     self.h5f.remove_node(g_sta, syn_tag)
-                ca = self.h5f.create_carray(g_sta, syn_tag, atom, shape, filters=filters)
-            
+                ca = self.h5f.create_carray(
+                    g_sta, syn_tag, atom, shape, filters=filters
+                )
+
             ca[:] = 0
             for i in range(3):
                 ca[i, :] = np.array(syn_st[i].data, dtype=np.float32)  # * win_func
@@ -1216,10 +1285,11 @@ class Misfit(object):
             ca.attrs["solver_tb"] = solver_tb
             ca.attrs["solver_dt"] = solver_dt
             ca.attrs["solver_nt"] = solver_nt
+            ca.attrs["valid_te"] = valid_te
             ca.attrs["type"] = syn_type
             ca.attrs["is_grn"] = is_grn
             if is_grn:
-                ca.attrs["origin_time"] = event['t0']
+                ca.attrs["origin_time"] = event_t0
 
             # # ------ rotate obs to ENZ
             # # projection matrix: obs = proj * ENZ => ENZ = inv(proj) * obs
@@ -1254,8 +1324,12 @@ class Misfit(object):
         if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        g_src = self.h5f.get_node("/source")
-        event = g_src._v_attrs
+        tbl_src = self.h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[-1]
+        event_t0 = UTCDateTime(event["t0"])
         evdp_km = event["depth"]
         if evdp_km < 0.0:
             evdp_km = 0.0
@@ -1292,13 +1366,15 @@ class Misfit(object):
             solver_nt = syn.attrs["solver_nt"]
             solver_dt = syn.attrs["solver_dt"]
             solver_te = solver_tb + solver_nt * solver_dt
+            solver_valid_te = syn.attrs["valid_te"]
             obs_tb = obs.attrs["starttime"]
             obs_nt = obs.attrs["npts"]
             obs_fs = obs.attrs["sampling_rate"]
             obs_te = obs_tb + obs_nt / obs_fs
 
             valid_tb = max(solver_tb, obs_tb)
-            valid_te = min(solver_te, obs_te)
+            # valid_te = min(solver_te, obs_te)
+            valid_te = min(solver_valid_te, obs_te)
 
             phase_list = [
                 phase.strip()
@@ -1317,7 +1393,9 @@ class Misfit(object):
             obs_Zchan = [cha for cha in obs_channels if cha["name"].decode()[-1] == "Z"]
             obs_Hchan = [cha for cha in obs_channels if cha["name"].decode()[-1] != "Z"]
             if len(obs_Zchan) != 1 or obs_Zchan[0]["dip"] != -90:
-                msg = f"{g_sta._v_name} has problematic Z channel info: {obs_Zchan}, skip"
+                msg = (
+                    f"{g_sta._v_name} has problematic Z channel info: {obs_Zchan}, skip"
+                )
                 raise AssertionError(msg)
             no_Hchan = False
             if len(obs_Hchan) == 0:
@@ -1339,7 +1417,9 @@ class Misfit(object):
                 win_weight = win["weight"]
 
                 if no_Hchan and cmpnm != "Z":
-                    msg = f"{g_sta._v_name}: no horizontal channels, skip window ({win})"
+                    msg = (
+                        f"{g_sta._v_name}: no horizontal channels, skip window ({win})"
+                    )
                     warnings.warn(msg)
                     continue
 
@@ -1379,8 +1459,8 @@ class Misfit(object):
                     warnings.warn(msg)
                     continue
 
-                win_tb = max(valid_tb, event["t0"] + tb)
-                win_te = min(valid_te, event["t0"] + te)
+                win_tb = max(valid_tb, event_t0 + tb)
+                win_te = min(valid_te, event_t0 + te)
 
                 if (win_te - win_tb) < 0.5 * minlen:
                     msg = f"window ({win})'s valid length ({win_tb}-{win_te} less than half of the minimum length ({minlen})"
@@ -1481,7 +1561,7 @@ class Misfit(object):
         if no_Hchan:
             obs_ENZ[2, :] = obs[0, :]  # only Z component
         else:
-            assert(obs.shape == obs_ENZ.shape)
+            assert obs.shape == obs_ENZ.shape
             proj_matrix = np.zeros((3, 3))
             for i in range(3):
                 chan = obs_channels[i]
@@ -1564,8 +1644,12 @@ class Misfit(object):
         if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        g_src = self.h5f.get_node("/source")
-        event = g_src._v_attrs
+        tbl_src = self.h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[-1]
+        event_t0 = UTCDateTime(event["t0"])
 
         if "/channel" not in self.h5f:
             msg = '"/channel" not existing, run read_channel_file first!'
@@ -1588,7 +1672,7 @@ class Misfit(object):
 
         # loop each station
         for g_sta in g_wav:
-            print(f'measure_adj for {g_sta._v_name}')
+            print(f"measure_adj for {g_sta._v_name}")
 
             attrs = g_sta._v_attrs
             net = attrs["network"]
@@ -1618,19 +1702,28 @@ class Misfit(object):
             noise_idx1 = int(noise_te * data_fs)  # 0:idx1 as noise
 
             # pre-filter parameters
-            data_butter_N = obs.attrs["filter"]["N"]
-            data_butter_Wn = obs.attrs["filter"]["Wn"]
+            pre_filters = obs.attrs["filter"]
+            # data_butter_N = obs.attrs["filter"]["N"]
+            # data_butter_Wn = obs.attrs["filter"]["Wn"]
 
             # sum of adjoint sources from all windows
             dchi_du = np.zeros((3, data_nt))
 
             # loop each window
             for win in tbl_win.where(f'(network == b"{net}") & (station == b"{sta}")'):
-                print("window: ", win["type"], win["phase"], win["cmpnm"], win["butter_Wn"])
+                print(
+                    "window: ",
+                    win["type"],
+                    win["phase"],
+                    win["cmpnm"],
+                    win["butter_Wn"],
+                )
                 # component
                 cmpnm = win["cmpnm"].decode()
                 if no_Hchan and cmpnm != "Z":
-                    warnings.warn("skip non-vertical window since only vertical data present")
+                    warnings.warn(
+                        "skip non-vertical window since only vertical data present"
+                    )
                     win["status"] = False
                     win.update()
                     continue
@@ -1650,10 +1743,17 @@ class Misfit(object):
                 _, filter_h = scipy.signal.freqz_sos(sos, worN=freqs, fs=data_fs)
                 Fw = abs(filter_h)  # zero-phase filter response
                 # pre-filter applied to obs & syn
-                sos = scipy.signal.butter(
-                    data_butter_N, data_butter_Wn, "bandpass", fs=data_fs, output="sos"
-                )
-                _, filter_h = scipy.signal.freqz_sos(sos, worN=freqs, fs=data_fs)
+                filter_h = np.ones_like(freqs)
+                for filter in pre_filters:
+                    sos = scipy.signal.butter(
+                        filter["N"],
+                        filter["Wn"],
+                        filter["type"],
+                        fs=data_fs,
+                        output="sos",
+                    )
+                    _, h = scipy.signal.freqz_sos(sos, worN=freqs, fs=data_fs)
+                    filter_h *= abs(h)
                 Fd = abs(filter_h)
                 # time derivative in frequency domain
                 Ft = 2j * np.pi * freqs
@@ -2112,8 +2212,11 @@ class Misfit(object):
         if "/source" not in self.h5f:
             msg = '"/source" does not exist, run read_cmtsolution first!'
             raise KeyError(msg)
-        g_src = self.h5f.get_node("/source")
-        event = g_src._v_attrs
+        tbl_src = self.h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[-1]
 
         if "/channel" not in self.h5f:
             msg = '"/channel" does not exist, run read_channel_file first!'
@@ -2131,11 +2234,12 @@ class Misfit(object):
         tbl_win = self.h5f.get_node("/window")
 
         # event info
-        evt0 = event["t0"]
+        evt0 = UTCDateTime(event["t0"])
         evtau = event["tau"]
         evla = event["latitude"]
         evlo = event["longitude"]
         evdp = event["depth"]
+        evnm = event["id"].decode()
         # evdp has to be >=0 otherwise taup would crash
         if evdp < 0.0:
             evdp = 0.0
@@ -2270,7 +2374,7 @@ class Misfit(object):
             # fig = plt.figure(figsize=(8.5, 11)) # US letter
             fig = plt.figure(figsize=(8.27, 11.69))  # A4
             str_title = "{:s} ({:s} az:{:04.1f}~{:04.1f} dep:{:.1f})".format(
-                event["id"], plot_window_id, bin_azmin, bin_azmax, event["depth"]
+                evnm, plot_window_id, bin_azmin, bin_azmax, evdp
             )
             fig.text(
                 0.5, 0.965, str_title, size="x-large", horizontalalignment="center"
@@ -2395,7 +2499,7 @@ class Misfit(object):
                 # read in obs and syn seismograms
                 try:
                     obs_ENZ, syn_ENZ, no_Hchan = self._extract_obs_syn_ENZ(
-                        g_sta, obs_tag, syn_tag, event["tau"]
+                        g_sta, obs_tag, syn_tag, evtau
                     )
                 except Exception as e:
                     msg = f"failed to get obs,syn_ENZ for {g_sta._v_name}, ({e})"
@@ -2457,7 +2561,7 @@ class Misfit(object):
                 # get plot time
                 reduced_time = dist_degree * plot_rayp
                 # time of first sample referred to centroid time
-                t0 = data_tb - event["t0"]
+                t0 = data_tb - evt0
                 # time of samples referred to centroid time
                 times = np.arange(data_nt) * data_dt + t0
                 # plot time window
@@ -2468,8 +2572,8 @@ class Misfit(object):
                 t_plot = times[plot_idx] - reduced_time
 
                 #  window begin/end
-                win_starttime = UTCDateTime(win["starttime"]) - event["t0"]
-                win_endtime = UTCDateTime(win["endtime"]) - event["t0"]
+                win_starttime = UTCDateTime(win["starttime"]) - evt0
+                win_endtime = UTCDateTime(win["endtime"]) - evt0
                 win_t0 = win_starttime - reduced_time
                 win_t1 = win_endtime - reduced_time
                 # win_idx = (times > win_starttime) & (times < win_endtime)
@@ -2566,7 +2670,7 @@ class Misfit(object):
             if savefig:
                 out_file = "%s/%s_az_%03d_%03d_%s.pdf" % (
                     out_dir,
-                    event["id"],
+                    evnm,  # event["id"],
                     azmin,
                     azmax,
                     plot_window_id,
@@ -2586,8 +2690,12 @@ class Misfit(object):
         if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        g_src = self.h5f.get_node("/source")
-        event = g_src._v_attrs
+        tbl_src = self.h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[-1]
+        event_t0 = UTCDateTime(event["t0"])
 
         if "/waveform" not in self.h5f:
             msg = '"/waveform" not existing, run read_data_h5 first!'
@@ -2623,20 +2731,22 @@ class Misfit(object):
             if solver_te > data_te:
                 npad_right = int((solver_te - data_te) * data_fs) + 1
 
-            solver_t0 = solver_tb - event["t0"]
-            solver_times = np.arange(solver_nt) * solver_dt + solver_t0 # relative to origin time
+            solver_t0 = solver_tb - event_t0
+            solver_times = (
+                np.arange(solver_nt) * solver_dt + solver_t0
+            )  # relative to origin time
 
             # write
-            channels = adj_src.attrs['channels']
+            channels = adj_src.attrs["channels"]
             nchan = adj_src.shape[0]
             dat = np.zeros((solver_nt, 2), dtype=float)
             dat[:, 0] = solver_times
             for i in range(nchan):
                 tr.data = np.zeros(data_nt + npad_left + npad_right, dtype=float)
-                tr.data[npad_left:(npad_left+data_nt)] = adj_src[i,:]
+                tr.data[npad_left : (npad_left + data_nt)] = adj_src[i, :]
                 tr.stats.starttime = data_tb - npad_left * data_dt
                 tr.stats.sampling_rate = data_fs
-                cha = channels[i]['name'].decode()
+                cha = channels[i]["name"].decode()
                 tr.stats.channel = cha
 
                 out_file = os.path.join(out_dir, f"{tr.id}{suffix}")
@@ -2646,13 +2756,19 @@ class Misfit(object):
                 if solver_fs < data_fs:
                     msg = f"solver_fs ({solver_fs}) < data_fs ({data_fs})"
                     warnings.warn(msg)
-                tr.interpolate(starttime=solver_tb, sampling_rate=solver_fs, npts=solver_nt, method='lanczos', a=20)
+                tr.interpolate(
+                    starttime=solver_tb,
+                    sampling_rate=solver_fs,
+                    npts=solver_nt,
+                    method="lanczos",
+                    a=20,
+                )
 
                 # tr.write(out_file + ".1.sac", format="sac")
 
                 # ascii format (needed by SEM)
                 dat[:, 1] = tr.data
-                np.savetxt(out_file, dat, fmt='%16.9e')
+                np.savetxt(out_file, dat, fmt="%16.9e")
 
     def make_cmt_perturb(
         self,
@@ -2766,6 +2882,7 @@ class Misfit(object):
             fp.write("%-18s %+15.8E\n" % ("Mxy(N*m):", mt_perturb[0, 1]))
             fp.write("%-18s %+15.8E\n" % ("Mxz(N*m):", mt_perturb[0, 2]))
             fp.write("%-18s %+15.8E\n" % ("Myz(N*m):", mt_perturb[1, 2]))
+
 
 #     #
 #     # ======================================================

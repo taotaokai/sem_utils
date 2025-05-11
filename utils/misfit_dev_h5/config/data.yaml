@@ -1,25 +1,15 @@
-# stations_path: 'stations' # 'test'  # path to folder of stationxml files
-# waveforms_path: 'waveforms' #'test' # path to folder of miniseed files
-# indexdb_path: 'waveforms/timeseries.sqlite' # path to mseedindex db file
-
-stations_path: 'sample_data/stations/' # 'test'  # path to folder of stationxml files
-SDS_root: 'sample_data/SDS_small/' #'test' # path to folder of miniseed files
-# indexdb_path: 'test/timeseries.sqlite' # path to mseedindex db file
+stations_path: 'sample_data/stations/' # station xml files, net.sta.xml
+SDS_root: 'sample_data/SDS/'
 
 enforce_3comp: False # True: either Z12 or ZNE, False: either Z or Z12 or ZNE
-
-# https://docs.obspy.org/packages/autogen/obspy.core.stream.Stream.html#obspy.core.stream.Stream._cleanup
-# merge matching traces misaligned by less than misalignment_threshold times the sampling interval 
-# default is 0.01, but data from network IV have timing error up to 0.04 
-# misalignment_threshold: 0.1 # in unit of sampling interval 
 
 # keep only one (loc, band) for each (net, sta)
 # channel code = band + instrument + orientation
 # NOTE: instrument code is fixed to 'H' and orientation codes are assumed to be Z,N,E or Z,1,2
 zcomp_pattern: "[BH]HZ" # for matching files of Z component
+
 # band_code_priority: ['H', 'B']
 # location_code_priority: ['', '00', '01', '*']
-
 
 time_window:
   before_first_arrival_seconds: 500 # sec 
@@ -28,7 +18,7 @@ time_window:
 
 resample:
   sampling_rate: 2 # Hz, resample data
-  filter: # butterworth, anti-aliasing (amp < 2e-5 at 1 Hz)
+  filter: # butterworth, anti-aliasing (amp < 2e-5 at Nyquist freq. 1 Hz)
     type: 'lowpass'
     N: 15     # filter order
     Wn: 0.5   # cutoff frequency
@@ -43,7 +33,7 @@ remove_response:
   ref_threshold: 3.01 # dB, relative to the amplitude at ref_freq, -3.01 dB is about half power
   max_resp_lc: 0.05  # Hz, ensure enough low freq. content
   min_resp_hc: 1     # Hz, ensure enough high freq. content
-  filter: # butterworth, https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.buttord.html#scipy.signal.buttord
+  filter: # butterworth, stablizing dividing response near small frequencies
     type: 'highpass'
-    N: 4
+    N: 2  # filter order, most broadband seismometers have 2 zero zeros, i.e. |H| ~ f^2 for f near 0
     min_cutoff_freq: 0.01  # Hz, minimum cutoff frequency, Wn = max(min_cutoff_freq, resp_lc)

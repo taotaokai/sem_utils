@@ -242,20 +242,20 @@ class Source(pt.IsDescription):
     header = pt.StringCol(
         100, pos=0
     )  # e.g. PDEW 2010 06 18 23 09 34.3000 13.20 93.09 20.0 6.1 5.9 ANDAMAN ISLANDS, INDIA R
-    id = pt.StringCol(20, pos=1)
+    id = pt.StringCol(30, pos=1)
     t0 = pt.StringCol(30, pos=2)  # t0
-    tau = pt.Float32Col(pos=3)  # tau
-    latitude = pt.Float32Col(pos=4)
-    longitude = pt.Float32Col(pos=5)
-    depth = pt.Float32Col(pos=6)
-    mt_rtp = pt.Float32Col(shape=(3, 3), pos=7)  # in CMT r,theta,phi coordinates
-    xs = pt.Float32Col(shape=(3), pos=8)  # xs in ECEF coordinate
-    mt = pt.Float32Col(shape=(3, 3), pos=9)  # in ECEF coordinate
+    tau = pt.Float64Col(pos=3)  # tau
+    latitude = pt.Float64Col(pos=4)
+    longitude = pt.Float64Col(pos=5)
+    depth = pt.Float64Col(pos=6)
+    mt_rtp = pt.Float64Col(shape=(3, 3), pos=7)  # in CMT r,theta,phi coordinates
+    xs = pt.Float64Col(shape=(3), pos=8)  # xs in ECEF coordinate
+    mt = pt.Float64Col(shape=(3, 3), pos=9)  # in ECEF coordinate
     # force_vector =
-    grad_xs = pt.Float32Col(shape=(3), pos=11)  # dchi_dxs
-    grad_mt = pt.Float32Col(shape=(3, 3), pos=12)  # dchi_dmt
-    dxs = pt.Float32Col(shape=(3), pos=13)  # dxs
-    dmt = pt.Float32Col(shape=(3, 3), pos=14)  # dmt
+    grad_xs = pt.Float64Col(shape=(3), pos=11)  # dchi_dxs
+    grad_mt = pt.Float64Col(shape=(3, 3), pos=12)  # dchi_dmt
+    dxs = pt.Float64Col(shape=(3), pos=13)  # dxs
+    dmt = pt.Float64Col(shape=(3, 3), pos=14)  # dmt
 
 
 class Misfit(object):
@@ -419,7 +419,7 @@ class Misfit(object):
         header[3] = "{:02d}".format(t0.day)
         header[4] = "{:02d}".format(t0.hour)
         header[5] = "{:02d}".format(t0.minute)
-        header[6] = "{:07.4f}".format(t0.second + 1.0e-6 * t0.microsecond)
+        header[6] = "{:09.6f}".format(t0.second + 1.0e-6 * t0.microsecond)
 
         # moment tensor
         # ECEF=false: 1,2,3 -> r,theta,phi
@@ -459,10 +459,10 @@ class Misfit(object):
             mt_xyz = np.dot(np.dot(a, mt_rtp), np.transpose(a))
 
         src_path = f"/source"
-        if src_path not in self.h5f:
-            tbl_src = self.h5f.create_table("/", "source", Source)
-        else:
-            tbl_src = self.h5f.get_node(src_path)
+        if src_path in self.h5f:
+            self.h5f.remove_node(src_path)
+        tbl_src = self.h5f.create_table("/", "source", Source)
+
         src_row = tbl_src.row
         src_row["header"] = " ".join(header)
         src_row["id"] = event_id
@@ -568,7 +568,9 @@ class Misfit(object):
         select_station = False
         if station_file:
             try:
-                stations_df = pd.read_csv(station_file, sep=r"\s+", header=None)
+                stations_df = pd.read_csv(
+                    station_file, sep=r"\s+", header=None, comment="#"
+                )
                 select_station = True
             except:
                 msg = f"failed to read station file, ignored ({station_file})"
@@ -792,7 +794,9 @@ class Misfit(object):
         select_station = False
         if station_file:
             try:
-                stations_df = pd.read_csv(station_file, sep=r"\s+", header=None)
+                stations_df = pd.read_csv(
+                    station_file, sep=r"\s+", header=None, comment="#"
+                )
                 select_station = True
             except:
                 msg = f"failed to read station file ({station_file})"
@@ -2770,26 +2774,19 @@ class Misfit(object):
                 dat[:, 1] = tr.data
                 np.savetxt(out_file, dat, fmt="%16.9e")
 
-    def make_cmt_perturb(
+    def read_srcfrechet(
         self,
         srcfrechet_file,
-        max_dxs_ratio=0.001,
-        out_cmt_file="CMTSOLUTION.perturb",
     ):
-        """Make perturbed CMTSOLUTION based on source gradient"""
-
-        R_earth = 6371000.0
-
-        # check input parameters
-        if max_dxs_ratio <= 0.0:
-            msg = "max_dxs_ratio must > 0"
-            raise ValueError(msg)
-
         if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        g_src = self.h5f.get_node("/source")
-        event = g_src._v_attrs
+        tbl_src = self.h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[-1]
+        # evnm = event['id'].decode()
 
         # read source gradient (src_frechet.000001)
         with open(srcfrechet_file, "r") as f:
@@ -2840,42 +2837,103 @@ class Misfit(object):
         # cc = np.sum(dchi_dmt * mt) / np.sum(mt**2) ** 0.5 / np.sum(dchi_dmt**2) ** 0.5
         # print("cc = ", cc)
 
-        # ====== get gradient for xs_ratio and mt_ratio
-        # xs = R_earth * xs_ratio
-        dchi_dxs_ratio = R_earth * dchi_dxs
+        # check xs and mt are the same as in the event info
+        assert np.allclose(xs, event["xs"])
+        assert np.allclose(mt, event["mt"])
 
-        # mt = m0 * mt_ratio
+        event["grad_xs"] = dchi_dxs
+        event["grad_mt"] = dchi_dmt
+        tbl_src[-1] = [event]
+
+    def make_perturbed_cmtsolution(
+        self,
+        out_cmtsolution_dxs="CMTSOLUTION_dxs",
+        out_cmtsolution_dmt="CMTSOLUTION_dmt",
+    ):
+        """Make perturbed CMTSOLUTION based on source gradient"""
+        config = self.h5f.root._v_attrs["config"]
+        max_dxs_ratio = config["source"]["max_dxs_ratio"]
+        max_dmt_ratio = config["source"]["max_dmt_ratio"]
+        if max_dxs_ratio <= 0.0:
+            msg = f"max_dxs_ratio ({max_dxs_ratio}) must > 0"
+            raise ValueError(msg)
+        if max_dmt_ratio <= 0.0:
+            msg = f"max_dmt_ratio ({max_dmt_ratio}) must > 0"
+            raise ValueError(msg)
+
+        if "/source" not in self.h5f:
+            msg = '"/source" not existing, run read_cmtsolution first!'
+            raise KeyError(msg)
+        tbl_src = self.h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[-1]
+        evhd = event["header"].decode()
+        evnm = event["id"].decode()
+        tau = event["tau"]
+        xs = event["xs"]
+        mt = event["mt"]
+        grad_xs = event["grad_xs"]
+        grad_xs /= np.max(grad_xs)  # normalize in case of loss of precision
+        grad_mt = event["grad_mt"]
+        grad_mt /= np.max(
+            grad_mt
+        )  # normalize in case of loss of precision, e.g. for very small x, x*x would be 0
+
+        # correlation between mt and dchi_dmt
+        # cc = np.sum(dchi_dmt * mt) / np.sum(mt**2) ** 0.5 / np.sum(dchi_dmt**2) ** 0.5
+        # print("cc = ", cc)
+
+        r0 = (np.sum(xs**2)) ** 0.5
+        norm_grad_xs = (np.sum(grad_xs**2)) ** 0.5
+        dxs_scaled = grad_xs
+        if norm_grad_xs > 0:
+            dxs_scaled = max_dxs_ratio * r0 * grad_xs / norm_grad_xs
+
         m0 = (0.5 * np.sum(mt**2)) ** 0.5
-        dchi_dmt_ratio = m0 * dchi_dmt
+        norm_grad_mt = (0.5 * np.sum(grad_mt**2)) ** 0.5
+        dmt_scaled = grad_mt
+        if norm_grad_mt > 0:
+            dmt_scaled = max_dmt_ratio * m0 * grad_mt / norm_grad_mt
+        # print(m0, norm_grad_mt, dmt_scaled)
 
-        # make dchi_dmt orthogonal to mt, i.e. keep scalar moment unchanged
-        dchi_dmt_ratio_ortho = dchi_dmt_ratio - mt * np.sum(
-            dchi_dmt_ratio * mt
-        ) / np.sum(mt**2)
-        # print(dchi_dmt_ratio_ortho)
-
-        # ====== make perturbed CMTSOLUTION
-        scale_factor = max_dxs_ratio / (np.sum(dchi_dxs_ratio**2)) ** 0.5
-
-        dxs_ratio = scale_factor * dchi_dxs_ratio
-        dmt_ratio = scale_factor * dchi_dmt_ratio_ortho
+        # # make dchi_dmt orthogonal to mt, i.e. keep scalar moment unchanged
+        # dchi_dmt_ratio_ortho = dchi_dmt_ratio - mt * np.sum(
+        #     dchi_dmt_ratio * mt
+        # ) / np.sum(mt**2)
+        # # print(dchi_dmt_ratio_ortho)
 
         # ====== write out new CMTSOLUTION
-        xs_perturb = xs + R_earth * dxs_ratio
-
-        mt_perturb = mt + m0 * dmt_ratio
+        xs_perturb = xs + dxs_scaled
+        mt_perturb = mt + dmt_scaled
         # force mt_perturb to have the same scalar moment as mt
         mt_perturb = m0 * mt_perturb / (0.5 * np.sum(mt_perturb**2)) ** 0.5
 
         # write out new CMTSOLUTION file
-        with open(out_cmt_file, "w") as fp:
-            fp.write("%s\n" % event["header"])
-            fp.write("%-18s %s_dmt\n" % ("event name:", event["id"]))
+        with open(out_cmtsolution_dxs, "w") as fp:
+            fp.write("%s\n" % evhd)
+            fp.write("%-18s %s_dxs\n" % ("event name:", evnm))
             fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
-            fp.write("%-18s %+15.8E\n" % ("tau(s):", 0.0))
+            fp.write("%-18s %+15.8E\n" % ("tau(s):", tau))
             fp.write("%-18s %+15.8E\n" % ("x(m):", xs_perturb[0]))
             fp.write("%-18s %+15.8E\n" % ("y(m):", xs_perturb[1]))
             fp.write("%-18s %+15.8E\n" % ("z(m):", xs_perturb[2]))
+            fp.write("%-18s %+15.8E\n" % ("Mxx(N*m):", mt[0, 0]))
+            fp.write("%-18s %+15.8E\n" % ("Myy(N*m):", mt[1, 1]))
+            fp.write("%-18s %+15.8E\n" % ("Mzz(N*m):", mt[2, 2]))
+            fp.write("%-18s %+15.8E\n" % ("Mxy(N*m):", mt[0, 1]))
+            fp.write("%-18s %+15.8E\n" % ("Mxz(N*m):", mt[0, 2]))
+            fp.write("%-18s %+15.8E\n" % ("Myz(N*m):", mt[1, 2]))
+
+        with open(out_cmtsolution_dmt, "w") as fp:
+            fp.write("%s\n" % evhd)
+            fp.write("%-18s %s_dmt\n" % ("event name:", evnm))
+            fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
+            fp.write("%-18s %+15.8E\n" % ("tau(s):", tau))
+            fp.write("%-18s %+15.8E\n" % ("x(m):", xs[0]))
+            fp.write("%-18s %+15.8E\n" % ("y(m):", xs[1]))
+            fp.write("%-18s %+15.8E\n" % ("z(m):", xs[2]))
             fp.write("%-18s %+15.8E\n" % ("Mxx(N*m):", mt_perturb[0, 0]))
             fp.write("%-18s %+15.8E\n" % ("Myy(N*m):", mt_perturb[1, 1]))
             fp.write("%-18s %+15.8E\n" % ("Mzz(N*m):", mt_perturb[2, 2]))

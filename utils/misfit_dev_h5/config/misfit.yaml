@@ -106,3 +106,7 @@ misfit:
     "CC0": [0.5, 0.7]
     "CCmax": [0.7, 0.9]
     # "dist": None,
+
+source:
+  max_dxs_ratio: 0.001 # ralative to |xs|
+  max_dmt_ratio: 0.01 # relative to Mw0

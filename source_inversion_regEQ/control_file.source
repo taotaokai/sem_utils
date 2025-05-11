@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# User defined control parameters
+
+#====== Structure of work directories 
+#
+#{base_dir}/
+#  |- {stage_dir}/
+#    |- {iter_dir}/
+#      |- {event_dir}/
+#        |- DATA/
+#          |- CMTSOLUTION.init
+#        |- green/
+#        |- misfit/
+#        |- srcfrechet/
+#        |- dgreen/
+#        |- search/
+#
+#====== Basic workflow:
+#
+# 1. forward modelling with hdur set to zero to get approximated green's function (so hdur can be updated through line search later)
+# 2. measure waveform misfit and get adjoint source (green's function convolved with the hdur in the initial CMTSOLUTION)
+# 3. adjoint simulation and get misfit gradient of source parameters (location and moment tensor)
+# 4. perturb source parameters (but set hdur=0) to get CMTSOLUTION.perturb based on the gradients and do forward modelling 
+# 5. calculate the finite difference between original and perturbed green's functions and iteratively update hdur and location&moment tensor based on the linear approximation dU = dG * source 
+
+# project root directory
+base_dir=$(readlink -f /home/taokai/EuropeFWI)
+
+# current stage and iteration number
+stage_dir=stage00.source
+iter_num=0
+
+#======== Data directories
+
+# specfem3d par files
+sem_config_dir=${base_dir}/sem_config  # sem_config/: DATA/Par_file, setup/constants.h.in, initial_model/
+
+# specfem3d binaries
+sem_build_dir=${base_dir}/build # build/: bin/xmeshfem3D,xspecfem3D
+
+# shell scripts
+sem_utils_dir=${base_dir}/sem_utils  # sem_utils/: misfit/, source_inversion_regEQ/
+
+# event data dir
+data_dir=$base_dir/data # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTIOn, data.h5
+
+# current iteration directory: need model/ and misfit_par/
+iter_num=$(printf "%02d" $iter_num)
+iter_dir=$base_dir/$stage_dir/iter${iter_num}
+
+# initial source dir
+#source_dir=$base_dir/backup/stage08.source
+source_dir=${base_dir}/CMTSOLUTION_initial
+
+# mesh/DATABASES_MPI/*solver_data.bin,..
+mesh_dir=${base_dir}/mesh
+
+#model_dir=${iter_dir}/model
+
+misfit_par_dir=${base_dir}/misfit_par
+
+#precond_dir=${iter_dir}/preconditioner # proc*_reg1_inv_hess_diag.bin
+
+# previous iteration directory
+iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
+prev_iter_dir=${base_dir}/${stage_dir}/iter${iter_minus_one}
+
+#======== slurm jobs
+
+# cluster cpu/node
+nproc_per_node=24
+
+# number of SEM slices
+sem_nproc=4  # actual mesh slices defined in Par_file
+
+# number of MPI processors to run jobs
+slurm_nnode=1
+slurm_nproc=4
+
+# mpi executable
+# slurm_mpiexec="srun --mpi=pmix_v3"
+slurm_mpiexec="mpirun -np ${slurm_nproc}"
+
+# slurm partition
+slurm_partition_dcu="xahdnormal" # SCNET
+slurm_partition_cpu="xahcnormal" # SCNET
+
+slurm_dcu_extra_args="--exclusive --gres=dcu:4"
+
+# time limit
+slurm_timelimit_mesh=01:00:00 # mesh
+slurm_timelimit_forward=00:30:00 # forward
+slurm_timelimit_adjoint=00:30:00 # adjoint for source
+slurm_timelimit_misfit=01:00:00 # misfit
+slurm_timelimit_dgreen=00:30:00 # dgreen
+slurm_timelimit_search=01:00:00 # grid search
+
+#----- update model
+
+#====== other
+
+python_exec=python

@@ -151,15 +151,16 @@ rm -rf $event_dir/SEM
 mkdir -p $event_dir/SEM
 
 $python_exec $sem_utils_dir/misfit/measure_adj.py \\
+  $db_file \\
   $misfit_par \\
   $event_dir/DATA/Par_file \\
   $cmt_file \\
+  "True" \\
   $data_dir/$event_id/channel.txt \\
   $data_dir/$event_id/data.h5 \\
   $event_dir/output_green/sac \\
-  $db_file \\
-  $event_dir/SEM \\
-  "True"
+  "True" \\
+  $event_dir/SEM
 
 # make STATIONS_ADJOINT
 cd $event_dir/SEM
@@ -235,7 +236,7 @@ cat <<EOF > $dgreen_job
 #SBATCH -N $slurm_nnode
 #SBATCH -n $slurm_nproc
 #SBATCH -p $slurm_partition_dcu
-#SBATCH -t $slurm_timelimit_forward
+#SBATCH -t $slurm_timelimit_dgreen
 #SBATCH $slurm_dcu_extra_args
 
 echo
@@ -243,7 +244,8 @@ echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
 # make perturbed CMTSOLUTION
-$python_exec $sem_utils_dir/source_inversion_regEQ/make_dcmt.py $cmt_file $misfit_dir/srcfrechet 0.001 $misfit_dir/dcmt
+$python_exec $sem_utils_dir/source_inversion_regEQ/make_dcmt.py $cmt_file $misfit_dir/srcfrechet 0.001 0.01 $misfit_dir/dxs.cmt $misfit_dir/dmt.cmt
+
 $python_exec $sem_utils_dir/source_inversion_regEQ/add_dcmt.py $cmt_file $misfit_dir/dcmt 1.0 0.0 0.0 $misfit_dir/CMTSOLUTION.perturb
 
 #for tag in dxs dmt

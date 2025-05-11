@@ -2847,6 +2847,7 @@ class Misfit(object):
 
     def make_perturbed_cmtsolution(
         self,
+        out_dcmt_file="diff_CMTSOLUTION",
         out_cmtsolution_dxs="CMTSOLUTION_dxs",
         out_cmtsolution_dmt="CMTSOLUTION_dmt",
     ):
@@ -2904,13 +2905,32 @@ class Misfit(object):
         # ) / np.sum(mt**2)
         # # print(dchi_dmt_ratio_ortho)
 
-        # ====== write out new CMTSOLUTION
+        event["dxs"] = dxs_scaled
+        event["dmt"] = dmt_scaled
+        tbl_src[-1] = [event]
+
+        #====== write out differential CMTSOLUTION file
+        with open(out_dcmt_file, "w") as fp:
+            fp.write("%s\n" % evhd)
+            fp.write("%-18s %s_dxs\n" % ("event name:", evnm))
+            fp.write("%-18s %+15.8E\n" % ("dt0(s):", 0.0))
+            fp.write("%-18s %+15.8E\n" % ("dtau(s):", 0.0))
+            fp.write("%-18s %+15.8E\n" % ("dx(m):", dxs_scaled[0]))
+            fp.write("%-18s %+15.8E\n" % ("dy(m):", dxs_scaled[1]))
+            fp.write("%-18s %+15.8E\n" % ("dz(m):", dxs_scaled[2]))
+            fp.write("%-18s %+15.8E\n" % ("dMxx(N*m):", dmt_scaled[0, 0]))
+            fp.write("%-18s %+15.8E\n" % ("dMyy(N*m):", dmt_scaled[1, 1]))
+            fp.write("%-18s %+15.8E\n" % ("dMzz(N*m):", dmt_scaled[2, 2]))
+            fp.write("%-18s %+15.8E\n" % ("dMxy(N*m):", dmt_scaled[0, 1]))
+            fp.write("%-18s %+15.8E\n" % ("dMxz(N*m):", dmt_scaled[0, 2]))
+            fp.write("%-18s %+15.8E\n" % ("dMyz(N*m):", dmt_scaled[1, 2]))
+
+        #====== write out perturbed CMTSOLUTION file
         xs_perturb = xs + dxs_scaled
         mt_perturb = mt + dmt_scaled
         # force mt_perturb to have the same scalar moment as mt
         mt_perturb = m0 * mt_perturb / (0.5 * np.sum(mt_perturb**2)) ** 0.5
-
-        # write out new CMTSOLUTION file
+        
         with open(out_cmtsolution_dxs, "w") as fp:
             fp.write("%s\n" % evhd)
             fp.write("%-18s %s_dxs\n" % ("event name:", evnm))

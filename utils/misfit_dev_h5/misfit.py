@@ -2853,10 +2853,10 @@ class Misfit(object):
     ):
         """Make perturbed CMTSOLUTION based on source gradient"""
         config = self.h5f.root._v_attrs["config"]
-        max_dxs_ratio = config["source"]["max_dxs_ratio"]
+        max_dxs_norm = config["source"]["max_dxs_norm"]
         max_dmt_ratio = config["source"]["max_dmt_ratio"]
-        if max_dxs_ratio <= 0.0:
-            msg = f"max_dxs_ratio ({max_dxs_ratio}) must > 0"
+        if max_dxs_norm <= 0.0:
+            msg = f"max_dxs_norm ({max_dxs_norm}) must > 0"
             raise ValueError(msg)
         if max_dmt_ratio <= 0.0:
             msg = f"max_dmt_ratio ({max_dmt_ratio}) must > 0"
@@ -2886,11 +2886,12 @@ class Misfit(object):
         # cc = np.sum(dchi_dmt * mt) / np.sum(mt**2) ** 0.5 / np.sum(dchi_dmt**2) ** 0.5
         # print("cc = ", cc)
 
-        r0 = (np.sum(xs**2)) ** 0.5
+        # r0 = (np.sum(xs**2)) ** 0.5
         norm_grad_xs = (np.sum(grad_xs**2)) ** 0.5
         dxs_scaled = grad_xs
         if norm_grad_xs > 0:
-            dxs_scaled = max_dxs_ratio * r0 * grad_xs / norm_grad_xs
+            # dxs_scaled = max_dxs_ratio * r0 * grad_xs / norm_grad_xs
+            dxs_scaled = max_dxs_norm * grad_xs / norm_grad_xs
 
         m0 = (0.5 * np.sum(mt**2)) ** 0.5
         norm_grad_mt = (0.5 * np.sum(grad_mt**2)) ** 0.5

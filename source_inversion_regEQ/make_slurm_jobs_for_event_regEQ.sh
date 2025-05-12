@@ -105,7 +105,7 @@ mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 # modify CMTSOLUTION.init with the source location actually used in the simulation
 tmpfile=\$(mktemp)
 grep -A4 "position of the source that will be used:" $event_dir/\$out_dir/output_solver.txt > \$tmpfile
-if [ $? -ne 0 ]
+if [ \$? -ne 0 ]
 then
   echo "[ERROR] check if green.job finished OK!"
   exit -1
@@ -155,12 +155,12 @@ $python_exec $sem_utils_dir/misfit/measure_adj.py \\
   $misfit_par \\
   $event_dir/DATA/Par_file \\
   $cmt_file \\
-  "True" \\
   $data_dir/$event_id/channel.txt \\
   $data_dir/$event_id/data.h5 \\
   $event_dir/output_green/sac \\
-  "True" \\
-  $event_dir/SEM
+  $event_dir/SEM \\
+  --cmt_in_ECEF \\
+  --syn_is_grn
 
 # make STATIONS_ADJOINT
 cd $event_dir/SEM
@@ -244,16 +244,18 @@ echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
 # make perturbed CMTSOLUTION
-$python_exec $sem_utils_dir/source_inversion_regEQ/make_dcmt.py $cmt_file $misfit_dir/srcfrechet 0.001 0.01 $misfit_dir/dxs.cmt $misfit_dir/dmt.cmt
+$python_exec $sem_utils_dir/misfit/make_perturbed_cmtsolution.py \\
+  $db_file \\
+  $misfit_dir/srcfrechet \\
+  $misfit_dir/diff_CMTSOLUTION \\
+  $misfit_dir/CMTSOLUTION_dxs \\
+  $misfit_dir/CMTSOLUTION_dmt
 
-$python_exec $sem_utils_dir/source_inversion_regEQ/add_dcmt.py $cmt_file $misfit_dir/dcmt 1.0 0.0 0.0 $misfit_dir/CMTSOLUTION.perturb
-
-#for tag in dxs dmt
-for tag in perturb
+for tag in dxs dmt
 do
   echo "====== \$tag"
   out_dir=output_\$tag
-  dcmt_file=$misfit_dir/CMTSOLUTION.\$tag
+  dcmt_file=$misfit_dir/CMTSOLUTION_\$tag
 
   cd $event_dir/DATA
 
@@ -282,29 +284,44 @@ do
   mkdir $event_dir/\$out_dir/sac
   mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 
-  # modify CMTSOLUTION.perturb with the source location actually used
-  tmpfile=\$(mktemp)
-  grep -A4 "position of the source that will be used:" $event_dir/\$out_dir/output_solver.txt > \$tmpfile
-  x1=\$(grep "x(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
-  y1=\$(grep "y(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
-  z1=\$(grep "z(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
+  # modify diff_CMTSOLUTION with the perturbation in source location actually used
+  if [ x"\$tag" == x"dxs" ]
+  then
+    tmpfile=\$(mktemp)
+    grep -A4 "position of the source that will be used:" $event_dir/\$out_dir/output_solver.txt > \$tmpfile
+    if [ \$? -ne 0 ]
+    then
+      echo "[ERROR] check if dgreen.job finished OK!"
+      exit -1
+    fi
 
-  sed -i "s/x(m).*/x(m):              \$x1/"  \$dcmt_file
-  sed -i "s/y(m).*/y(m):              \$y1/"  \$dcmt_file
-  sed -i "s/z(m).*/z(m):              \$z1/"  \$dcmt_file
+    x1=\$(grep "x(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
+    y1=\$(grep "y(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
+    z1=\$(grep "z(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
 
-  # modify dcmt file
-  x0=\$(grep "x(m)" $cmt_file | awk '{printf "%+15.8E", \$2}')
-  y0=\$(grep "y(m)" $cmt_file | awk '{printf "%+15.8E", \$2}')
-  z0=\$(grep "z(m)" $cmt_file | awk '{printf "%+15.8E", \$2}')
+    sed -i "s/x(m).*/x(m):              \$x1/"  \$dcmt_file
+    sed -i "s/y(m).*/y(m):              \$y1/"  \$dcmt_file
+    sed -i "s/z(m).*/z(m):              \$z1/"  \$dcmt_file
 
-  dx=\$(echo \$x1 \$x0 | awk '{printf "%+15.8E", \$1-\$2}')
-  dy=\$(echo \$y1 \$y0 | awk '{printf "%+15.8E", \$1-\$2}')
-  dz=\$(echo \$z1 \$z0 | awk '{printf "%+15.8E", \$1-\$2}')
+    # modify dcmt file
+    x0=\$(grep "x(m)" $cmt_file | awk '{printf "%+15.8E", \$2}')
+    y0=\$(grep "y(m)" $cmt_file | awk '{printf "%+15.8E", \$2}')
+    z0=\$(grep "z(m)" $cmt_file | awk '{printf "%+15.8E", \$2}')
 
-  sed -i "s/dx(m).*/dx(m):              \$dx/"  $misfit_dir/dcmt
-  sed -i "s/dy(m).*/dy(m):              \$dy/"  $misfit_dir/dcmt
-  sed -i "s/dz(m).*/dz(m):              \$dz/"  $misfit_dir/dcmt
+    dx=\$(echo \$x1 \$x0 | awk '{printf "%+15.8E", \$1-\$2}')
+    dy=\$(echo \$y1 \$y0 | awk '{printf "%+15.8E", \$1-\$2}')
+    dz=\$(echo \$z1 \$z0 | awk '{printf "%+15.8E", \$1-\$2}')
+
+    sed -i "s/dx(m).*/dx(m):              \$dx/"  $misfit_dir/diff_CMTSOLUTION
+    sed -i "s/dy(m).*/dy(m):              \$dy/"  $misfit_dir/diff_CMTSOLUTION
+    sed -i "s/dz(m).*/dz(m):              \$dz/"  $misfit_dir/diff_CMTSOLUTION
+
+    ${python_exec} ${sem_utils_dir}/misfit/update_source_dxs.py \\
+      "${db_file}" \\
+      -- "\$dx" "\$dy" "\$dz"
+    # -- means everything behind is positional,  so values like "-1.e-4" will be parsed correctly
+
+  fi
 
 done
 
@@ -321,11 +338,8 @@ cat <<EOF > $search_job
 #SBATCH -o $search_job.o%j
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -p $slurm_partition
+#SBATCH -p $slurm_partition_cpu
 #SBATCH -t $slurm_timelimit_search
-##SBATCH --mail-user=kai.tao@utexas.edu
-##SBATCH --mail-type=begin
-##SBATCH --mail-type=end
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -334,7 +348,14 @@ echo
 cd $event_dir
 
 # read derivatives of green's fuction
-$python_exec $sem_utils_dir/source_inversion_regEQ/waveform_der_source.py $misfit_par $db_file $event_dir/output_perturb/sac xs_mt
+for tag in dxs dmt
+do
+  $python_exec $sem_utils_dir/misfit/read_perturbed_syn.py \\
+    $db_file \\
+    $event_dir/output_${tag}/sac \\
+    $tag \\
+    --syn_is_grn
+done
 
 # grid search of source model
 $python_exec $sem_utils_dir/source_inversion_regEQ/grid_search_source.py $misfit_par $db_file $misfit_dir/grid_search_source.txt $misfit_dir/grid_search_source.pdf

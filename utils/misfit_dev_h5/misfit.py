@@ -2930,7 +2930,7 @@ class Misfit(object):
         mt_perturb = mt + dmt_scaled
         # force mt_perturb to have the same scalar moment as mt
         mt_perturb = m0 * mt_perturb / (0.5 * np.sum(mt_perturb**2)) ** 0.5
-        
+
         with open(out_cmtsolution_dxs, "w") as fp:
             fp.write("%s\n" % evhd)
             fp.write("%-18s %s_dxs\n" % ("event name:", evnm))
@@ -2961,7 +2961,7 @@ class Misfit(object):
             fp.write("%-18s %+15.8E\n" % ("Mxz(N*m):", mt_perturb[0, 2]))
             fp.write("%-18s %+15.8E\n" % ("Myz(N*m):", mt_perturb[1, 2]))
 
-    def update_source_location(self, x, y, z): 
+    def update_source_dxs(self, dx, dy, dz):
         if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
@@ -2970,7 +2970,7 @@ class Misfit(object):
             msg = "no source information"
             raise Exception(msg)
         event = tbl_src[0]
-        event["xs"] = np.array([x, y, z], dtype=float)
+        event["dxs"] = np.array([dx, dy, dz], dtype=float)
         tbl_src[0] = [event]
 
 #     #

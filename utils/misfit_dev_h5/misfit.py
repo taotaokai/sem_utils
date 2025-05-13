@@ -236,6 +236,9 @@ class Window(pt.IsDescription):
     syn_maxamp = pt.Float32Col(pos=21)
     id = pt.StringCol(128, pos=22)
     valid = pt.BoolCol(pos=23)
+    proj_matrix = pt.Float32Col(
+        shape=(3, 3), pos=24
+    )  # from ENZ to the measured component
 
 
 class Source(pt.IsDescription):
@@ -597,7 +600,7 @@ class Misfit(object):
                     stations_df.iloc[:, 1] == f"{sta}.{loc}"
                 )
                 if not any(match):
-                    msg = f"no match in station file ({station_file}), skip ({l})"
+                    # msg = f"no match in station file ({station_file}), skip ({l})"
                     continue
 
             if len(cha) != 3:
@@ -808,7 +811,7 @@ class Misfit(object):
 
         with pt.open_file(h5_file, "r") as obs_h5f:
             for g_sta_obs in obs_h5f.root:
-                print(g_sta_obs._v_name)
+                # print(g_sta_obs._v_name)
 
                 sta_attrs = g_sta_obs._v_attrs
                 net = sta_attrs["network"]
@@ -832,8 +835,8 @@ class Misfit(object):
                         stations_df.iloc[:, 1] == f"{sta}.{loc}"
                     )
                     if not any(match):
-                        msg = f"not in station select list, skip ({net}.{sta})"
-                        warnings.warn(msg)
+                        # msg = f"not in station select list, skip ({net}.{sta})"
+                        # warnings.warn(msg)
                         continue
 
                 channels = tbl_chan.read_where(
@@ -1000,7 +1003,7 @@ class Misfit(object):
         is_grn=False,
         is_diff=False,
         tag_diff="diff",
-        diff_src="/source/dxs_dmt",
+        # diff_src="/source/dxs_dmt",
     ):
         """
         sac file naming rule: NET.STA.LOC.CHA , where CHA consists of band_code(e.g. BH or MX) + orientation[E|N|Z]
@@ -1216,7 +1219,9 @@ class Misfit(object):
                 _, h = scipy.signal.freqz_sos(sos, worN=freqs, fs=solver_fs)
                 filter_h *= abs(h)
 
-            valid_te = solver_te - min_cutoff_freq  # avoid filter response from edge
+            valid_te = (
+                solver_te - 1.0 / min_cutoff_freq
+            )  # avoid filter response from edge
 
             if _DEBUG:
                 syn_st1 = syn_st.copy()
@@ -1352,7 +1357,7 @@ class Misfit(object):
         win_row = tbl_win.row
 
         for g_sta in g_wav:
-            print(f"setup windows for {g_sta._v_name}")
+            # print(f"setup windows for {g_sta._v_name}")
             meta = g_sta._v_attrs
             net = meta["network"]
             sta = meta["station"]
@@ -1415,7 +1420,7 @@ class Misfit(object):
                 win_phase = win["phase"]
                 cmpnm = win["cmp"]
                 win_bp = win["bp"]
-                # bp_long_period = 1.0 / min(win_bp[1:])
+                bp_long_period = 1.0 / min(win_bp[1:])
                 evdp_limit = win["evdp"]
                 gcarc_limit = win["gcarc"]
                 win_weight = win["weight"]
@@ -1464,7 +1469,10 @@ class Misfit(object):
                     continue
 
                 win_tb = max(valid_tb, event_t0 + tb)
-                win_te = min(valid_te, event_t0 + te)
+                win_te = (
+                    min(valid_te, event_t0 + te) - bp_long_period
+                )  # to avoid filter edge effect in the later bandpass process
+                # print(solver_te, obs_te, solver_valid_te, win_te)
 
                 if (win_te - win_tb) < 0.5 * minlen:
                     msg = f"window ({win})'s valid length ({win_tb}-{win_te} less than half of the minimum length ({minlen})"
@@ -1512,6 +1520,106 @@ class Misfit(object):
                 win_row.append()
 
         tbl_win.flush()
+
+    def _get_obs_ENZ(self, g_sta, obs_tag):
+        """get observed seismogram in array(ENZ,nt)"""
+        if obs_tag not in g_sta:
+            msg = f"{g_sta._v_name}: {obs_tag} does not exist, skip"
+            raise KeyError(msg)
+        obs = g_sta[obs_tag]
+
+        # check data type
+        obs_type = obs.attrs["type"]
+        if obs_type != "VEL" and obs_type != "DISP":
+            raise AssertionError(f"wrong types: obs({obs_type}), either VEL or DISP")
+
+        # check channels' info
+        obs_channels = obs.attrs["channels"]
+        obs_Zchan = [cha for cha in obs_channels if cha["name"].decode()[-1] == "Z"]
+        obs_Hchan = [cha for cha in obs_channels if cha["name"].decode()[-1] != "Z"]
+        if len(obs_Zchan) != 1 or obs_Zchan[0]["dip"] != -90:
+            msg = f"{g_sta._v_name} has problematic Z channel info: {obs_Zchan}, skip"
+            raise AssertionError(msg)
+        no_Hchan = False
+        if len(obs_Hchan) == 0:
+            msg = f"{g_sta._v_name} has no horizontal channels"
+            warnings.warn(msg)
+            no_Hchan = True
+        else:
+            assert len(obs_Hchan) == 2
+
+        # rotate obs to ENZ
+        # projection matrix: obs = proj * ENZ => ENZ = inv(proj) * obs
+        data_nt = obs.attrs["npts"]
+        obs_ENZ = np.zeros((3, data_nt), dtype=float)
+        if no_Hchan:
+            obs_ENZ[0:2, :] = 0.0
+            obs_ENZ[2, :] = obs[0, :]  # only Z component
+        else:
+            assert obs.shape == obs_ENZ.shape
+            proj_matrix = np.zeros((3, 3))
+            for i in range(3):
+                chan = obs_channels[i]
+                sin_az = np.sin(np.deg2rad(chan["azimuth"]))
+                cos_az = np.cos(np.deg2rad(chan["azimuth"]))
+                sin_dip = np.sin(np.deg2rad(chan["dip"]))
+                cos_dip = np.cos(np.deg2rad(chan["dip"]))
+                # column vector = obs channel polarization
+                proj_matrix[i, 0] = cos_dip * sin_az  # proj to E
+                proj_matrix[i, 1] = cos_dip * cos_az  # proj to N
+                proj_matrix[i, 2] = -sin_dip  # proj to Z (Up)
+            # inverse projection matrix: ENZ = inv(proj) * obs
+            inv_proj = np.linalg.inv(proj_matrix)
+            obs_ENZ = np.dot(inv_proj, obs)
+
+        return obs_ENZ, no_Hchan
+
+    def _get_syn_ENZ(self, g_sta, syn_tag):
+
+        if syn_tag not in g_sta:
+            msg = f"{g_sta._v_name}: {syn_tag} does not exist, skip"
+            raise KeyError(msg)
+        syn = g_sta[syn_tag]
+
+        # check data type
+        syn_type = syn.attrs["type"]
+        if syn_type != "DISP":
+            raise AssertionError(f"wrong types: syn({syn_type}) must be DISP")
+
+        # check channels' info
+        syn_channels = syn.attrs["channels"]
+        assert len(syn_channels) == 3
+
+        # rotate syn to ENZ
+        data_nt = syn.attrs["npts"]
+        data_fs = syn.attrs["sampling_rate"]
+        data_dt = 1.0 / data_fs
+        syn_ENZ = np.zeros((3, data_nt))
+        syn_ENZ[:] = syn[:]
+        proj_matrix = np.zeros((3, 3))
+        for i in range(3):
+            chan = syn_channels[i]
+            sin_az = np.sin(np.deg2rad(chan["azimuth"]))
+            cos_az = np.cos(np.deg2rad(chan["azimuth"]))
+            sin_dip = np.sin(np.deg2rad(chan["dip"]))
+            cos_dip = np.cos(np.deg2rad(chan["dip"]))
+            # column vector = obs channel polarization
+            proj_matrix[i, 0] = cos_dip * sin_az  # proj to E
+            proj_matrix[i, 1] = cos_dip * cos_az  # proj to N
+            proj_matrix[i, 2] = -sin_dip  # proj to Z
+        # inverse projection matrix: ENZ = inv(proj) * obs
+        inv_proj = np.linalg.inv(proj_matrix)
+        syn_ENZ[:] = np.dot(inv_proj, syn_ENZ)
+
+        # # apply time derivative (when data is vel)
+        # if to_vel:
+        #     npad = 100  # t_pad = 100 / fs, response drop to ~1% peak value
+        #     nfft = scipy.fft.next_fast_len(data_nt + npad)
+        #     freqs = np.fft.rfftfreq(nfft, d=data_dt)
+        #     Fsyn *= 2j * np.pi * freqs
+        #     syn_ENZ[:] = np.fft.irfft(Fsyn, nfft)[:, :data_nt]
+
+        return syn_ENZ
 
     def _extract_obs_syn_ENZ(self, g_sta, obs_tag, syn_tag, event_tau):
 
@@ -1599,14 +1707,18 @@ class Misfit(object):
         inv_proj = np.linalg.inv(proj_matrix)
         syn_ENZ[:] = np.dot(inv_proj, syn_ENZ)
 
+        # np.savez('extract', syn_ENZ=syn_ENZ)
+
         # apply source time function and/or time derivative
         if syn.attrs["is_grn"] or obs_type == "VEL":
             npad = int(5 * event_tau * data_fs)
+            # npad = data_nt  #DEBUG
             nfft = scipy.fft.next_fast_len(data_nt + npad)
             freqs = np.fft.rfftfreq(nfft, d=data_dt)
             Fsyn = np.fft.rfft(syn_ENZ, nfft)
             if syn.attrs["is_grn"]:
                 # source spectrum (moment-rate function)
+                # print("event_tau=", event_tau)
                 F_src = stf_gauss_spectrum(freqs, event_tau)
                 Fsyn *= F_src
             if obs_type == "VEL":
@@ -1676,7 +1788,7 @@ class Misfit(object):
 
         # loop each station
         for g_sta in g_wav:
-            print(f"measure_adj for {g_sta._v_name}")
+            # print(f"measure_adj for {g_sta._v_name}")
 
             attrs = g_sta._v_attrs
             net = attrs["network"]
@@ -1715,20 +1827,21 @@ class Misfit(object):
 
             # loop each window
             for win in tbl_win.where(f'(network == b"{net}") & (station == b"{sta}")'):
-                print(
-                    "window: ",
-                    win["type"],
-                    win["phase"],
-                    win["cmpnm"],
-                    win["butter_Wn"],
-                )
+                # print(
+                #     "window: ",
+                #     win["id"],
+                #     win["type"],
+                #     win["phase"],
+                #     win["cmpnm"],
+                #     win["butter_Wn"],
+                # )
                 # component
                 cmpnm = win["cmpnm"].decode()
                 if no_Hchan and cmpnm != "Z":
                     warnings.warn(
                         "skip non-vertical window since only vertical data present"
                     )
-                    win["status"] = False
+                    win["valid"] = False
                     win.update()
                     continue
                 cmpaz = win["cmpaz"]
@@ -1783,8 +1896,8 @@ class Misfit(object):
                     n = np.array(
                         [
                             [cos_dip * sin_az],  # cos(E, comp)
-                            [cos_dip * cos_az],  # N, comp
-                            [-sin_dip],  # Z, comp
+                            [cos_dip * cos_az],  # cos(N, comp)
+                            [-sin_dip],  # cos(Z, comp)
                         ]
                     )
                     proj_matrix = np.dot(n, n.transpose())
@@ -1854,6 +1967,8 @@ class Misfit(object):
                 # noise
                 noise_filt_win = np.dot(proj_matrix, noise_filt)[:, :noise_idx1]
 
+                # np.savez('measure_adj', obs_ENZ=obs_ENZ, syn_ENZ=syn_ENZ, syn_filt=syn_filt, win_func=win_func, obs_filt_win=obs_filt_win, syn_filt_win=syn_filt_win)
+
                 # for i in range(3):
                 #     plt.subplot(311 + i)
                 #     plt.plot(
@@ -1904,8 +2019,7 @@ class Misfit(object):
                 CC0 = cc[data_nt - 1]  # the n-th point corresponds to zero lag time
                 AR0 = CC0 * syn_norm / obs_norm  # amplitude ratio syn/obs
                 # DEBUG
-                # print(CC0)
-                # print(np.sum(obs_filt_win * syn_filt_win)/obs_norm/syn_norm)
+                # print(CC0, np.sum(obs_filt_win * syn_filt_win)/obs_norm/syn_norm)
                 # -- interpolate cc to finer time samples
                 CC_shift_range = win_len / 2.0  # TODO: more reasonable choice?
                 if data_dt < cci_dt:
@@ -2103,6 +2217,7 @@ class Misfit(object):
                 win["SNR"] = snr
                 win["weight"] = weight
                 win["valid"] = True
+                win["proj_matrix"] = proj_matrix
                 win.update()
 
             # store adjoint source for this station, e.g. /NET_STA/ADJ_DISP[0:nchan, 0:npts]
@@ -2555,10 +2670,10 @@ class Misfit(object):
                 cmp_vec = np.array(
                     [
                         cos_dip * sin_az,  # cos(E, comp)
-                        cos_dip * cos_az,  # N, comp
-                        -sin_dip,
+                        cos_dip * cos_az,  # cos(N, comp)
+                        -sin_dip,  # cos(Z, comp)
                     ]
-                )  # Z, comp
+                )
                 obs_filt_proj = np.dot(cmp_vec, obs_ENZ_filt)
                 syn_filt_proj = np.dot(cmp_vec, syn_ENZ_filt)
 
@@ -2910,7 +3025,7 @@ class Misfit(object):
         event["dmt"] = dmt_scaled
         tbl_src[0] = [event]
 
-        #====== write out differential CMTSOLUTION file
+        # ====== write out differential CMTSOLUTION file
         with open(out_dcmt_file, "w") as fp:
             fp.write("%s\n" % evhd)
             fp.write("%-18s %s_dxs\n" % ("event name:", evnm))
@@ -2926,7 +3041,7 @@ class Misfit(object):
             fp.write("%-18s %+15.8E\n" % ("dMxz(N*m):", dmt_scaled[0, 2]))
             fp.write("%-18s %+15.8E\n" % ("dMyz(N*m):", dmt_scaled[1, 2]))
 
-        #====== write out perturbed CMTSOLUTION file
+        # ====== write out perturbed CMTSOLUTION file
         xs_perturb = xs + dxs_scaled
         mt_perturb = mt + dmt_scaled
         # force mt_perturb to have the same scalar moment as mt
@@ -2973,6 +3088,422 @@ class Misfit(object):
         event = tbl_src[0]
         event["dxs"] = np.array([dx, dy, dz], dtype=float)
         tbl_src[0] = [event]
+
+    def linearized_search_cc(
+        self,
+        dm={"dt0": None, "dtau": None, "dxs": None, "dmt": None},
+    ):
+        """
+        calculate normalized zero-lag cc for perturbed seismograms
+        by linear combination of waveform derivatives of source parameters (t0,tau,xs,mt)
+
+        dm={<model_name>:<model_step_sizes>, ...}
+
+        return wcc_sum, weight_sum
+        """
+        # check model vectors in dm have the same length
+        if (not dm) or len(dm) == 0:
+            msg = "dm must not be empty"
+            raise ValueError(msg)
+        # model_num = len(dm)
+
+        for model_name in dm:
+            if model_name not in ["dt0", "dtau", "dxs", "dmt"]:
+                msg = f"model_name[{model_name}] must be one of [t0, tau, xs, mt]"
+                raise ValueError(msg)
+
+        nstep = []
+        for model_name in dm:
+            if dm[model_name].ndim != 1:
+                msg = f"dm[{model_name}] must be 1-D vector"
+                raise ValueError(msg)
+            nstep.append(np.size(dm[model_name]))
+
+        if len(set(nstep)) != 1 or nstep[0] < 1:
+            msg = "vectors in dm must have the same length"
+            raise Exception(msg)
+        nstep = nstep[0]
+
+        # check parameters
+        if "/source" not in self.h5f:
+            msg = '"/source" not existing, run read_cmtsolution first!'
+            raise KeyError(msg)
+        tbl_src = self.h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[0]
+
+        if "dtau" in dm:
+            tau = dm["dtau"] + event["tau"]
+            if any(tau < 0):
+                msg = f"too small dm['dtau'] ({dm['dtau']}) for event['tau']={event['tau']}"
+                raise ValueError(msg)
+
+        # syn_components = ["E", "N", "Z"]
+
+        config = self.h5f.root._v_attrs["config"]
+        obs_tag = config["data"]["tag"]
+        syn_tag = config["syn"]["tag"]
+        dsyn_grp = config["syn"]["dsyn_grp"]
+
+        # sum of weighted normalized zero-lag cc at each model grid
+        wcc_sum = np.zeros(nstep)
+        # sum of all windows' weighting
+        weight_sum = 0.0
+
+        if "/waveform" not in self.h5f:
+            msg = '"/waveform" not existing, run read_data_h5 first!'
+            raise KeyError(msg)
+        g_wav = self.h5f.get_node("/waveform")
+
+        if "/window" not in self.h5f:
+            msg = '"/window" not existing, run setup_window/measure_adj first!'
+            raise KeyError(msg)
+        tbl_win = self.h5f.get_node("/window")
+
+        dsyn_tags = {}
+        for model_name in dm:
+            if model_name not in ["dt0", "dtau"]:
+                dsyn_tags[model_name] = f"{dsyn_grp}/{model_name}"
+
+        # print(dsyn_tags)
+
+        for g_sta in g_wav:
+            # print(f"cc_linearize for {g_sta._v_name}")
+
+            attrs = g_sta._v_attrs
+            net = attrs["network"]
+            sta = attrs["station"]
+
+            windows = tbl_win.read_where(
+                f'(network == b"{net}") & (station == b"{sta}") & (valid == True)'
+            )
+            if len(windows) == 0:
+                msg = "No windows found for {g_sta._v_name}, SKIP"
+                warnings.warn(msg)
+                continue
+
+            assert obs_tag in g_sta
+            assert syn_tag in g_sta
+            for _, tag in dsyn_tags.items():
+                assert tag in g_sta
+
+            obs = g_sta[obs_tag]
+            syn = g_sta[syn_tag]
+
+            obs_type = obs.attrs["type"]
+            syn_type = syn.attrs["type"]
+            if obs_type == "VEL" and syn_type == "DISP":
+                syn_to_vel = True
+            elif obs_type == "DISP" and syn_type == "DISP":
+                syn_to_vel = False
+            else:
+                msg = (
+                    f"unknown obs/syn types ({obs_type}/{syn_type}) in {g_sta._v_name}"
+                )
+                raise RuntimeError(msg)
+
+            for _, dsyn_tag in dsyn_tags.items():
+                assert g_sta[dsyn_tag].attrs["is_grn"] == g_sta[syn_tag].attrs["is_grn"]
+                assert g_sta[dsyn_tag].attrs["type"] == g_sta[syn_tag].attrs["type"]
+
+            try:
+                dsyn_dm = {}
+                obs_ENZ, no_Hchan = self._get_obs_ENZ(g_sta, obs_tag)
+                syn_ENZ = self._get_syn_ENZ(g_sta, syn_tag)
+                for m, tag in dsyn_tags.items():
+                    dsyn_dm[m] = self._get_syn_ENZ(g_sta, tag)
+            except Exception as e:
+                msg = f"failed to get {obs_tag},{syn_tag},{dsyn_tags} from {g_sta._v_name}, ({e})"
+                warnings.warn(msg)
+                continue
+
+            if "dtau" in dm:
+                assert g_sta[syn_tag].attrs["is_grn"] == True
+                # for m, tag in dsyn_tags:
+                #     assert g_sta[tag].attrs["is_grn"] == True
+
+            conv_stf = False
+            if g_sta[syn_tag].attrs["is_grn"]:
+                conv_stf = True
+
+            dsyn_dm = {}
+            for model_name in dm:
+                if model_name not in ["dt0", "dtau"]:
+                    dsyn_tag = f"{dsyn_grp}/{model_name}"
+                    try:
+                        dsyn_ENZ = self._get_syn_ENZ(g_sta, dsyn_tag)
+                    except Exception as e:
+                        msg = f"failed to get obs,syn_ENZ for {g_sta._v_name}, ({e})"
+                    dsyn_dm[model_name] = dsyn_ENZ
+
+            # time samples
+            data_tb = obs.attrs["starttime"]
+            data_fs = obs.attrs["sampling_rate"]
+            data_dt = 1.0 / data_fs
+            data_nt = obs.attrs["npts"]
+            data_times = np.arange(data_nt, dtype=float) * data_dt
+
+            for win in windows:
+                # print(win["id"])
+                # skip bad windows
+                if not win["valid"]:
+                    msg = f"Window not measured for adj (WIN: {win}), SKIP"
+                    warnings.warn(msg)
+                    continue
+
+                # window weight
+                weight = win["weight"]
+
+                # skip window with zero weight
+                if np.isclose(weight, 0.0):
+                    msg = f"Window has near zero weight ({win['weight']}) (WIN: {win}), SKIP"
+                    warnings.warn(msg)
+                    continue
+
+                weight_sum += weight
+
+                # filter
+                butter_N = win["butter_N"]
+                butter_Wn = win["butter_Wn"]
+                # fft
+                npad = int(2 * data_fs / min(butter_Wn))
+                nfft = scipy.fft.next_fast_len(data_nt + npad)
+                freqs = np.fft.rfftfreq(nfft, d=data_dt)
+                # window filter
+                sos = scipy.signal.butter(
+                    butter_N, butter_Wn, "bandpass", fs=data_fs, output="sos"
+                )
+                _, filter_h = scipy.signal.freqz_sos(sos, worN=freqs, fs=data_fs)
+                Fw = abs(filter_h)  # zero-phase filter response
+                # time derivative in frequency domain
+                Ft = 2j * np.pi * freqs
+                # time window
+                win_tb = UTCDateTime(win["starttime"])
+                win_te = UTCDateTime(win["endtime"])
+                win_taper = win["taper"]
+                # window function
+                b = win_tb - data_tb
+                e = win_te - data_tb
+                win_len = e - b
+                width = win_len * min(win_taper, 0.4)
+                win_c = [b, b + width, e - width, e]
+                win_func = cosine_sac_taper(data_times, win_c)
+                # polarity projection
+                proj_matrix = win["proj_matrix"]
+                #
+                obs_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ, nfft), nfft)[
+                    :, :data_nt
+                ]
+                obs_filt_win = np.dot(proj_matrix, obs_filt) * win_func
+                norm_obs = np.sqrt(np.sum(obs_filt_win**2))
+
+                f_syn = np.fft.rfft(syn_ENZ, nfft)
+                if syn_to_vel:
+                    f_syn *= Ft
+                f_dsyn_dm = {}
+                for m, dsyn in dsyn_dm.items():
+                    f_dsyn = np.fft.rfft(dsyn, nfft)
+                    if syn_to_vel:
+                        f_dsyn *= Ft
+                    f_dsyn_dm[m] = f_dsyn
+
+                # #DEBUG
+                # f_syn0 = f_syn.copy()
+                # if conv_stf:
+                #     print(event["tau"])
+                #     f_src = stf_gauss_spectrum(freqs, event["tau"])
+                #     f_syn0 *= f_src
+                # syn0 = np.fft.irfft(f_syn0, nfft)[:,:data_nt]
+                # syn0_filt1 = np.fft.irfft(Fw * np.fft.rfft(syn0, nfft), nfft)[:,:data_nt]
+                # syn0_filt = np.fft.irfft(Fw * f_syn0, nfft)[:,:data_nt]
+                # syn0_filt_win = np.dot(proj_matrix, syn0_filt) * win_func
+                # norm_syn0 = np.sqrt(np.sum(syn0_filt_win**2))
+                # Nw = norm_obs * norm_syn0
+                # cc0 = np.sum(obs_filt_win * syn0_filt_win) / Nw
+                # np.savez('cc_linearized', obs_ENZ=obs_ENZ, syn_ENZ=syn_ENZ, syn0=syn0,
+                #          syn0_filt=syn0_filt, syn0_filt1=syn0_filt1, win_func=win_func, obs_filt_win=obs_filt_win, syn_filt_win=syn0_filt_win)
+                # print(cc0, win['cc0'])
+                # assert np.isclose(cc0, win['cc0'])
+
+                # search each model grid
+                for istep in range(nstep):
+                    f_syn1 = np.zeros_like(f_syn)
+                    f_syn1 += f_syn
+                    for m, f_dsyn in f_dsyn_dm.items():
+                        f_syn1 += dm[m][istep] * f_dsyn
+
+                    # perturbed source time function
+                    dt0 = 0.0
+                    if "dt0" in dm:
+                        dt0 = dm["dt0"][istep]
+                        f_tshift = np.exp(-2.0j * np.pi * freqs * dt0)
+                        f_syn1 *= f_tshift
+
+                    dtau = 0.0
+                    if "dtau" in dm:
+                        dtau = dm["dtau"][istep]
+                    if conv_stf:
+                        f_src = stf_gauss_spectrum(freqs, event["tau"] + dtau)
+                        f_syn1 *= f_src
+
+                    syn1_filt = np.fft.irfft(Fw * f_syn1, nfft)[:, :data_nt]
+                    syn1_filt_win = np.dot(proj_matrix, syn1_filt) * win_func
+                    norm_syn1 = np.sqrt(np.sum(syn1_filt_win**2))
+
+                    # normalized cc between obs and perturbed syn
+                    Nw = norm_obs * norm_syn1
+                    cc = np.sum(obs_filt_win * syn1_filt_win) / Nw
+
+                    # weighted cc
+                    wcc_sum[istep] += weight * cc
+
+        return wcc_sum, weight_sum
+
+    def grid_search_source(self, out_txt, out_fig):
+
+        range_shrink_ratio = 0.618
+        dtau_range = 2
+        dt0_range = 5
+        dxs_range = 5
+        dmt_range = 5
+
+        dtau_opt = 0.0
+        dt0_opt = 0.0
+        dxs_opt = 0.0
+        dmt_opt = 0.0
+
+        if "/source" not in self.h5f:
+            msg = '"/source" not existing, run read_cmtsolution first!'
+            raise KeyError(msg)
+        tbl_src = self.h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[0]
+        tau0 = event["tau"]
+
+        f = open(out_txt, "w")
+
+        niter = 0
+        with PdfPages(out_fig) as pdf:
+            while niter < 4:
+                f.write("====== iter = {:02d}\n".format(niter))
+
+                # define search range
+                dtau_min = dtau_opt - dtau_range
+                if (tau0 + dtau_min) < 0.1:  # in case of negative tau
+                    dtau_min = 0.1 - tau0
+                dtau_max = dtau_opt + dtau_range
+                dt0_min = dt0_opt - dt0_range
+                dt0_max = dt0_opt + dt0_range
+                dxs_min = dxs_opt - dxs_range
+                dxs_max = dxs_opt + dxs_range
+                dmt_min = dmt_opt - dmt_range
+                dmt_max = dmt_opt + dmt_range
+
+                f.write("search range for dtau: {:f} {:f}\n".format(dtau_min, dtau_max))
+                f.write("search range for dt0:  {:f} {:f}\n".format(dt0_min, dt0_max))
+                f.write("search range for dxs: {:f} {:f}\n".format(dxs_min, dxs_max))
+                f.write("search range for dmt: {:f} {:f}\n".format(dmt_min, dmt_max))
+
+                # 2D grid search for dt0 and dxs
+                dt0_1d = np.linspace(dt0_min, dt0_max, 5)
+                dxs_1d = np.linspace(dxs_min, dxs_max, 5)
+                dt0_2d, dxs_2d = np.meshgrid(dt0_1d, dxs_1d)
+                dm = {
+                    "dt0": dt0_2d.reshape(dt0_2d.size),
+                    "dxs": dxs_2d.reshape(dxs_2d.size),
+                }
+                wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
+                wcc = wcc_sum / weight_sum
+                interp = scipy.interpolate.RectBivariateSpline(
+                    dxs_1d, dt0_1d, wcc.reshape(dt0_2d.shape)
+                )
+                y = np.linspace(np.min(dxs_1d), np.max(dxs_1d), 500)
+                x = np.linspace(np.min(dt0_1d), np.max(dt0_1d), 500)
+                zz = interp(y, x)
+                idx_max = np.argmax(zz)
+                iy, ix = np.unravel_index(idx_max, zz.shape)
+                dt0_opt = x[ix]
+                dxs_opt = y[iy]
+                f.write("dt0_opt = {:f}\n".format(dt0_opt))
+                f.write("dxs_opt = {:f}\n".format(dxs_opt))
+
+                plt.figure(figsize=(11, 8.5))  # US Letter
+
+                plt.subplot(3, 1, 1)
+                levels = np.linspace(np.min(zz), np.max(zz), 100)
+                cs = plt.contour(x, y, zz, levels=levels)
+                plt.clabel(cs, levels, inline=1, fmt="%.3f", fontsize=10)
+                plt.plot(dt0_opt, dxs_opt, "r*", markersize=3, clip_on=False)
+                plt.text(dt0_opt, dxs_opt, "%f/%f" % (dt0_opt, dxs_opt))
+                plt.xlabel("dt0 (second)")
+                plt.ylabel("dxs")
+                plt.title("iter%02d" % (niter))
+
+                # 1D grid search for dmt
+                dmt_1d = np.linspace(dmt_min, dmt_max, 11)
+                dm = {
+                    "dt0": dt0_opt * np.ones(dmt_1d.size),
+                    "dxs": dxs_opt * np.ones(dmt_1d.size),
+                    "dmt": dmt_1d,
+                }
+                wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
+                wcc = wcc_sum / weight_sum
+                interp = scipy.interpolate.interp1d(dmt_1d, wcc, kind="cubic")
+                x = np.linspace(dmt_min, dmt_max, 500)
+                z = interp(x)
+                idx_max = np.argmax(z)
+                dmt_opt = x[idx_max]
+                f.write("dmt_opt = {:f}\n".format(dmt_opt))
+
+                plt.subplot(3, 1, 2)
+                plt.plot(dmt_1d, wcc, "ko")
+                plt.plot(x, z, "k")
+                plt.plot(x[idx_max], z[idx_max], "ro", markersize=5)
+                plt.xlabel("dmt")
+                plt.ylabel("wcc(interp)")
+
+                # 1D grid search for dtau
+                dtau_1d = np.linspace(dtau_min, dtau_max, 11)
+                dm = {
+                    "dt0": dt0_opt * np.ones(dtau_1d.size),
+                    "dxs": dxs_opt * np.ones(dtau_1d.size),
+                    "dmt": dmt_opt * np.ones(dtau_1d.size),
+                    "dtau": dtau_1d,
+                }
+                wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
+                wcc = wcc_sum / weight_sum
+                interp = scipy.interpolate.interp1d(dtau_1d, wcc, kind="cubic")
+                x = np.linspace(dtau_min, dtau_max, 500)
+                z = interp(x)
+                idx_max = np.argmax(z)
+                dtau_opt = x[idx_max]
+                f.write("dtau_opt = {:f}\n".format(dtau_opt))
+
+                plt.subplot(3, 1, 3)
+                plt.plot(dtau_1d, wcc, "ko")
+                plt.plot(x, z, "k")
+                plt.plot(x[idx_max], z[idx_max], "ro", markersize=5)
+                plt.xlabel("dtau")
+                plt.ylabel("wcc(interp)")
+
+                pdf.savefig()
+                plt.close()
+
+                # shrink search range
+                dtau_range = range_shrink_ratio * dtau_range
+                dt0_range = range_shrink_ratio * dt0_range
+                dxs_range = range_shrink_ratio * dxs_range
+                dmt_range = range_shrink_ratio * dmt_range
+
+                niter += 1
+
+        # ====== close file
+        f.close()
+
 
 #     #
 #     # ======================================================
@@ -3207,669 +3738,6 @@ class Misfit(object):
 #         plt.xlabel("dt_cc [obs-syn] (second)")
 #         plt.ylabel("Event number")
 #         plt.savefig(out_file, format="pdf")
-#
-#     #
-#     # ======================================================
-#     #
-#
-#     def output_adj(self, out_dir="adj", syn_band_code="MX"):
-#         """
-#         Output adjoint sources
-#
-#         """
-#         syn_orientation_codes = ["E", "N", "Z"]
-#         event = self.data["event"]
-#         station_dict = self.data["station"]
-#
-#         tr = Trace()
-#         for station_id in station_dict:
-#             station = station_dict[station_id]
-#             # skip rejected statations
-#             if station["stat"]["code"] < 1:
-#                 continue
-#             # time samples
-#             waveform = station["waveform"]
-#             time_sample = waveform["time_sample"]
-#             syn_starttime = time_sample["starttime"]
-#             syn_delta = time_sample["delta"]
-#             syn_nt = time_sample["nt"]
-#             syn_nl = time_sample["nl"]
-#             syn_nr = time_sample["nr"]
-#             # without padding
-#             npts = syn_nt - syn_nl - syn_nr
-#             starttime = syn_starttime + syn_nl * syn_delta
-#             # time samples for ascii output, referred to origin time
-#             syn_times = np.arange(npts) * syn_delta
-#             b = starttime - event["t0"]
-#             syn_times += b
-#
-#             # adjoint source
-#             adj = station["dchi_du"]
-#
-#             # loop ENZ
-#             for i in range(3):
-#                 tr.data = adj[i, syn_nl : (syn_nl + npts)]
-#                 tr.stats.starttime = starttime
-#                 tr.stats.delta = syn_delta
-#
-#                 out_file = "{:s}/{:s}.{:2s}{:1s}".format(
-#                     out_dir, station_id, syn_band_code, syn_orientation_codes[i]
-#                 )
-#
-#                 # sac format
-#                 tr.write(out_file + ".adj.sac", "sac")
-#
-#                 # ascii format (needed by SEM)
-#                 # time is relative to event origin time: t0
-#                 with open(out_file + ".adj", "w") as fp:
-#                     for j in range(npts):
-#                         fp.write(
-#                             "{:16.9e}  {:16.9e}\n".format(
-#                                 syn_times[j], adj[i, syn_nl + j]
-#                             )
-#                         )
-#
-#             # endfor i in range(3):
-#         # endfor station_id in station_dict:
-#
-#     # enddef output_adjoint_source
-#
-#     #
-#     # ======================================================
-#     #
-#
-#     def read_srcfrechet(self, filename=None):
-#         """Read in source derivative of misfit function
-#         Dchi/Dxs, Dchi/Dmt
-#         """
-#         with open(filename, "r") as f:
-#             lines = [x for x in f.readlines() if not (x.startswith("#"))]
-#
-#         lines = [x.split() for x in lines]
-#
-#         t0 = float(lines[0][0])
-#         dchi_dt0 = float(lines[0][1])
-#         tau = float(lines[1][0])
-#         dchi_dtau = float(lines[1][1])
-#         x = float(lines[2][0])
-#         dchi_dx = float(lines[2][1])
-#         y = float(lines[3][0])
-#         dchi_dy = float(lines[3][1])
-#         z = float(lines[4][0])
-#         dchi_dz = float(lines[4][1])
-#         mxx = float(lines[5][0])
-#         dchi_dmxx = float(lines[5][1])
-#         myy = float(lines[6][0])
-#         dchi_dmyy = float(lines[6][1])
-#         mzz = float(lines[7][0])
-#         dchi_dmzz = float(lines[7][1])
-#         mxy = float(lines[8][0])
-#         dchi_dmxy = float(lines[8][1])
-#         mxz = float(lines[9][0])
-#         dchi_dmxz = float(lines[9][1])
-#         myz = float(lines[10][0])
-#         dchi_dmyz = float(lines[10][1])
-#
-#         dchi_dxs = np.array([dchi_dx, dchi_dy, dchi_dz])
-#
-#         dchi_dmt = np.zeros((3, 3))
-#         dchi_dmt[0, 0] = dchi_dmxx
-#         dchi_dmt[1, 1] = dchi_dmyy
-#         dchi_dmt[2, 2] = dchi_dmzz
-#         dchi_dmt[0, 1] = dchi_dmxy
-#         dchi_dmt[1, 0] = dchi_dmxy
-#         dchi_dmt[0, 2] = dchi_dmxz
-#         dchi_dmt[2, 0] = dchi_dmxz
-#         dchi_dmt[1, 2] = dchi_dmyz
-#         dchi_dmt[2, 1] = dchi_dmyz
-#
-#         # check if the same as event info
-#         data = self.data
-#         event = data["event"]
-#         # ...
-#
-#         # record
-#         src_frechet = {
-#             "t0": dchi_dt0,
-#             "tau": dchi_dtau,
-#             "xs": dchi_dxs,
-#             "mt": dchi_dmt,
-#             "stat": {"code": 0, "msg": "created on " + UTCDateTime.now().isoformat()},
-#         }
-#         data["src_frechet"] = src_frechet
-#
-#     #
-#     # ======================================================
-#     #
-#
-#     def make_cmt_perturb(
-#         self,
-#         srcfrechet_file,
-#         max_dxs_ratio=0.001,
-#         out_cmt_file="CMTSOLUTION",
-#         out_perturb_file="CMTSOLUTION.perturb",
-#     ):
-#         """Make perturbed CMTSOLUTION based on source gradient"""
-#         # get source parameters
-#         event = self.data["event"]
-#
-#         # check parameters
-#         if max_dxs_ratio <= 0.0:
-#             error_str = "max_dxs_ratio must > 0"
-#             raise ValueError(error_str)
-#
-#         # ====== read source gradient
-#         with open(srcfrechet_file, "r") as f:
-#             lines = [x for x in f.readlines() if not (x.startswith("#"))]
-#
-#         lines = [x.split() for x in lines]
-#
-#         t0 = float(lines[0][0])
-#         dchi_dt0 = float(lines[0][1])
-#         tau = float(lines[1][0])
-#         dchi_dtau = float(lines[1][1])
-#
-#         xs = np.zeros(3)
-#         dchi_dxs = np.zeros(3)
-#         xs[0] = float(lines[2][0])
-#         dchi_dxs[0] = float(lines[2][1])
-#         xs[1] = float(lines[3][0])
-#         dchi_dxs[1] = float(lines[3][1])
-#         xs[2] = float(lines[4][0])
-#         dchi_dxs[2] = float(lines[4][1])
-#
-#         mt = np.zeros((3, 3))
-#         dchi_dmt = np.zeros((3, 3))
-#         mt[0, 0] = float(lines[5][0])
-#         dchi_dmt[0, 0] = float(lines[5][1])
-#         mt[1, 1] = float(lines[6][0])
-#         dchi_dmt[1, 1] = float(lines[6][1])
-#         mt[2, 2] = float(lines[7][0])
-#         dchi_dmt[2, 2] = float(lines[7][1])
-#
-#         mt[0, 1] = float(lines[8][0])
-#         dchi_dmt[0, 1] = float(lines[8][1])
-#         mt[1, 0] = mt[0, 1]
-#         dchi_dmt[1, 0] = dchi_dmt[0, 1]
-#
-#         mt[0, 2] = float(lines[9][0])
-#         dchi_dmt[0, 2] = float(lines[9][1])
-#         mt[2, 0] = mt[0, 2]
-#         dchi_dmt[2, 0] = dchi_dmt[0, 2]
-#
-#         mt[1, 2] = float(lines[10][0])
-#         dchi_dmt[1, 2] = float(lines[10][1])
-#         mt[2, 1] = mt[1, 2]
-#         dchi_dmt[2, 1] = dchi_dmt[1, 2]
-#
-#         # correlation between mt and dchi_dmt
-#         cc = np.sum(dchi_dmt * mt) / np.sum(mt**2) ** 0.5 / np.sum(dchi_dmt**2) ** 0.5
-#         print("cc = ", cc)
-#
-#         # ====== get gradient for xs_ratio and mt_ratio
-#         # xs = R_earth * xs_ratio
-#         dchi_dxs_ratio = R_earth * dchi_dxs
-#
-#         # mt = m0 * mt_ratio
-#         m0 = (0.5 * np.sum(mt**2)) ** 0.5
-#         dchi_dmt_ratio = m0 * dchi_dmt
-#
-#         # make dchi_dmt orthogonal to mt, i.e. keep scalar moment unchanged
-#         dchi_dmt_ratio_ortho = dchi_dmt_ratio - mt * np.sum(
-#             dchi_dmt_ratio * mt
-#         ) / np.sum(mt**2)
-#         print(dchi_dmt_ratio_ortho)
-#
-#         # ====== make perturbed CMTSOLUTION
-#         scale_factor = max_dxs_ratio / (np.sum(dchi_dxs_ratio**2)) ** 0.5
-#
-#         dxs_ratio = scale_factor * dchi_dxs_ratio
-#         dmt_ratio = scale_factor * dchi_dmt_ratio_ortho
-#
-#         # ====== write out new CMTSOLUTION
-#         xs_perturb = xs + R_earth * dxs_ratio
-#
-#         mt_perturb = mt + m0 * dmt_ratio
-#         # force mt_perturb to have the same scalar moment as mt
-#         mt_perturb = m0 * mt_perturb / (0.5 * np.sum(mt_perturb**2)) ** 0.5
-#
-#         # write out new CMTSOLUTION file
-#         with open(out_cmtfile, "w") as fp:
-#             fp.write("%s\n" % event["header"])
-#             fp.write("%-18s %s_dmt\n" % ("event name:", event["id"]))
-#             fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
-#             fp.write("%-18s %+15.8E\n" % ("tau(s):", 0.0))
-#             fp.write("%-18s %+15.8E\n" % ("x(m):", xs_perturb[0]))
-#             fp.write("%-18s %+15.8E\n" % ("y(m):", xs_perturb[1]))
-#             fp.write("%-18s %+15.8E\n" % ("z(m):", xs_perturb[2]))
-#             fp.write("%-18s %+15.8E\n" % ("Mxx(N*m):", mt_perturb[0, 0]))
-#             fp.write("%-18s %+15.8E\n" % ("Myy(N*m):", mt_perturb[1, 1]))
-#             fp.write("%-18s %+15.8E\n" % ("Mzz(N*m):", mt_perturb[2, 2]))
-#             fp.write("%-18s %+15.8E\n" % ("Mxy(N*m):", mt_perturb[0, 1]))
-#             fp.write("%-18s %+15.8E\n" % ("Mxz(N*m):", mt_perturb[0, 2]))
-#             fp.write("%-18s %+15.8E\n" % ("Myz(N*m):", mt_perturb[1, 2]))
-#
-#         # write out parameter changes
-#         with open(out_file, "w") as fp:
-#             fp.write("%s\n" % event["header"])
-#             fp.write("%-18s %s_dmt\n" % ("event name:", event["id"]))
-#             fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
-#             fp.write("%-18s %+15.8E\n" % ("tau(s):", 0.0))
-#             fp.write("%-18s %+15.8E\n" % ("dx_ratio(m):", xs_perturb[0]))
-#             fp.write("%-18s %+15.8E\n" % ("dy_ratio(m):", xs_perturb[1]))
-#             fp.write("%-18s %+15.8E\n" % ("dz_ratio(m):", xs_perturb[2]))
-#             fp.write("%-18s %+15.8E\n" % ("dmxx_ratio(N*m):", mt_perturb[0, 0]))
-#             fp.write("%-18s %+15.8E\n" % ("dmyy_ratio(N*m):", mt_perturb[1, 1]))
-#             fp.write("%-18s %+15.8E\n" % ("dmzz_ratio(N*m):", mt_perturb[2, 2]))
-#             fp.write("%-18s %+15.8E\n" % ("dmxy_ratio(N*m):", mt_perturb[0, 1]))
-#             fp.write("%-18s %+15.8E\n" % ("dmxz_ratio(N*m):", mt_perturb[0, 2]))
-#             fp.write("%-18s %+15.8E\n" % ("dmyz_ratio(N*m):", mt_perturb[1, 2]))
-#
-#     #
-#     # ======================================================
-#     #
-#
-#     #  def waveform_der_stf(self):
-#     #    """ Calculate waveform derivatives for source time function (t0, tau)
-#     #    """
-#     #    event = self.data['event']
-#     #    t0 = event['t0']
-#     #    tau = event['tau']
-#     #
-#     #    station_dict = self.data['station']
-#     #    for station_id in station_dict:
-#     #      station = station_dict[station_id]
-#     #      # skip rejected statations
-#     #      if station['stat']['code'] < 0:
-#     #        continue
-#     #
-#     #      # source time function
-#     #      waveform = station['waveform']
-#     #      time_sample = waveform['time_sample']
-#     #      starttime = time_sample['starttime']
-#     #      dt = time_sample['delta']
-#     #      nt = time_sample['nt']
-#     #      t = np.arange(nt) * dt + (starttime - t0) #referred to t0
-#     #      # s(t), Ds(t)/Dt0, Ds(t)/Dtau
-#     #      freq = np.fft.rfftfreq(nt, d=dt)
-#     #      F_src, F_ds_dt0, F_ds_dtau = stf_gauss_spectrum(freq, tau)
-#     #
-#     #      #------ waveform derivative
-#     #      # green's function
-#     #      grn = waveform['grn']
-#     #      # convolve Ds(t)/Dt0,tau with Green's function
-#     #      du_dt0 = np.fft.irfft(F_ds_dt0 * np.fft.rfft(grn), nt)
-#     #      du_dtau = np.fft.irfft(F_ds_dtau * np.fft.rfft(grn), nt)
-#     #      # zero records before origin time (wrap around from the end)
-#     #      idx = t < -5.0*tau
-#     #      du_dt0[:,idx] = 0.0
-#     #      du_dtau[:,idx] = 0.0
-#     #
-#     #      #------ misfit derivative
-#     #      # adjoint source = Dchi/Du
-#     #      dchi_du = station['dchi_du']
-#     #      dchi_dt0 = np.sum(dchi_du * du_dt0) * dt
-#     #      dchi_dtau = np.sum(dchi_du * du_dtau) * dt
-#     #
-#     #      #------ record derivatives
-#     #      if 'waveform_der' not in station:
-#     #        station['waveform_der'] = {}
-#     #      station['waveform_der']['dt0'] = {
-#     #          'dm':1.0, 'du':du_dt0, 'dchi':dchi_dt0 }
-#     #      station['waveform_der']['dtau'] = {
-#     #          'dm':1.0, 'du': du_dtau, 'dchi':dchi_dtau }
-#     #
-#     #      # DEBUG
-#     #      #print(dchi_dt0, dchi_dtau
-#     #      #for i in range(3):
-#     #      #  plt.subplot(311+i)
-#     #      #  #plt.plot(t, dchi_du[i,:], 'k')
-#     #      #  plt.plot(t, du_dt0[i,:], 'b', t, du_dtau[i,:], 'r')
-#     #      #plt.show()
-#     #
-#     #  #enddef derivative_stf(self)
-#
-#     #
-#     # ======================================================
-#     #
-#
-#     def make_cmt_dxs(self, out_file="CMTSOLUTION.dxs", norm=2000.0, GPS_ELLPS="WGS84"):
-#         """Calculate derivative for source location along one direction
-#         norm: displacement in meter
-#         """
-#         norm = float(norm)
-#         if norm <= 0.0:
-#             raise Exception("norm(dxs) must be larger than 0.")
-#
-#         # initialize pyproj objects
-#         # geod = pyproj.Geod(ellps='WGS84')
-#         ecef = pyproj.Proj(proj="geocent", ellps=GPS_ELLPS)
-#         lla = pyproj.Proj(proj="latlong", ellps=GPS_ELLPS)
-#
-#         # get source parameters
-#         event = self.data["event"]
-#         tau = event["tau"]
-#         xs = event["xs"]
-#         mt = event["mt"]
-#
-#         # get perturbed source location
-#         if "src_frechet" not in self.data:
-#             raise Exception("src_frechet not set.")
-#         src_frechet = self.data["src_frechet"]
-#         dxs = src_frechet["xs"]
-#         # normalize dxs
-#         dxs = dxs / (np.sum(dxs**2)) ** 0.5
-#         # apply given norm
-#         dxs *= norm
-#         # get new src location
-#         xs1 = xs + dxs
-#         lon, lat, alt = pyproj.transform(ecef, lla, xs1[0], xs1[1], xs1[2])
-#         depth = -alt
-#         if depth < 0.0:
-#             warnings.warn("perturbed src depth %f < 0.0" % (depth / 1000.0))
-#
-#         # record dxs
-#         if "src_perturb" not in self.data:
-#             self.data["src_perturb"] = {}
-#         self.data["src_perturb"]["xs"] = dxs
-#
-#         # write out new CMTSOLUTION file
-#         with open(out_file, "w") as fp:
-#             fp.write("%s\n" % event["header"])
-#             fp.write("%-18s %s_dxs\n" % ("event name:", event["id"]))
-#             fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
-#             fp.write("%-18s %+15.8E\n" % ("tau(s):", 0.0))
-#             fp.write("%-18s %+15.8E\n" % ("x(m):", xs1[0]))
-#             fp.write("%-18s %+15.8E\n" % ("y(m):", xs1[1]))
-#             fp.write("%-18s %+15.8E\n" % ("z(m):", xs1[2]))
-#             fp.write("%-18s %+15.8E\n" % ("Mxx(N*m):", mt[0, 0]))
-#             fp.write("%-18s %+15.8E\n" % ("Myy(N*m):", mt[1, 1]))
-#             fp.write("%-18s %+15.8E\n" % ("Mzz(N*m):", mt[2, 2]))
-#             fp.write("%-18s %+15.8E\n" % ("Mxy(N*m):", mt[0, 1]))
-#             fp.write("%-18s %+15.8E\n" % ("Mxz(N*m):", mt[0, 2]))
-#             fp.write("%-18s %+15.8E\n" % ("Myz(N*m):", mt[1, 2]))
-#
-#     #
-#     # ======================================================
-#     #
-#
-#     def waveform_der_source(
-#         self,
-#         syn_dir="output_perturb",
-#         syn_band_code="MX",
-#         syn_suffix=".sem.sac",
-#         model_name="xs_mt",
-#         sac_dir=None,
-#     ):
-#         """
-#         Calculate waveform derivative for source parameters
-#
-#         Notes
-#         -----
-#         use finite difference to get waveform derivative
-#
-#         """
-#         syn_orientation_codes = ["E", "N", "Z"]
-#         event = self.data["event"]
-#         station_dict = self.data["station"]
-#
-#         for station_id in station_dict:
-#             station = station_dict[station_id]
-#             # skip rejected statations
-#             if station["stat"]["code"] < 1:
-#                 continue
-#
-#             # ------ time samples
-#             waveform = station["waveform"]
-#             time_sample = waveform["time_sample"]
-#             starttime = time_sample["starttime"]
-#             dt = time_sample["delta"]
-#             nt = time_sample["nt"]
-#             nl = time_sample["nl"]  # npts of left padding
-#             nr = time_sample["nr"]  # npts of right padding
-#             sem_nt = nt - nl - nr  # number of time sample number in SEM simulation
-#             # DEBUG
-#             # t = np.arange(nt) * dt + (starttime - t0) #referred to t0
-#
-#             # ------ get file paths of syn seismograms
-#             syn_files = [
-#                 "{:s}/{:s}.{:2s}{:1s}{:s}".format(
-#                     syn_dir, station_id, syn_band_code, x, syn_suffix
-#                 )
-#                 for x in syn_orientation_codes
-#             ]
-#
-#             # ------ read in obs, syn seismograms
-#             syn_st = read(syn_files[0])
-#             syn_st += read(syn_files[1])
-#             syn_st += read(syn_files[2])
-#
-#             # ------ check the same time samples as original syn
-#             if not is_equal(
-#                 [(tr.stats.starttime, tr.stats.delta, tr.stats.npts) for tr in syn_st]
-#             ):
-#                 raise Exception(
-#                     "%s: not equal time samples in"
-#                     " synthetic seismograms." % (station_id)
-#                 )
-#             tr = syn_st[0]
-#
-#             if tr.stats.delta != dt:
-#                 raise Exception("%s: not the same dt for diff-srcloc!" % (station_id))
-#
-#             tr_starttime = tr.stats.starttime - nl * dt
-#             if tr_starttime != starttime:
-#                 # if np.abs(tr_starttime - starttime) > 1.0e-5:
-#                 raise Exception(
-#                     "%s: not the same starttime for diff-srcloc!" % (station_id)
-#                 )
-#
-#             if tr.stats.npts != sem_nt:
-#                 raise Exception("%s: not the same npts for diff-srcloc!" % (station_id))
-#
-#             # ------ read syn seismograms from perturbed source location
-#             syn_ENZ = np.zeros((3, nt))
-#             for i in range(3):
-#                 syn_ENZ[i, nl : (nl + sem_nt)] = syn_st[i].data
-#
-#             # waveform partial derivatives
-#             g0 = waveform["grn"]
-#             dg = syn_ENZ - g0
-#
-#             # ------ record derivatives
-#             if "waveform_der" not in station:
-#                 station["waveform_der"] = {}
-#             station["waveform_der"][model_name] = {"dg": dg}
-#
-#             # DEBUG
-#             # print(dchi
-#             # for i in range(3):
-#             #  plt.subplot(311+i)
-#             #  #plt.plot(t,grn0[i,:],'k', t,syn_ENZ[i,:],'r', t,dg[i,:], 'b')
-#             #  plt.plot(t, du[i,:], 'k')
-#             # plt.show()
-#             if sac_dir:
-#                 for i in range(3):
-#                     tr.data = du[i, :]
-#                     tr.stats.starttime = starttime
-#                     tr.stats.delta = dt
-#                     tr.stats.npts = nt
-#                     out_file = "{:s}/{:s}.{:2s}{:1s}".format(
-#                         sac_dir, station_id, syn_band_code, syn_orientation_codes[i]
-#                     )
-#                     tr.write(out_file, "sac")
-#
-#     #
-#     # ======================================================
-#     #
-#
-#     def make_cmt_dmt(
-#         self, out_file="CMTSOLUTION.dmt", fix_M0=True, zerotrace=True, ratio_M0=0.01
-#     ):
-#         """Calculate derivative for source location along one direction
-#         fix_M0: project dmt orthogonal to mt to keep seismic moment M0 = sqrt(0.5*m:m) fixed
-#         zerotrace: zero tr(dmt)
-#         ratio_M0: magnitude of dmt is set to the ratio of M0
-#         """
-#         # get source parameters
-#         event = self.data["event"]
-#         tau = event["tau"]
-#         xs = event["xs"]
-#         mt = event["mt"]
-#
-#         # check parameters
-#         if ratio_M0 <= 0.0:
-#             error_str = "ratio_M0(%f) must > 0" % ratio_M0
-#             raise ValueError(error_str)
-#
-#         # get perturbed moment tensor
-#         if "src_frechet" not in self.data:
-#             raise Exception("src_frechet not set.")
-#         src_frechet = self.data["src_frechet"]
-#         # set dmt parallel to dchi_dmt
-#         dmt = src_frechet["mt"]
-#         # project dmt perpendicular to M0 change direction
-#         if fix_M0:
-#             dmt = dmt - mt * np.sum(dmt * mt) / np.sum(mt**2)
-#         if zerotrace:
-#             dmt = dmt - np.identity(3) * np.trace(dmt) / 3.0
-#         # normalize dmt to have unit seismic moment
-#         dmt = dmt / (0.5 * np.sum(dmt**2)) ** 0.5
-#         # use ratio_M0 as the magnitude of dmt
-#         m0 = (0.5 * np.sum(mt**2)) ** 0.5
-#         dmt *= ratio_M0 * m0
-#
-#         # record dmt
-#         if "src_perturb" not in self.data:
-#             self.data["src_perturb"] = {}
-#         self.data["src_perturb"]["mt"] = dmt
-#
-#         # write out new CMTSOLUTION file
-#         with open(out_file, "w") as fp:
-#             fp.write("%s\n" % event["header"])
-#             fp.write("%-18s %s_dmt\n" % ("event name:", event["id"]))
-#             fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
-#             fp.write("%-18s %+15.8E\n" % ("tau(s):", 0.0))
-#             fp.write("%-18s %+15.8E\n" % ("x(m):", xs[0]))
-#             fp.write("%-18s %+15.8E\n" % ("y(m):", xs[1]))
-#             fp.write("%-18s %+15.8E\n" % ("z(m):", xs[2]))
-#             fp.write("%-18s %+15.8E\n" % ("Mxx(N*m):", dmt[0, 0]))
-#             fp.write("%-18s %+15.8E\n" % ("Myy(N*m):", dmt[1, 1]))
-#             fp.write("%-18s %+15.8E\n" % ("Mzz(N*m):", dmt[2, 2]))
-#             fp.write("%-18s %+15.8E\n" % ("Mxy(N*m):", dmt[0, 1]))
-#             fp.write("%-18s %+15.8E\n" % ("Mxz(N*m):", dmt[0, 2]))
-#             fp.write("%-18s %+15.8E\n" % ("Myz(N*m):", dmt[1, 2]))
-#
-#     #
-#     # ======================================================
-#     #
-#
-#     def waveform_der_dmt(
-#         self,
-#         syn_dir="output_dmt",
-#         syn_band_code="MX",
-#         syn_suffix=".sem.sac",
-#         sac_dir=None,
-#     ):
-#         """Calculate derivative for moment tensor along a given direction
-#         NOTE:
-#           1) dmt: 3 by 3 symetric matrix (unit: N*m)
-#           2) use green's function as input (i.e. set tau to zero in simulation)
-#         """
-#         syn_orientation_codes = ["E", "N", "Z"]
-#         # event
-#         event = self.data["event"]
-#         tau = event["tau"]
-#         t0 = event["t0"]
-#
-#         # src_perturb
-#         dmt = self.data["src_perturb"]["mt"]
-#
-#         station_dict = self.data["station"]
-#         for station_id in station_dict:
-#             station = station_dict[station_id]
-#             # skip rejected statations
-#             if station["stat"]["code"] < 1:
-#                 continue
-#
-#             # ------ time samples
-#             waveform = station["waveform"]
-#             time_sample = waveform["time_sample"]
-#             starttime = time_sample["starttime"]
-#             dt = time_sample["delta"]
-#             nt = time_sample["nt"]
-#             nl = time_sample["nl"]  # npts of left padding
-#             nr = time_sample["nr"]  # npts of right padding
-#             sem_nt = nt - nl - nr  # number of time samples in SEM simuation
-#             t = np.arange(nt) * dt + (starttime - t0)  # referred to t0
-#
-#             # ------ get file paths of syn seismograms
-#             syn_files = [
-#                 "{:s}/{:s}.{:2s}{:1s}{:s}".format(
-#                     syn_dir, station_id, syn_band_code, x, syn_suffix
-#                 )
-#                 for x in syn_orientation_codes
-#             ]
-#
-#             # ------ read in obs, syn seismograms
-#             syn_st = read(syn_files[0])
-#             syn_st += read(syn_files[1])
-#             syn_st += read(syn_files[2])
-#
-#             # ------ check the same time samples as original syn
-#             if not is_equal(
-#                 [(tr.stats.starttime, tr.stats.delta, tr.stats.npts) for tr in syn_st]
-#             ):
-#                 raise Exception(
-#                     "%s: not equal time samples in"
-#                     " synthetic seismograms." % (station_id)
-#                 )
-#
-#             tr = syn_st[0]
-#
-#             if tr.stats.delta != dt:
-#                 raise Exception("%s: not the same dt for diff-srcloc!" % (station_id))
-#
-#             tr_starttime = tr.stats.starttime - nl * dt
-#             if tr_starttime != starttime:
-#                 raise Exception(
-#                     "%s: not the same starttime for diff-srcloc!" % (station_id)
-#                 )
-#
-#             if tr.stats.npts != sem_nt:
-#                 raise Exception("%s: not the same npts for diff-srcloc!" % (station_id))
-#
-#             # ------ read syn seismograms from perturbed source location
-#             dg = np.zeros((3, nt))
-#             for i in range(3):
-#                 dg[i, nl : (nl + sem_nt)] = syn_st[i].data
-#
-#             # ------ record derivatives
-#             if "waveform_der" not in station:
-#                 station["waveform_der"] = {}
-#             station["waveform_der"]["mt"] = {"dm": np.array(dmt), "dg": dg}
-#             #'dm':np.array(dmt), 'dg':dg, 'du':du, 'dchi':dchi }
-#
-#             # DEBUG
-#             # print(dchi
-#             # for i in range(3):
-#             #  plt.subplot(311+i)
-#             #  plt.plot(t, du[i,:], 'k')
-#             # plt.show()
-#             if sac_dir:
-#                 for i in range(3):
-#                     tr.data = du[i, :]
-#                     tr.stats.starttime = starttime
-#                     tr.stats.delta = dt
-#                     tr.stats.npts = nt
-#                     out_file = "{:s}/{:s}.{:2s}{:1s}".format(
-#                         sac_dir, station_id, syn_band_code, syn_orientation_codes[i]
-#                     )
-#                     tr.write(out_file, "sac")
-#
-#     #
-#     # ======================================================
-#     #
 #
 #     def waveform_der_dmodel(
 #         self,

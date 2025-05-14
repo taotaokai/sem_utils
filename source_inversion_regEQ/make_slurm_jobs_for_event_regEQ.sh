@@ -361,8 +361,8 @@ for tag in dxs dmt
 do
   $python_exec $sem_utils_dir/misfit/read_perturbed_syn.py \\
     $db_file \\
-    $event_dir/output_${tag}/sac \\
-    $tag \\
+    $event_dir/output_\${tag}/sac \\
+    \${tag} \\
     --syn_is_grn
 done
 

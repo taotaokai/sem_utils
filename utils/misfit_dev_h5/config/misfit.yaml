@@ -108,5 +108,5 @@ misfit:
     # "dist": None,
 
 source:
-  max_dxs_norm: 5.0e3 # meters
+  max_dxs_norm: 5000 # meters
   max_dmt_ratio: 0.01 # relative to Mw0

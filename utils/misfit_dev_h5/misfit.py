@@ -3170,17 +3170,17 @@ class Misfit(object):
         # print(dsyn_tags)
 
         for g_sta in g_wav:
-            # print(f"cc_linearize for {g_sta._v_name}")
+            print(f"cc_linearize for {g_sta._v_name}")
 
             attrs = g_sta._v_attrs
             net = attrs["network"]
             sta = attrs["station"]
 
             windows = tbl_win.read_where(
-                f'(network == b"{net}") & (station == b"{sta}") & (valid == True)'
+                f'(network == b"{net}") & (station == b"{sta}") & (valid == True) & (weight > 0)'
             )
             if len(windows) == 0:
-                msg = "No windows found for {g_sta._v_name}, SKIP"
+                msg = f"No windows found for {g_sta._v_name}, SKIP"
                 warnings.warn(msg)
                 continue
 
@@ -3409,6 +3409,11 @@ class Misfit(object):
                 f.write("search range for dxs: {:f} {:f}\n".format(dxs_min, dxs_max))
                 f.write("search range for dmt: {:f} {:f}\n".format(dmt_min, dmt_max))
 
+                fig = plt.figure(figsize=(8.5, 11))
+                fig.suptitle(f"iter#{niter:02d}")
+                gs0 = fig.add_gridspec(2, 2) # 2-D search between dt0 and dxs
+                # gs1 = gs0[1,0].subgridspec(1, 2) # 1-D search of dtau and dmt
+
                 # 2D grid search for dt0 and dxs
                 dt0_1d = np.linspace(dt0_min, dt0_max, 5)
                 dxs_1d = np.linspace(dxs_min, dxs_max, 5)
@@ -3434,17 +3439,15 @@ class Misfit(object):
                 f.write("dt0_opt = {:f}\n".format(dt0_opt))
                 f.write("dxs_opt = {:f}\n".format(dxs_opt))
 
-                plt.figure(figsize=(11, 8.5))  # US Letter
-
-                plt.subplot(3, 1, 1)
+                ax = fig.add_subplot(gs0[0,:])
                 levels = np.linspace(np.min(zz), np.max(zz), 100)
-                cs = plt.contour(x, y, zz, levels=levels)
-                plt.clabel(cs, levels, inline=1, fmt="%.3f", fontsize=10)
-                plt.plot(dt0_opt, dxs_opt, "r*", markersize=3, clip_on=False)
-                plt.text(dt0_opt, dxs_opt, "%f/%f" % (dt0_opt, dxs_opt))
-                plt.xlabel("dt0 (second)")
-                plt.ylabel("dxs")
-                plt.title("iter%02d" % (niter))
+                cs = ax.contour(x, y, zz, levels=levels)
+                ax.clabel(cs, levels, inline=1, fmt="%.3f", fontsize=10)
+                ax.plot(dt0_opt, dxs_opt, "r*", markersize=3, clip_on=False)
+                ax.text(dt0_opt, dxs_opt, f"{dt0_opt:.1f},{dxs_opt:.1f}")
+                ax.set_xlabel("dt0 (second)")
+                ax.set_ylabel("dxs")
+                # ax.set_title("iter%02d" % (niter))
 
                 # 1D grid search for dmt
                 dmt_1d = np.linspace(dmt_min, dmt_max, 11)
@@ -3463,12 +3466,13 @@ class Misfit(object):
                 dmt_opt = x[idx_max]
                 f.write("dmt_opt = {:f}\n".format(dmt_opt))
 
-                plt.subplot(3, 1, 2)
-                plt.plot(dmt_1d, wcc, "ko")
-                plt.plot(x, z, "k")
-                plt.plot(x[idx_max], z[idx_max], "ro", markersize=5)
-                plt.xlabel("dmt")
-                plt.ylabel("wcc(interp)")
+                ax1 = fig.add_subplot(gs0[1,0])
+                ax1.plot(dmt_1d, wcc, "ko")
+                ax1.plot(x, z, "k")
+                ax1.plot(x[idx_max], z[idx_max], "ro", markersize=5)
+                ax1.text(x[idx_max], z[idx_max], f"{dmt_opt:.1f}")
+                ax1.set_xlabel("dmt")
+                ax1.set_ylabel("wcc(interp)")
 
                 # 1D grid search for dtau
                 dtau_1d = np.linspace(dtau_min, dtau_max, 11)
@@ -3487,12 +3491,14 @@ class Misfit(object):
                 dtau_opt = x[idx_max]
                 f.write("dtau_opt = {:f}\n".format(dtau_opt))
 
-                plt.subplot(3, 1, 3)
-                plt.plot(dtau_1d, wcc, "ko")
-                plt.plot(x, z, "k")
-                plt.plot(x[idx_max], z[idx_max], "ro", markersize=5)
-                plt.xlabel("dtau")
-                plt.ylabel("wcc(interp)")
+                ax2 = fig.add_subplot(gs0[1,1], sharey=ax1)
+                ax2.plot(dtau_1d, wcc, "ko")
+                ax2.plot(x, z, "k")
+                ax2.plot(x[idx_max], z[idx_max], "ro", markersize=5)
+                ax2.text(x[idx_max], z[idx_max], f"{dtau_opt:.1f}")
+                ax2.set_xlabel("dtau")
+                ax2.tick_params(labelleft=False)
+                # ax2.set_ylabel("wcc(interp)")
 
                 pdf.savefig()
                 plt.close()

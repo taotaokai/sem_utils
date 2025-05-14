@@ -312,6 +312,15 @@ do
     dy=\$(echo \$y1 \$y0 | awk '{printf "%+15.8E", \$1-\$2}')
     dz=\$(echo \$z1 \$z0 | awk '{printf "%+15.8E", \$1-\$2}')
 
+    # original dxs
+    dx0=\$(grep "dx(m)" $misfit_dir/diff_CMTSOLUTION | awk '{printf "%+15.8E", \$2}')
+    dy0=\$(grep "dy(m)" $misfit_dir/diff_CMTSOLUTION | awk '{printf "%+15.8E", \$2}')
+    dz0=\$(grep "dz(m)" $misfit_dir/diff_CMTSOLUTION | awk '{printf "%+15.8E", \$2}')
+
+    echo "dxs required: \$dx0 \$dy0 \$dz0"
+    echo "dxs actually used: \$dx \$dy \$dz"
+
+    # update to dxs actually used
     sed -i "s/dx(m).*/dx(m):              \$dx/"  $misfit_dir/diff_CMTSOLUTION
     sed -i "s/dy(m).*/dy(m):              \$dy/"  $misfit_dir/diff_CMTSOLUTION
     sed -i "s/dz(m).*/dz(m):              \$dz/"  $misfit_dir/diff_CMTSOLUTION
@@ -358,18 +367,26 @@ do
 done
 
 # grid search of source model
-$python_exec $sem_utils_dir/source_inversion_regEQ/grid_search_source.py $misfit_par $db_file $misfit_dir/grid_search_source.txt $misfit_dir/grid_search_source.pdf
+$python_exec $sem_utils_dir/misfit/grid_search_source.py \\
+  $db_file \\
+  $misfit_dir/grid_search_source.txt \\
+  $misfit_dir/grid_search_source.pdf
 
 # get optimal model
-xs_mt_step_opt=\$(grep xs_mt_step_opt $misfit_dir/grid_search_source.txt | tail -n1 | awk '{print \$3}')
+dxs_opt=\$(grep dxs_opt $misfit_dir/grid_search_source.txt | tail -n1 | awk '{print \$3}')
+dmt_opt=\$(grep dmt_opt $misfit_dir/grid_search_source.txt | tail -n1 | awk '{print \$3}')
 dt0_opt=\$(grep dt0_opt $misfit_dir/grid_search_source.txt | tail -n1 | awk '{print \$3}')
 dtau_opt=\$(grep dtau_opt $misfit_dir/grid_search_source.txt | tail -n1 | awk '{print \$3}')
 
-echo xs_mt_step_opt = \$xs_mt_step_opt
+echo dxs_opt = \$dxs_opt
+echo dmt_opt = \$dmt_opt
 echo dt0_opt = \$dt0_opt
 echo dtau_opt = \$dtau_opt
 
-$python_exec $sem_utils_dir/source_inversion_regEQ/add_dcmt.py $cmt_file $misfit_dir/dcmt \$xs_mt_step_opt \$dt0_opt \$dtau_opt $misfit_dir/CMTSOLUTION.updated
+$python_exec $sem_utils_dir/misfit/make_updated_cmtsolution.py \\
+  $db_file \\
+  $misfit_dir/CMTSOLUTION.updated \\
+  \$dt0_opt \$dtau_opt \$dxs_opt \$dmt_opt
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

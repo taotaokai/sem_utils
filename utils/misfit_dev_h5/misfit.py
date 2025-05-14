@@ -3364,6 +3364,7 @@ class Misfit(object):
     def grid_search_source(self, out_txt, out_fig):
 
         range_shrink_ratio = 0.618
+
         dtau_range = 2
         dt0_range = 5
         dxs_range = 5
@@ -3415,6 +3416,8 @@ class Misfit(object):
                 dm = {
                     "dt0": dt0_2d.reshape(dt0_2d.size),
                     "dxs": dxs_2d.reshape(dxs_2d.size),
+                    "dmt": dmt_opt * np.ones(dt0_2d.size),
+                    "dtau": dtau_opt * np.ones(dt0_2d.size),
                 }
                 wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
                 wcc = wcc_sum / weight_sum
@@ -3446,9 +3449,10 @@ class Misfit(object):
                 # 1D grid search for dmt
                 dmt_1d = np.linspace(dmt_min, dmt_max, 11)
                 dm = {
+                    "dmt": dmt_1d,
                     "dt0": dt0_opt * np.ones(dmt_1d.size),
                     "dxs": dxs_opt * np.ones(dmt_1d.size),
-                    "dmt": dmt_1d,
+                    "dtau": dtau_opt * np.ones(dmt_1d.size),
                 }
                 wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
                 wcc = wcc_sum / weight_sum
@@ -3469,10 +3473,10 @@ class Misfit(object):
                 # 1D grid search for dtau
                 dtau_1d = np.linspace(dtau_min, dtau_max, 11)
                 dm = {
+                    "dtau": dtau_1d,
                     "dt0": dt0_opt * np.ones(dtau_1d.size),
                     "dxs": dxs_opt * np.ones(dtau_1d.size),
                     "dmt": dmt_opt * np.ones(dtau_1d.size),
-                    "dtau": dtau_1d,
                 }
                 wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
                 wcc = wcc_sum / weight_sum
@@ -3503,6 +3507,58 @@ class Misfit(object):
 
         # ====== close file
         f.close()
+
+    def make_updated_cmtsolution(self, cmtfile="CMTSOLUTION.update", dt0=0.0, dtau=0.0, dxs=0.0, dmt=0.0):
+        if "/source" not in self.h5f:
+            msg = '"/source" not existing, run read_cmtsolution first!'
+            raise KeyError(msg)
+        tbl_src = self.h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[0]
+        evhd = event["header"].decode()
+        evnm = event["id"].decode()
+        t0 = UTCDateTime(event['t0'])
+        tau = event["tau"]
+        xs = event["xs"]
+        mt = event["mt"]
+        dxs_vec = event["dxs"]
+        dmt_vec = event["dmt"]
+
+        # modify origin time in header line to have centroid time 
+        t1 = t0 + dt0
+        header = evhd.split()
+        header[1] = "{:04d}".format(t1.year)
+        header[2] = "{:02d}".format(t1.month)
+        header[3] = "{:02d}".format(t1.day)
+        header[4] = "{:02d}".format(t1.hour)
+        header[5] = "{:02d}".format(t1.minute)
+        header[6] = "{:07.4f}".format(t1.second + 1.0e-6*t1.microsecond)
+        header = ' '.join(header)
+
+        xs1 = xs + dxs * dxs_vec
+
+        mt1 = mt + dmt_vec
+        # force mt_perturb to have the same scalar moment as mt
+        m0 = (0.5 * np.sum(mt**2)) ** 0.5
+        mt1 = m0 * mt1 / (0.5 * np.sum(mt1**2)) ** 0.5
+
+        with open(cmtfile, "w") as fp:
+            fp.write("%s\n" % header)
+            fp.write("%-18s %s_dxs\n" % ("event name:", evnm))
+            fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
+            fp.write("%-18s %+15.8E\n" % ("tau(s):", tau + dtau))
+            fp.write("%-18s %+15.8E\n" % ("x(m):", xs1[0]))
+            fp.write("%-18s %+15.8E\n" % ("y(m):", xs1[1]))
+            fp.write("%-18s %+15.8E\n" % ("z(m):", xs1[2]))
+            fp.write("%-18s %+15.8E\n" % ("Mxx(N*m):", mt1[0, 0]))
+            fp.write("%-18s %+15.8E\n" % ("Myy(N*m):", mt1[1, 1]))
+            fp.write("%-18s %+15.8E\n" % ("Mzz(N*m):", mt1[2, 2]))
+            fp.write("%-18s %+15.8E\n" % ("Mxy(N*m):", mt1[0, 1]))
+            fp.write("%-18s %+15.8E\n" % ("Mxz(N*m):", mt1[0, 2]))
+            fp.write("%-18s %+15.8E\n" % ("Myz(N*m):", mt1[1, 2]))
+
 
 
 #     #

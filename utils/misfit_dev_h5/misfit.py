@@ -3514,7 +3514,7 @@ class Misfit(object):
         # ====== close file
         f.close()
 
-    def make_updated_cmtsolution(self, cmtfile="CMTSOLUTION.update", dt0=0.0, dtau=0.0, dxs=0.0, dmt=0.0):
+    def make_updated_cmtsolution(self, cmtfile="CMTSOLUTION.updated", dt0=0.0, dtau=0.0, dxs=0.0, dmt=0.0):
         if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
@@ -3552,7 +3552,7 @@ class Misfit(object):
 
         with open(cmtfile, "w") as fp:
             fp.write("%s\n" % header)
-            fp.write("%-18s %s_dxs\n" % ("event name:", evnm))
+            fp.write("%-18s %s\n" % ("event name:", evnm))
             fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
             fp.write("%-18s %+15.8E\n" % ("tau(s):", tau + dtau))
             fp.write("%-18s %+15.8E\n" % ("x(m):", xs1[0]))

@@ -3028,7 +3028,7 @@ class Misfit(object):
         # ====== write out differential CMTSOLUTION file
         with open(out_dcmt_file, "w") as fp:
             fp.write("%s\n" % evhd)
-            fp.write("%-18s %s_dxs\n" % ("event name:", evnm))
+            fp.write("%-18s %s\n" % ("event name:", evnm))
             fp.write("%-18s %+15.8E\n" % ("dt0(s):", 0.0))
             fp.write("%-18s %+15.8E\n" % ("dtau(s):", 0.0))
             fp.write("%-18s %+15.8E\n" % ("dx(m):", dxs_scaled[0]))
@@ -3532,7 +3532,7 @@ class Misfit(object):
         dxs_vec = event["dxs"]
         dmt_vec = event["dmt"]
 
-        # modify origin time in header line to have centroid time 
+        # modify origin time in header line to have centroid time
         t1 = t0 + dt0
         header = evhd.split()
         header[1] = "{:04d}".format(t1.year)

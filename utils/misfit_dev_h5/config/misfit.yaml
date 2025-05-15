@@ -39,28 +39,35 @@ window: [
   # epidistance range: gcarc = [distmin, distmax] in degrees
 
   # direct arrivals
-  {'id':'p,P_Z_30-100sec', 'type':'body', 'phase':'p,P', 'cmp':'Z', 'twin':[-50,100], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
-  {'id':'p,P_Z_10-50sec', 'type':'body', 'phase':'p,P', 'cmp':'Z', 'twin':[-30,70], 'bp':[4,0.02,0.10], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
-#  {'type':'body', 'phase':'p,P', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
-#  {'type':'body', 'phase':'p,P', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
-  {'id':'s,S_Z_30-100sec', 'type':'body', 'phase':'s,S', 'cmp':'Z', 'twin':[-50,100], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
-  {'id':'s,S_R_30-100sec', 'type':'body', 'phase':'s,S', 'cmp':'R', 'twin':[-50,100], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
-  {'id':'s,S_T_30-100sec', 'type':'body', 'phase':'s,S', 'cmp':'T', 'twin':[-50,100], 'bp':[4,0.01,0.03], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
-  {'id':'s,S_T_10-50sec', 'type':'body', 'phase':'s,S', 'cmp':'T', 'twin':[-30,70], 'bp':[4,0.02,0.10], 'evdp':[0,1000], 'gcarc':[0,180], 'weight':1},
-#  # surface multiples
-#  {'type':'body', 'phase':'PP', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
-#  {'type':'body', 'phase':'PP', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
-#  {'type':'body', 'phase':'PP', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
-#  {'type':'body', 'phase':'SS', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
-#  {'type':'body', 'phase':'SS', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
-#  {'type':'body', 'phase':'SS', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
-#  {'type':'body', 'phase':'PPP', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
-#  {'type':'body', 'phase':'PPP', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
-#  {'type':'body', 'phase':'PPP', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
-#  {'type':'body', 'phase':'SSS', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
-#  {'type':'body', 'phase':'SSS', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
-#  {'type':'body', 'phase':'SSS', 'cmp':'T', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[0, 1000], 'gcarc':[20,180], 'weight':1},
-#
+  {'id':'p,P_Z_30-100sec','type':'body','phase':'p,P','cmp':'Z','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'p,P_R_30-100sec','type':'body','phase':'p,P','cmp':'R','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+
+  {'id':'s,S_Z_30-100sec','type':'body','phase':'s,S','cmp':'Z','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'s,S_R_30-100sec','type':'body','phase':'s,S','cmp':'R','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'s,S_T_30-100sec','type':'body','phase':'s,S','cmp':'T','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+
+  {'id':'p,P_Z_10-50sec','type':'body','phase':'p,P','cmp':'Z','twin':[-30,70],'bp':[4,0.02,0.10],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'p,P_R_10-50sec','type':'body','phase':'p,P','cmp':'R','twin':[-30,70],'bp':[4,0.02,0.10],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+
+  {'id':'s,S_Z_10-50sec','type':'body','phase':'s,S','cmp':'Z','twin':[-30,70],'bp':[4,0.02,0.10],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'s,S_R_10-50sec','type':'body','phase':'s,S','cmp':'R','twin':[-30,70],'bp':[4,0.02,0.10],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'s,S_T_10-50sec','type':'body','phase':'s,S','cmp':'T','twin':[-30,70],'bp':[4,0.02,0.10],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+
+  # surface multiples
+  {'id':'PP_Z_30-100sec','type':'body','phase':'PP','cmp':'Z','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'PP_R_30-100sec','type':'body','phase':'PP','cmp':'R','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+
+  {'id':'SS_Z_30-100sec','type':'body','phase':'SS','cmp':'Z','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'SS_R_30-100sec','type':'body','phase':'SS','cmp':'R','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'SS_T_30-100sec','type':'body','phase':'SS','cmp':'T','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+
+  {'id':'PPP_Z_30-100sec','type':'body','phase':'PPP','cmp':'Z','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[20,180],'weight':1},
+  {'id':'PPP_R_30-100sec','type':'body','phase':'PPP','cmp':'R','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[20,180],'weight':1},
+
+  {'id':'SSS_Z_30-100sec','type':'body','phase':'SSS','cmp':'Z','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[20,180],'weight':1},
+  {'id':'SSS_R_30-100sec','type':'body','phase':'SSS','cmp':'R','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[20,180],'weight':1},
+  {'id':'SSS_T_30-100sec','type':'body','phase':'SSS','cmp':'T','twin':[-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[20,180],'weight':1},
+
 #  # depth phases
 #  {'type':'body', 'phase':'pP,sP', 'cmp':'Z', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[0,180], 'weight':1},
 #  {'type':'body', 'phase':'pP,sP', 'cmp':'R', 'twin':[-50,50], 'bp':[4,0.01,0.03], 'evdp':[200,1000], 'gcarc':[0,180], 'weight':1},
@@ -87,9 +94,9 @@ window: [
 #  # slowness window: swin = [smin(s/deg), smax(s/deg), min_length]
 #  #                  window start, end = smin * gcarc, smax * gcarc
 #  #                  the window is expanded to at least min_length long
-  {'id':'Surf_Z_30-100sec', 'type':'surf', 'phase':'surf', 'cmp':'Z', 'swin':[20,40,100], 'bp':[4,0.01,0.03], 'evdp':[0,100], 'gcarc':[0,180], 'weight':1},
-  {'id':'Surf_R_30-100sec', 'type':'surf', 'phase':'surf', 'cmp':'R', 'swin':[20,40,100], 'bp':[4,0.01,0.03], 'evdp':[0,100], 'gcarc':[0,180], 'weight':1},
-  {'id':'Surf_T_30-100sec', 'type':'surf', 'phase':'surf', 'cmp':'T', 'swin':[15,45,100], 'bp':[4,0.01,0.03], 'evdp':[0,100], 'gcarc':[0,180], 'weight':1},
+  {'id':'Surf_Z_30-100sec','type':'surf','phase':'surf','cmp':'Z','swin':[20,40,100],'bp':[4,0.01,0.03],'evdp':[0,100],'gcarc':[0,180],'weight':1},
+  {'id':'Surf_R_30-100sec','type':'surf','phase':'surf','cmp':'R','swin':[20,40,100],'bp':[4,0.01,0.03],'evdp':[0,100],'gcarc':[0,180],'weight':1},
+  {'id':'Surf_T_30-100sec','type':'surf','phase':'surf','cmp':'T','swin':[15,45,100],'bp':[4,0.01,0.03],'evdp':[0,100],'gcarc':[0,180],'weight':1},
 ]
 
 window_taper: 0.1

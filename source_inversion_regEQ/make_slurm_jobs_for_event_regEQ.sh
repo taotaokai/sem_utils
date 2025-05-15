@@ -70,7 +70,7 @@ chmod u+w -R $event_dir/DATA
 mkdir -p $event_dir/DATA
 cd $event_dir/DATA
 
-rm CMTSOLUTION
+rm -f CMTSOLUTION
 cp $cmt_file CMTSOLUTION
 sed -i "/^tau(s)/s/.*/tau(s):            +0.0E+00/" CMTSOLUTION
 
@@ -82,6 +82,7 @@ sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
 sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
 sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" Par_file
 
+chmod u+w -R $event_dir/DATABASES_MPI
 rm -rf $event_dir/DATABASES_MPI
 mkdir $event_dir/DATABASES_MPI
 ln -s $mesh_dir/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
@@ -146,7 +147,7 @@ chmod u+w -R $misfit_dir
 rm -rf $misfit_dir
 mkdir -p $misfit_dir
 
-chmod u+w $event_dir/SEM
+chmod u+w -R $event_dir/SEM
 rm -rf $event_dir/SEM
 mkdir -p $event_dir/SEM
 
@@ -194,7 +195,7 @@ out_dir=output_srcfrechet
 
 cd $event_dir/DATA
 
-rm CMTSOLUTION
+rm -f CMTSOLUTION
 cp $cmt_file CMTSOLUTION
 sed -i "/^SIMULATION_TYPE/s/=.*/= 2/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
@@ -259,7 +260,7 @@ do
 
   cd $event_dir/DATA
 
-  rm CMTSOLUTION
+  rm -f CMTSOLUTION
   cp -L \$dcmt_file CMTSOLUTION
   sed -i "/^tau(s)/s/.*/tau(s):            +0.00000000E+00/" CMTSOLUTION
 

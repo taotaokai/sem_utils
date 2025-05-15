@@ -1218,10 +1218,8 @@ class Misfit(object):
                 )
                 _, h = scipy.signal.freqz_sos(sos, worN=freqs, fs=solver_fs)
                 filter_h *= abs(h)
-
-            valid_te = (
-                solver_te - 1.0 / min_cutoff_freq
-            )  # avoid filter response from edge
+            # avoid filter response from edge
+            valid_te = solver_te - 1.0 / min_cutoff_freq  
 
             if _DEBUG:
                 syn_st1 = syn_st.copy()
@@ -1470,7 +1468,7 @@ class Misfit(object):
 
                 win_tb = max(valid_tb, event_t0 + tb)
                 win_te = (
-                    min(valid_te, event_t0 + te) - bp_long_period
+                    min(valid_te - bp_long_period, event_t0 + te) 
                 )  # to avoid filter edge effect in the later bandpass process
                 # print(solver_te, obs_te, solver_valid_te, win_te)
 

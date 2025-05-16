@@ -617,8 +617,8 @@ class Misfit(object):
             if l[16]:
                 te = UTCDateTime(l[16])
             else:
-                msg = f"empty endtime in ({l})"
-                warnings.warn(msg)
+                # msg = f"empty endtime in ({l})"
+                # warnings.warn(msg)
                 te = None  # UTCDateTime(empty_endtime)
             # date1 = [int(a) for a in re.sub("\D", " ", x[15]).split()]
             # date2 = [int(a) for a in re.sub("\D", " ", x[16]).split()]
@@ -941,7 +941,7 @@ class Misfit(object):
                 if data_starttime > t0 or data_endtime < t1:
                     msg = f"{g_sta_obs._v_name}: timespan [{data_starttime}, {data_endtime}] does not cover required [{t0}, {t1}], skip"
                     warnings.warn(msg)
-                    continue
+                    # continue
 
                 # create station group, e.g. /waveforms/NET_STA
                 station_name = f"{net}_{sta}"

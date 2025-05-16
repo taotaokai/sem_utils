@@ -28,8 +28,8 @@
 base_dir=$(readlink -f /home/taokai/EuropeFWI)
 
 # current stage and iteration number
-stage_dir=stage00.source
-iter_num=0
+stage_dir=${base_dir}/stage00.source
+iter_num=01
 
 #======== Data directories
 
@@ -43,28 +43,27 @@ sem_build_dir=${base_dir}/build # build/: bin/xmeshfem3D,xspecfem3D
 sem_utils_dir=${base_dir}/sem_utils  # sem_utils/: misfit/, source_inversion_regEQ/
 
 # event data dir
-data_dir=$base_dir/data # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTIOn, data.h5
+data_dir=${base_dir}/data # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTIOn, data.h5
 
 # current iteration directory: need model/ and misfit_par/
 iter_num=$(printf "%02d" $iter_num)
-iter_dir=$base_dir/$stage_dir/iter${iter_num}
+iter_dir=${stage_dir}/iter${iter_num}
 
 # initial source dir
-#source_dir=$base_dir/backup/stage08.source
-source_dir=${base_dir}/CMTSOLUTION_initial
+source_dir=${stage_dir}/CMTSOLUTION_updated
 
 # mesh/DATABASES_MPI/*solver_data.bin,..
-mesh_dir=${base_dir}/mesh
+mesh_dir=${stage_dir}/mesh
 
 #model_dir=${iter_dir}/model
 
-misfit_par_dir=${base_dir}/misfit_par
+misfit_par_dir=${stage_dir}/misfit_par
 
 #precond_dir=${iter_dir}/preconditioner # proc*_reg1_inv_hess_diag.bin
 
 # previous iteration directory
 iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
-prev_iter_dir=${base_dir}/${stage_dir}/iter${iter_minus_one}
+prev_iter_dir=${stage_dir}/iter${iter_minus_one}
 
 #======== slurm jobs
 

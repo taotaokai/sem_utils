@@ -24,18 +24,28 @@ do
 
   # create event dir
   event_dir=$iter_dir/$event_id
-  chmod u+w -R $event_dir/DATA
+  sem_data_dir=$event_dir/DATA
+  if [ -d "$sem_data_dir" ]
+  then
+    chmod u+w -R $event_dir/DATA
+  fi
   mkdir -p $event_dir/DATA
 
   # copy initial CMTSOLUTION file
   cmt_file=$source_dir/${event_id}.cmt
   echo ------ use: $(readlink -f $cmt_file)
-  if [ ! -f "$cmt_file" ]; then
+  if [ ! -f "$cmt_file" ]
+  then
     echo "[WARN] $cmt_file does NOT exist!"
     exit -1
   fi
-  rm $event_dir/DATA/CMTSOLUTION.init
-  cp -L $cmt_file $event_dir/DATA/CMTSOLUTION.init
+
+  init_cmt_file=$event_dir/DATA/CMTSOLUTION.init
+  if [ -f "$init_cmt_file" ]
+  then
+    rm -f $init_cmt_file
+  fi
+  cp -L $cmt_file $init_cmt_file
 
   # copy STATIONS
   station_file=$data_dir/$event_id/STATIONS

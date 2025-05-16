@@ -1,8 +1,8 @@
 #!/bin/bash
 
 event_list=${1:?[arg]event_list, e.g. "C202411201443A\nC202411201443A"}
-stage_dir=${2:?[arg]stage_dir, e.g. stage00.source/iter??/evid/misfit/CMTSOLUTION.updated}
-out_dir=${3:?[arg]out_dir, e.g. CMTSOLUTION_updated}
+stage_dir=${2:?[arg]stage_dir, e.g. stage00.source/ (find stage_dir/iter??/*/misfit/CMTSOLUTION.updated)}
+out_dir=${3:?[arg]out_dir, e.g. CMTSOLUTION_updated/}
 
 for event_id in $(awk 'NF&&$1!~/#/{print $1}' $event_list)
 do

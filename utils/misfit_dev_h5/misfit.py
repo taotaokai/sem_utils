@@ -3362,7 +3362,7 @@ class Misfit(object):
 
         return wcc_sum, weight_sum
 
-    def grid_search_source(self, out_txt, out_fig):
+    def grid_search_source(self, out_txt, out_fig, max_niter=5):
 
         range_shrink_ratio = 0.618
 
@@ -3390,7 +3390,7 @@ class Misfit(object):
 
         niter = 0
         with PdfPages(out_fig) as pdf:
-            while niter < 4:
+            while niter < max_niter:
                 f.write("====== iter = {:02d}\n".format(niter))
 
                 # define search range

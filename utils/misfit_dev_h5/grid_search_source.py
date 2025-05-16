@@ -12,8 +12,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("misfit_h5file" )  # "misfit.h5"
 parser.add_argument("out_txt")  # "search.txt"
 parser.add_argument("out_fig")  # "search.pdf"
+parser.add_argument("-n", "--niter", default=5, type=int)  # "search.pdf"
 
 args = parser.parse_args()
 
 with Misfit(args.misfit_h5file, 'r') as misfit:
-    misfit.grid_search_source(args.out_txt, args.out_fig)
+    misfit.grid_search_source(args.out_txt, args.out_fig, args.niter)

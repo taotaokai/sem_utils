@@ -2761,8 +2761,8 @@ class Misfit(object):
                     ##annotate station names
                     str_annot = " %s (%.3f,%.3f,%.1f)" % (
                         g_sta._v_name,
-                        win_cc0,
-                        win_tshift,
+                        win["cc0"],
+                        win["cc_time_shift"],
                         win["weight"],
                     )
                     ax_1comp.text(

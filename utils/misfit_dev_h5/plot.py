@@ -1,4 +1,4 @@
-import sys
+import sys, os
 import argparse
 from datetime import datetime
 from misfit import Misfit
@@ -16,5 +16,6 @@ with Misfit(args.misfit_h5file, 'r') as misfit:
     win_ids = [w.decode() for w in set(win_tbl.read(field='id'))]
     for win_id in win_ids:
         print(f"[{datetime.now()}] {win_id}")
-        misfit.plot_seismogram_1comp(savefig=True, out_dir=args.out_fig_dir, win_id=win_id)
+        fig_fn = f"{win_id}.pdf"
+        misfit.plot_seismogram_1comp(win_id, out_fig=os.path.join(args.out_fig_dir, fig_fn))
     print(f"======= [{datetime.now()}] END")

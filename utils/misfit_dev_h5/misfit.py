@@ -2255,9 +2255,9 @@ class Misfit(object):
 
     def plot_seismogram_1comp(
         self,
-        savefig=False,
-        out_dir="plot",
-        win_id="p,P_Z_30-100sec",
+        # savefig=False,
+        # out_dir="plot",
+        win_id, # e.g. p,P_Z_30-100sec
         azbin=20,
         max_ntrace_per_bin=30,  # maximum traces to plot for each azimuthal bin
         begin_time=0,
@@ -2270,6 +2270,7 @@ class Misfit(object):
         # plot_az0=0,
         # plot_adj=False,  # whether plot adjoint source
         align_time=False,  # whether align the phase according to cc time shift
+        out_fig='seis.pdf'
     ):
         """
         Plot record section in azimuthal bins
@@ -2434,368 +2435,370 @@ class Misfit(object):
         )  # sort windows by azimuth
         nwin = len(windows)
         bin_idx0 = 0  # start index of windowes in the bin
-        while bin_idx0 < nwin:
-            winfo, g_sta = windows[bin_idx0]
-            azmin = (g_sta._v_attrs["azimuth"]) % 360
-            azmax = azmin + plot_azbin
 
-            # get windows of one azimuthal bin
-            windows_bin = []
-            nwin_bin = 0
+        with PdfPages(out_fig) as pdf:
             while bin_idx0 < nwin:
                 winfo, g_sta = windows[bin_idx0]
-                if not winfo["valid"]:
-                    msg = f"invalid window: {winfo}, skip"
-                    warnings.warn(msg)
-                    continue
-                az = (g_sta._v_attrs["azimuth"]) % 360
-                dist_degree = g_sta._v_attrs["dist_degree"]
-                win_SNR = winfo["SNR"]
-                win_cc0 = winfo["cc0"]
-                win_ccmax = winfo["cc_max"]
-                # skip window not satisfying selection conditions
-                if plot_distlim.any():
-                    if dist_degree < np.min(plot_distlim) or dist_degree > np.max(
-                        plot_distlim
-                    ):
+                azmin = (g_sta._v_attrs["azimuth"]) % 360
+                azmax = azmin + plot_azbin
+
+                # get windows of one azimuthal bin
+                windows_bin = []
+                nwin_bin = 0
+                while bin_idx0 < nwin:
+                    winfo, g_sta = windows[bin_idx0]
+                    if not winfo["valid"]:
+                        msg = f"invalid window: {winfo}, skip"
+                        warnings.warn(msg)
                         continue
-                if plot_SNR and win_SNR < np.min(plot_SNR):
-                    continue
-                if plot_CC0 and win_cc0 < np.min(plot_CC0):
-                    continue
-                if plot_CCmax and win_ccmax < np.min(plot_CCmax):
-                    continue
-                # put window into current bin or start a new bin
-                if az <= azmax and (
-                    not plot_max_ntrace_per_bin or nwin_bin <= plot_max_ntrace_per_bin
-                ):
-                    windows_bin.append(windows[bin_idx0])
-                    nwin_bin = nwin_bin + 1
-                    bin_idx0 += 1  # next window
-                else:
-                    break
+                    az = (g_sta._v_attrs["azimuth"]) % 360
+                    dist_degree = g_sta._v_attrs["dist_degree"]
+                    win_SNR = winfo["SNR"]
+                    win_cc0 = winfo["cc0"]
+                    win_ccmax = winfo["cc_max"]
+                    # skip window not satisfying selection conditions
+                    if plot_distlim.any():
+                        if dist_degree < np.min(plot_distlim) or dist_degree > np.max(
+                            plot_distlim
+                        ):
+                            continue
+                    if plot_SNR and win_SNR < np.min(plot_SNR):
+                        continue
+                    if plot_CC0 and win_cc0 < np.min(plot_CC0):
+                        continue
+                    if plot_CCmax and win_ccmax < np.min(plot_CCmax):
+                        continue
+                    # put window into current bin or start a new bin
+                    if az <= azmax and (
+                        not plot_max_ntrace_per_bin or nwin_bin <= plot_max_ntrace_per_bin
+                    ):
+                        windows_bin.append(windows[bin_idx0])
+                        nwin_bin = nwin_bin + 1
+                        bin_idx0 += 1  # next window
+                    else:
+                        break
 
-            # skip empty azimuthal_bin
-            if nwin_bin == 0:
-                msg = f"No traces in the azimuthal bin [{bin_azmin}, {bin_azmax}], skip"
-                warnings.warn(msg)
-                continue
-
-            bin_azmin = (windows_bin[0][1]._v_attrs["azimuth"]) % 360
-            bin_azmax = (windows_bin[-1][1]._v_attrs["azimuth"]) % 360
-
-            # ---- create figure
-
-            print(f"[INFO] plot azimuthal bin: {bin_azmin:05.1f} - {bin_azmax:05.1f}")
-
-            # fig = plt.figure(figsize=(8.5, 11)) # US letter
-            fig = plt.figure(figsize=(8.27, 11.69))  # A4
-            str_title = "{:s} ({:s} az:{:04.1f}~{:04.1f} dep:{:.1f})".format(
-                evnm, plot_window_id, bin_azmin, bin_azmax, evdp
-            )
-            fig.text(
-                0.5, 0.965, str_title, size="x-large", horizontalalignment="center"
-            )
-
-            # create axis for event,station map
-            ax_width = 0.25
-            ax_height = ax_width * map_height / map_width
-            ax_size = [ax_width, ax_height]
-            ax_origin = [0.05, 0.5 - ax_height / 2]
-            ax_map = fig.add_axes(ax_origin + ax_size)
-            # ax_bm = Basemap(projection='poly', resolution='l', area_thresh=1000.,
-            #     llcrnrlat=min_lat, llcrnrlon=min_lon,
-            #     urcrnrlat=max_lat, urcrnrlon=max_lon,
-            #     lat_0=lat_0, lon_0=lon_0, ax=ax_map)
-            # ax_bm = Basemap(projection='ortho', resolution='l', lat_0=lat_0, lon_0=lon_0)
-            ax_bm = Basemap(
-                projection="stere",
-                resolution="l",  # area_thresh=10000.,
-                width=map_width,
-                height=map_height,
-                lat_0=map_lat0,
-                lon_0=map_lon0,
-                ax=ax_map,
-            )
-            ax_bm.drawcoastlines(linewidth=0.1)
-            ax_bm.drawcountries(linewidth=0.1)
-            ax_bm.drawlsmask()
-            ax_bm.drawparallels(
-                parallels, linewidth=0.1, labels=[1, 0, 0, 0], fontsize=10
-            )  # , fmt='%3.0f')
-            ax_bm.drawmeridians(
-                meridians, linewidth=0.1, labels=[0, 0, 0, 1], fontsize=10
-            )  # , fmt='%3.0f')
-            # plot all stations
-            sx, sy = ax_bm(stlo_all, stla_all)
-            ax_bm.scatter(sx, sy, s=5, marker="^", facecolor="black")
-            # plot stations in the bin
-            stla_bin = np.array([sta._v_attrs["latitude"] for _, sta in windows_bin])
-            stlo_bin = np.array([sta._v_attrs["longitude"] for _, sta in windows_bin])
-            sx, sy = ax_bm(stlo_bin, stla_bin)
-            ax_bm.scatter(sx, sy, s=5, marker="^", facecolor="red")
-            # plot focal mechanism
-            sx, sy = ax_bm(evlo, evla)
-            # bb_width = 110000.0 * np.abs(max(stlo_all)-min(stlo_all)) * 0.1
-            bb_width = max(map_width, map_height) * 0.05
-            b = beach(focmec, xy=(sx, sy), width=bb_width, linewidth=0.2, facecolor="r")
-            ax_map.add_collection(b)
-
-            # create axis for seismograms
-            ax_origin = [0.42, 0.06]
-            ax_size = [0.4, 0.88]
-            # ax_size = [0.3, 0.90]
-            ax_1comp = fig.add_axes(ax_origin + ax_size)
-
-            # -- xlim setting
-            winb_bin = np.array(
-                [UTCDateTime(win["starttime"]) - evt0 for win, _ in windows_bin]
-            )
-            wine_bin = np.array(
-                [UTCDateTime(win["endtime"]) - evt0 for win, _ in windows_bin]
-            )
-            dist_bin = np.array([sta._v_attrs["dist_degree"] for _, sta in windows_bin])
-            # get time window relative to the regressed window central time
-            plot_t0 = np.min(winb_bin - plot_rayp * dist_bin)
-            plot_t1 = np.max(wine_bin - plot_rayp * dist_bin)
-            plot_time = np.array([begin_time + plot_t0, end_time + plot_t1])
-
-            # -- ylim setting
-            y = dist_bin
-            ny = len(y)
-            plot_dy = 0.5 * (max(y) - min(y) + 1) / ny
-            if plot_distlim.any():
-                plot_ymax = max(plot_distlim) + 2 * plot_dy
-                plot_ymin = min(plot_distlim) - 2 * plot_dy
-            else:
-                plot_ymax = max(y) + 2 * plot_dy
-                plot_ymin = min(y) - 2 * plot_dy
-
-            # -- plot traveltime curves
-            for phase_name in phase_list:
-                # skip if no tt curves for this phase_names
-                if not ttcurve[phase_name]:
-                    continue
-                # reduced time
-                phase_times = np.array(
-                    [x[1] - plot_rayp * x[0] for x in ttcurve[phase_name]]
-                )
-                phase_distances = np.array([x[0] for x in ttcurve[phase_name]])
-                # skip if not in plot range
-                max_dist = np.max(phase_distances)
-                min_dist = np.min(phase_distances)
-                if max_dist < plot_ymin or min_dist > plot_ymax:
-                    continue
-                ax_1comp.plot(phase_times, phase_distances, "b-", linewidth=0.1)
-                # ax_1comp.plot(phase_times, phase_distances, 'b.', markersize=0.5)
-                # label phase names
-                if max_dist < plot_ymax:
-                    y_str = max_dist
-                    x_str = max(phase_times[phase_distances == max_dist])
-                else:
-                    y_str = plot_ymax
-                    max_dist = max(phase_distances[phase_distances <= plot_ymax])
-                    x_str = max(phase_times[phase_distances == max_dist])
-                ax_1comp.text(
-                    x_str,
-                    y_str,
-                    phase_name,
-                    verticalalignment="top",
-                    horizontalalignment="center",
-                    fontsize=11,
-                    color="blue",
-                )
-
-            # plot trace in each measurement window
-            for win, g_sta in windows_bin:
-                attrs = g_sta._v_attrs
-                net = attrs["network"]
-                sta = attrs["station"]
-                first_arrtime = attrs["first_arrtime"]
-                dist_degree = attrs["dist_degree"]
-                # read in obs and syn seismograms
-                try:
-                    obs_ENZ, syn_ENZ, no_Hchan = self._extract_obs_syn_ENZ(
-                        g_sta, obs_tag, syn_tag, evtau
-                    )
-                except Exception as e:
-                    msg = f"failed to get obs,syn_ENZ for {g_sta._v_name}, ({e})"
+                # skip empty azimuthal_bin
+                if nwin_bin == 0:
+                    msg = f"No traces in the azimuthal bin [{bin_azmin}, {bin_azmax}], skip"
                     warnings.warn(msg)
                     continue
 
-                obs_h5 = g_sta[obs_tag]
-                # syn_h5 = g_sta[syn_tag]
+                bin_azmin = (windows_bin[0][1]._v_attrs["azimuth"]) % 360
+                bin_azmax = (windows_bin[-1][1]._v_attrs["azimuth"]) % 360
 
-                data_tb = obs_h5.attrs["starttime"]
-                data_fs = obs_h5.attrs["sampling_rate"]
-                data_dt = 1.0 / data_fs
-                data_nt = obs_h5.attrs["npts"]
-                # data_te = data_tb + (data_nt - 1) * data_dt
-                # data_times = np.arange(data_nt, dtype=float) * data_dt
-                # noise_te = (first_arrtime - data_tb) - cfg_noise_before_first_arrival
-                # noise_idx1 = int(noise_te * data_fs)  # 0:idx1 as noise
+                # ---- create figure
+                print(f"[INFO] plot azimuthal bin: {bin_azmin:05.1f} - {bin_azmax:05.1f}")
 
-                # apply bandpass filter
-                butter_N = win["butter_N"]
-                butter_Wn = win["butter_Wn"]
-                # fft
-                npad = int(2 * data_fs / min(butter_Wn))
-                nfft = scipy.fft.next_fast_len(data_nt + npad)
-                freqs = np.fft.rfftfreq(nfft, d=data_dt)
-                # window filter
-                sos = scipy.signal.butter(
-                    butter_N, butter_Wn, "bandpass", fs=data_fs, output="sos"
+                # fig = plt.figure(figsize=(8.5, 11)) # US letter
+                fig = plt.figure(figsize=(8.27, 11.69))  # A4
+                str_title = "{:s} ({:s} az:{:04.1f}~{:04.1f} dep:{:.1f})".format(
+                    evnm, plot_window_id, bin_azmin, bin_azmax, evdp
                 )
-                _, filter_h = scipy.signal.freqz_sos(sos, worN=freqs, fs=data_fs)
-                Fw = abs(filter_h)  # zero-phase filter response
+                fig.text(
+                    0.5, 0.965, str_title, size="x-large", horizontalalignment="center"
+                )
 
-                # obs = Fw * (Fd * d), obs_ENZ = Fd * d, d = disp. or vel.
-                obs_ENZ_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ, nfft), nfft)[
-                    :, :data_nt
-                ]
-                # syn = Fw * (Fd * [Ft] * u), (syn_ENZ = Fd * [Ft] *[S] * u)
-                syn_ENZ_filt = np.fft.irfft(Fw * np.fft.rfft(syn_ENZ, nfft), nfft)[
-                    :, :data_nt
-                ]
+                # create axis for event,station map
+                ax_width = 0.25
+                ax_height = ax_width * map_height / map_width
+                ax_size = [ax_width, ax_height]
+                ax_origin = [0.05, 0.5 - ax_height / 2]
+                ax_map = fig.add_axes(ax_origin + ax_size)
+                # ax_bm = Basemap(projection='poly', resolution='l', area_thresh=1000.,
+                #     llcrnrlat=min_lat, llcrnrlon=min_lon,
+                #     urcrnrlat=max_lat, urcrnrlon=max_lon,
+                #     lat_0=lat_0, lon_0=lon_0, ax=ax_map)
+                # ax_bm = Basemap(projection='ortho', resolution='l', lat_0=lat_0, lon_0=lon_0)
+                ax_bm = Basemap(
+                    projection="stere",
+                    resolution="l",  # area_thresh=10000.,
+                    width=map_width,
+                    height=map_height,
+                    lat_0=map_lat0,
+                    lon_0=map_lon0,
+                    ax=ax_map,
+                )
+                ax_bm.drawcoastlines(linewidth=0.1)
+                ax_bm.drawcountries(linewidth=0.1)
+                ax_bm.drawlsmask()
+                ax_bm.drawparallels(
+                    parallels, linewidth=0.1, labels=[1, 0, 0, 0], fontsize=10
+                )  # , fmt='%3.0f')
+                ax_bm.drawmeridians(
+                    meridians, linewidth=0.1, labels=[0, 0, 0, 1], fontsize=10
+                )  # , fmt='%3.0f')
+                # plot all stations
+                sx, sy = ax_bm(stlo_all, stla_all)
+                ax_bm.scatter(sx, sy, s=5, marker="^", facecolor="black")
+                # plot stations in the bin
+                stla_bin = np.array([sta._v_attrs["latitude"] for _, sta in windows_bin])
+                stlo_bin = np.array([sta._v_attrs["longitude"] for _, sta in windows_bin])
+                sx, sy = ax_bm(stlo_bin, stla_bin)
+                ax_bm.scatter(sx, sy, s=5, marker="^", facecolor="red")
+                # plot focal mechanism
+                sx, sy = ax_bm(evlo, evla)
+                # bb_width = 110000.0 * np.abs(max(stlo_all)-min(stlo_all)) * 0.1
+                bb_width = max(map_width, map_height) * 0.05
+                b = beach(focmec, xy=(sx, sy), width=bb_width, linewidth=0.2, facecolor="r")
+                ax_map.add_collection(b)
 
-                # project to polarity defined by the window
-                cmpaz = win["cmpaz"]
-                cmpdip = win["cmpdip"]
-                sin_az = np.sin(np.deg2rad(cmpaz))
-                cos_az = np.cos(np.deg2rad(cmpaz))
-                sin_dip = np.sin(np.deg2rad(cmpdip))
-                cos_dip = np.cos(np.deg2rad(cmpdip))
-                cmp_vec = np.array(
-                    [
-                        cos_dip * sin_az,  # cos(E, comp)
-                        cos_dip * cos_az,  # cos(N, comp)
-                        -sin_dip,  # cos(Z, comp)
+                # create axis for seismograms
+                ax_origin = [0.42, 0.06]
+                ax_size = [0.4, 0.88]
+                # ax_size = [0.3, 0.90]
+                ax_1comp = fig.add_axes(ax_origin + ax_size)
+
+                # -- xlim setting
+                winb_bin = np.array(
+                    [UTCDateTime(win["starttime"]) - evt0 for win, _ in windows_bin]
+                )
+                wine_bin = np.array(
+                    [UTCDateTime(win["endtime"]) - evt0 for win, _ in windows_bin]
+                )
+                dist_bin = np.array([sta._v_attrs["dist_degree"] for _, sta in windows_bin])
+                # get time window relative to the regressed window central time
+                plot_t0 = np.min(winb_bin - plot_rayp * dist_bin)
+                plot_t1 = np.max(wine_bin - plot_rayp * dist_bin)
+                plot_time = np.array([begin_time + plot_t0, end_time + plot_t1])
+
+                # -- ylim setting
+                y = dist_bin
+                ny = len(y)
+                plot_dy = 0.5 * (max(y) - min(y) + 1) / ny
+                if plot_distlim.any():
+                    plot_ymax = max(plot_distlim) + 2 * plot_dy
+                    plot_ymin = min(plot_distlim) - 2 * plot_dy
+                else:
+                    plot_ymax = max(y) + 2 * plot_dy
+                    plot_ymin = min(y) - 2 * plot_dy
+
+                # -- plot traveltime curves
+                for phase_name in phase_list:
+                    # skip if no tt curves for this phase_names
+                    if not ttcurve[phase_name]:
+                        continue
+                    # reduced time
+                    phase_times = np.array(
+                        [x[1] - plot_rayp * x[0] for x in ttcurve[phase_name]]
+                    )
+                    phase_distances = np.array([x[0] for x in ttcurve[phase_name]])
+                    # skip if not in plot range
+                    max_dist = np.max(phase_distances)
+                    min_dist = np.min(phase_distances)
+                    if max_dist < plot_ymin or min_dist > plot_ymax:
+                        continue
+                    ax_1comp.plot(phase_times, phase_distances, "b-", linewidth=0.1)
+                    # ax_1comp.plot(phase_times, phase_distances, 'b.', markersize=0.5)
+                    # label phase names
+                    if max_dist < plot_ymax:
+                        y_str = max_dist
+                        x_str = max(phase_times[phase_distances == max_dist])
+                    else:
+                        y_str = plot_ymax
+                        max_dist = max(phase_distances[phase_distances <= plot_ymax])
+                        x_str = max(phase_times[phase_distances == max_dist])
+                    ax_1comp.text(
+                        x_str,
+                        y_str,
+                        phase_name,
+                        verticalalignment="top",
+                        horizontalalignment="center",
+                        fontsize=11,
+                        color="blue",
+                    )
+
+                # plot trace in each measurement window
+                for win, g_sta in windows_bin:
+                    attrs = g_sta._v_attrs
+                    net = attrs["network"]
+                    sta = attrs["station"]
+                    first_arrtime = attrs["first_arrtime"]
+                    dist_degree = attrs["dist_degree"]
+                    # read in obs and syn seismograms
+                    try:
+                        obs_ENZ, syn_ENZ, no_Hchan = self._extract_obs_syn_ENZ(
+                            g_sta, obs_tag, syn_tag, evtau
+                        )
+                    except Exception as e:
+                        msg = f"failed to get obs,syn_ENZ for {g_sta._v_name}, ({e})"
+                        warnings.warn(msg)
+                        continue
+
+                    obs_h5 = g_sta[obs_tag]
+                    # syn_h5 = g_sta[syn_tag]
+
+                    data_tb = obs_h5.attrs["starttime"]
+                    data_fs = obs_h5.attrs["sampling_rate"]
+                    data_dt = 1.0 / data_fs
+                    data_nt = obs_h5.attrs["npts"]
+                    # data_te = data_tb + (data_nt - 1) * data_dt
+                    # data_times = np.arange(data_nt, dtype=float) * data_dt
+                    # noise_te = (first_arrtime - data_tb) - cfg_noise_before_first_arrival
+                    # noise_idx1 = int(noise_te * data_fs)  # 0:idx1 as noise
+
+                    # apply bandpass filter
+                    butter_N = win["butter_N"]
+                    butter_Wn = win["butter_Wn"]
+                    # fft
+                    npad = int(2 * data_fs / min(butter_Wn))
+                    nfft = scipy.fft.next_fast_len(data_nt + npad)
+                    freqs = np.fft.rfftfreq(nfft, d=data_dt)
+                    # window filter
+                    sos = scipy.signal.butter(
+                        butter_N, butter_Wn, "bandpass", fs=data_fs, output="sos"
+                    )
+                    _, filter_h = scipy.signal.freqz_sos(sos, worN=freqs, fs=data_fs)
+                    Fw = abs(filter_h)  # zero-phase filter response
+
+                    # obs = Fw * (Fd * d), obs_ENZ = Fd * d, d = disp. or vel.
+                    obs_ENZ_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ, nfft), nfft)[
+                        :, :data_nt
                     ]
-                )
-                obs_filt_proj = np.dot(cmp_vec, obs_ENZ_filt)
-                syn_filt_proj = np.dot(cmp_vec, syn_ENZ_filt)
+                    # syn = Fw * (Fd * [Ft] * u), (syn_ENZ = Fd * [Ft] *[S] * u)
+                    syn_ENZ_filt = np.fft.irfft(Fw * np.fft.rfft(syn_ENZ, nfft), nfft)[
+                        :, :data_nt
+                    ]
 
-                # get plot time
-                reduced_time = dist_degree * plot_rayp
-                # time of first sample referred to centroid time
-                t0 = data_tb - evt0
-                # time of samples referred to centroid time
-                times = np.arange(data_nt) * data_dt + t0
-                # plot time window
-                plot_t0 = min(plot_time) + reduced_time
-                plot_t1 = max(plot_time) + reduced_time
-                plot_idx = (times > plot_t0) & (times < plot_t1)
-                # plot time (reduced time)
-                t_plot = times[plot_idx] - reduced_time
+                    # project to polarity defined by the window
+                    cmpaz = win["cmpaz"]
+                    cmpdip = win["cmpdip"]
+                    sin_az = np.sin(np.deg2rad(cmpaz))
+                    cos_az = np.cos(np.deg2rad(cmpaz))
+                    sin_dip = np.sin(np.deg2rad(cmpdip))
+                    cos_dip = np.cos(np.deg2rad(cmpdip))
+                    cmp_vec = np.array(
+                        [
+                            cos_dip * sin_az,  # cos(E, comp)
+                            cos_dip * cos_az,  # cos(N, comp)
+                            -sin_dip,  # cos(Z, comp)
+                        ]
+                    )
+                    obs_filt_proj = np.dot(cmp_vec, obs_ENZ_filt)
+                    syn_filt_proj = np.dot(cmp_vec, syn_ENZ_filt)
 
-                #  window begin/end
-                win_starttime = UTCDateTime(win["starttime"]) - evt0
-                win_endtime = UTCDateTime(win["endtime"]) - evt0
-                win_t0 = win_starttime - reduced_time
-                win_t1 = win_endtime - reduced_time
-                # win_idx = (times > win_starttime) & (times < win_endtime)
-                win_tshift = win["cc_time_shift"]
+                    # get plot time
+                    reduced_time = dist_degree * plot_rayp
+                    # time of first sample referred to centroid time
+                    t0 = data_tb - evt0
+                    # time of samples referred to centroid time
+                    times = np.arange(data_nt) * data_dt + t0
+                    # plot time window
+                    plot_t0 = min(plot_time) + reduced_time
+                    plot_t1 = max(plot_time) + reduced_time
+                    plot_idx = (times > plot_t0) & (times < plot_t1)
+                    # plot time (reduced time)
+                    t_plot = times[plot_idx] - reduced_time
 
-                # plot seismograms
-                Amax_obs = win["obs_maxamp"]
-                Amax_syn = win["syn_maxamp"]
+                    #  window begin/end
+                    win_starttime = UTCDateTime(win["starttime"]) - evt0
+                    win_endtime = UTCDateTime(win["endtime"]) - evt0
+                    win_t0 = win_starttime - reduced_time
+                    win_t1 = win_endtime - reduced_time
+                    # win_idx = (times > win_starttime) & (times < win_endtime)
+                    win_tshift = win["cc_time_shift"]
 
-                # # clip large amplitudes
-                # if plot_adj:
-                #     adj = station["adj"]
-                #     y = adj[plot_idx] / Amax_adj
-                #     idx = abs(y) > plot_clip + 1.0e-3
-                #     y[idx] = np.nan
-                #     ax_1comp.plot(
-                #         t_plot,
-                #         plot_flip * plot_dy * y + dist_degree,
-                #         "k-",
-                #         linewidth=0.5,
-                #     )
+                    # plot seismograms
+                    Amax_obs = win["obs_maxamp"]
+                    Amax_syn = win["syn_maxamp"]
 
-                y = obs_filt_proj[plot_idx] / Amax_obs
-                idx = abs(y) > plot_clip + 1.0e-3
-                y[idx] = np.nan
-                ax_1comp.plot(
-                    t_plot, plot_flip * plot_dy * y + dist_degree, "k-", linewidth=0.5
-                )
+                    # # clip large amplitudes
+                    # if plot_adj:
+                    #     adj = station["adj"]
+                    #     y = adj[plot_idx] / Amax_adj
+                    #     idx = abs(y) > plot_clip + 1.0e-3
+                    #     y[idx] = np.nan
+                    #     ax_1comp.plot(
+                    #         t_plot,
+                    #         plot_flip * plot_dy * y + dist_degree,
+                    #         "k-",
+                    #         linewidth=0.5,
+                    #     )
 
-                y = syn_filt_proj[plot_idx] / Amax_syn
-                idx = abs(y) > plot_clip + 1.0e-3
-                y[idx] = np.nan
-                ax_1comp.plot(
-                    t_plot,
-                    plot_flip * plot_dy * y + dist_degree,
-                    "r-",
-                    linewidth=0.5,
-                )
-                if align_time:
+                    y = obs_filt_proj[plot_idx] / Amax_obs
+                    idx = abs(y) > plot_clip + 1.0e-3
+                    y[idx] = np.nan
                     ax_1comp.plot(
-                        t_plot + win_tshift,
+                        t_plot, plot_flip * plot_dy * y + dist_degree, "k-", linewidth=0.5
+                    )
+
+                    y = syn_filt_proj[plot_idx] / Amax_syn
+                    idx = abs(y) > plot_clip + 1.0e-3
+                    y[idx] = np.nan
+                    ax_1comp.plot(
+                        t_plot,
                         plot_flip * plot_dy * y + dist_degree,
-                        "r--",
+                        "r-",
                         linewidth=0.5,
                     )
+                    if align_time:
+                        ax_1comp.plot(
+                            t_plot + win_tshift,
+                            plot_flip * plot_dy * y + dist_degree,
+                            "r--",
+                            linewidth=0.5,
+                        )
 
-                # mark measure window range
-                ax_1comp.plot(win_t0, dist_degree, "k|", markersize=8)
-                ax_1comp.plot(win_t1, dist_degree, "k|", markersize=8)
-                ## annotate amplitude
-                #  ax.text(max(plot_time), dist_degree, '%.1e ' % (Amax_obs),
-                #      verticalalignment='bottom',
-                #      horizontalalignment='right',
-                #      fontsize=7, color='black')
-                #  ax.text(max(plot_time), dist_degree, '%.1e ' % (Amax_syn),
-                #      verticalalignment='top',
-                #      horizontalalignment='right',
-                #      fontsize=7, color='red')
-                ## annotate CC0
-                #  ax.text(max(plot_time), dist_degree, ' %.3f'%(window['cc']['CC0']),
-                #      verticalalignment='center', fontsize=7)
-                ## annotate window weight
-                # if i == 1:
-                #  ax.text(max(plot_time), dist_degree, ' %.1f' % (window['weight']),
-                #      verticalalignment='center', fontsize=7)
-                ##annotate station names
-                str_annot = " %s (%.3f,%.3f,%.1f)" % (
-                    g_sta._v_name,
-                    win_cc0,
-                    win_tshift,
-                    win["weight"],
-                )
-                ax_1comp.text(
-                    max(plot_time),
-                    dist_degree,
-                    str_annot,
-                    verticalalignment="center",
-                    fontsize=7,
-                )
-                # ax_1comp.text(160, dist_degree, str_annot,
-                #    verticalalignment='center', fontsize=7)
+                    # mark measure window range
+                    ax_1comp.plot(win_t0, dist_degree, "k|", markersize=8)
+                    ax_1comp.plot(win_t1, dist_degree, "k|", markersize=8)
+                    ## annotate amplitude
+                    #  ax.text(max(plot_time), dist_degree, '%.1e ' % (Amax_obs),
+                    #      verticalalignment='bottom',
+                    #      horizontalalignment='right',
+                    #      fontsize=7, color='black')
+                    #  ax.text(max(plot_time), dist_degree, '%.1e ' % (Amax_syn),
+                    #      verticalalignment='top',
+                    #      horizontalalignment='right',
+                    #      fontsize=7, color='red')
+                    ## annotate CC0
+                    #  ax.text(max(plot_time), dist_degree, ' %.3f'%(window['cc']['CC0']),
+                    #      verticalalignment='center', fontsize=7)
+                    ## annotate window weight
+                    # if i == 1:
+                    #  ax.text(max(plot_time), dist_degree, ' %.1f' % (window['weight']),
+                    #      verticalalignment='center', fontsize=7)
+                    ##annotate station names
+                    str_annot = " %s (%.3f,%.3f,%.1f)" % (
+                        g_sta._v_name,
+                        win_cc0,
+                        win_tshift,
+                        win["weight"],
+                    )
+                    ax_1comp.text(
+                        max(plot_time),
+                        dist_degree,
+                        str_annot,
+                        verticalalignment="center",
+                        fontsize=7,
+                    )
+                    # ax_1comp.text(160, dist_degree, str_annot,
+                    #    verticalalignment='center', fontsize=7)
 
-            # -- set axes limits and lables, annotation
-            ax_1comp.set_xlim(min(plot_time), max(plot_time))
-            # ax_1comp.set_xlim(80,160)
-            ax_1comp.set_ylim(plot_ymin, plot_ymax)
-            ax_1comp.set_xlabel("t - {:.1f}*dist (s)".format(plot_rayp))
-            ax_1comp.tick_params(axis="both", labelsize=10)
-            # ylabel
-            ax_1comp.set_ylabel("dist (deg)")
-            # ax_1comp.invert_yaxis()
+                # -- set axes limits and lables, annotation
+                ax_1comp.set_xlim(min(plot_time), max(plot_time))
+                # ax_1comp.set_xlim(80,160)
+                ax_1comp.set_ylim(plot_ymin, plot_ymax)
+                ax_1comp.set_xlabel("t - {:.1f}*dist (s)".format(plot_rayp))
+                ax_1comp.tick_params(axis="both", labelsize=10)
+                # ylabel
+                ax_1comp.set_ylabel("dist (deg)")
+                # ax_1comp.invert_yaxis()
 
-            # -- save figures
-            if savefig:
-                out_file = "%s/%s_az_%03d_%03d_%s.pdf" % (
-                    out_dir,
-                    evnm,  # event["id"],
-                    azmin,
-                    azmax,
-                    plot_window_id,
-                )
-                plt.savefig(out_file, format="pdf")
-            else:
-                plt.show()
-            plt.close(fig)
+                # # -- save figures
+                # if savefig:
+                #     out_file = "%s/%s_az_%03d_%03d_%s.pdf" % (
+                #         out_dir,
+                #         evnm,  # event["id"],
+                #         azmin,
+                #         azmax,
+                #         plot_window_id,
+                #     )
+                #     plt.savefig(out_file, format="pdf")
+                # else:
+                #     plt.show()
+                pdf.savefig(fig)
+                plt.close(fig)
 
     def output_adj(self, out_dir="adj"):
 

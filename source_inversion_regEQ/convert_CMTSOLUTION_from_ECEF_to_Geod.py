@@ -4,29 +4,23 @@
 """
 import sys
 import numpy as np
-from scipy.interpolate import interpn
+# from scipy.interpolate import interpn
 
-from netCDF4 import Dataset
+# from netCDF4 import Dataset
 from obspy import UTCDateTime
 
-import pyproj
+from pyproj import Transformer
 
 #====== user input
 cmt_file = str(sys.argv[1])
 out_file = str(sys.argv[2])
-topoGRDfile = str(sys.argv[3]) # 'ETOPO1_Ice_g_smooth_b15km_I4m.grd'
+# topoGRDfile = str(sys.argv[3]) # 'ETOPO1_Ice_g_smooth_b15km_I4m.grd'
 
-GPS_ELLPS = 'WGS84'
-ecef = pyproj.Proj(proj='geocent', ellps=GPS_ELLPS)
-lla = pyproj.Proj(proj='latlong', ellps=GPS_ELLPS)
+epsg_ecef = "EPSG:4978"
+epsg_wgs84 = "EPSG:4326"
+transformer = Transformer.from_crs(epsg_ecef, epsg_wgs84)
 
-#--- read in topo file
-fh = Dataset(topoGRDfile,'r')
-grd_lat = np.array(fh.variables['lat'][:])
-grd_lon = np.array(fh.variables['lon'][:])
-grd_topo = np.transpose(np.array(fh.variables['z'][:])) # (lon,lat)
-
-#--- read in Harvard gCMT
+#--- read in CMTSOLUTION in ECEF coord.
 with open(cmt_file, 'r') as f:
   lines = [ x for x in f.readlines() if not(x.startswith('#')) ]
 
@@ -48,16 +42,17 @@ y = float(lines[5][1])
 z = float(lines[6][1])
 
 # convert from ECEF to llh
-lon, lat, height = pyproj.transform(ecef, lla, x, y, z)
-topo_local = interpn((grd_lon,grd_lat), grd_topo, [lon,lat])
-print("lon,lat,topo = ",lon,lat,topo_local)
-dep_km = (topo_local - height)/1000.0 # elliptic height, ellipsoid approx. MSL
+lat, lon, height = transformer.transform(x, y, z)
+# topo_local = interpn((grd_lon,grd_lat), grd_topo, [lon,lat])
+# print("lon,lat,topo = ",lon,lat,topo_local)
+# dep_km = (topo_local - height)/1000.0 # elliptic height, ellipsoid approx. MSL
+dep_km = (0 - height)/1000.0 # elliptic height, ellipsoid approx. MSL
 
 # centroid time: t0
 isotime = '{:s}-{:s}-{:s}T{:s}:{:s}:{:s}Z'.format(
     year, month, day, hour, minute, second)
 t0 = UTCDateTime(isotime) + time_shift
-# modify origin time in header line to have centroid time 
+# modify origin time in header line to have centroid time
 header[1] = str(t0.year)
 header[2] = str(t0.month)
 header[3] = str(t0.day)
@@ -76,7 +71,7 @@ m13 = float(lines[11][1])
 m23 = float(lines[12][1])
 mt_xyz = np.array([[m11, m12, m13], [m12, m22, m23], [m13, m23, m33]]) * 1.0e7
 
-# coordinate transformation matrix (r,theta,phi) to (x,y,z) 
+# coordinate transformation matrix (r,theta,phi) to (x,y,z)
 r = (x**2 + y**2 + z**2)**0.5
 theta = np.arccos(z/r)
 phi = np.arctan2(y, x)

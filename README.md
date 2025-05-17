@@ -91,7 +91,7 @@ project/
 #====== Project setup
 
 1. setup sem_config/
-    
+   
     * DATA/Par_file: define model geometry, mesh slices, simulation properties, etc.
 
     * setup/constants.h.in: fine tuning of mesh parameters
@@ -115,7 +115,7 @@ project/
         - specfem3d_globe/OUTPUT_FILES/values_from_mesher.h,
 
     into include/. You should use these header files for your own application.
- 
+
     * set correct path to netcdf include and lib directories in Makefile
     
     * make -f Makefile clean all
@@ -146,3 +146,81 @@ project/
     * plot x-sections: model, kernel
 
     * plot data misfit: station misfit distribution, waveform profile for each earthquake
+
+
+
+## Work flow of structural inversion
+
+``` mermaid
+flowchart LR
+		classDef GPU fill:#f96
+		
+		A[initial model] --> e1f
+		A --> edf
+		A --> enf
+
+		subgraph e1 [event 1]
+        direction LR
+    	e1f[forward]:::GPU --> e1m[misfit] --> e1k[kernel]:::GPU
+    end
+    
+    subgraph ed [event ...]
+      direction LR
+    	edf[forward] --> edm[misfit] --> edk[kernel]
+    end
+    
+    subgraph en [event N]
+        direction LR
+    	enf[forward] --> enm[misfit] --> enk[kernel]
+    end
+
+    e1k --> ks[sum kernel \n preconditioning \n non-linear CG \n search directions]
+    edk --> ks
+    enk --> ks
+    
+    ks --> mp[perturb model]
+
+    subgraph es1 [event 1]
+        direction LR
+        es1f[N x forward]:::GPU --> es1d[diff] --> es1s[search]
+    end
+    subgraph esd [event ...]
+        direction LR
+        esdf[forward] --> esdd[diff] --> esds[search]
+    end
+ 		subgraph esn [event N]
+        direction LR
+        esnf[forward] --> esnd[diff] --> esns[search]
+    end
+    
+    mp --> es1f & esdf & esnf
+		
+		es1s & esds & esns --> o[optimal step lengths]
+```
+
+```pseudocode
+# Note: [***_job] is a slurm job
+
+for each event:
+     [forward_job] forward simulation
+     [misfit_job]  measure misfit
+     [kernel_job]  kernel simulation, get model gradients (e.g. cijkl_kernel)
+
+[sum_kernel_job] sum model gradients for all events to get averaged model gradients, also with preconditioning
+
+[perturb_model_job] perturb model parameters along some chosen search directions (e.g. dVp, dVs) based on averaged gradients and also nonliear-cg
+
+for each event:
+	[forward_perturb_job] forward simulation for perturbed models
+
+[search_job]
+	for each event:
+		get waveform differences for each search direction in model space
+	while changes in the optimal step lengths greater than a threshold:
+		for each event:
+			calculate misfit for a range of step lengths, assuming linear relationship between waveform differences and step length
+		sum search results for all event, get optimal step lengths
+```
+
+
+

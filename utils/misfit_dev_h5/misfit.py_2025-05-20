@@ -8,8 +8,6 @@ import warnings
 import re
 import datetime
 from collections import OrderedDict
-import multiprocessing
-import queue
 
 #
 import numpy as np
@@ -262,515 +260,6 @@ class Source(pt.IsDescription):
     dmt = pt.Float64Col(shape=(3, 3), pos=14)  # dmt
 
 
-def _get_obs_ENZ(g_sta, obs_tag):
-    """get observed seismogram in array(ENZ,nt)"""
-    if obs_tag not in g_sta:
-        msg = f"{g_sta._v_name}: {obs_tag} does not exist, skip"
-        raise KeyError(msg)
-    obs = g_sta[obs_tag]
-
-    # check data type
-    obs_type = obs.attrs["type"]
-    if obs_type != "VEL" and obs_type != "DISP":
-        raise AssertionError(f"wrong types: obs({obs_type}), either VEL or DISP")
-
-    # check channels' info
-    obs_channels = obs.attrs["channels"]
-    obs_Zchan = [cha for cha in obs_channels if cha["name"].decode()[-1] == "Z"]
-    obs_Hchan = [cha for cha in obs_channels if cha["name"].decode()[-1] != "Z"]
-    if len(obs_Zchan) != 1 or obs_Zchan[0]["dip"] != -90:
-        msg = f"{g_sta._v_name} has problematic Z channel info: {obs_Zchan}, skip"
-        raise AssertionError(msg)
-    no_Hchan = False
-    if len(obs_Hchan) == 0:
-        msg = f"{g_sta._v_name} has no horizontal channels"
-        warnings.warn(msg)
-        no_Hchan = True
-    else:
-        assert len(obs_Hchan) == 2
-
-    # rotate obs to ENZ
-    # projection matrix: obs = proj * ENZ => ENZ = inv(proj) * obs
-    data_nt = obs.attrs["npts"]
-    obs_ENZ = np.zeros((3, data_nt), dtype=float)
-    if no_Hchan:
-        obs_ENZ[0:2, :] = 0.0
-        obs_ENZ[2, :] = obs[0, :]  # only Z component
-    else:
-        assert obs.shape == obs_ENZ.shape
-        proj_matrix = np.zeros((3, 3))
-        for i in range(3):
-            chan = obs_channels[i]
-            sin_az = np.sin(np.deg2rad(chan["azimuth"]))
-            cos_az = np.cos(np.deg2rad(chan["azimuth"]))
-            sin_dip = np.sin(np.deg2rad(chan["dip"]))
-            cos_dip = np.cos(np.deg2rad(chan["dip"]))
-            # column vector = obs channel polarization
-            proj_matrix[i, 0] = cos_dip * sin_az  # proj to E
-            proj_matrix[i, 1] = cos_dip * cos_az  # proj to N
-            proj_matrix[i, 2] = -sin_dip  # proj to Z (Up)
-        # inverse projection matrix: ENZ = inv(proj) * obs
-        inv_proj = np.linalg.inv(proj_matrix)
-        obs_ENZ = np.dot(inv_proj, obs)
-
-    return obs_ENZ, no_Hchan
-
-
-def _get_syn_ENZ(g_sta, syn_tag):
-
-    if syn_tag not in g_sta:
-        msg = f"{g_sta._v_name}: {syn_tag} does not exist, skip"
-        raise KeyError(msg)
-    syn = g_sta[syn_tag]
-
-    # check data type
-    syn_type = syn.attrs["type"]
-    if syn_type != "DISP":
-        raise AssertionError(f"wrong types: syn({syn_type}) must be DISP")
-
-    # check channels' info
-    syn_channels = syn.attrs["channels"]
-    assert len(syn_channels) == 3
-
-    # rotate syn to ENZ
-    data_nt = syn.attrs["npts"]
-    data_fs = syn.attrs["sampling_rate"]
-    data_dt = 1.0 / data_fs
-    syn_ENZ = np.zeros((3, data_nt))
-    syn_ENZ[:] = syn[:]
-    proj_matrix = np.zeros((3, 3))
-    for i in range(3):
-        chan = syn_channels[i]
-        sin_az = np.sin(np.deg2rad(chan["azimuth"]))
-        cos_az = np.cos(np.deg2rad(chan["azimuth"]))
-        sin_dip = np.sin(np.deg2rad(chan["dip"]))
-        cos_dip = np.cos(np.deg2rad(chan["dip"]))
-        # column vector = obs channel polarization
-        proj_matrix[i, 0] = cos_dip * sin_az  # proj to E
-        proj_matrix[i, 1] = cos_dip * cos_az  # proj to N
-        proj_matrix[i, 2] = -sin_dip  # proj to Z
-    # inverse projection matrix: ENZ = inv(proj) * obs
-    inv_proj = np.linalg.inv(proj_matrix)
-    syn_ENZ[:] = np.dot(inv_proj, syn_ENZ)
-
-    # # apply time derivative (when data is vel)
-    # if to_vel:
-    #     npad = 100  # t_pad = 100 / fs, response drop to ~1% peak value
-    #     nfft = scipy.fft.next_fast_len(data_nt + npad)
-    #     freqs = np.fft.rfftfreq(nfft, d=data_dt)
-    #     Fsyn *= 2j * np.pi * freqs
-    #     syn_ENZ[:] = np.fft.irfft(Fsyn, nfft)[:, :data_nt]
-
-    return syn_ENZ
-
-
-def _extract_obs_syn_ENZ(
-    sta_attrs, obs_data, obs_attrs, syn_data, syn_attrs, event_tau
-):
-    net = sta_attrs["network"]
-    sta = sta_attrs["station"]
-    stnm = f"{net}_{sta}"
-
-    # check data type
-    obs_type = obs_attrs["type"]
-    syn_type = syn_attrs["type"]
-    case1 = obs_type == "VEL" and syn_type == "DISP"
-    case2 = obs_type == "DISP" and syn_type == "DISP"
-    if not (case1 or case2):
-        raise AssertionError(f"wrong types: obs({obs_type}), syn({syn_type})")
-
-    # check channels' info
-    obs_channels = obs_attrs["channels"]
-    syn_channels = syn_attrs["channels"]
-    obs_Zchan = [cha for cha in obs_channels if cha["name"].decode()[-1] == "Z"]
-    obs_Hchan = [cha for cha in obs_channels if cha["name"].decode()[-1] != "Z"]
-    if len(obs_Zchan) != 1 or obs_Zchan[0]["dip"] != -90:
-        msg = f"{stnm} has problematic Z channel info: {obs_Zchan}, skip"
-        raise AssertionError(msg)
-    no_Hchan = False
-    if len(obs_Hchan) == 0:
-        msg = f"{stnm} has no horizontal channels"
-        warnings.warn(msg)
-        no_Hchan = True
-    else:
-        assert len(obs_Hchan) == 2
-    assert len(syn_channels) == 3
-
-    # data_tb = obs.attrs["starttime"]
-    data_fs = obs_attrs["sampling_rate"]
-    data_dt = 1.0 / data_fs
-    data_nt = obs_attrs["npts"]
-    # data_te = data_tb + (data_nt - 1) * data_dt
-    # data_times = np.arange(data_nt, dtype=float) * data_dt
-    # noise_te = (first_arrtime - data_tb) - cfg_noise_before_first_arrival
-    # noise_idx1 = int(noise_te * data_fs)  # 0:idx1 as noise
-
-    # rotate obs to ENZ
-    # projection matrix: obs = proj * ENZ => ENZ = inv(proj) * obs
-    obs_ENZ = np.zeros((3, data_nt))
-    if no_Hchan:
-        obs_ENZ[2, :] = obs_data[0, :]  # only Z component
-    else:
-        assert obs_data.shape == obs_ENZ.shape
-        proj_matrix = np.zeros((3, 3))
-        for i in range(3):
-            chan = obs_channels[i]
-            sin_az = np.sin(np.deg2rad(chan["azimuth"]))
-            cos_az = np.cos(np.deg2rad(chan["azimuth"]))
-            sin_dip = np.sin(np.deg2rad(chan["dip"]))
-            cos_dip = np.cos(np.deg2rad(chan["dip"]))
-            # column vector = obs channel polarization
-            proj_matrix[i, 0] = cos_dip * sin_az  # proj to E
-            proj_matrix[i, 1] = cos_dip * cos_az  # proj to N
-            proj_matrix[i, 2] = -sin_dip  # proj to Z (Up)
-        # inverse projection matrix: ENZ = inv(proj) * obs
-        inv_proj = np.linalg.inv(proj_matrix)
-        obs_ENZ = np.dot(inv_proj, obs_data)
-
-    # rotate syn to ENZ
-    syn_ENZ = np.zeros((3, data_nt))
-    syn_ENZ[:] = syn_data[:]
-    proj_matrix = np.zeros((3, 3))
-    for i in range(3):
-        chan = syn_channels[i]
-        sin_az = np.sin(np.deg2rad(chan["azimuth"]))
-        cos_az = np.cos(np.deg2rad(chan["azimuth"]))
-        sin_dip = np.sin(np.deg2rad(chan["dip"]))
-        cos_dip = np.cos(np.deg2rad(chan["dip"]))
-        # column vector = obs channel polarization
-        proj_matrix[i, 0] = cos_dip * sin_az  # proj to E
-        proj_matrix[i, 1] = cos_dip * cos_az  # proj to N
-        proj_matrix[i, 2] = -sin_dip  # proj to Z
-    # inverse projection matrix: ENZ = inv(proj) * obs
-    inv_proj = np.linalg.inv(proj_matrix)
-    syn_ENZ[:] = np.dot(inv_proj, syn_ENZ)
-
-    # np.savez('extract', syn_ENZ=syn_ENZ)
-
-    # apply source time function and/or time derivative
-    if syn_attrs["is_grn"] or obs_type == "VEL":
-        npad = int(5 * event_tau * data_fs)
-        # npad = data_nt  #DEBUG
-        nfft = scipy.fft.next_fast_len(data_nt + npad)
-        freqs = np.fft.rfftfreq(nfft, d=data_dt)
-        Fsyn = np.fft.rfft(syn_ENZ, nfft)
-        if syn_attrs["is_grn"]:
-            # source spectrum (moment-rate function)
-            # print("event_tau=", event_tau)
-            F_src = stf_gauss_spectrum(freqs, event_tau)
-            Fsyn *= F_src
-        if obs_type == "VEL":
-            Fsyn *= 2j * np.pi * freqs
-        syn_ENZ[:] = np.fft.irfft(Fsyn, nfft)[:, :data_nt]
-
-    return obs_ENZ, syn_ENZ, no_Hchan
-
-
-def _measure_adj_one_sta(
-    sta_attrs,
-    obs_data,
-    obs_attrs,
-    syn_data,
-    syn_attrs,
-    wins,
-    event_tau,
-    cfg_noise_before_first_arrival,
-    cci_dt,
-    misfit_type,
-    weight_param,
-    adj_band_code,
-):
-
-    net = sta_attrs["network"]
-    sta = sta_attrs["station"]
-    stnm = f"{net}_{sta}"
-    # loc = attrs['location']
-    first_arrtime = sta_attrs["first_arrtime"]
-
-    try:
-        obs_ENZ, syn_ENZ, no_Hchan = _extract_obs_syn_ENZ(
-            sta_attrs, obs_data, obs_attrs, syn_data, syn_attrs, event_tau
-        )
-    except Exception as e:
-        msg = f"{stnm}: failed to get obs_ENZ,syn_ENZ ({e})"
-        warnings.warn(msg)
-        return None
-
-    data_tb = obs_attrs["starttime"]
-    data_fs = obs_attrs["sampling_rate"]
-    data_dt = 1.0 / data_fs
-    data_nt = obs_attrs["npts"]
-    data_te = data_tb + (data_nt - 1) * data_dt
-    data_times = np.arange(data_nt, dtype=float) * data_dt
-    noise_te = (first_arrtime - data_tb) - cfg_noise_before_first_arrival
-    noise_idx1 = int(noise_te * data_fs)  # 0:idx1 as noise
-
-    # pre-filter parameters
-    pre_filters = obs_attrs["filter"]
-    # data_butter_N = obs.attrs["filter"]["N"]
-    # data_butter_Wn = obs.attrs["filter"]["Wn"]
-
-    # sum of adjoint sources from all windows
-    dchi_du = np.zeros((3, data_nt))
-
-    for win in wins:
-        # component
-        cmpnm = win["cmpnm"].decode()
-        if no_Hchan and cmpnm != "Z":
-            warnings.warn("skip non-vertical window since only vertical data present")
-            win["valid"] = False
-            win.update()
-            continue
-        cmpaz = win["cmpaz"]
-        cmpdip = win["cmpdip"]
-        # filter
-        butter_N = win["butter_N"]
-        butter_Wn = win["butter_Wn"]
-        # fft
-        npad = int(2 * data_fs / min(butter_Wn))
-        nfft = scipy.fft.next_fast_len(data_nt + npad)
-        freqs = np.fft.rfftfreq(nfft, d=data_dt)
-        # window filter
-        sos = scipy.signal.butter(
-            butter_N, butter_Wn, "bandpass", fs=data_fs, output="sos"
-        )
-        _, filter_h = scipy.signal.freqz_sos(sos, worN=freqs, fs=data_fs)
-        Fw = abs(filter_h)  # zero-phase filter response
-        # pre-filter applied to obs & syn
-        filter_h = np.ones_like(freqs)
-        for filter in pre_filters:
-            sos = scipy.signal.butter(
-                filter["N"],
-                filter["Wn"],
-                filter["type"],
-                fs=data_fs,
-                output="sos",
-            )
-            _, h = scipy.signal.freqz_sos(sos, worN=freqs, fs=data_fs)
-            filter_h *= abs(h)
-        Fd = abs(filter_h)
-        # time derivative in frequency domain
-        Ft = 2j * np.pi * freqs
-        # time window
-        win_tb = UTCDateTime(win["starttime"])
-        win_te = UTCDateTime(win["endtime"])
-        win_taper = win["taper"]
-
-        # window function
-        b = win_tb - data_tb
-        e = win_te - data_tb
-        win_len = e - b
-        width = win_len * min(win_taper, 0.4)
-        win_c = [b, b + width, e - width, e]
-        win_func = cosine_sac_taper(data_times, win_c)
-
-        # component
-        if cmpnm in ["Z", "R", "T"]:
-            sin_az = np.sin(np.deg2rad(cmpaz))
-            cos_az = np.cos(np.deg2rad(cmpaz))
-            sin_dip = np.sin(np.deg2rad(cmpdip))
-            cos_dip = np.cos(np.deg2rad(cmpdip))
-            n = np.array(
-                [
-                    [cos_dip * sin_az],  # cos(E, comp)
-                    [cos_dip * cos_az],  # cos(N, comp)
-                    [-sin_dip],  # cos(Z, comp)
-                ]
-            )
-            proj_matrix = np.dot(n, n.transpose())
-        elif cmpnm == "H":  # horizontal vector 2d
-            proj_matrix = np.identity(3)
-            proj_matrix[2, 2] = 0.0  # zero Z component
-        elif cmpnm == "F":  # full 3d vector
-            proj_matrix = np.identity(3)
-        else:
-            msg = f"unrecognized component code ({cmpnm}), SKIP"
-            warnings.warn(msg)
-            continue
-
-        # Fd: pre-filter used during preprocessing (e.g. rmresp)
-        # Fw: bandpass filter used on this window
-        # w: window function
-        #
-        # obs = w*(Fw*Fd*d), syn = w*(Fw*Fd*u)
-
-        # apply filter to obs, syn
-        # obs = Fw * (Fd * d), obs_ENZ = Fd * d, d = disp. or vel.
-        obs_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ, nfft), nfft)[:, :data_nt]
-        # syn = Fw * (Fd * [Ft] * u), (syn_ENZ = Fd * [Ft] *[S] * u)
-        syn_filt = np.fft.irfft(Fw * np.fft.rfft(syn_ENZ, nfft), nfft)[:, :data_nt]
-        # noise
-        taper_width = 0.5 / min(butter_Wn)
-        noise_win = cosine_sac_taper(
-            data_times, [0, taper_width, noise_te - taper_width, noise_te]
-        )
-        # cut noise window from obs_ENZ before applying bandpass filter Fw
-        noise_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ * noise_win, nfft), nfft)[
-            :, :data_nt
-        ]
-
-        # apply window and projection
-        # obs: w*(Fw*Fd*d)
-        obs_filt_win = np.dot(proj_matrix, obs_filt) * win_func
-        # syn: w*(Fw*Fd*u)
-        syn_filt_win = np.dot(proj_matrix, syn_filt) * win_func
-        # noise
-        noise_filt_win = np.dot(proj_matrix, noise_filt)[:, :noise_idx1]
-
-        # ------ measure SNR (based on maximum amplitude)
-        Amax_obs = np.sqrt(np.max(np.sum(obs_filt_win**2, axis=0)))
-        Amax_syn = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
-        Amax_noise = np.sqrt(np.max(np.sum(noise_filt_win**2, axis=0)))
-        if Amax_obs == 0:  # bad record
-            msg = f"empty obs trace ({win}), skip"
-            warnings.warn(msg)
-            continue
-        if Amax_noise == 0:
-            # could occure when the data begin time is too close to the first arrival
-            msg = f"empty noise trace ({win}), SKIP."
-            warnings.warn(msg)
-            continue
-        snr = 20.0 * np.log10(Amax_obs / Amax_noise)
-
-        # ------ measure CC time shift (between w*F*d and w*F*u)
-        obs_norm = np.sqrt(np.sum(obs_filt_win**2))
-        syn_norm = np.sqrt(np.sum(syn_filt_win**2))
-        # window normalization factor (without dt)
-        Nw = obs_norm * syn_norm
-        # NOTE the order (obs,syn) is important. The positive time on
-        # CC means shifting syn in the positive time direction to match
-        # the observed obs, and vice verser.
-        # [-(nt-1), nt) * dt
-        cc = np.zeros(2 * data_nt - 1)
-        for i in range(3):
-            cc += signal.fftconvolve(obs_filt_win[i, :], syn_filt_win[i, ::-1], "full")
-        cc /= Nw
-        # -- zero-lag cc coeff.
-        CC0 = cc[data_nt - 1]  # the n-th point corresponds to zero lag time
-        AR0 = CC0 * syn_norm / obs_norm  # amplitude ratio syn/obs
-        # DEBUG
-        # print(CC0, np.sum(obs_filt_win * syn_filt_win)/obs_norm/syn_norm)
-        # -- interpolate cc to finer time samples
-        CC_shift_range = win_len / 2.0  # TODO: more reasonable choice?
-        if data_dt < cci_dt:
-            msg = f"data_dt({data_dt}) < cci_dt({cci_dt})"
-            warnings.warn(msg)
-            cci_dt = data_dt
-        ncci = int(CC_shift_range / cci_dt)
-        cci_t0 = -ncci * cci_dt
-        cc_t0 = -(data_nt - 1) * data_dt  # begin time in cc
-        cci = lanczos_interpolation(
-            cc, cc_t0, data_dt, cci_t0, cci_dt, 2 * ncci + 1, a=20
-        )
-        # time shift at the maximum correlation
-        imax = np.argmax(cci)
-        CC_time_shift = cci_t0 + imax * cci_dt
-        CCmax = cci[imax]
-        ARmax = CCmax * syn_norm / obs_norm  # amplitude ratio: syn/obs
-
-        # ------ window weighting based on SNR and misfit
-        weight = win["weight"]
-        if "SNR" in weight_param:
-            weight *= cosine_taper(snr, weight_param["SNR"])
-        if "CCmax" in weight_param:
-            weight *= cosine_taper(CCmax, weight_param["CCmax"])
-        if "CC0" in weight_param:
-            weight *= cosine_taper(CC0, weight_param["CC0"])
-        if "cc_tshift" in weight_param:
-            weight *= cosine_taper(CC_time_shift, weight_param["cc_tshift"])
-
-        # ------ measure adjoint source
-        Aw = CC0 * obs_norm / syn_norm  # window amplitude raito
-        if misfit_type == "cc0":
-            #
-            # Goodness-of-fit: (zero-lag normalized cross-correlation coefficient)
-            #   cc(syn, obs) = sum(syn * obs) / sqrt(sum(syn**2) * sum(obs**2))
-            #
-            # obs = w * (Fw * Fd * P * d),        d = displacement or velocity.
-            # syn = w * (Fw * Fd * P * u),        if d = disp.
-            #       w * (Fw * Fd * Ft * P * u),   if d = vel.
-            #
-            #  u[3,nt]: synthetic seismogram of displacement
-            #     , replaced by S * u, when u is Green's function (S: source wavelet)
-            #  d[3,nt]: recorded ground displacement or velocity
-            #  P[3,3]: the projection matrix (real valued), e.g. project to radial/tangential component
-            #  Fd[nfft]: bandpass filter applied during pre-processing (e.g. removing instrument response, down-sampling)
-            #  Fw[nfft]: bandpass filter applied for the measurment time window
-            #  Ft[nfft]: time derivate (2j * pi * freqs in frequency domian)
-            #  note: F * x = irfft(F * rfft(x, nfft), nfft)[:, :nt]
-            #  w[nt]: time window function
-            #
-            # adjoint source:
-            #   Dcc/Du[3,nt] = conj(Fw * Fd * [Ft]) * transpose(P) * w * (obs - Aw * syn) / obs_norm / syn_norm,
-            #
-            #   where,
-            #           [Ft] is only applied when d is vel.
-            #           obs_norm = sqrt(sum(obs**2))
-            #           syn_norm = sqrt(sum(syn**2))
-            #           Aw = sum(syn * obs) / sum(syn**2)
-            #
-            #   cc(u+du) - cc(u) = sum(Dcc/Du * du) + O(du**2)
-            #
-            dchiw_du = np.dot(
-                np.transpose(proj_matrix),
-                win_func * (obs_filt_win - Aw * syn_filt_win) / Nw,
-            )
-            conj_F = np.conjugate(Fw * Fd, dtype="complex")
-            if obs_attrs["type"] == "VEL":
-                conj_F *= np.conjugate(Ft)
-            dchiw_du = np.fft.irfft(conj_F * np.fft.rfft(dchiw_du, nfft), nfft)[
-                :, :data_nt
-            ]
-        else:
-            msg = f"{stnm}: unknown misfit type ({misfit_type})"
-            raise ValueError(msg)
-
-        # add into total dchi_du
-        dchi_du += weight * dchiw_du
-
-        win["cc0"] = CC0
-        win["cc_time_shift"] = CC_time_shift
-        win["cc_max"] = CCmax
-        win["amp_ratio_cc0"] = AR0
-        win["amp_ratio_ccmax"] = ARmax
-        win["noise_maxamp"] = Amax_noise
-        win["obs_maxamp"] = Amax_obs
-        win["syn_maxamp"] = Amax_syn
-        win["SNR"] = snr
-        win["weight"] = weight
-        win["valid"] = True
-        win["proj_matrix"] = proj_matrix
-
-    # store adjoint source for this station, e.g. /NET_STA/ADJ_DISP[0:nchan, 0:npts]
-    # if adj_tag in g_sta:
-    #     msg = f"{adj_tag} exists in {g_sta._v_name}, overwrite!"
-    #     warnings.warn(msg)
-    #     h5f.remove_node(g_sta, adj_tag)
-    # shape = (3, data_nt)
-    # ca = h5f.create_carray(
-    #     g_sta, adj_tag, pt_atom, shape, filters=pt_filters
-    # )
-    # ca[:] = dchi_du
-    dtype = [("name", "S3"), ("azimuth", float), ("dip", float)]
-    channels = [
-        (f"{adj_band_code}E", 90, 0),
-        (f"{adj_band_code}N", 0, 0),
-        (f"{adj_band_code}Z", 0, -90),
-    ]
-    adj_attrs = {}
-    adj_attrs["channels"] = np.array(channels, dtype=dtype)
-    adj_attrs["starttime"] = data_tb
-    adj_attrs["sampling_rate"] = data_fs
-    adj_attrs["npts"] = data_nt
-    adj_attrs["solver_tb"] = syn_attrs["solver_tb"]
-    adj_attrs["solver_dt"] = syn_attrs["solver_dt"]
-    adj_attrs["solver_nt"] = syn_attrs["solver_nt"]
-    adj_attrs["type"] = syn_attrs["type"]
-    adj_attrs["misfit"] = misfit_type
-
-    return dchi_du, adj_attrs, wins
-
-
 class Misfit(object):
     """Class managing all misfit windows
 
@@ -833,18 +322,35 @@ class Misfit(object):
 
     """
 
-    def __init__(self, h5_path):
-        self.h5_path = h5_path
+    def __init__(self, h5_file, mode="r", nproc=1, **kwargs):
+        try:
+            self.h5f = pt.open_file(h5_file, mode=mode, **kwargs)
+        except Exception as e:
+            self.h5f = None
+            raise e
+        if nproc <= 0: nproc = 1
+        self.nproc = nproc
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def __del__(self):
+        self.close()
+
+    def close(self):  # clean-up
+        if self.h5f:
+            self.h5f.close()
 
     def read_config_file(self, config_yaml):
         with open(config_yaml, "r") as file:
             self.config = yaml.safe_load(file)
-
-        with pt.open_file(self.h5_path, "r+") as h5f:
-            if "config" in h5f.root._v_attrs:
-                msg = f"config field exists, overwrite!"
-                warnings.warn(msg)
-            h5f.root._v_attrs["config"] = self.config
+        if "config" in self.h5f.root._v_attrs:
+            msg = f"config field exists, overwrite!"
+            warnings.warn(msg)
+        self.h5f.root._v_attrs["config"] = self.config
 
     def read_solver_parfile(self, solver_parfile):
         """
@@ -859,12 +365,10 @@ class Misfit(object):
             dtype=dict(key=object, value=object),
             index_col=["key"],
         ).to_dict()["value"]
-
-        with pt.open_file(self.h5_path, "r+") as h5f:
-            if "solver" in h5f.root._v_attrs:
-                msg = f"solver field exists, overwrite!"
-                warnings.warn(msg)
-            h5f.root._v_attrs["solver"] = self.solver_param
+        if "solver" in self.h5f.root._v_attrs:
+            msg = f"solver field exists, overwrite!"
+            warnings.warn(msg)
+        self.h5f.root._v_attrs["solver"] = self.solver_param
 
     def read_cmtsolution(self, cmt_file, ECEF=False):
         """cmt_file (str): CMTSOLUTION format file"""
@@ -884,7 +388,7 @@ class Misfit(object):
         time_shift = float(lines[2][1])
 
         # initialize pyproj objects
-        # GPS_ELLPS = h5f.root._v_attrs["config"]["gps_ellps"]
+        # GPS_ELLPS = self.h5f.root._v_attrs["config"]["gps_ellps"]
         # ecef = pyproj.Proj(proj="geocent", ellps=GPS_ELLPS)
         # lla = pyproj.Proj(proj="latlong", ellps=GPS_ELLPS)
         gps2ecef = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:4978")  # GPS to ECEF
@@ -958,25 +462,24 @@ class Misfit(object):
             mt_rtp = mt * 1.0e-7
             mt_xyz = np.dot(np.dot(a, mt_rtp), np.transpose(a))
 
-        with pt.open_file(self.h5_path, "r+") as h5f:
-            src_path = f"/source"
-            if src_path in h5f:
-                h5f.remove_node(src_path)
-            tbl_src = h5f.create_table("/", "source", Source)
+        src_path = f"/source"
+        if src_path in self.h5f:
+            self.h5f.remove_node(src_path)
+        tbl_src = self.h5f.create_table("/", "source", Source)
 
-            src_row = tbl_src.row
-            src_row["header"] = " ".join(header)
-            src_row["id"] = event_id
-            src_row["t0"] = t0.isoformat()
-            src_row["tau"] = tau
-            src_row["xs"] = [x, y, z]
-            src_row["mt"] = mt_xyz
-            src_row["mt_rtp"] = mt_rtp
-            src_row["latitude"] = lat
-            src_row["longitude"] = lon
-            src_row["depth"] = dep
-            src_row.append()
-            tbl_src.flush()
+        src_row = tbl_src.row
+        src_row["header"] = " ".join(header)
+        src_row["id"] = event_id
+        src_row["t0"] = t0.isoformat()
+        src_row["tau"] = tau
+        src_row["xs"] = [x, y, z]
+        src_row["mt"] = mt_xyz
+        src_row["mt_rtp"] = mt_rtp
+        src_row["latitude"] = lat
+        src_row["longitude"] = lon
+        src_row["depth"] = dep
+        src_row.append()
+        tbl_src.flush()
 
         # g_src._v_attrs["id"] = event_id
         # g_src._v_attrs["header"] = " ".join(header)
@@ -993,21 +496,20 @@ class Misfit(object):
         """
         Write out CMTSOLUTION file
         """
-        with pt.open_file(self.h5_path, "r") as h5f:
-            src_path = f"/source"
-            if src_path not in h5f:
+        src_path = f"/source"
+        if src_path not in self.h5f:
+            msg = "no source information"
+            raise Exception(msg)
+        else:
+            tbl_src = self.h5f.get_node(src_path)
+            if tbl_src.nrows == 0:
                 msg = "no source information"
                 raise Exception(msg)
-            else:
-                tbl_src = h5f.get_node(src_path)
-                if tbl_src.nrows == 0:
-                    msg = "no source information"
-                    raise Exception(msg)
 
-            event = tbl_src[0]
-            event_id = event["id"].decode()
-            header = event["header"].decode()
-            tau = event["tau"]
+        event = tbl_src[0]
+        event_id = event["id"].decode()
+        header = event["header"].decode()
+        tau = event["tau"]
 
         if ECEF:
             xs = event["xs"]
@@ -1051,21 +553,20 @@ class Misfit(object):
         station (table)
             net,sta,loc,bi,components,stla,stlo,stel,stdp
         """
-        # config = h5f.root._v_attrs["config"]
+        # config = self.h5f.root._v_attrs["config"]
 
-        # if "/source" not in h5f:
+        # if "/source" not in self.h5f:
         #     raise KeyError("/source does not exist, run read_cmtsolutin first")
-        # tbl_src = h5f.get_node("/source")
+        # tbl_src = self.h5f.get_node("/source")
         # if tbl_src.nrows == 0:
         #     msg = "no source information"
         #     raise Exception(msg)
         # event = tbl_src[-1]
         # origin_time = UTCDateTime(event["t0"])
 
-        h5f = pt.open_file(self.h5_path, "r+")
-        if "/channel" in h5f:
-            h5f.remove_node("/", "channel")
-        tbl_chan = h5f.create_table("/", "channel", Channel)
+        if "/channel" in self.h5f:
+            self.h5f.remove_node("/", "channel")
+        tbl_chan = self.h5f.create_table("/", "channel", Channel)
         chan_row = tbl_chan.row
 
         select_station = False
@@ -1088,6 +589,7 @@ class Misfit(object):
             ]
 
         # sort channels based on station_id (net,sta,loc,bi) bi=band,instrument
+        # station_dict = {}
         for l in lines:
             l = [x.strip() for x in l]
 
@@ -1148,23 +650,132 @@ class Misfit(object):
 
         tbl_chan.flush()
 
-        h5f.close()
+        # for station_id in station_dict:
+        #     # select channels which are active at the specified time
+        #     channels = [
+        #         cha
+        #         for cha in station_dict[station_id]
+        #         if cha["starttime"] < origin_time
+        #         and (not cha["endtime"] or origin_time < cha["endtime"])
+        #     ]
+
+        #     # # select band code (e.g. BH )
+        #     # if band_code:
+        #     #     n = len(band_code)
+        #     #     channel = [x for x in channel if x["code"][0:n] == band_code]
+
+        #     # check if all selected channels have the same location
+        #     coords = [
+        #         (x["latitude"], x["longitude"], x["elevation"], x["depth"])
+        #         for x in channels
+        #     ]
+        #     if len(set(coords)) != 1:
+        #         msg = f"{station_id}: channels do not have same coordinates, {coords}"
+        #         warnings.warn(msg)
+        #         continue
+        #     stla, stlo, stel, stdp = coords[0]
+
+        #     # if three_channels:
+        #     #     if len(channel) != 3:
+        #     #         warn = "Not exactly 3 components found: %s" % (str(station_id))
+        #     #         warnings.warn(warn)
+        #     #         continue
+
+        #     # check vertical component
+        #     Z_comp = [
+        #         (cha["component"], cha["azimuth"], cha["dip"])
+        #         for cha in channels
+        #         if cha["component"] == "Z"
+        #     ]
+        #     if len(Z_comp) != 1 or abs(Z_comp[0][2]) != 90.0:
+        #         msg = f"{station_id}: problematic vertical channel, {Z_comp}"
+        #         warnings.warn(msg)
+        #         continue
+
+        #     # check horizontal components
+        #     H_comp = [
+        #         (cha["component"], cha["azimuth"], cha["dip"])
+        #         for cha in channels
+        #         if cha["component"] != "Z"
+        #         and (cha["component"] in ["1", "2"] or cha["component"] in ["E", "N"])
+        #     ]
+        #     if len(H_comp) == 0:
+        #         msg = f"{station_id}: no horizontal channels"
+        #         warnings.warn(msg)
+        #     elif (
+        #         len(H_comp) != 2
+        #         or abs(H_comp[0][2]) != 0.0
+        #         or abs(H_comp[1][2]) != 0.0
+        #         or abs(np.cos(np.deg2rad(H_comp[0][1] - H_comp[1][1]))) > 0.1
+        #     ):
+        #         msg = f"{station_id}: problematic horizontal channels, ignored {H_comp}"
+        #         warnings.warn(msg)
+        #         H_comp = []
+
+        #     net, sta, loc, bi = station_id
+        #     station_row["network"] = net
+        #     station_row["station"] = sta
+        #     station_row["location"] = loc
+        #     station_row["band"] = bi[0]
+        #     station_row["instrument"] = bi[1]
+        #     station_row["latitude"] = stla
+        #     station_row["longitude"] = stlo
+        #     station_row["elevation"] = stel
+        #     station_row["depth"] = stdp
+
+        #     cmpnm = Z_comp[0][0]
+        #     cmpaz = [Z_comp[0][1], np.nan, np.nan]
+        #     cmpdip = [Z_comp[0][2], np.nan, np.nan]
+        #     if H_comp:
+        #         cmpnm = cmpnm + "".join([a[0] for a in H_comp])
+        #         cmpaz[1:] = [a[1] for a in H_comp]
+        #         cmpdip[1:] = [a[2] for a in H_comp]
+
+        #     station_row["component/code"] = cmpnm
+        #     station_row["component/az"] = cmpaz
+        #     station_row["component/dip"] = cmpdip
+
+        #     station_row.append()
+
+        # az, baz, dist = geod.inv(event["longitude"], event["latitude"], stlo, stla)
+        # dist_degree = np.rad2deg(dist / R_earth)
+        # evdp_km = event["depth"]
+        # if evdp_km < 0.0:
+        #     evdp_km = 0.0
+        # ttp = taup.get_travel_times(
+        #     source_depth_in_km=evdp_km,
+        #     distance_in_degree=dist_degree,
+        #     phase_list=["ttp"],
+        # )
+        # first_arrtime = event["t0"] + min([arr.time for arr in ttp])
+
+        # # create station group, e.g. /waveforms/NET_STA
+        # station_name = f"{net}_{sta}"
+        # if station_name in g_wav:
+        #     warnings.warn(f"{station_name} alreay exists, overwrite.")
+        #     g_sta = self.h5f.get_node(g_wav, station_name)
+        # else:
+        #     g_sta = self.h5f.create_group(g_wav, station_name)
+        # attrs = g_sta._v_attrs
+        # attrs["first_arrtime"] = first_arrtime
+        # attrs["azimuth"] = az
+        # attrs["back_azimuth"] = baz
+        # attrs["dist_degree"] = dist_degree
+        # attrs["channels"] = channels
 
     def read_data_h5(self, h5_file, station_file=None):
         """
         Read in observed seismograms from hdf5 file.
         """
-        h5f = pt.open_file(self.h5_path, "r+")
-
-        config = h5f.root._v_attrs["config"]
+        config = self.h5f.root._v_attrs["config"]
         time_before_first_arrival = config["data"]["time_before_first_arrival"]
         # taper_width = config['data']['taper_width']
         time_after_origin = config["data"]["time_after_origin"]
         obs_tag = config["data"]["tag"]
 
-        if "/source" not in h5f:
+        if "/source" not in self.h5f:
             raise KeyError("/source does not exist, run read_cmtsolutin first")
-        tbl_src = h5f.get_node("/source")
+        tbl_src = self.h5f.get_node("/source")
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
@@ -1175,14 +786,14 @@ class Misfit(object):
         R_earth = (geod.a + geod.b) / 2
         taup_model = TauPyModel(model=config["taup_model"])
 
-        if "/waveform" not in h5f:
-            g_wav = h5f.create_group("/", "waveform")
+        if "/waveform" not in self.h5f:
+            g_wav = self.h5f.create_group("/", "waveform")
         else:
-            g_wav = h5f.get_node("/waveform")
+            g_wav = self.h5f.get_node("/waveform")
 
-        if "/channel" not in h5f:
+        if "/channel" not in self.h5f:
             raise KeyError("/channel does not exist, run read_channel_file first")
-        tbl_chan = h5f.get_node("/channel")
+        tbl_chan = self.h5f.get_node("/channel")
 
         select_station = False
         if station_file:
@@ -1337,9 +948,9 @@ class Misfit(object):
                 station_name = f"{net}_{sta}"
                 if station_name in g_wav:
                     warnings.warn(f"{station_name} alreay exists, overwrite.")
-                    g_sta = h5f.get_node(g_wav, station_name)
+                    g_sta = self.h5f.get_node(g_wav, station_name)
                 else:
-                    g_sta = h5f.create_group(g_wav, station_name)
+                    g_sta = self.h5f.create_group(g_wav, station_name)
                 for attr_name in g_sta_obs._v_attrs._f_list("user"):
                     g_sta._v_attrs[attr_name] = g_sta_obs._v_attrs[attr_name]
                 g_sta._v_attrs["first_arrtime"] = first_arrtime
@@ -1351,8 +962,8 @@ class Misfit(object):
                 if obs_tag in g_sta:
                     msg = f"{obs_tag} alreay exists, overwrite."
                     warnings.warn(msg)
-                    h5f.remove_node(g_sta, obs_tag)
-                # h5f.create_external_link(g_sta, obs_tag, data)
+                    self.h5f.remove_node(g_sta, obs_tag)
+                # self.h5f.create_external_link(g_sta, obs_tag, data)
 
                 # cut data /waveforms/NET_STA/DATA_DISP
                 idx0 = int((t0 - data_starttime) * data_fs)
@@ -1363,7 +974,7 @@ class Misfit(object):
                 starttime = data_starttime + idx0 * data_dt
                 nchan = data.shape[0]
                 shape = (nchan, npts)
-                ca = h5f.create_carray(
+                ca = self.h5f.create_carray(
                     g_sta, obs_tag, h5_atom, shape, filters=h5_filters
                 )
                 # times = np.arange(npts) * data_dt
@@ -1385,9 +996,7 @@ class Misfit(object):
                 #     g_sta._v_attrs["md5"] = {}
                 # g_sta._v_attrs["md5"][obs_tag] = hashlib.md5(data).hexdigest()
 
-                h5f.flush()
-
-        h5f.close()
+                self.h5f.flush()
 
     def read_syn_sac(
         self,
@@ -1404,9 +1013,7 @@ class Misfit(object):
         """
         syn_components = ["E", "N", "Z"]
 
-        h5f = pt.open_file(self.h5_path, "r+")
-
-        config = h5f.root._v_attrs["config"]
+        config = self.h5f.root._v_attrs["config"]
 
         # time_before_first_arrival_as_noise = config["data"][
         #     "time_before_first_arrival_as_noise"
@@ -1438,19 +1045,19 @@ class Misfit(object):
         #     time_before_first_arrival_as_noise = 50.0
         #     warnings.warn("[arg] time_before_first_arrival_as_noise < 0, set to 50")
 
-        if "/source" not in h5f:
+        if "/source" not in self.h5f:
             raise KeyError("/source does not exist, run read_cmtsolutin first")
-        tbl_src = h5f.get_node("/source")
+        tbl_src = self.h5f.get_node("/source")
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
         event = tbl_src[0]
         event_t0 = UTCDateTime(event["t0"])
 
-        if "/waveform" not in h5f:
+        if "/waveform" not in self.h5f:
             msg = '"/waveform" not existing, run read_data_h5 first!'
             raise KeyError(msg)
-        g_wav = h5f.get_node("/waveform")
+        g_wav = self.h5f.get_node("/waveform")
 
         for g_sta in g_wav:
             net = g_sta._v_attrs["network"]
@@ -1613,7 +1220,7 @@ class Misfit(object):
                 _, h = scipy.signal.freqz_sos(sos, worN=freqs, fs=solver_fs)
                 filter_h *= abs(h)
             # avoid filter response from edge
-            valid_te = solver_te - 1.0 / min_cutoff_freq
+            valid_te = solver_te - 1.0 / min_cutoff_freq  
 
             if _DEBUG:
                 syn_st1 = syn_st.copy()
@@ -1649,20 +1256,24 @@ class Misfit(object):
 
             if is_diff:
                 if dsyn_grp not in g_sta:
-                    g_dsyn = h5f.create_group(g_sta, dsyn_grp)
+                    g_dsyn = self.h5f.create_group(g_sta, dsyn_grp)
                 else:
-                    g_dsyn = h5f.get_node(g_sta, dsyn_grp)
+                    g_dsyn = self.h5f.get_node(g_sta, dsyn_grp)
                 if dsyn_tag in g_dsyn:
                     msg = f"{dsyn_tag} exists in {g_dsyn._v_pathname}, overwrite!"
                     warnings.warn(msg)
-                    h5f.remove_node(g_dsyn, dsyn_tag)
-                ca = h5f.create_carray(g_dsyn, dsyn_tag, atom, shape, filters=filters)
+                    self.h5f.remove_node(g_dsyn, dsyn_tag)
+                ca = self.h5f.create_carray(
+                    g_dsyn, dsyn_tag, atom, shape, filters=filters
+                )
             else:
                 if syn_tag in g_sta:
                     msg = f"{syn_tag} exists in {g_sta._v_pathname}, overwrite!"
                     warnings.warn(msg)
-                    h5f.remove_node(g_sta, syn_tag)
-                ca = h5f.create_carray(g_sta, syn_tag, atom, shape, filters=filters)
+                    self.h5f.remove_node(g_sta, syn_tag)
+                ca = self.h5f.create_carray(
+                    g_sta, syn_tag, atom, shape, filters=filters
+                )
 
             ca[:] = 0
             for i in range(3):
@@ -1705,13 +1316,9 @@ class Misfit(object):
             # inv_proj = np.linalg.inv(proj_matrix)
             # obs_ENZ = np.dot(inv_proj, obs_ENZ)
 
-        h5f.close()
-
     def setup_windows(self):
         """ """
-        h5f = pt.open_file(self.h5_path, "r+")
-
-        config = h5f.root._v_attrs["config"]
+        config = self.h5f.root._v_attrs["config"]
         window_cfg = config["window"]
         win_taper = config["window_taper"]
         win_ids = set([w["id"] for w in window_cfg])
@@ -1722,10 +1329,10 @@ class Misfit(object):
         cache = OrderedDict()
         taup_model = TauPyModel(model=config["taup_model"], cache=cache)
 
-        if "/source" not in h5f:
+        if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        tbl_src = h5f.get_node("/source")
+        tbl_src = self.h5f.get_node("/source")
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
@@ -1738,14 +1345,14 @@ class Misfit(object):
         obs_tag = config["data"]["tag"]
         syn_tag = config["syn"]["tag"]
 
-        if "/waveform" not in h5f:
+        if "/waveform" not in self.h5f:
             msg = '"/waveform" not existing, run read_data_h5 first!'
             raise KeyError(msg)
-        g_wav = h5f.get_node("/waveform")
+        g_wav = self.h5f.get_node("/waveform")
 
-        if "/window" in h5f:
-            tbl_win = h5f.remove_node("/", "window")
-        tbl_win = h5f.create_table("/", "window", Window)
+        if "/window" in self.h5f:
+            tbl_win = self.h5f.remove_node("/", "window")
+        tbl_win = self.h5f.create_table("/", "window", Window)
         win_row = tbl_win.row
 
         for g_sta in g_wav:
@@ -1861,8 +1468,8 @@ class Misfit(object):
                     continue
 
                 win_tb = max(valid_tb, event_t0 + tb)
-                win_te = min(
-                    valid_te - bp_long_period, event_t0 + te
+                win_te = (
+                    min(valid_te - bp_long_period, event_t0 + te) 
                 )  # to avoid filter edge effect in the later bandpass process
                 # print(solver_te, obs_te, solver_valid_te, win_te)
 
@@ -1912,8 +1519,6 @@ class Misfit(object):
                 win_row.append()
 
         tbl_win.flush()
-
-        h5f.close()
 
     def _get_obs_ENZ(self, g_sta, obs_tag):
         """get observed seismogram in array(ENZ,nt)"""
@@ -2139,9 +1744,7 @@ class Misfit(object):
         u : synthetic waveform
 
         """
-        h5f = pt.open_file(self.h5_path, "r+")
-
-        config = h5f.root._v_attrs["config"]
+        config = self.h5f.root._v_attrs["config"]
         obs_tag = config["data"]["tag"]
         syn_tag = config["syn"]["tag"]
         cfg_noise_before_first_arrival = config["data"][
@@ -2153,36 +1756,39 @@ class Misfit(object):
         adj_tag = config["adj"]["tag"]
         adj_band_code = config["adj"]["band_code"]
 
-        if "/source" not in h5f:
+        if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        tbl_src = h5f.get_node("/source")
+        tbl_src = self.h5f.get_node("/source")
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
         event = tbl_src[0]
         event_t0 = UTCDateTime(event["t0"])
 
-        if "/channel" not in h5f:
+        if "/channel" not in self.h5f:
             msg = '"/channel" not existing, run read_channel_file first!'
             raise KeyError(msg)
-        tbl_chan = h5f.get_node("/channel")
+        tbl_chan = self.h5f.get_node("/channel")
 
-        if "/waveform" not in h5f:
+        if "/waveform" not in self.h5f:
             msg = '"/waveform" not existing, run read_data_h5 first!'
             raise KeyError(msg)
-        g_wav = h5f.get_node("/waveform")
+        g_wav = self.h5f.get_node("/waveform")
 
-        if "/window" not in h5f:
+        if "/window" not in self.h5f:
             msg = '"/waveform" not existing, run setup_windows first!'
             raise KeyError(msg)
-        tbl_win = h5f.get_node("/window")
+        tbl_win = self.h5f.get_node("/window")
 
         # for storing adjoint source
         pt_atom = pt.Atom.from_dtype(np.dtype(np.float32))
         pt_filters = pt.Filters(complevel=3, complib="zlib")
 
         # loop each station
+        # read_queue: (net,sta)
+        # result_queue: (obs[ncha,nt], obs_attrs, syn[ncha,nt], syn_attrs, window list w/ row number)
+        # write_queue: (net, sta, adj[ncha,nt], adj_attrs, windows list)
         for g_sta in g_wav:
             # print(f"measure_adj for {g_sta._v_name}")
 
@@ -2620,9 +2226,11 @@ class Misfit(object):
             if adj_tag in g_sta:
                 msg = f"{adj_tag} exists in {g_sta._v_name}, overwrite!"
                 warnings.warn(msg)
-                h5f.remove_node(g_sta, adj_tag)
+                self.h5f.remove_node(g_sta, adj_tag)
             shape = (3, data_nt)
-            ca = h5f.create_carray(g_sta, adj_tag, pt_atom, shape, filters=pt_filters)
+            ca = self.h5f.create_carray(
+                g_sta, adj_tag, pt_atom, shape, filters=pt_filters
+            )
             ca[:] = dchi_du
             dtype = [("name", "S3"), ("azimuth", float), ("dip", float)]
             channels = [
@@ -2648,236 +2256,535 @@ class Misfit(object):
             # plt.show()
 
         # endfor station_id in station_dict:
-        h5f.close()
 
-    class FileAccess(multiprocessing.Process):
-
-        def __init__(self, h5_path, read_queue, result_queues, write_queue, shutdown):
-            self.h5_path = h5_path
-            self.read_queue = read_queue
-            self.result_queues = result_queues
-            self.write_queue = write_queue
-            self.shutdown = shutdown
-            self.block_period = 0.01
-            super().__init__()
-
-        def run(self):
-            self.h5_file = pt.open_file(self.h5_path, "r+")
-            another_loop = True
-            while another_loop:
-                if self.shutdown.poll():
-                    another_loop = False
-                    print('bye bye')
-                try:
-                    proc_num, net, sta, obs_tag, syn_tag = self.read_queue.get(
-                        True, self.block_period
-                    )
-                    data = self.read_data(net, sta, obs_tag, syn_tag)
-                    result_queue = self.result_queues[proc_num]
-                    result_queue.put(data)
-                    # another_loop = True
-                except queue.Empty:
-                    pass
-
-                try:
-                    net, sta, adj_tag, adj_src, adj_attrs, inds, wins = (
-                        self.write_queue.get(True, self.block_period)
-                    )
-                    self.write_data(net, sta, adj_tag, adj_src, adj_attrs, inds, wins)
-                    # another_loop = True
-                except queue.Empty:
-                    pass
-            # close the HDF4 file before shutting down
-            print('close h5 file')
-            self.h5_file.close()
-
-        def read_data(self, net, sta, obs_tag, syn_tag):
-            try:
-                gsta = self.h5_file.get_node(f"/waveform/{net}_{sta}")
-                tbl_win = self.h5_file.get_node("/window")
-
-                sta_attrs = {k: gsta._v_attrs[k] for k in gsta._v_attrs._f_list("user")}
-
-                obs = gsta[obs_tag]
-                obs_data = obs[:]
-                obs_attrs = {k: obs.attrs[k] for k in obs.attrs._f_list("user")}
-
-                syn = gsta[syn_tag]
-                syn_data = syn[:]
-                syn_attrs = {k: syn.attrs[k] for k in syn.attrs._f_list("user")}
-
-                inds = tbl_win.get_where_list(
-                    f'(network == b"{net}") & (station == b"{sta}")'
-                )
-                wins = tbl_win[inds]
-            except Exception as e:
-                msg = f"{net}_{sta}: failed to get syn/obs_ENZ"
-                warnings.warn(msg)
-                return None
-
-            return (
-                sta_attrs,
-                obs_data,
-                obs_attrs,
-                syn_data,
-                syn_attrs,
-                inds,
-                wins,
-            )
-
-        def write_data(self, net, sta, adj_tag, adj_src, adj_attrs, inds, wins):
-            gsta = self.h5_file.get_node(f"/waveform/{net}_{sta}")
-            tbl_win = self.h5_file.get_node("/window")
-
-            pt_atom = pt.Atom.from_dtype(np.dtype(np.float32))
-            pt_filters = pt.Filters(complevel=2, complib="zlib")
-
-            if adj_tag in gsta:
-                msg = f"{net}_{sta}: {adj_tag} exists, overwrite!"
-                warnings.warn(msg)
-                self.h5_file.remove_node(gsta, adj_tag)
-
-            ca = self.h5_file.create_carray(
-                gsta, adj_tag, pt_atom, adj_src.shape, filters=pt_filters
-            )
-            ca[:] = adj_src
-            for k in adj_attrs:
-                ca.attrs[k] = adj_attrs[k]
-            tbl_win[inds] = wins
-            tbl_win.flush()
-
-    class DataProcessor(multiprocessing.Process):
-
-        def __init__(
-            self,
-            read_queue,
-            result_queue,
-            write_queue,
-            proc_num,
-            net_sta_list,
-            config,
-            event_tau,
-        ):
-            self.read_queue = read_queue
-            self.result_queue = result_queue
-            self.write_queue = write_queue
-            self.proc_num = proc_num
-            self.net_sta_list = net_sta_list
-            self.config = config
-            self.event_tau = event_tau
-            super().__init__()
-
-        def run(self):
-            obs_tag = self.config["data"]["tag"]
-            syn_tag = self.config["syn"]["tag"]
-            cfg_noise_before_first_arrival = self.config["data"][
-                "time_before_first_arrival_as_noise"
-            ]
-            cci_dt = self.config["misfit"]["cc_deltat"]
-            misfit_type = self.config["misfit"]["type"]
-            weight_param = self.config["misfit"]["window_weight"]
-            adj_tag = self.config["adj"]["tag"]
-            adj_band_code = self.config["adj"]["band_code"]
-            event_tau = self.event_tau
-
-            for net, sta in self.net_sta_list:
-                self.read_queue.put((self.proc_num, net, sta, obs_tag, syn_tag))
-                ret = self.result_queue.get()
-                if not ret:
-                    continue
-                sta_attrs, obs_data, obs_attrs, syn_data, syn_attrs, inds, wins = ret
-
-                ret = _measure_adj_one_sta(
-                    sta_attrs,
-                    obs_data,
-                    obs_attrs,
-                    syn_data,
-                    syn_attrs,
-                    wins,
-                    event_tau,
-                    cfg_noise_before_first_arrival,
-                    cci_dt,
-                    misfit_type,
-                    weight_param,
-                    adj_band_code,
-                )
-                if ret:
-                    adj_src, adj_attrs, wins = ret
-                    self.write_queue.put(
-                        (net, sta, adj_tag, adj_src, adj_attrs, inds, wins)
-                    )
-
-    def measure_adj_multiprocess(self, nproc=5):
+    def measure_adj_multiprocess(self):
         """
         calculate adjoint sources (dchi_du)
         """
-        h5f = pt.open_file(self.h5_path, "r+")
+        config = self.h5f.root._v_attrs["config"]
+        obs_tag = config["data"]["tag"]
+        syn_tag = config["syn"]["tag"]
+        cfg_noise_before_first_arrival = config["data"][
+            "time_before_first_arrival_as_noise"
+        ]
+        cci_dt = config["misfit"]["cc_deltat"]
+        misfit_type = config["misfit"]["type"]
+        weight_param = config["misfit"]["window_weight"]
+        adj_tag = config["adj"]["tag"]
+        adj_band_code = config["adj"]["band_code"]
 
-        config = h5f.root._v_attrs["config"]
-
-        if "/source" not in h5f:
+        if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        tbl_src = h5f.get_node("/source")
+        tbl_src = self.h5f.get_node("/source")
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
         event = tbl_src[0]
-        event_tau = event["tau"]
+        event_t0 = UTCDateTime(event["t0"])
 
-        if "/channel" not in h5f:
+        if "/channel" not in self.h5f:
             msg = '"/channel" not existing, run read_channel_file first!'
             raise KeyError(msg)
-        if "/waveform" not in h5f:
+        tbl_chan = self.h5f.get_node("/channel")
+
+        if "/waveform" not in self.h5f:
             msg = '"/waveform" not existing, run read_data_h5 first!'
             raise KeyError(msg)
-        g_wav = h5f.get_node("/waveform")
-        if "/window" not in h5f:
+        g_wav = self.h5f.get_node("/waveform")
+
+        if "/window" not in self.h5f:
             msg = '"/waveform" not existing, run setup_windows first!'
             raise KeyError(msg)
+        tbl_win = self.h5f.get_node("/window")
 
-        net_sta_list = [
-            (gsta._v_attrs["network"], gsta._v_attrs["station"]) for gsta in g_wav
-        ]
+        # for storing adjoint source
+        pt_atom = pt.Atom.from_dtype(np.dtype(np.float32))
+        pt_filters = pt.Filters(complevel=3, complib="zlib")
 
-        h5f.close()
+        # loop each station
+        # read_queue: (net,sta)
+        # result_queue: (obs[ncha,nt], obs_attrs, syn[ncha,nt], syn_attrs, window list w/ row number)
+        # write_queue: (net, sta, adj[ncha,nt], adj_attrs, windows list)
 
-        multiprocessing.set_start_method("spawn")
+        net_sta_list = [(gsta._v_attrs['network'], gsta._v_attrs['station']) for gsta in g_wav]
 
-        read_queue = multiprocessing.Queue()
-        write_queue = multiprocessing.Queue()
-        shutdown_recv, shutdown_send = multiprocessing.Pipe(False)
-        result_queues = [multiprocessing.Queue() for i in range(nproc)]
-        file_access = self.FileAccess(
-            self.h5_path, read_queue, result_queues, write_queue, shutdown_recv
-        )
-        file_access.start()
-        processors = []
-        for i in range(nproc):
-            result_queue = result_queues[i]
-            processor = self.DataProcessor(
-                read_queue,
-                result_queue,
-                write_queue,
-                i,
-                net_sta_list[i::nproc],
-                config,
-                event_tau,
+
+        for g_sta in g_wav:
+            # print(f"measure_adj for {g_sta._v_name}")
+
+            attrs = g_sta._v_attrs
+            net = attrs["network"]
+            sta = attrs["station"]
+            # loc = attrs['location']
+            first_arrtime = attrs["first_arrtime"]
+
+            try:
+                obs_ENZ, syn_ENZ, no_Hchan = self._extract_obs_syn_ENZ(
+                    g_sta, obs_tag, syn_tag, event["tau"]
+                )
+            except Exception as e:
+                msg = f"failed to get obs,syn_ENZ for {g_sta._v_name}, ({e})"
+                warnings.warn(msg)
+                continue
+
+            obs = g_sta[obs_tag]
+            syn = g_sta[syn_tag]
+
+            data_tb = obs.attrs["starttime"]
+            data_fs = obs.attrs["sampling_rate"]
+            data_dt = 1.0 / data_fs
+            data_nt = obs.attrs["npts"]
+            data_te = data_tb + (data_nt - 1) * data_dt
+            data_times = np.arange(data_nt, dtype=float) * data_dt
+            noise_te = (first_arrtime - data_tb) - cfg_noise_before_first_arrival
+            noise_idx1 = int(noise_te * data_fs)  # 0:idx1 as noise
+
+            # pre-filter parameters
+            pre_filters = obs.attrs["filter"]
+            # data_butter_N = obs.attrs["filter"]["N"]
+            # data_butter_Wn = obs.attrs["filter"]["Wn"]
+
+            # sum of adjoint sources from all windows
+            dchi_du = np.zeros((3, data_nt))
+
+            # loop each window
+            for win in tbl_win.where(f'(network == b"{net}") & (station == b"{sta}")'):
+                # print(
+                #     "window: ",
+                #     win["id"],
+                #     win["type"],
+                #     win["phase"],
+                #     win["cmpnm"],
+                #     win["butter_Wn"],
+                # )
+                # component
+                cmpnm = win["cmpnm"].decode()
+                if no_Hchan and cmpnm != "Z":
+                    warnings.warn(
+                        "skip non-vertical window since only vertical data present"
+                    )
+                    win["valid"] = False
+                    win.update()
+                    continue
+                cmpaz = win["cmpaz"]
+                cmpdip = win["cmpdip"]
+                # filter
+                butter_N = win["butter_N"]
+                butter_Wn = win["butter_Wn"]
+                # fft
+                npad = int(2 * data_fs / min(butter_Wn))
+                nfft = scipy.fft.next_fast_len(data_nt + npad)
+                freqs = np.fft.rfftfreq(nfft, d=data_dt)
+                # window filter
+                sos = scipy.signal.butter(
+                    butter_N, butter_Wn, "bandpass", fs=data_fs, output="sos"
+                )
+                _, filter_h = scipy.signal.freqz_sos(sos, worN=freqs, fs=data_fs)
+                Fw = abs(filter_h)  # zero-phase filter response
+                # pre-filter applied to obs & syn
+                filter_h = np.ones_like(freqs)
+                for filter in pre_filters:
+                    sos = scipy.signal.butter(
+                        filter["N"],
+                        filter["Wn"],
+                        filter["type"],
+                        fs=data_fs,
+                        output="sos",
+                    )
+                    _, h = scipy.signal.freqz_sos(sos, worN=freqs, fs=data_fs)
+                    filter_h *= abs(h)
+                Fd = abs(filter_h)
+                # time derivative in frequency domain
+                Ft = 2j * np.pi * freqs
+                # time window
+                win_tb = UTCDateTime(win["starttime"])
+                win_te = UTCDateTime(win["endtime"])
+                win_taper = win["taper"]
+
+                # window function
+                b = win_tb - data_tb
+                e = win_te - data_tb
+                win_len = e - b
+                width = win_len * min(win_taper, 0.4)
+                win_c = [b, b + width, e - width, e]
+                win_func = cosine_sac_taper(data_times, win_c)
+
+                # component
+                if cmpnm in ["Z", "R", "T"]:
+                    sin_az = np.sin(np.deg2rad(cmpaz))
+                    cos_az = np.cos(np.deg2rad(cmpaz))
+                    sin_dip = np.sin(np.deg2rad(cmpdip))
+                    cos_dip = np.cos(np.deg2rad(cmpdip))
+                    n = np.array(
+                        [
+                            [cos_dip * sin_az],  # cos(E, comp)
+                            [cos_dip * cos_az],  # cos(N, comp)
+                            [-sin_dip],  # cos(Z, comp)
+                        ]
+                    )
+                    proj_matrix = np.dot(n, n.transpose())
+                elif cmpnm == "H":  # horizontal vector 2d
+                    proj_matrix = np.identity(3)
+                    proj_matrix[2, 2] = 0.0  # zero Z component
+                elif cmpnm == "F":  # full 3d vector
+                    proj_matrix = np.identity(3)
+                else:
+                    msg = f"unrecognized component code ({cmpnm}), SKIP"
+                    warnings.warn(msg)
+                    continue
+
+                # DEBUG
+                # np.save("obs_ENZ.npy", obs_ENZ)
+                # np.save("syn_ENZ.npy", syn_ENZ)
+                # np.save("Fd.npy", Fd)
+                # np.save("Fw.npy", Fw)
+                # np.save("win_func.npy", win_func)
+                # np.save("proj_matrix.npy", proj_matrix)
+                # print(data_nt, nfft, data_fs)
+
+                # Fd: pre-filter used during preprocessing (e.g. rmresp)
+                # Fw: bandpass filter used on this window
+                # w: window function
+                #
+                # obs = w*(Fw*Fd*d), syn = w*(Fw*Fd*u)
+
+                # apply filter to obs, syn
+                # obs = Fw * (Fd * d), obs_ENZ = Fd * d, d = disp. or vel.
+                obs_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ, nfft), nfft)[
+                    :, :data_nt
+                ]
+                # syn = Fw * (Fd * [Ft] * u), (syn_ENZ = Fd * [Ft] *[S] * u)
+                syn_filt = np.fft.irfft(Fw * np.fft.rfft(syn_ENZ, nfft), nfft)[
+                    :, :data_nt
+                ]
+                # noise
+                taper_width = 0.5 / min(butter_Wn)
+                noise_win = cosine_sac_taper(
+                    data_times, [0, taper_width, noise_te - taper_width, noise_te]
+                )
+                # cut noise window from obs_ENZ before applying bandpass filter Fw
+                noise_filt = np.fft.irfft(
+                    Fw * np.fft.rfft(obs_ENZ * noise_win, nfft), nfft
+                )[:, :data_nt]
+
+                # # DEBUG
+                # for i in range(3):
+                #     plt.subplot(311 + i)
+                #     plt.plot(
+                #         data_times, obs[i, :], "k", data_times, obs_filt[i, :], "r", data_times, noise_filt[i,:], 'b'
+                #     )
+                # plt.show()
+                # for i in range(3):
+                #     plt.subplot(311 + i)
+                #     plt.plot(
+                #         data_times, syn[i, :], "k", data_times, syn_filt[i, :], "r"
+                #     )
+                # plt.show()
+
+                # apply window and projection
+                # obs: w*(Fw*Fd*d)
+                obs_filt_win = np.dot(proj_matrix, obs_filt) * win_func
+                # syn: w*(Fw*Fd*u)
+                syn_filt_win = np.dot(proj_matrix, syn_filt) * win_func
+                # noise
+                noise_filt_win = np.dot(proj_matrix, noise_filt)[:, :noise_idx1]
+
+                # np.savez('measure_adj', obs_ENZ=obs_ENZ, syn_ENZ=syn_ENZ, syn_filt=syn_filt, win_func=win_func, obs_filt_win=obs_filt_win, syn_filt_win=syn_filt_win)
+
+                # for i in range(3):
+                #     plt.subplot(311 + i)
+                #     plt.plot(
+                #         data_times, syn[i, :], "k", data_times, syn_filt[i, :], "r"
+                #     )
+                # plt.show()
+
+                # DEBUG
+                # diff = obs_ENZ_win - syn_ENZ_win
+                # for i in range(3):
+                #  plt.subplot(311+i)
+                #  plt.plot(syn_times, obs_ENZ_win[i,:], 'k')
+                #  plt.plot(syn_times, syn_ENZ_win[i,:], 'r')
+                #  plt.plot(syn_times, diff[i,:], 'c')
+                # plt.show()
+
+                # ------ measure SNR (based on maximum amplitude)
+                Amax_obs = np.sqrt(np.max(np.sum(obs_filt_win**2, axis=0)))
+                Amax_syn = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
+                Amax_noise = np.sqrt(np.max(np.sum(noise_filt_win**2, axis=0)))
+                if Amax_obs == 0:  # bad record
+                    msg = f"empty obs trace ({win}), skip"
+                    warnings.warn(msg)
+                    continue
+                if Amax_noise == 0:
+                    # could occure when the data begin time is too close to the first arrival
+                    msg = f"empty noise trace ({win}), SKIP."
+                    warnings.warn(msg)
+                    continue
+                snr = 20.0 * np.log10(Amax_obs / Amax_noise)
+
+                # ------ measure CC time shift (between w*F*d and w*F*u)
+                obs_norm = np.sqrt(np.sum(obs_filt_win**2))
+                syn_norm = np.sqrt(np.sum(syn_filt_win**2))
+                # window normalization factor (without dt)
+                Nw = obs_norm * syn_norm
+                # NOTE the order (obs,syn) is important. The positive time on
+                # CC means shifting syn in the positive time direction to match
+                # the observed obs, and vice verser.
+                # [-(nt-1), nt) * dt
+                cc = np.zeros(2 * data_nt - 1)
+                for i in range(3):
+                    cc += signal.fftconvolve(
+                        obs_filt_win[i, :], syn_filt_win[i, ::-1], "full"
+                    )
+                cc /= Nw
+                # -- zero-lag cc coeff.
+                CC0 = cc[data_nt - 1]  # the n-th point corresponds to zero lag time
+                AR0 = CC0 * syn_norm / obs_norm  # amplitude ratio syn/obs
+                # DEBUG
+                # print(CC0, np.sum(obs_filt_win * syn_filt_win)/obs_norm/syn_norm)
+                # -- interpolate cc to finer time samples
+                CC_shift_range = win_len / 2.0  # TODO: more reasonable choice?
+                if data_dt < cci_dt:
+                    msg = f"data_dt({data_dt}) < cci_dt({cci_dt})"
+                    warnings.warn(msg)
+                    cci_dt = data_dt
+                ncci = int(CC_shift_range / cci_dt)
+                cci_t0 = -ncci * cci_dt
+                cc_t0 = -(data_nt - 1) * data_dt  # begin time in cc
+                cci = lanczos_interpolation(
+                    cc, cc_t0, data_dt, cci_t0, cci_dt, 2 * ncci + 1, a=20
+                )
+                # time shift at the maximum correlation
+                imax = np.argmax(cci)
+                CC_time_shift = cci_t0 + imax * cci_dt
+                CCmax = cci[imax]
+                ARmax = CCmax * syn_norm / obs_norm  # amplitude ratio: syn/obs
+
+                # ------ window weighting based on SNR and misfit
+                weight = win["weight"]
+                if "SNR" in weight_param:
+                    weight *= cosine_taper(snr, weight_param["SNR"])
+                if "CCmax" in weight_param:
+                    weight *= cosine_taper(CCmax, weight_param["CCmax"])
+                if "CC0" in weight_param:
+                    weight *= cosine_taper(CC0, weight_param["CC0"])
+                if "cc_tshift" in weight_param:
+                    weight *= cosine_taper(CC_time_shift, weight_param["cc_tshift"])
+
+                # ------ measure adjoint source
+                Aw = CC0 * obs_norm / syn_norm  # window amplitude raito
+                if misfit_type == "cc0":
+                    #
+                    # Goodness-of-fit: (zero-lag normalized cross-correlation coefficient)
+                    #   cc(syn, obs) = sum(syn * obs) / sqrt(sum(syn**2) * sum(obs**2))
+                    #
+                    # obs = w * (Fw * Fd * P * d),        d = displacement or velocity.
+                    # syn = w * (Fw * Fd * P * u),        if d = disp.
+                    #       w * (Fw * Fd * Ft * P * u),   if d = vel.
+                    #
+                    #  u[3,nt]: synthetic seismogram of displacement
+                    #     , replaced by S * u, when u is Green's function (S: source wavelet)
+                    #  d[3,nt]: recorded ground displacement or velocity
+                    #  P[3,3]: the projection matrix (real valued), e.g. project to radial/tangential component
+                    #  Fd[nfft]: bandpass filter applied during pre-processing (e.g. removing instrument response, down-sampling)
+                    #  Fw[nfft]: bandpass filter applied for the measurment time window
+                    #  Ft[nfft]: time derivate (2j * pi * freqs in frequency domian)
+                    #  note: F * x = irfft(F * rfft(x, nfft), nfft)[:, :nt]
+                    #  w[nt]: time window function
+                    #
+                    # adjoint source:
+                    #   Dcc/Du[3,nt] = conj(Fw * Fd * [Ft]) * transpose(P) * w * (obs - Aw * syn) / obs_norm / syn_norm,
+                    #
+                    #   where,
+                    #           [Ft] is only applied when d is vel.
+                    #           obs_norm = sqrt(sum(obs**2))
+                    #           syn_norm = sqrt(sum(syn**2))
+                    #           Aw = sum(syn * obs) / sum(syn**2)
+                    #
+                    #   cc(u+du) - cc(u) = sum(Dcc/Du * du) + O(du**2)
+                    #
+                    dchiw_du = np.dot(
+                        np.transpose(proj_matrix),
+                        win_func * (obs_filt_win - Aw * syn_filt_win) / Nw,
+                    )
+                    conj_F = np.conjugate(Fw * Fd, dtype="complex")
+                    if obs.attrs["type"] == "VEL":
+                        conj_F *= np.conjugate(Ft)
+                    dchiw_du = np.fft.irfft(conj_F * np.fft.rfft(dchiw_du, nfft), nfft)[
+                        :, :data_nt
+                    ]
+                    # np.save("dchiw_du.npy", dchiw_du)
+
+                # elif misfit_type == "phcc":
+                #     # misfit: weighted phase correlation
+                #     norm_N = np.sum(obs_filt_win**2)
+                #     fft_wFu = np.fft.rfft(syn_filt_win)
+                #     fft_wFd = np.fft.rfft(obs_filt_win)
+                #     abs_fft_wFu = (
+                #         np.sum(np.abs(fft_wFu) ** 2, axis=0, keepdims=True) ** 0.5
+                #     )
+                #     abs_fft_wFd = (
+                #         np.sum(np.abs(fft_wFd) ** 2, axis=0, keepdims=True) ** 0.5
+                #     )
+                #     abs_fft_wFu_wl = np.copy(abs_fft_wFu)
+                #     wl_thred = 0.01 * np.max(
+                #         abs_fft_wFu
+                #     )  # FIXME water-level coef. 0.01 is hard coded here!
+                #     abs_fft_wFu_wl[abs_fft_wFu < wl_thred] = wl_thred
+                #     trans_H = abs_fft_wFd / abs_fft_wFu_wl
+                #     dchiw_du = (
+                #         trans_H
+                #         / norm_N
+                #         * (
+                #             fft_wFd
+                #             - fft_wFu
+                #             * np.real(
+                #                 np.sum(
+                #                     fft_wFd * np.conj(fft_wFu), axis=0, keepdims=True
+                #                 )
+                #             )
+                #             / abs_fft_wFu_wl**2
+                #         )
+                #     )
+                #     dchiw_du = np.fft.irfft(dchiw_du) * win_func
+                #     dchiw_du = signal.filtfilt(filter_b, filter_a, dchiw_du[:, ::-1])
+                #     dchiw_du = dchiw_du[:, ::-1]
+                #     # phase correlation value
+                #     HwFu = np.fft.irfft(trans_H * fft_wFu)
+                #     phcc = np.sum(obs_filt_win * HwFu) / N
+                # elif misfit_type == "ccdt":
+                #     # misfit: cross-correlation traveltime difference -1*|ccdtau|^2
+                #     # adjoint source: dchiw_du = ccdt * dtau/du
+                #     # dchiw_du = conj(F)*w*d/dt(w*F*u)/N,
+                #     # , where N = norm(d/dt(w*F*u))
+                #     # -- dchiw_du
+                #     # NOTE: *dt is put back to Nw
+                #     dwFu_dt = np.fft.irfft(
+                #         np.fft.rfft(syn_filt_win) * 2.0j * np.pi * syn_freq, n=syn_nt
+                #     )
+                #     w_dwFu_dt = win_func * dwFu_dt
+                #     # apply conj(F), for two-pass filter (zero phase) conj(F) = F
+                #     conjF_w_dwFu_dt = signal.filtfilt(
+                #         filter_b, filter_a, w_dwFu_dt[:, ::-1]
+                #     )
+                #     conjF_w_dwFu_dt = conjF_w_dwFu_dt[:, ::-1]
+                #     #
+                #     dchiw_du = -1 * CC_time_shift * conjF_w_dwFu_dt / np.sum(dwFu_dt**2)
+                #     # DEBUG
+                #     # print(CC_time_shift)
+                #     # plt.subplot(411)
+                #     # plt.plot(syn_times, syn_filt_win[1,:])
+                #     # plt.subplot(412)
+                #     # plt.plot(syn_times, dwFu_dt[1,:])
+                #     # plt.subplot(413)
+                #     # plt.plot(syn_times, conjF_w_dwFu_dt[1,:])
+                #     # plt.subplot(414)
+                #     # plt.plot(syn_times, dchiw_du[1,:])
+                #     # plt.show()
+                else:
+                    msg = f"{g_sta._v_name}: unknown misfit type ({misfit_type})"
+                    raise ValueError(msg)
+
+                # DEBUG
+                # for i in range(3):
+                #  plt.subplot(311+i)
+                #  plt.plot(syn_times, dchiw_du1[i,:], 'k')
+                #  plt.plot(syn_times, dchiw_du[i,:], 'r')
+                # plt.show()
+
+                # add into total dchi_du
+                dchi_du += weight * dchiw_du
+
+                # -- dchiw_dg = conj(S) * dchiw_du
+                # dchiw_dg = np.fft.irfft(np.conjugate(F_src) * np.fft.rfft(dchiw_du), syn_nt)
+                # add into total dchi_dg
+                # dchi_dg += weight * dchiw_dg
+                # DEBUG
+                # for i in range(3):
+                #  plt.subplot(311+i)
+                #  plt.plot(syn_times, dchiw_du[i,:], 'k')
+                #  plt.plot(syn_times, dchiw_dg[i,:], 'r')
+                # plt.show()
+
+                # # DEBUG
+                # print(f"cc_time_shift = {CC_time_shift}")
+                # print(f"cc_max = {CCmax}")
+                # print(f"SNR = {CCmax}")
+                # print(f"CC0 = {CC0}")
+                # phase_shift = np.exp(-2j * np.pi * freqs * CC_time_shift)
+                # Fsyn = np.fft.rfft(syn_filt_win, nfft) * phase_shift
+                # syn_filt_win_shift = np.fft.irfft(Fsyn, nfft)[:, :data_nt]
+                # scale_dcc = np.max(np.abs(syn_filt_win)) / np.max(np.abs(dchiw_du))
+                # for i in range(3):
+                #     plt.subplot(311 + i)
+                #     plt.plot(
+                #         data_times, obs_filt_win[i, :], "k",
+                #         # data_times, obs_ENZ[i, :], "k--",
+                #         data_times, syn_filt_win[i, :], "r",
+                #         # data_times, syn_ENZ[i, :], "r--",
+                #         data_times, syn_filt_win_shift[i, :], "c",
+                #         data_times[:noise_idx1], noise_filt_win[i,:], "b",
+                #         data_times, scale_dcc * dchiw_du[i,:], "y"
+                #     )
+                # plt.show()
+
+                win["cc0"] = CC0
+                win["cc_time_shift"] = CC_time_shift
+                win["cc_max"] = CCmax
+                win["amp_ratio_cc0"] = AR0
+                win["amp_ratio_ccmax"] = ARmax
+                win["noise_maxamp"] = Amax_noise
+                win["obs_maxamp"] = Amax_obs
+                win["syn_maxamp"] = Amax_syn
+                win["SNR"] = snr
+                win["weight"] = weight
+                win["valid"] = True
+                win["proj_matrix"] = proj_matrix
+                win.update()
+
+            # store adjoint source for this station, e.g. /NET_STA/ADJ_DISP[0:nchan, 0:npts]
+            if adj_tag in g_sta:
+                msg = f"{adj_tag} exists in {g_sta._v_name}, overwrite!"
+                warnings.warn(msg)
+                self.h5f.remove_node(g_sta, adj_tag)
+            shape = (3, data_nt)
+            ca = self.h5f.create_carray(
+                g_sta, adj_tag, pt_atom, shape, filters=pt_filters
             )
-            processors.append(processor)
-        for processor in processors:
-            processor.start()
-        for processor in processors:
-            processor.join()
-        # shut down the FileAccess instance
-        shutdown_send.send(0)
-        file_access.join()
+            ca[:] = dchi_du
+            dtype = [("name", "S3"), ("azimuth", float), ("dip", float)]
+            channels = [
+                (f"{adj_band_code}E", 90, 0),
+                (f"{adj_band_code}N", 0, 0),
+                (f"{adj_band_code}Z", 0, -90),
+            ]
+            ca.attrs["channels"] = np.array(channels, dtype=dtype)
+            ca.attrs["starttime"] = data_tb
+            ca.attrs["sampling_rate"] = data_fs
+            ca.attrs["npts"] = data_nt
+            ca.attrs["solver_tb"] = syn.attrs["solver_tb"]
+            ca.attrs["solver_dt"] = syn.attrs["solver_dt"]
+            ca.attrs["solver_nt"] = syn.attrs["solver_nt"]
+            ca.attrs["type"] = syn.attrs["type"]
+            ca.attrs["misfit"] = misfit_type
+
+            # DEBUG
+            # for i in range(3):
+            #  plt.subplot(311+i)
+            #  plt.plot(syn_times, dchi_du[i,:], 'k')
+            #  plt.plot(syn_times, dchi_dg[i,:], 'r')
+            # plt.show()
+
+        # endfor station_id in station_dict:
+
+
 
     def plot_seismogram_1comp(
         self,
         # savefig=False,
         # out_dir="plot",
-        win_id,  # e.g. p,P_Z_30-100sec
+        win_id, # e.g. p,P_Z_30-100sec
         azbin=20,
         max_ntrace_per_bin=30,  # maximum traces to plot for each azimuthal bin
         begin_time=0,
@@ -2890,7 +2797,7 @@ class Misfit(object):
         # plot_az0=0,
         # plot_adj=False,  # whether plot adjoint source
         align_time=False,  # whether align the phase according to cc time shift
-        out_fig="seis.pdf",
+        out_fig='seis.pdf'
     ):
         """
         Plot record section in azimuthal bins
@@ -2940,38 +2847,36 @@ class Misfit(object):
         if plot_clip < 1.0:
             raise Exception("clip_ratio(%f) should be larger than 1.0" % (plot_clip))
 
-        h5f = pt.open_file(self.h5_path, "r")
-
         # config
-        config = h5f.root._v_attrs["config"]
+        config = self.h5f.root._v_attrs["config"]
         taup_model = TauPyModel(model=config["taup_model"])
         obs_tag = config["data"]["tag"]
         syn_tag = config["syn"]["tag"]
 
         # event info
-        if "/source" not in h5f:
+        if "/source" not in self.h5f:
             msg = '"/source" does not exist, run read_cmtsolution first!'
             raise KeyError(msg)
-        tbl_src = h5f.get_node("/source")
+        tbl_src = self.h5f.get_node("/source")
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
         event = tbl_src[0]
 
-        if "/channel" not in h5f:
+        if "/channel" not in self.h5f:
             msg = '"/channel" does not exist, run read_channel_file first!'
             raise KeyError(msg)
-        tbl_chan = h5f.get_node("/channel")
+        tbl_chan = self.h5f.get_node("/channel")
 
-        if "/waveform" not in h5f:
+        if "/waveform" not in self.h5f:
             msg = '"/waveform" does not exist, run read_data_h5 first!'
             raise KeyError(msg)
-        g_wav = h5f.get_node("/waveform")
+        g_wav = self.h5f.get_node("/waveform")
 
-        if "/window" not in h5f:
+        if "/window" not in self.h5f:
             msg = '"/waveform" does not exist, run setup_windows first!'
             raise KeyError(msg)
-        tbl_win = h5f.get_node("/window")
+        tbl_win = self.h5f.get_node("/window")
 
         # event info
         evt0 = UTCDateTime(event["t0"])
@@ -3092,8 +2997,7 @@ class Misfit(object):
                         continue
                     # put window into current bin or start a new bin
                     if az <= azmax and (
-                        not plot_max_ntrace_per_bin
-                        or nwin_bin <= plot_max_ntrace_per_bin
+                        not plot_max_ntrace_per_bin or nwin_bin <= plot_max_ntrace_per_bin
                     ):
                         windows_bin.append(windows[bin_idx0])
                         nwin_bin = nwin_bin + 1
@@ -3111,9 +3015,7 @@ class Misfit(object):
                 bin_azmax = (windows_bin[-1][1]._v_attrs["azimuth"]) % 360
 
                 # ---- create figure
-                print(
-                    f"[INFO] plot azimuthal bin: {bin_azmin:05.1f} - {bin_azmax:05.1f}"
-                )
+                print(f"[INFO] plot azimuthal bin: {bin_azmin:05.1f} - {bin_azmax:05.1f}")
 
                 # fig = plt.figure(figsize=(8.5, 11)) # US letter
                 fig = plt.figure(figsize=(8.27, 11.69))  # A4
@@ -3157,21 +3059,15 @@ class Misfit(object):
                 sx, sy = ax_bm(stlo_all, stla_all)
                 ax_bm.scatter(sx, sy, s=5, marker="^", facecolor="black")
                 # plot stations in the bin
-                stla_bin = np.array(
-                    [sta._v_attrs["latitude"] for _, sta in windows_bin]
-                )
-                stlo_bin = np.array(
-                    [sta._v_attrs["longitude"] for _, sta in windows_bin]
-                )
+                stla_bin = np.array([sta._v_attrs["latitude"] for _, sta in windows_bin])
+                stlo_bin = np.array([sta._v_attrs["longitude"] for _, sta in windows_bin])
                 sx, sy = ax_bm(stlo_bin, stla_bin)
                 ax_bm.scatter(sx, sy, s=5, marker="^", facecolor="red")
                 # plot focal mechanism
                 sx, sy = ax_bm(evlo, evla)
                 # bb_width = 110000.0 * np.abs(max(stlo_all)-min(stlo_all)) * 0.1
                 bb_width = max(map_width, map_height) * 0.05
-                b = beach(
-                    focmec, xy=(sx, sy), width=bb_width, linewidth=0.2, facecolor="r"
-                )
+                b = beach(focmec, xy=(sx, sy), width=bb_width, linewidth=0.2, facecolor="r")
                 ax_map.add_collection(b)
 
                 # create axis for seismograms
@@ -3187,9 +3083,7 @@ class Misfit(object):
                 wine_bin = np.array(
                     [UTCDateTime(win["endtime"]) - evt0 for win, _ in windows_bin]
                 )
-                dist_bin = np.array(
-                    [sta._v_attrs["dist_degree"] for _, sta in windows_bin]
-                )
+                dist_bin = np.array([sta._v_attrs["dist_degree"] for _, sta in windows_bin])
                 # get time window relative to the regressed window central time
                 plot_t0 = np.min(winb_bin - plot_rayp * dist_bin)
                 plot_t1 = np.max(wine_bin - plot_rayp * dist_bin)
@@ -3352,10 +3246,7 @@ class Misfit(object):
                     idx = abs(y) > plot_clip + 1.0e-3
                     y[idx] = np.nan
                     ax_1comp.plot(
-                        t_plot,
-                        plot_flip * plot_dy * y + dist_degree,
-                        "k-",
-                        linewidth=0.5,
+                        t_plot, plot_flip * plot_dy * y + dist_degree, "k-", linewidth=0.5
                     )
 
                     y = syn_filt_proj[plot_idx] / Amax_syn
@@ -3436,31 +3327,27 @@ class Misfit(object):
                 pdf.savefig(fig)
                 plt.close(fig)
 
-        h5f.close()
-
     def output_adj(self, out_dir="adj"):
 
-        h5f = pt.open_file(self.h5_path, "r")
-
-        config = h5f.root._v_attrs["config"]
+        config = self.h5f.root._v_attrs["config"]
         adj_tag = config["adj"]["tag"]
         # band_code = config["adj"]["band_code"]
         suffix = config["adj"]["suffix"]
 
-        if "/source" not in h5f:
+        if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        tbl_src = h5f.get_node("/source")
+        tbl_src = self.h5f.get_node("/source")
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
         event = tbl_src[0]
         event_t0 = UTCDateTime(event["t0"])
 
-        if "/waveform" not in h5f:
+        if "/waveform" not in self.h5f:
             msg = '"/waveform" not existing, run read_data_h5 first!'
             raise KeyError(msg)
-        g_wav = h5f.get_node("/waveform")
+        g_wav = self.h5f.get_node("/waveform")
 
         for g_sta in g_wav:
             if adj_tag not in g_sta:
@@ -3530,18 +3417,14 @@ class Misfit(object):
                 dat[:, 1] = tr.data
                 np.savetxt(out_file, dat, fmt="%16.9e")
 
-        h5f.close()
-
     def read_srcfrechet(
         self,
         srcfrechet_file,
     ):
-        h5f = pt.open_file(self.h5_path, "r+")
-
-        if "/source" not in h5f:
+        if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        tbl_src = h5f.get_node("/source")
+        tbl_src = self.h5f.get_node("/source")
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
@@ -3604,9 +3487,6 @@ class Misfit(object):
         event["grad_xs"] = dchi_dxs
         event["grad_mt"] = dchi_dmt
         tbl_src[0] = [event]
-        tbl_src.flush()
-
-        h5f.close()
 
     def make_perturbed_cmtsolution(
         self,
@@ -3615,9 +3495,7 @@ class Misfit(object):
         out_cmtsolution_dmt="CMTSOLUTION_dmt",
     ):
         """Make perturbed CMTSOLUTION based on source gradient"""
-        h5f = pt.open_file(self.h5_path, "r+")
-
-        config = h5f.root._v_attrs["config"]
+        config = self.h5f.root._v_attrs["config"]
         max_dxs_norm = config["source"]["max_dxs_norm"]
         max_dmt_ratio = config["source"]["max_dmt_ratio"]
         if max_dxs_norm <= 0.0:
@@ -3627,10 +3505,10 @@ class Misfit(object):
             msg = f"max_dmt_ratio ({max_dmt_ratio}) must > 0"
             raise ValueError(msg)
 
-        if "/source" not in h5f:
+        if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        tbl_src = h5f.get_node("/source")
+        tbl_src = self.h5f.get_node("/source")
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
@@ -3727,24 +3605,17 @@ class Misfit(object):
             fp.write("%-18s %+15.8E\n" % ("Mxz(N*m):", mt_perturb[0, 2]))
             fp.write("%-18s %+15.8E\n" % ("Myz(N*m):", mt_perturb[1, 2]))
 
-        h5f.close()
-
     def update_source_dxs(self, dx, dy, dz):
-        h5f = pt.open_file(self.h5_path, "r+")
-
-        if "/source" not in h5f:
+        if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        tbl_src = h5f.get_node("/source")
+        tbl_src = self.h5f.get_node("/source")
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
         event = tbl_src[0]
         event["dxs"] = np.array([dx, dy, dz], dtype=float)
         tbl_src[0] = [event]
-        tbl_src.flush()
-
-        h5f.close()
 
     def linearized_search_cc(
         self,
@@ -3781,13 +3652,11 @@ class Misfit(object):
             raise Exception(msg)
         nstep = nstep[0]
 
-        h5f = pt.open_file(self.h5_path, "r")
-
         # check parameters
-        if "/source" not in h5f:
+        if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        tbl_src = h5f.get_node("/source")
+        tbl_src = self.h5f.get_node("/source")
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
@@ -3801,7 +3670,7 @@ class Misfit(object):
 
         # syn_components = ["E", "N", "Z"]
 
-        config = h5f.root._v_attrs["config"]
+        config = self.h5f.root._v_attrs["config"]
         obs_tag = config["data"]["tag"]
         syn_tag = config["syn"]["tag"]
         dsyn_grp = config["syn"]["dsyn_grp"]
@@ -3811,15 +3680,15 @@ class Misfit(object):
         # sum of all windows' weighting
         weight_sum = 0.0
 
-        if "/waveform" not in h5f:
+        if "/waveform" not in self.h5f:
             msg = '"/waveform" not existing, run read_data_h5 first!'
             raise KeyError(msg)
-        g_wav = h5f.get_node("/waveform")
+        g_wav = self.h5f.get_node("/waveform")
 
-        if "/window" not in h5f:
+        if "/window" not in self.h5f:
             msg = '"/window" not existing, run setup_window/measure_adj first!'
             raise KeyError(msg)
-        tbl_win = h5f.get_node("/window")
+        tbl_win = self.h5f.get_node("/window")
 
         dsyn_tags = {}
         for model_name in dm:
@@ -4018,8 +3887,6 @@ class Misfit(object):
                     # weighted cc
                     wcc_sum[istep] += weight * cc
 
-        h5f.close()
-
         return wcc_sum, weight_sum
 
     def grid_search_source(self, out_txt, out_fig, max_niter=5):
@@ -4036,12 +3903,10 @@ class Misfit(object):
         dxs_opt = 0.0
         dmt_opt = 0.0
 
-        h5f = pt.open_file(self.h5_path, "r")
-
-        if "/source" not in h5f:
+        if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        tbl_src = h5f.get_node("/source")
+        tbl_src = self.h5f.get_node("/source")
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
@@ -4074,7 +3939,7 @@ class Misfit(object):
 
                 fig = plt.figure(figsize=(8.5, 11))
                 fig.suptitle(f"iter#{niter:02d}")
-                gs0 = fig.add_gridspec(2, 2)  # 2-D search between dt0 and dxs
+                gs0 = fig.add_gridspec(2, 2) # 2-D search between dt0 and dxs
                 # gs1 = gs0[1,0].subgridspec(1, 2) # 1-D search of dtau and dmt
 
                 # 2D grid search for dt0 and dxs
@@ -4102,7 +3967,7 @@ class Misfit(object):
                 f.write("dt0_opt = {:f}\n".format(dt0_opt))
                 f.write("dxs_opt = {:f}\n".format(dxs_opt))
 
-                ax = fig.add_subplot(gs0[0, :])
+                ax = fig.add_subplot(gs0[0,:])
                 levels = np.linspace(np.min(zz), np.max(zz), 100)
                 cs = ax.contour(x, y, zz, levels=levels)
                 ax.clabel(cs, levels, inline=1, fmt="%.3f", fontsize=10)
@@ -4129,7 +3994,7 @@ class Misfit(object):
                 dmt_opt = x[idx_max]
                 f.write("dmt_opt = {:f}\n".format(dmt_opt))
 
-                ax1 = fig.add_subplot(gs0[1, 0])
+                ax1 = fig.add_subplot(gs0[1,0])
                 ax1.plot(dmt_1d, wcc, "ko")
                 ax1.plot(x, z, "k")
                 ax1.plot(x[idx_max], z[idx_max], "ro", markersize=5)
@@ -4154,7 +4019,7 @@ class Misfit(object):
                 dtau_opt = x[idx_max]
                 f.write("dtau_opt = {:f}\n".format(dtau_opt))
 
-                ax2 = fig.add_subplot(gs0[1, 1], sharey=ax1)
+                ax2 = fig.add_subplot(gs0[1,1], sharey=ax1)
                 ax2.plot(dtau_1d, wcc, "ko")
                 ax2.plot(x, z, "k")
                 ax2.plot(x[idx_max], z[idx_max], "ro", markersize=5)
@@ -4177,24 +4042,18 @@ class Misfit(object):
         # ====== close file
         f.close()
 
-        h5f.close()
-
-    def make_updated_cmtsolution(
-        self, cmtfile="CMTSOLUTION.updated", dt0=0.0, dtau=0.0, dxs=0.0, dmt=0.0
-    ):
-        h5f = pt.open_file(self.h5_path, "r")
-
-        if "/source" not in h5f:
+    def make_updated_cmtsolution(self, cmtfile="CMTSOLUTION.updated", dt0=0.0, dtau=0.0, dxs=0.0, dmt=0.0):
+        if "/source" not in self.h5f:
             msg = '"/source" not existing, run read_cmtsolution first!'
             raise KeyError(msg)
-        tbl_src = h5f.get_node("/source")
+        tbl_src = self.h5f.get_node("/source")
         if tbl_src.nrows == 0:
             msg = "no source information"
             raise Exception(msg)
         event = tbl_src[0]
         evhd = event["header"].decode()
         evnm = event["id"].decode()
-        t0 = UTCDateTime(event["t0"])
+        t0 = UTCDateTime(event['t0'])
         tau = event["tau"]
         xs = event["xs"]
         mt = event["mt"]
@@ -4209,8 +4068,8 @@ class Misfit(object):
         header[3] = "{:02d}".format(t1.day)
         header[4] = "{:02d}".format(t1.hour)
         header[5] = "{:02d}".format(t1.minute)
-        header[6] = "{:07.4f}".format(t1.second + 1.0e-6 * t1.microsecond)
-        header = " ".join(header)
+        header[6] = "{:07.4f}".format(t1.second + 1.0e-6*t1.microsecond)
+        header = ' '.join(header)
 
         xs1 = xs + dxs * dxs_vec
 
@@ -4234,7 +4093,6 @@ class Misfit(object):
             fp.write("%-18s %+15.8E\n" % ("Mxz(N*m):", mt1[0, 2]))
             fp.write("%-18s %+15.8E\n" % ("Myz(N*m):", mt1[1, 2]))
 
-        h5f.close()
 
 
 #     #

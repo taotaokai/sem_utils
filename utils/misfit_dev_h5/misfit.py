@@ -2667,7 +2667,6 @@ class Misfit(object):
             while another_loop:
                 if self.shutdown.poll():
                     another_loop = False
-                    print('bye bye')
                 try:
                     proc_num, net, sta, obs_tag, syn_tag = self.read_queue.get(
                         True, self.block_period
@@ -2687,8 +2686,7 @@ class Misfit(object):
                     # another_loop = True
                 except queue.Empty:
                     pass
-            # close the HDF4 file before shutting down
-            print('close h5 file')
+            # close the HDF5 file before shutting down
             self.h5_file.close()
 
         def read_data(self, net, sta, obs_tag, syn_tag):

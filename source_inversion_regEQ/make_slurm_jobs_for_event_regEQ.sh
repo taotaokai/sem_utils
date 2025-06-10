@@ -132,8 +132,7 @@ cat <<EOF > $misfit_job
 #!/bin/bash
 #SBATCH -J ${event_id}.misfit
 #SBATCH -o $misfit_job.o%j
-#SBATCH -N 1
-#SBATCH -n 1
+#SBATCH -n $slurm_nproc_misfit
 #SBATCH -p $slurm_partition_cpu
 #SBATCH -t $slurm_timelimit_misfit
 
@@ -160,8 +159,10 @@ $python_exec $sem_utils_dir/misfit/measure_adj.py \\
   $data_dir/$event_id/data.h5 \\
   $event_dir/output_green/sac \\
   $event_dir/SEM \\
+  --nproc=$slurm_nproc_misfit \\
   --cmt_in_ECEF \\
   --syn_is_grn
+
 
 # make STATIONS_ADJOINT
 cd $event_dir/SEM
@@ -346,7 +347,6 @@ cat <<EOF > $search_job
 #!/bin/bash
 #SBATCH -J ${event_id}.search
 #SBATCH -o $search_job.o%j
-#SBATCH -N 1
 #SBATCH -n 1
 #SBATCH -p $slurm_partition_cpu
 #SBATCH -t $slurm_timelimit_search

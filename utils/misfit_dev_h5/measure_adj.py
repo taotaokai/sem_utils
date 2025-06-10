@@ -21,6 +21,9 @@ parser.add_argument("--nproc", type=int, default=10)
 
 args = parser.parse_args()
 
+if args.nproc < 2:
+    parser.error("nproc must >= 2!")
+
 # with Misfit(args.misfit_h5file, 'w') as misfit:
 if __name__ == "__main__":
     misfit = Misfit(args.misfit_h5file)
@@ -40,6 +43,7 @@ if __name__ == "__main__":
     misfit.setup_windows()
     print(f"======= [{datetime.now()}] measure_adj", flush=True)
     # misfit.measure_adj()
-    misfit.measure_adj_multiprocess(nproc=args.nproc)
+    nproc = args.nproc - 1
+    misfit.measure_adj_multiprocess(nproc=nproc)
     print(f"======= [{datetime.now()}] output_adj", flush=True)
     misfit.output_adj(args.out_adj_dir)

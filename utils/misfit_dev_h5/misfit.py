@@ -2829,6 +2829,8 @@ class Misfit(object):
         """
         calculate adjoint sources (dchi_du)
         """
+        assert nproc >= 1
+
         h5f = pt.open_file(self.h5_path, "r+")
 
         config = h5f.root._v_attrs["config"]

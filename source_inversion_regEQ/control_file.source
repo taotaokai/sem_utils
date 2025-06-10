@@ -76,9 +76,11 @@ nproc_per_node=24
 # number of SEM slices
 sem_nproc=4  # actual mesh slices defined in Par_file
 
-# number of MPI processors to run jobs
+# number of MPI processors to run xspecfem jobs
 slurm_nnode=1
 slurm_nproc=4
+#
+slurm_nproc_misfit=12  # nproc to run misfit_job
 
 # mpi executable
 slurm_mpiexec="srun --mpi=pmix_v3" # SCNET

@@ -14,78 +14,74 @@
     * make_vtk.sh, make_slice_gcircle.sh, make_slice_sphere.sh
     * plot_slice_*.sh, plot_misfit.sh
 
-#====== Folder Structure for an inversion project
 
+
+## Folder Structure for an inversion project
+
+
+
+```shell
 project/
-*   sem_utils/ # utility scripts and excutables to run the inversion
-|   
-*   sem_config/ # configuration files for SEM (model setup,)
-|   *   setup/ # these header files are used to build specfem3d_globe
-|   |   *   constants.h.in
-|   |   *   precision.h (optional)
-|   |   *   values_from_mesher.h (optional)
-|   *   DATA/
-|   |   *   Par_file #used to build specfem3d_globe
-|   *   starting_model/
-|   ...
-|
-*   specfem3d_globe/ # build directory of SEM excutables (xmesher3D, xspecfem3D)
-|   *   bin/
-|   *   ...
-|
-*   events/ # waveform data
-|   *   <event_id>/
-|   |   *   data/
-|   |   |   *   station.txt # fdsnws-station: text output at channel level  
-|   |   |   *   CMTSOLUTION # SEM inputs
-|   |   |   *   STATIONS # SEM inputs
-|   |   |
-|   |   *   disp/
-|   |   |   *   <net>.<sta>.<loc>.<cha> # sac file of displacement (after instrument correction )
-|   |   |
-|   *   <event_id>/
-|   |   *   ...
-|   ...   
-|   
-*   iterations/ # iteration database
-|   *   iteration.00/
-|   |   *   control_file.00 # a shell script contains control parameters
-|   |   |
-|   |   *   model/
-|   |   |   *   DATABASES_MPI/
-|   |   |   |   *   prco***_reg1_<model_name>_dmodel.bin # model updates
-|   |   |   |   *   prco***_reg1_<v??,rho,eta>.bin # updated model files
-|   |   |   |
-|   |   *   mesh/
-|   |   |   *   DATABASES_MPI/proc*_reg1_solver_data.bin
-|   |   |   *   DATA/ # necessary data files, Par_file 
-|   |   |   
-|   |   *   <event_id>/
-|   |   |   *   DATABASES_MPI/ 
-|   |   |   *   DATA/ 
-|   |   |   *   output_syn/ 
-|   |   |   |   *   sac/
-|   |   |   *   output_kernel/ 
-|   |   |   |   *   kernel/ proc*_reg1_cijkl,rho_kernel.bin
-|   |   |   *   output_hess/ 
-|   |   |   |   *   kernel/ proc*_reg1_cijkl,rho_kernel.bin
-|   |   |   *   output_perturb/ # simulation for perturbed model
-|   |   |   |   *   sac/
-|   |   |   *   misfit/ 
-|   |   |   |   *   CMTSOLUTION.reloc # relocated source parameter
-|   |   |   |   *   misfit.pkl # misfit measurments (e.g. CC0, CCmax, ...)
-|   |   |   *   adj_kernel/ # adjoint source for kernel calculation 
-|   |   |   *   adj_hess/ # random adjoint source for hessian calculation 
-|   |   |
-|   |   *   <event_id>/
-|   |   |   *   ...
-|   |   ...
-|   |   *   kernel_sum/ # summed kernel (with precondition, smoothing, thresholding etc.)
-|   |   |   *   # *_dkernel.bin, *_kernel.bin
-|   |   |
-|   *   iteration.01/
-|   |   ...
-|   ...
+		sem_utils/ # utility scripts and excutables to run the inversion
+    |   
+		sem_config/ # configuration files for SEM (model setup,)
+    |   setup/ # these header files are used to build specfem3d_globe
+    |   |   *   constants.h.in
+    |   |   *   precision.h (optional)
+    |   |   *   values_from_mesher.h (optional)
+    |   DATA/
+    |   |   *   Par_file #used to build specfem3d_globe
+    |   *   starting_model/
+    |   ...
+    |
+    specfem3d_globe/ # build directory of SEM excutables (xmesher3D, xspecfem3D)
+    |   bin/
+    |   ...
+    |
+    events/ # waveform data
+    |   <event_id>/
+    |   |   |		channel.txt # fdsnws-station: text output at channel level  
+    |   |   |   CMTSOLUTION # SEM inputs
+    |   |   |   STATIONS # SEM inputs
+    |		|		|		data.h5
+    |   ...   
+    |   
+		stage??.[source|structure]/ # iteration database
+    |   iter??/
+    |   |   control_file.00 # a shell script contains control parameters
+    |  	|		|
+    |   |   model/
+    |   |   |   *   DATABASES_MPI/
+    |   |   |   |   *   prco***_reg1_<model_name>_dmodel.bin # model updates
+    |   |   |   |   *   prco***_reg1_<v??,rho,eta>.bin # updated model files
+    |   |   |   |
+    |   |   mesh/
+    |   |   |   *   DATABASES_MPI/proc*_reg1_solver_data.bin
+    |   |   |   *   DATA/ # necessary data files, Par_file 
+    |   |   |   
+    |   |   <event_id>/
+    |   |   |   DATABASES_MPI/ 
+    |   |   |   DATA/ 
+    |   |   |   output_syn/ 
+    |   |   |   |   *   sac/
+    |   |   |   output_kernel/ 
+    |   |   |   |   *   kernel/ proc*_reg1_cijkl,rho_kernel.bin
+    |   |   |   output_hess/ 
+    |   |   |   |   *   kernel/ proc*_reg1_cijkl,rho_kernel.bin
+    |   |   |   output_perturb/ # simulation for perturbed model
+    |   |   |   |   *   sac/
+    |   |   |   misfit/ 
+    |   |   |   |   CMTSOLUTION.reloc # relocated source parameter
+    |   |   |   |   misfit.h5 # misfit measurments (e.g. CC0, CCmax, ...)
+    |   |   |   SEM/ # adjoint source for kernel calculation 
+    |   |   |
+    |   |   ...
+    |   |   kernel_sum/ # summed kernel (with precondition, smoothing, thresholding etc.)
+    |   |   |   				# *_dkernel.bin, *_kernel.bin
+    |   |   |
+    |   iter??/
+    |   |   ...
+```
 
 
 #====== Project setup
@@ -146,6 +142,42 @@ project/
     * plot x-sections: model, kernel
 
     * plot data misfit: station misfit distribution, waveform profile for each earthquake
+
+
+
+## Work flow of source inversion (one earthquake)
+
+```mermaid
+flowchart LR
+		classDef GPU fill:#f96
+		
+		A[initial CMTSOLUTION] --> e1f
+
+		
+      direction LR
+    	e1f[green]:::GPU --> e1m[misfit] --> e1k[srcfrechet]:::GPU --> e1p[perturb] --> es1f[N x forward]:::GPU --> es1d[diff] --> es1s[search]
+    
+    
+	
+		es1s --> o[updated CMTSOLUTION]
+```
+
+```pseudocode
+# Note: [***_job] is a slurm job
+
+[green_job] forward simulation
+[misfit_job] measure misfit
+[srcfrechet_job] adjoint simulation, get source gradients (e.g. dchi_dxs, dchi_dmt)
+
+[perturb_job] perturb source parameters along some chosen search directions (e.g. dxs, dmt)
+[forward_perturb_job] forward simulation for perturbed models
+
+[search_job]
+		get waveform differences for each search direction in model space
+		while changes in the optimal step lengths greater than a threshold:
+			calculate misfit for a range of step lengths, assuming linear relationship between waveform differences and step length
+		get optimal step lengths
+```
 
 
 

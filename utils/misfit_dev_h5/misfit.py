@@ -2626,8 +2626,9 @@ class Misfit(object):
                 win["proj_matrix"] = proj_matrix
                 win.update()
 
-            wins = tbl_win.read_where(f'(network == b"{net}") & (station == b"{sta}")') 
-            np.savez(f'{net}_{sta}_wins.npz', wins=wins)
+            #DEBUG
+            #wins = tbl_win.read_where(f'(network == b"{net}") & (station == b"{sta}")') 
+            # np.savez(f'{net}_{sta}_wins.npz', wins=wins)
 
             # store adjoint source for this station, e.g. /NET_STA/ADJ_DISP[0:nchan, 0:npts]
             if adj_tag in g_sta:

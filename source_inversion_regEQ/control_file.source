@@ -4,17 +4,15 @@
 
 #====== Structure of work directories 
 #
-#{base_dir}/
-#  |- {stage_dir}/
-#    |- {iter_dir}/
-#      |- {event_dir}/
-#        |- DATA/
-#          |- CMTSOLUTION.init
-#        |- green/
-#        |- misfit/
-#        |- srcfrechet/
-#        |- dgreen/
-#        |- search/
+# EuropeFWI/
+# |   stage00.source/
+# |   |   iter00/
+# |   |   |   C202411201443A/
+# |   |   |   |   DATA/, DATABASES_MPI/, SEM/
+# |   |   |   |   slurm/**.job
+# |   |   |   |   misfit/
+# |   |   |   |   |   misfit.h5, grid_search_source.txt, ...
+# |   |   |   |   output_[green|srcfrechet|dxs,dmt]/
 #
 #====== Basic workflow:
 #
@@ -43,14 +41,19 @@ sem_build_dir=${base_dir}/build # build/: bin/xmeshfem3D,xspecfem3D
 sem_utils_dir=${base_dir}/sem_utils  # sem_utils/: misfit/, source_inversion_regEQ/
 
 # event data dir
-data_dir=${base_dir}/data # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTIOn, data.h5
+data_dir=${base_dir}/data # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTION, data.h5
 
 # current iteration directory: need model/ and misfit_par/
 iter_num=$(printf "%02d" $iter_num)
 iter_dir=${stage_dir}/iter${iter_num}
 
-# initial source dir
-source_dir=${stage_dir}/CMTSOLUTION_updated
+# previous iteration directory
+iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
+prev_iter_dir=${stage_dir}/iter${iter_minus_one}
+
+# CMTSOLUTION dir
+initial_cmt_dir=${prev_iter_dir}/CMTSOLUTION_updated
+updated_cmt_dir=${iter_dir}/CMTSOLUTION_updated
 
 # mesh/DATABASES_MPI/*solver_data.bin,..
 mesh_dir=${stage_dir}/mesh
@@ -60,10 +63,6 @@ mesh_dir=${stage_dir}/mesh
 misfit_par_dir=${stage_dir}/misfit_par
 
 #precond_dir=${iter_dir}/preconditioner # proc*_reg1_inv_hess_diag.bin
-
-# previous iteration directory
-iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
-prev_iter_dir=${stage_dir}/iter${iter_minus_one}
 
 #======== slurm jobs
 

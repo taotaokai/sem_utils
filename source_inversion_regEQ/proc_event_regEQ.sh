@@ -17,6 +17,11 @@ event_list=${2:?[arg]need event_list}
 # load parameters in control_file
 source $control_file
 
+if [ ! -d "$updated_cmt_dir" ]
+then
+  mkdir -p $updated_cmt_dir
+fi
+
 #------ process each event
 for event_id in $(awk 'NF&&$1!~/#/{print $1}' $event_list)
 do
@@ -32,7 +37,7 @@ do
   mkdir -p $event_dir/DATA
 
   # copy initial CMTSOLUTION file
-  cmt_file=$source_dir/${event_id}.cmt
+  cmt_file=$initial_cmt_dir/${event_id}.cmt
   echo ------ use: $(readlink -f $cmt_file)
   if [ ! -f "$cmt_file" ]
   then

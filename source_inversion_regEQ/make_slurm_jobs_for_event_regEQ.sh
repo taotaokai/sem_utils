@@ -389,6 +389,8 @@ $python_exec $sem_utils_dir/misfit/make_updated_cmtsolution.py \\
   $misfit_dir/CMTSOLUTION.updated \\
   \$dt0_opt \$dtau_opt \$dxs_opt \$dmt_opt
 
+cp $misfit_dir/CMTSOLUTION.updated $updated_cmt_dir/${event_id}.cmt
+
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo

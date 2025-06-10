@@ -7,12 +7,16 @@
 # EuropeFWI/
 # |   stage00.source/
 # |   |   iter00/
-# |   |   |   C202411201443A/
-# |   |   |   |   DATA/, DATABASES_MPI/, SEM/
-# |   |   |   |   slurm/**.job
-# |   |   |   |   misfit/
-# |   |   |   |   |   misfit.h5, grid_search_source.txt, ...
-# |   |   |   |   output_[green|srcfrechet|dxs,dmt]/
+# |   |   |   events/
+# |   |   |   |   C202411201443A/
+# |   |   |   |   |   DATA/, DATABASES_MPI/, SEM/
+# |   |   |   |   |   slurm/: green.job, misfit.job, ...
+# |   |   |   |   |   misfit/:   misfit.h5, grid_search_source.txt, CMTSOLUTION.updated, ...
+# |   |   |   |   |   output_green,srcfrechet,dxs,dmt/
+# |   |   |   |   C202006211907A/ 
+# |   |   |   |   | ... 
+# |   |   |   CMTSOLUTION_updated
+#
 #
 #====== Basic workflow:
 #
@@ -43,11 +47,11 @@ sem_utils_dir=${base_dir}/sem_utils  # sem_utils/: misfit/, source_inversion_reg
 # event data dir
 data_dir=${base_dir}/data # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTION, data.h5
 
-# current iteration directory: need model/ and misfit_par/
+# current iteration directory, e.g. iter01/
 iter_num=$(printf "%02d" $iter_num)
 iter_dir=${stage_dir}/iter${iter_num}
 
-# previous iteration directory
+# previous iteration directory, e.g. iter00/
 iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
 prev_iter_dir=${stage_dir}/iter${iter_minus_one}
 

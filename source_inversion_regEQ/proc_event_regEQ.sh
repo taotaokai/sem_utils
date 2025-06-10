@@ -28,7 +28,7 @@ do
   echo "====== $event_id"
 
   # create event dir
-  event_dir=$iter_dir/$event_id
+  event_dir=$iter_dir/events/$event_id
   sem_data_dir=$event_dir/DATA
   if [ -d "$sem_data_dir" ]
   then

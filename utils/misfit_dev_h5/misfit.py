@@ -216,28 +216,28 @@ class Window(pt.IsDescription):
     cmpnm = pt.StringCol(1, pos=4)
     starttime = pt.StringCol(30, pos=5)
     endtime = pt.StringCol(30, pos=6)
-    taper = pt.Float32Col(pos=7)
+    taper = pt.Float64Col(pos=7)
     butter_N = pt.Int32Col(pos=8)
-    butter_Wn = pt.Float32Col(2, pos=9)
-    cmpaz = pt.Float32Col(pos=10)
-    cmpdip = pt.Float32Col(pos=11)
-    weight = pt.Float32Col(pos=12)
-    cc0 = pt.Float32Col(pos=13)
-    cc_time_shift = pt.Float32Col(
+    butter_Wn = pt.Float64Col(2, pos=9)
+    cmpaz = pt.Float64Col(pos=10)
+    cmpdip = pt.Float64Col(pos=11)
+    weight = pt.Float64Col(pos=12)
+    cc0 = pt.Float64Col(pos=13)
+    cc_time_shift = pt.Float64Col(
         pos=14
     )  # syn(t-dt): positive dt means shiftting syn right
-    cc_max = pt.Float32Col(pos=15)  # cc after time shift
-    amp_ratio_cc0 = pt.Float32Col(
+    cc_max = pt.Float64Col(pos=15)  # cc after time shift
+    amp_ratio_cc0 = pt.Float64Col(
         pos=16
     )  # (w*obs, w*syn)/(w*obs, w*obs), (*,*): inner product
-    amp_ratio_ccmax = pt.Float32Col(pos=17)  # after time shift
-    SNR = pt.Float32Col(pos=18)
-    noise_maxamp = pt.Float32Col(pos=19)
-    obs_maxamp = pt.Float32Col(pos=20)
-    syn_maxamp = pt.Float32Col(pos=21)
+    amp_ratio_ccmax = pt.Float64Col(pos=17)  # after time shift
+    SNR = pt.Float64Col(pos=18)
+    noise_maxamp = pt.Float64Col(pos=19)
+    obs_maxamp = pt.Float64Col(pos=20)
+    syn_maxamp = pt.Float64Col(pos=21)
     id = pt.StringCol(128, pos=22)
     valid = pt.BoolCol(pos=23)
-    proj_matrix = pt.Float32Col(
+    proj_matrix = pt.Float64Col(
         shape=(3, 3), pos=24
     )  # from ENZ to the measured component
 
@@ -491,6 +491,8 @@ def _measure_adj_one_sta(
         obs_ENZ, syn_ENZ, no_Hchan = _extract_obs_syn_ENZ(
             sta_attrs, obs_data, obs_attrs, syn_data, syn_attrs, event_tau
         )
+        # debug
+        # np.savez(f'{net}_{sta}_new.npz', obs_ENZ=obs_ENZ, syn_ENZ=syn_ENZ, no_Hchan=no_Hchan)
     except Exception as e:
         msg = f"{stnm}: failed to get obs_ENZ,syn_ENZ ({e})"
         warnings.warn(msg)
@@ -523,6 +525,7 @@ def _measure_adj_one_sta(
             continue
         cmpaz = win["cmpaz"]
         cmpdip = win["cmpdip"]
+
         # filter
         butter_N = win["butter_N"]
         butter_Wn = win["butter_Wn"]
@@ -741,6 +744,8 @@ def _measure_adj_one_sta(
         win["valid"] = True
         win["proj_matrix"] = proj_matrix
 
+    np.savez(f'{net}_{sta}_wins_mp.npz', wins=wins)
+
     # store adjoint source for this station, e.g. /NET_STA/ADJ_DISP[0:nchan, 0:npts]
     # if adj_tag in g_sta:
     #     msg = f"{adj_tag} exists in {g_sta._v_name}, overwrite!"
@@ -835,6 +840,8 @@ class Misfit(object):
 
     def __init__(self, h5_path):
         self.h5_path = h5_path
+        with pt.open_file(self.h5_path, 'w'):
+            pass
 
     def read_config_file(self, config_yaml):
         with open(config_yaml, "r") as file:
@@ -2195,7 +2202,9 @@ class Misfit(object):
             try:
                 obs_ENZ, syn_ENZ, no_Hchan = self._extract_obs_syn_ENZ(
                     g_sta, obs_tag, syn_tag, event["tau"]
-                )
+                ) 
+                # debug
+                # np.savez(f'{net}_{sta}_old.npz', obs_ENZ=obs_ENZ, syn_ENZ=syn_ENZ, no_Hchan=no_Hchan)
             except Exception as e:
                 msg = f"failed to get obs,syn_ENZ for {g_sta._v_name}, ({e})"
                 warnings.warn(msg)
@@ -2242,6 +2251,7 @@ class Misfit(object):
                     continue
                 cmpaz = win["cmpaz"]
                 cmpdip = win["cmpdip"]
+
                 # filter
                 butter_N = win["butter_N"]
                 butter_Wn = win["butter_Wn"]
@@ -2616,6 +2626,9 @@ class Misfit(object):
                 win["proj_matrix"] = proj_matrix
                 win.update()
 
+            wins = tbl_win.read_where(f'(network == b"{net}") & (station == b"{sta}")') 
+            np.savez(f'{net}_{sta}_wins.npz', wins=wins)
+
             # store adjoint source for this station, e.g. /NET_STA/ADJ_DISP[0:nchan, 0:npts]
             if adj_tag in g_sta:
                 msg = f"{adj_tag} exists in {g_sta._v_name}, overwrite!"
@@ -2709,7 +2722,7 @@ class Misfit(object):
                 )
                 wins = tbl_win[inds]
             except Exception as e:
-                msg = f"{net}_{sta}: failed to get syn/obs_ENZ"
+                msg = f"{net}_{sta}: failed to get syn/obs data"
                 warnings.warn(msg)
                 return None
 
@@ -2728,7 +2741,7 @@ class Misfit(object):
             tbl_win = self.h5_file.get_node("/window")
 
             pt_atom = pt.Atom.from_dtype(np.dtype(np.float32))
-            pt_filters = pt.Filters(complevel=2, complib="zlib")
+            pt_filters = pt.Filters(complevel=3, complib="zlib")
 
             if adj_tag in gsta:
                 msg = f"{net}_{sta}: {adj_tag} exists, overwrite!"

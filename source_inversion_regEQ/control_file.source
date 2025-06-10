@@ -81,14 +81,14 @@ slurm_nnode=1
 slurm_nproc=4
 
 # mpi executable
-# slurm_mpiexec="srun --mpi=pmix_v3"
-slurm_mpiexec="mpirun -np ${slurm_nproc}"
+slurm_mpiexec="srun --mpi=pmix_v3" # SCNET
+# slurm_mpiexec="mpirun -np ${slurm_nproc}"
 
 # slurm partition
-slurm_partition_dcu="xahdnormal" # SCNET
-slurm_partition_cpu="xahcnormal" # SCNET
+slurm_partition_dcu="xahdnormal" # SCNET GPU
+slurm_partition_cpu="xahcnormal" # SCNET CPU
 
-slurm_dcu_extra_args="--exclusive --gres=dcu:4"
+slurm_dcu_extra_args="--exclusive --gres=dcu:4" # SCNET
 
 # time limit
 slurm_timelimit_mesh=01:00:00 # mesh

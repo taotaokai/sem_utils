@@ -839,9 +839,15 @@ class Misfit(object):
     """
 
     def __init__(self, h5_path):
+        if os.path.isfile(h5_path):
+            if pt.is_hdf5_file(h5_path):
+                self.h5_path = h5_path
+            else:
+                raise FileExistsError(f"{h5_path} is not a valid HDF5 file!")
+        else:
+            with pt.open_file(h5_path, 'w') as h5f:
+                pass
         self.h5_path = h5_path
-        with pt.open_file(self.h5_path, 'w'):
-            pass
 
     def read_config_file(self, config_yaml):
         with open(config_yaml, "r") as file:
@@ -1004,12 +1010,12 @@ class Misfit(object):
             src_path = f"/source"
             if src_path not in h5f:
                 msg = "no source information"
-                raise Exception(msg)
+                raise ValueError(msg)
             else:
                 tbl_src = h5f.get_node(src_path)
                 if tbl_src.nrows == 0:
                     msg = "no source information"
-                    raise Exception(msg)
+                    raise ValueError(msg)
 
             event = tbl_src[0]
             event_id = event["id"].decode()

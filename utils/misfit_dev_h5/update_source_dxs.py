@@ -12,5 +12,5 @@ parser.add_argument("dz", type=float)
 
 args = parser.parse_args()
 
-with Misfit(args.misfit_h5file, 'a') as misfit:
-    misfit.update_source_dxs(args.dx, args.dy, args.dz)
+misfit = Misfit(args.misfit_h5file) 
+misfit.update_source_dxs(args.dx, args.dy, args.dz)

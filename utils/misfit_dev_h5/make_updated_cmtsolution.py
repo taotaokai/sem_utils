@@ -18,9 +18,9 @@ parser.add_argument("dmt", type=float)
 
 args = parser.parse_args()
 
-with Misfit(args.misfit_h5file, 'r') as misfit:
-    misfit.make_updated_cmtsolution(args.out_cmt,
-                                    dt0 = args.dt0,
-                                    dtau = args.dtau,
-                                    dxs = args.dxs,
-                                    dmt = args.dmt)
+misfit = Misfit(args.misfit_h5file)
+misfit.make_updated_cmtsolution(args.out_cmt,
+                                dt0 = args.dt0,
+                                dtau = args.dtau,
+                                dxs = args.dxs,
+                                dmt = args.dmt)

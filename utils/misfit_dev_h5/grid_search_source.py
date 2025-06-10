@@ -16,5 +16,5 @@ parser.add_argument("-n", "--niter", default=5, type=int)  # "search.pdf"
 
 args = parser.parse_args()
 
-with Misfit(args.misfit_h5file, 'r') as misfit:
-    misfit.grid_search_source(args.out_txt, args.out_fig, args.niter)
+misfit = Misfit(args.misfit_h5file)
+misfit.grid_search_source(args.out_txt, args.out_fig, args.niter)

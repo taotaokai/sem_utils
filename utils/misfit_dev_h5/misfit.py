@@ -744,7 +744,7 @@ def _measure_adj_one_sta(
         win["valid"] = True
         win["proj_matrix"] = proj_matrix
 
-    np.savez(f'{net}_{sta}_wins_mp.npz', wins=wins)
+    # np.savez(f'{net}_{sta}_wins_mp.npz', wins=wins)
 
     # store adjoint source for this station, e.g. /NET_STA/ADJ_DISP[0:nchan, 0:npts]
     # if adj_tag in g_sta:

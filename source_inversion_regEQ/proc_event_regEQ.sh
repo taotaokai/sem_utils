@@ -37,7 +37,12 @@ do
   mkdir -p $event_dir/DATA
 
   # copy initial CMTSOLUTION file
-  cmt_file=$initial_cmt_dir/${event_id}.cmt
+  if (( $iter_num == 0 ))
+  then
+    cmt_file=$data_dir/${event_id}/CMTSOLUTION.ecef
+  else
+    cmt_file=$initial_cmt_dir/${event_id}.cmt
+  fi
   echo ------ use: $(readlink -f $cmt_file)
   if [ ! -f "$cmt_file" ]
   then

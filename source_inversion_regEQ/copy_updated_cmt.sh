@@ -6,7 +6,8 @@ event_list=${1:?[arg]need event_list}
 
 mkdir CMTSOLUTION_updated
 
-for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
+# for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
+for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $1}' $event_list)
 do
 
   echo "====== $event_id"

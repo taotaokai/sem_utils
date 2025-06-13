@@ -19,7 +19,7 @@ for event_id in $(awk 'NF&&$1!~/#/' $event_list)
 do
 
   echo "====== $event_id"
-  event_dir=$iter_dir/$event_id
+  event_dir=$iter_dir/events/$event_id
   slurm_dir=$event_dir/slurm
 
   $sem_utils_dir/submit_slurm_jobs_sequential.sh $slurm_dir $job_names $job_dep

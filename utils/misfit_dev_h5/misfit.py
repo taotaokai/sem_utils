@@ -845,7 +845,7 @@ class Misfit(object):
             else:
                 raise FileExistsError(f"{h5_path} is not a valid HDF5 file!")
         else:
-            with pt.open_file(h5_path, 'w') as h5f:
+            with pt.open_file(h5_path, "w") as h5f:
                 pass
         self.h5_path = h5_path
 
@@ -2208,7 +2208,7 @@ class Misfit(object):
             try:
                 obs_ENZ, syn_ENZ, no_Hchan = self._extract_obs_syn_ENZ(
                     g_sta, obs_tag, syn_tag, event["tau"]
-                ) 
+                )
                 # debug
                 # np.savez(f'{net}_{sta}_old.npz', obs_ENZ=obs_ENZ, syn_ENZ=syn_ENZ, no_Hchan=no_Hchan)
             except Exception as e:
@@ -2632,8 +2632,8 @@ class Misfit(object):
                 win["proj_matrix"] = proj_matrix
                 win.update()
 
-            #DEBUG
-            #wins = tbl_win.read_where(f'(network == b"{net}") & (station == b"{sta}")') 
+            # DEBUG
+            # wins = tbl_win.read_where(f'(network == b"{net}") & (station == b"{sta}")')
             # np.savez(f'{net}_{sta}_wins.npz', wins=wins)
 
             # store adjoint source for this station, e.g. /NET_STA/ADJ_DISP[0:nchan, 0:npts]
@@ -2683,27 +2683,36 @@ class Misfit(object):
 
         def run(self):
             self.h5_file = pt.open_file(self.h5_path, "r+")
-            another_loop = True
-            while another_loop:
+            stop_loop = False
+            end_of_read_queue = False
+            end_of_write_queue = False
+            while True:
                 if self.shutdown.poll():
-                    another_loop = False
+                    stop_loop = True
+                if stop_loop and end_of_read_queue and end_of_write_queue:
+                    break
+
                 try:
-                    proc_num, net, sta, obs_tag, syn_tag = self.read_queue.get(
-                        True, self.block_period
-                    )
-                    data = self.read_data(net, sta, obs_tag, syn_tag)
-                    result_queue = self.result_queues[proc_num]
-                    result_queue.put(data)
-                    # another_loop = True
+                    item = self.read_queue.get(True, self.block_period)
+                    if item is None:
+                        end_of_read_queue = True
+                    else:
+                        proc_num, net, sta, obs_tag, syn_tag = item
+                        data = self.read_data(net, sta, obs_tag, syn_tag)
+                        result_queue = self.result_queues[proc_num]
+                        result_queue.put(data)
                 except queue.Empty:
                     pass
 
                 try:
-                    net, sta, adj_tag, adj_src, adj_attrs, inds, wins = (
-                        self.write_queue.get(True, self.block_period)
-                    )
-                    self.write_data(net, sta, adj_tag, adj_src, adj_attrs, inds, wins)
-                    # another_loop = True
+                    item = self.write_queue.get(True, self.block_period)
+                    if item is None:
+                        end_of_write_queue = True
+                    else:
+                        net, sta, adj_tag, adj_src, adj_attrs, inds, wins = item
+                        self.write_data(
+                            net, sta, adj_tag, adj_src, adj_attrs, inds, wins
+                        )
                 except queue.Empty:
                     pass
             # close the HDF5 file before shutting down
@@ -2890,6 +2899,8 @@ class Misfit(object):
         for processor in processors:
             processor.join()
         # shut down the FileAccess instance
+        read_queue.put(None)
+        write_queue.put(None)
         shutdown_send.send(0)
         file_access.join()
 
@@ -3482,6 +3493,7 @@ class Misfit(object):
             raise KeyError(msg)
         g_wav = h5f.get_node("/waveform")
 
+        # TODO: parallelize by pool and imap_unordered
         for g_sta in g_wav:
             if adj_tag not in g_sta:
                 continue
@@ -4100,7 +4112,7 @@ class Misfit(object):
                 # 2D grid search for dt0 and dxs
                 dt0_1d = np.linspace(dt0_min, dt0_max, 5)
                 dxs_1d = np.linspace(dxs_min, dxs_max, 5)
-                dt0_2d, dxs_2d = np.meshgrid(dt0_1d, dxs_1d)
+                dt0_2d, dxs_2d = np.meshgrid(dt0_1d, dxs_1d, indexing="ij")
                 dm = {
                     "dt0": dt0_2d.reshape(dt0_2d.size),
                     "dxs": dxs_2d.reshape(dxs_2d.size),
@@ -4108,29 +4120,33 @@ class Misfit(object):
                     "dtau": dtau_opt * np.ones(dt0_2d.size),
                 }
                 wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
-                wcc = wcc_sum / weight_sum
+                # wcc = wcc_sum / weight_sum
                 interp = scipy.interpolate.RectBivariateSpline(
-                    dxs_1d, dt0_1d, wcc.reshape(dt0_2d.shape)
+                    dt0_1d, dxs_1d, wcc_sum.reshape(dt0_2d.shape)
                 )
-                y = np.linspace(np.min(dxs_1d), np.max(dxs_1d), 500)
-                x = np.linspace(np.min(dt0_1d), np.max(dt0_1d), 500)
-                zz = interp(y, x)
-                idx_max = np.argmax(zz)
-                iy, ix = np.unravel_index(idx_max, zz.shape)
-                dt0_opt = x[ix]
-                dxs_opt = y[iy]
+                dt0_1d_fine = np.linspace(np.min(dt0_1d), np.max(dt0_1d), 100)
+                dxs_1d_fine = np.linspace(np.min(dxs_1d), np.max(dxs_1d), 100)
+                wcc_sum_fine = interp(dt0_1d_fine, dxs_1d_fine)
+                wcc_fine = wcc_sum_fine / weight_sum
+                idx_max = np.argmax(wcc_sum_fine)
+                ix, iy = np.unravel_index(idx_max, wcc_sum_fine.shape)
+                wcc_sum_max = wcc_sum_fine[ix, iy]
+                dt0_opt = dt0_1d_fine[ix]
+                dxs_opt = dxs_1d_fine[iy]
                 f.write("dt0_opt = {:f}\n".format(dt0_opt))
                 f.write("dxs_opt = {:f}\n".format(dxs_opt))
 
                 ax = fig.add_subplot(gs0[0, :])
-                levels = np.linspace(np.min(zz), np.max(zz), 100)
-                cs = ax.contour(x, y, zz, levels=levels)
+                levels = np.linspace(np.min(wcc_fine), np.max(wcc_fine), 100)
+                cs = ax.contour(dt0_1d_fine, dxs_1d_fine, wcc_fine.T, levels=levels)
                 ax.clabel(cs, levels, inline=1, fmt="%.3f", fontsize=10)
-                ax.plot(dt0_opt, dxs_opt, "r*", markersize=3, clip_on=False)
+                ax.plot(dt0_opt, dxs_opt, "ro", markersize=3, clip_on=False)
                 ax.text(dt0_opt, dxs_opt, f"{dt0_opt:.1f},{dxs_opt:.1f}")
                 ax.set_xlabel("dt0 (second)")
                 ax.set_ylabel("dxs")
-                # ax.set_title("iter%02d" % (niter))
+                ax.set_title(
+                    f"max(wcc_sum)={wcc_sum_max:.2e}, weight_sum={weight_sum:.2e}"
+                )
 
                 # 1D grid search for dmt
                 dmt_1d = np.linspace(dmt_min, dmt_max, 11)
@@ -4142,20 +4158,24 @@ class Misfit(object):
                 }
                 wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
                 wcc = wcc_sum / weight_sum
-                interp = scipy.interpolate.interp1d(dmt_1d, wcc, kind="cubic")
-                x = np.linspace(dmt_min, dmt_max, 500)
-                z = interp(x)
-                idx_max = np.argmax(z)
-                dmt_opt = x[idx_max]
+                interp = scipy.interpolate.interp1d(dmt_1d, wcc_sum, kind="cubic")
+                dmt_1d_fine = np.linspace(dmt_min, dmt_max, 100)
+                wcc_sum_fine = interp(dmt_1d_fine)
+                wcc_fine = wcc_sum_fine / weight_sum
+                idx_max = np.argmax(wcc_sum_fine)
+                wcc_sum_max = wcc_sum_fine[idx_max]
+                wcc_max = wcc_sum_max / weight_sum
+                dmt_opt = dmt_1d_fine[idx_max]
                 f.write("dmt_opt = {:f}\n".format(dmt_opt))
 
                 ax1 = fig.add_subplot(gs0[1, 0])
                 ax1.plot(dmt_1d, wcc, "ko")
-                ax1.plot(x, z, "k")
-                ax1.plot(x[idx_max], z[idx_max], "ro", markersize=5)
-                ax1.text(x[idx_max], z[idx_max], f"{dmt_opt:.1f}")
+                ax1.plot(dmt_1d_fine, wcc_fine, "k")
+                ax1.plot(dmt_opt, wcc_max, "ro", markersize=5)
+                ax1.text(dmt_opt, wcc_max, f"{dmt_opt:.1f}")
                 ax1.set_xlabel("dmt")
-                ax1.set_ylabel("wcc(interp)")
+                ax1.set_ylabel("wcc")
+                ax1.set_title(f"max(wcc_sum)={wcc_sum_max:.2e}")
 
                 # 1D grid search for dtau
                 dtau_1d = np.linspace(dtau_min, dtau_max, 11)
@@ -4167,21 +4187,29 @@ class Misfit(object):
                 }
                 wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
                 wcc = wcc_sum / weight_sum
-                interp = scipy.interpolate.interp1d(dtau_1d, wcc, kind="cubic")
-                x = np.linspace(dtau_min, dtau_max, 500)
-                z = interp(x)
-                idx_max = np.argmax(z)
-                dtau_opt = x[idx_max]
+                interp = scipy.interpolate.interp1d(dtau_1d, wcc_sum, kind="cubic")
+                dtau_1d_fine = np.linspace(dtau_min, dtau_max, 100)
+                wcc_sum_fine = interp(dtau_1d_fine)
+                wcc_fine = wcc_sum_fine / weight_sum
+                idx_max = np.argmax(wcc_sum_fine)
+                wcc_sum_max = wcc_sum_fine[idx_max]
+                wcc_max = wcc_sum_max / weight_sum
+                dtau_opt = dtau_1d_fine[idx_max]
                 f.write("dtau_opt = {:f}\n".format(dtau_opt))
 
                 ax2 = fig.add_subplot(gs0[1, 1], sharey=ax1)
                 ax2.plot(dtau_1d, wcc, "ko")
-                ax2.plot(x, z, "k")
-                ax2.plot(x[idx_max], z[idx_max], "ro", markersize=5)
-                ax2.text(x[idx_max], z[idx_max], f"{dtau_opt:.1f}")
+                ax2.plot(dtau_1d_fine, wcc_fine, "k")
+                ax2.plot(dtau_opt, wcc_max, "ro", markersize=5)
+                ax2.text(dtau_opt, wcc_max, f"{dtau_opt:.1f}")
                 ax2.set_xlabel("dtau")
                 ax2.tick_params(labelleft=False)
+                ax2.set_title(f"max(wcc_sum)={wcc_sum_max:.2e}")
                 # ax2.set_ylabel("wcc(interp)")
+
+                f.write(f"weight_sum = {weight_sum:.5e}\n")
+                f.write(f"max(wcc_sum) = {wcc_sum_max:.5e}\n")
+                f.write(f"max(wcc_sum)/weight_sum = {wcc_max:.5e}\n")
 
                 pdf.savefig()
                 plt.close()

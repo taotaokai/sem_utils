@@ -48,6 +48,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 
+import cartopy.crs as ccrs
+
 #
 import yaml
 
@@ -4284,10 +4286,310 @@ class Misfit(object):
 
         h5f.close()
 
+    def get_window_ids(self):
+        with pt.open_file(self.h5_path, "r") as h5f:
+            win_tbl = h5f.root["window"]
+            win_ids = [w.decode() for w in set(win_tbl.read(field="id"))]
+        return win_ids
 
-#     #
-#     # ======================================================
-#     #
+    def plot_misfit(self, out_fig, **kwargs):
+        """Plot misfit for a certain event and window_id"""
+
+        h5f = pt.open_file(self.h5_path, "r")
+
+        # config
+        config = h5f.root._v_attrs["config"]
+
+        # event info
+        if "/source" not in h5f:
+            msg = '"/source" does not exist, run read_cmtsolution first!'
+            raise KeyError(msg)
+        tbl_src = h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[0]
+
+        if "/waveform" not in h5f:
+            msg = '"/waveform" does not exist, run read_data_h5 first!'
+            raise KeyError(msg)
+        g_wav = h5f.get_node("/waveform")
+
+        if "/window" not in h5f:
+            msg = '"/waveform" does not exist, run setup_windows first!'
+            raise KeyError(msg)
+        tbl_win = h5f.get_node("/window")
+
+        # event info
+        evt0 = UTCDateTime(event["t0"])
+        evtau = event["tau"]
+        evla = event["latitude"]
+        evlo = event["longitude"]
+        evdp = event["depth"]
+        evnm = event["id"].decode()
+        # evdp has to be >=0 otherwise taup would crash
+        if evdp < 0.0:
+            evdp = 0.0
+        mt = event["mt_rtp"]
+        Mrr = mt[0][0]
+        Mtt = mt[1][1]
+        Mpp = mt[2][2]
+        Mrt = mt[0][1]
+        Mrp = mt[0][2]
+        Mtp = mt[1][2]
+        focmec = [Mrr, Mtt, Mpp, Mrt, Mrp, Mtp]
+
+        # get all windows
+        data = [
+            (win, g_wav[stnm])
+            for win in tbl_win.read()
+            if (stnm := f'{win["network"].decode()}_{win["station"].decode()}') in g_wav
+        ]
+        if not data:
+            warnings.warn("No data to plot!")
+            return
+
+        # map configuration
+        parallels = np.arange(-90.0, 90, 10.0)
+        meridians = np.arange(0.0, 360, 10.0)
+
+        stla_all = np.array([sta._v_attrs["latitude"] for _, sta in data])
+        stlo_all = np.array([sta._v_attrs["longitude"] for _, sta in data])
+
+        map_latc = kwargs.get("center_lat", np.median(stla_all))
+        map_lonc = kwargs.get("center_lon", np.median(stlo_all))
+        min_lon = kwargs.get("min_lon", min(min(stlo_all), evlo))
+        max_lon = kwargs.get("max_lon", max(max(stlo_all), evlo))
+        min_lat = kwargs.get("min_lat", min(min(stla_all), evla))
+        max_lat = kwargs.get("max_lat", max(max(stla_all), evla))
+
+        # map_lat0, map_lon0, map_width, map_height = centerMap(
+        #     [*stla_all, evla], [*stlo_all, evlo], 1.1
+        # )
+
+        window_ids = list(set([win["id"].decode() for win, _ in data]))
+
+        # projection = ccrs.TransverseMercator(central_latitude=map_latc, central_longitude=map_lonc)
+        # projection = ccrs.Mercator(central_longitude=map_lonc, min_latitude=min_lat, max_latitude=max_lat,
+        #                            latitude_true_scale=map_latc)
+        projection = ccrs.NearsidePerspective(
+            central_latitude=map_latc,
+            central_longitude=map_lonc,
+            satellite_height=5000 * 1000,
+        )
+
+        with PdfPages(out_fig) as pdf:
+            for window_id in window_ids:
+                data_sel = [
+                    (win, sta) for win, sta in data if win["id"].decode() == window_id
+                ]
+                stlats = np.array([sta._v_attrs["latitude"] for _, sta in data_sel])
+                stlons = np.array([sta._v_attrs["longitude"] for _, sta in data_sel])
+                ccdt_list = [win["cc_time_shift"] for win, _ in data_sel]
+                cc0_list = [win["cc0"] for win, _ in data_sel]
+                weight_list = [win["weight"] for win, _ in data_sel]
+
+                # fig = plt.figure(figsize=(8.5, 11))
+                fig = plt.figure(figsize=(8.27, 11.69))  # A4
+                str_title = "{:s} ({:s} dep:{:.1f})".format(evnm, window_id, evdp)
+                fig.suptitle(str_title)
+                # fig.text(
+                #     0.5, 0.965, str_title, size="x-large", horizontalalignment="center"
+                # )
+
+                # plots of cc_dt
+                ax = fig.add_subplot(211, projection=projection)
+                # ax.set_extent((min_lon, max_lon, min_lat, max_lat), crs=ccrs.Geodetic())
+
+                # Draw standard features
+                ax.gridlines()
+                ax.coastlines()
+                ax.stock_img()
+
+                sizes = 5 * np.array(weight_list)
+                sizes[sizes < 1] = 1
+                im = ax.scatter(
+                    stlons,
+                    stlats,
+                    s=sizes,
+                    c=ccdt_list,
+                    marker="o",
+                    cmap="seismic",
+                    edgecolor="gray",
+                    linewidth=0.1,
+                    vmin=-10,
+                    vmax=10,
+                    transform=ccrs.Geodetic(),
+                )
+                fig.colorbar(
+                    im,
+                    ax=ax,
+                    location="right",
+                    extend="both",
+                    shrink=0.5,
+                    fraction=0.1,
+                    aspect=40,
+                    label="cc_dt",
+                )
+
+                # plot focal mechanism
+                sx, sy = projection.transform_point(evlo, evla, ccrs.Geodetic())
+                # bb_width = 110000.0 * np.abs(max(stlo_all)-min(stlo_all)) * 0.1
+                # bb_width = max(map_width, map_height) * 0.05
+                x0, x1 = ax.get_xlim()
+                bb_width = 0.05 * abs(x1 - x0)
+                b = beach(
+                    focmec, xy=(sx, sy), width=bb_width, linewidth=0.2, facecolor="r"
+                )
+                ax.add_collection(b)
+
+                # plots of cc0
+                ax = fig.add_subplot(212, projection=projection)
+                # ax.set_extent((min_lon, max_lon, min_lat, max_lat), crs=ccrs.Geodetic())
+
+                # Draw standard features
+                ax.gridlines()
+                ax.coastlines()
+                ax.stock_img()
+
+                sizes = 5 * np.array(weight_list)
+                sizes[sizes < 1] = 1
+                im = ax.scatter(
+                    stlons,
+                    stlats,
+                    s=sizes,
+                    c=cc0_list,
+                    marker="o",
+                    cmap="seismic",
+                    edgecolor="gray",
+                    linewidth=0.1,
+                    vmin=0,
+                    vmax=1,
+                    transform=ccrs.Geodetic(),
+                )
+                fig.colorbar(
+                    im,
+                    ax=ax,
+                    location="right",
+                    extend="both",
+                    shrink=0.5,
+                    fraction=0.1,
+                    aspect=40,
+                    label="cc0",
+                )
+
+                # plot focal mechanism
+                sx, sy = projection.transform_point(evlo, evla, ccrs.Geodetic())
+                x0, x1 = ax.get_xlim()
+                bb_width = 0.05 * abs(x1 - x0)
+                b = beach(
+                    focmec, xy=(sx, sy), width=bb_width, linewidth=0.2, facecolor="r"
+                )
+                ax.add_collection(b)
+
+                pdf.savefig(fig)
+                plt.close(fig)
+
+        h5f.close()
+
+    def plot_histogram(self, out_fig, min_dt=-20, max_dt=20, min_cc=0, min_weight=0.1, nbins=50):
+        h5f = pt.open_file(self.h5_path, "r")
+
+        # config
+        config = h5f.root._v_attrs["config"]
+
+        # event info
+        if "/source" not in h5f:
+            msg = '"/source" does not exist, run read_cmtsolution first!'
+            raise KeyError(msg)
+        tbl_src = h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[0]
+
+        if "/waveform" not in h5f:
+            msg = '"/waveform" does not exist, run read_data_h5 first!'
+            raise KeyError(msg)
+        g_wav = h5f.get_node("/waveform")
+
+        if "/window" not in h5f:
+            msg = '"/waveform" does not exist, run setup_windows first!'
+            raise KeyError(msg)
+        tbl_win = h5f.get_node("/window")
+
+        # event info
+        evt0 = UTCDateTime(event["t0"])
+        evtau = event["tau"]
+        evla = event["latitude"]
+        evlo = event["longitude"]
+        evdp = event["depth"]
+        evnm = event["id"].decode()
+        # evdp has to be >=0 otherwise taup would crash
+        if evdp < 0.0:
+            evdp = 0.0
+        mt = event["mt_rtp"]
+        Mrr = mt[0][0]
+        Mtt = mt[1][1]
+        Mpp = mt[2][2]
+        Mrt = mt[0][1]
+        Mrp = mt[0][2]
+        Mtp = mt[1][2]
+        focmec = [Mrr, Mtt, Mpp, Mrt, Mrp, Mtp]
+
+        # get all windows
+        data = [
+            (win, g_wav[stnm])
+            for win in tbl_win.read()
+            if (stnm := f'{win["network"].decode()}_{win["station"].decode()}') in g_wav
+            and win['weight'] >= min_weight
+        ]
+        if not data:
+            warnings.warn("No data to plot!")
+            return
+
+        window_ids = sorted(set([win["id"].decode() for win, _ in data]))
+
+        with PdfPages(out_fig) as pdf:
+            fig = plt.figure(figsize=(10, 5))
+            str_title = "{:s} (dep:{:.1f}): all (num={:d})".format(evnm, evdp, len(data))
+            fig.suptitle(str_title)
+            ccdt_list = [win["cc_time_shift"] for win, _ in data]
+            cc0_list = [win["cc0"] for win, _ in data]
+            ax = fig.add_subplot(121)
+            ax.hist(ccdt_list, nbins)
+            ax.set_xlabel("dt_cc [obs-syn] (second)")
+            ax.set_xlim([min_dt, max_dt])
+            ax = fig.add_subplot(122)
+            ax.hist(cc0_list, nbins)
+            ax.set_xlabel("cc0")
+            ax.set_xlim([min_cc, 1])
+            pdf.savefig(fig)
+            plt.close(fig)
+
+            for window_id in window_ids:
+                data_sel = [
+                    (win, sta) for win, sta in data if win["id"].decode() == window_id
+                ]
+                ccdt_list = [win["cc_time_shift"] for win, _ in data_sel]
+                cc0_list = [win["cc0"] for win, _ in data_sel]
+
+                fig = plt.figure(figsize=(10, 5))
+                str_title = "{:s} (dep:{:.1f}): {:s} (num={:d})".format(evnm, evdp, window_id, len(data_sel))
+                fig.suptitle(str_title)
+                ax = fig.add_subplot(121)
+                ax.hist(ccdt_list, nbins)
+                ax.set_xlabel("dt_cc [obs-syn] (second)")
+                ax.set_xlim([min_dt, max_dt])
+                ax = fig.add_subplot(122)
+                ax.hist(cc0_list, nbins)
+                ax.set_xlabel("cc0")
+                ax.set_xlim([min_cc, 1])
+                pdf.savefig(fig)
+                plt.close(fig)
+
+        h5f.close()
+
 #
 #     def output_misfit(self, out_file):
 #         """
@@ -5864,284 +6166,7 @@ class Misfit(object):
 #
 #         return wcc_sum, weight_sum
 #
-#     #
-#     # ======================================================
-#     #
-#
-#     def plot_misfit(self, event_id, window_id, out_file=None):
-#         """Plot misfit for a certain event and window_id"""
-#         # CC0 map  | CC0 v.s. SNR (size ~ weight)
-#         # ------------|-----------------
-#         # DTcc map   | avg. CC0
-#
-#         # check inputs
-#         events = self.data["events"]
-#         if event_id not in events:
-#             print("[ERROR] %s does NOT exist. Exit" % (event_id))
-#             sys.exit()
-#         event = events[event_id]
-#         stations = event["stations"]
-#
-#         # get list of station,window id
-#         # sta_win_id_list = []
-#         stla_list = []
-#         stlo_list = []
-#         cc_dt_list = []
-#         CC0_list = []
-#         CCmax_list = []
-#         snr_list = []
-#         weight_list = []
-#         for station_id in stations:
-#             station = stations[station_id]
-#             windows = station["windows"]
-#
-#             # skip bad station
-#             if station["stat"]["code"] < 1:
-#                 continue
-#
-#             if window_id not in windows:
-#                 continue
-#
-#             window = windows[window_id]
-#             if window["stat"]["code"] != 1:
-#                 continue
-#
-#             meta = station["meta"]
-#             misfit = window["misfit"]
-#             quality = window["quality"]
-#
-#             # sta_win_id = (station_id, window_id)
-#             # sta_win_id_list.append(sta_win_id)
-#             stla_list.append(meta["latitude"])
-#             stlo_list.append(meta["longitude"])
-#             cc_dt_list.append(misfit["CC_time_shift"])
-#             CC0_list.append(misfit["CC0"])
-#             CCmax_list.append(misfit["CCmax"])
-#             snr_list.append(quality["SNR"])
-#             weight_list.append(window["weight"])
-#
-#         # get event data
-#         gcmt = event["gcmt"]
-#         evla = gcmt["latitude"]
-#         evlo = gcmt["longitude"]
-#         M = gcmt["moment_tensor"]
-#         Mrr = M[0][0]
-#         Mtt = M[1][1]
-#         Mpp = M[2][2]
-#         Mrt = M[0][1]
-#         Mrp = M[0][2]
-#         Mtp = M[1][2]
-#         focmec = [Mrr, Mtt, Mpp, Mrt, Mrp, Mtp]
-#
-#         # map range
-#         min_lat = min(min(stla_list), evla)
-#         max_lat = max(max(stla_list), evla)
-#         lat_range = max_lat - min_lat
-#         min_lat -= 0.1 * lat_range
-#         max_lat += 0.1 * lat_range
-#         min_lon = min(min(stlo_list), evlo)
-#         max_lon = max(max(stlo_list), evlo)
-#         lon_range = max_lon - min_lon
-#         min_lon -= 0.1 * lon_range
-#         max_lon += 0.1 * lon_range
-#         # lat_true_scale = np.mean(stla_list)
-#         lat_0 = np.mean(stla_list)
-#         lon_0 = np.mean(stlo_list)
-#         #
-#         parallels = np.arange(0.0, 81, 10.0)
-#         meridians = np.arange(0.0, 351, 10.0)
-#
-#         # figure size
-#         fig = plt.figure(figsize=(11, 8.5))
-#         str_title = "%s %s" % (event_id, window_id)
-#         fig.text(0.5, 0.95, str_title, size="x-large", horizontalalignment="center")
-#
-#         # ------ color map CC_time_shift, symbol size ~ SNR
-#         ax = fig.add_axes([0.05, 0.5, 0.4, 0.35])
-#         ax.set_title("DT_cc (symbol_size ~ SNR)")
-#
-#         m = Basemap(
-#             projection="merc",
-#             resolution="l",
-#             llcrnrlat=min_lat,
-#             llcrnrlon=min_lon,
-#             urcrnrlat=max_lat,
-#             urcrnrlon=max_lon,
-#             lat_0=lat_0,
-#             lon_0=lon_0,
-#         )
-#         m.drawcoastlines(linewidth=0.1)
-#         m.drawcountries(linewidth=0.1)
-#         m.drawparallels(parallels, linewidth=0.1, labels=[1, 0, 0, 1])
-#         m.drawmeridians(meridians, linewidth=0.1, labels=[1, 0, 0, 1])
-#
-#         # CC_time_shift, SNR
-#         sx, sy = m(stlo_list, stla_list)
-#         size_list = [0.1 if x < 0.1 else x for x in snr_list]
-#         im = m.scatter(
-#             sx,
-#             sy,
-#             s=size_list,
-#             marker="o",
-#             c=cc_dt_list,
-#             cmap="seismic",
-#             edgecolor="grey",
-#             linewidth=0.05,
-#         )
-#         mean_amp = np.mean(cc_dt_list)
-#         std_amp = np.std(cc_dt_list)
-#         # plot_amp = abs(mean_amp)+std_amp
-#         plot_amp = 5.0
-#         im.set_clim(-plot_amp, plot_amp)
-#
-#         # focal mechanism
-#         sx, sy = m(evlo, evla)
-#         b = beach(focmec, xy=(sx, sy), width=200000, linewidth=0.2, facecolor="k")
-#         ax.add_collection(b)
-#
-#         # colorbar
-#         cbar_ax = fig.add_axes([0.46, 0.575, 0.005, 0.2])
-#         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
-#         cbar_ax.tick_params(labelsize=9)
-#         cbar_ax.set_xlabel("DT_cc(s)", fontsize=9)
-#         cbar_ax.xaxis.set_label_position("top")
-#
-#         # ------ color map CC0, symbol size ~ SNR
-#         ax = fig.add_axes([0.05, 0.05, 0.4, 0.35])
-#         ax.set_title("CC0 (symbol_size ~ SNR)")
-#
-#         m = Basemap(
-#             projection="merc",
-#             resolution="l",
-#             llcrnrlat=min_lat,
-#             llcrnrlon=min_lon,
-#             urcrnrlat=max_lat,
-#             urcrnrlon=max_lon,
-#             lat_0=lat_0,
-#             lon_0=lon_0,
-#         )
-#         m.drawcoastlines(linewidth=0.1)
-#         m.drawcountries(linewidth=0.1)
-#         m.drawparallels(parallels, linewidth=0.1, labels=[1, 0, 0, 1])
-#         m.drawmeridians(meridians, linewidth=0.1, labels=[1, 0, 0, 1])
-#
-#         # CC0, SNR
-#         sx, sy = m(stlo_list, stla_list)
-#         # size_list = [ 20**x for x in CCmax_list ]
-#         size_list = [0.1 if x < 0.1 else x for x in snr_list]
-#         im = m.scatter(
-#             sx,
-#             sy,
-#             s=size_list,
-#             marker="o",
-#             c=CC0_list,
-#             cmap="jet",
-#             edgecolor="grey",
-#             linewidth=0.05,
-#         )
-#         im.set_clim(0.5, 1.0)
-#
-#         # focal mechanism
-#         sx, sy = m(evlo, evla)
-#         b = Beach(focmec, xy=(sx, sy), width=200000, linewidth=0.2, facecolor="k")
-#         ax.add_collection(b)
-#
-#         # add colorbar
-#         cbar_ax = fig.add_axes([0.46, 0.125, 0.005, 0.2])
-#         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
-#         cbar_ax.tick_params(labelsize=9)
-#         cbar_ax.set_xlabel("CC0", fontsize=9)
-#         cbar_ax.xaxis.set_label_position("top")
-#
-#         # ------ SNR v.s. CC0, colored by cc_dt, size ~ weight
-#         ax = fig.add_axes([0.58, 0.65, 0.35, 0.2])
-#         im = ax.scatter(
-#             snr_list,
-#             CC0_list,
-#             marker="o",
-#             s=10.0 * np.array(weight_list),
-#             c=cc_dt_list,
-#             cmap="seismic",
-#             edgecolor="grey",
-#             linewidth=0.05,
-#         )
-#         mean_amp = np.mean(cc_dt_list)
-#         std_amp = np.std(cc_dt_list)
-#         # plot_amp = abs(mean_amp)+std_amp
-#         plot_amp = 5.0
-#         im.set_clim(-plot_amp, plot_amp)
-#         # ax.set_xlim([min(snr_list), max(snr_list)])
-#         # ax.set_ylim([min(CCmax_list), max(CCmax_list)])
-#         ax.set_xlim([0, max(snr_list)])
-#         ax.set_ylim([0.3, 1.0])
-#         ax.set_xlabel("SNR")
-#         ax.set_ylabel("CC0")
-#         # add colorbar
-#         cbar_ax = fig.add_axes([0.95, 0.65, 0.005, 0.2])
-#         fig.colorbar(im, cax=cbar_ax, orientation="vertical")
-#         cbar_ax.tick_params(labelsize=9)
-#         cbar_ax.set_xlabel("DT_cc(s)", fontsize=9)
-#         cbar_ax.xaxis.set_label_position("top")
-#
-#         ##------ CC0 v.s. CCmax, colored by cc_dt
-#         # ax = fig.add_axes([0.58, 0.375, 0.35, 0.2])
-#         # im = ax.scatter(CC0_list, CCmax_list, marker='o', s=10,
-#         #    c=cc_dt_list, cmap='seismic',
-#         #    edgecolor='grey', linewidth=0.05)
-#         # mean_amp = np.mean(cc_dt_list)
-#         # std_amp = np.std(cc_dt_list)
-#         # plot_amp = abs(mean_amp)+std_amp
-#         # im.set_clim(-plot_amp, plot_amp)
-#         # ax.set_xlim([min(CC0_list), max(CC0_list)])
-#         # ax.set_ylim([min(CCmax_list), max(CCmax_list)])
-#         # ax.set_xlabel("CC0")
-#         # ax.set_ylabel("CCmax")
-#         ##add colorbar
-#         # cbar_ax = fig.add_axes([0.95, 0.375, 0.005, 0.2])
-#         # fig.colorbar(im, cax=cbar_ax, orientation="vertical")
-#         # cbar_ax.tick_params(labelsize=9)
-#         # cbar_ax.set_xlabel('cc_dt(s)', fontsize=9)
-#         # cbar_ax.xaxis.set_label_position('top')
-#
-#         ##------ cc_dt v.s. CCmax, colored by SNR
-#         # ax = fig.add_axes([0.58, 0.1, 0.35, 0.2])
-#         # im = ax.scatter(cc_dt_list, CCmax_list, marker='o', s=10,
-#         #    c=snr_list, cmap='seismic',
-#         #    edgecolor='grey', linewidth=0.05)
-#         # im.set_clim(min(snr_list), max(snr_list))
-#         # ax.set_xlim([min(cc_dt_list), max(cc_dt_list)])
-#         # ax.set_ylim([min(CCmax_list), max(CCmax_list)])
-#         # ax.set_xlabel("cc_dt")
-#         # ax.set_ylabel("CCmax")
-#         ##add colorbar
-#         # cbar_ax = fig.add_axes([0.95, 0.1, 0.005, 0.2])
-#         # fig.colorbar(im, cax=cbar_ax, orientation="vertical")
-#         # cbar_ax.tick_params(labelsize=9)
-#         # cbar_ax.set_xlabel('SNR(dB)', fontsize=9)
-#         # cbar_ax.xaxis.set_label_position('top')
-#
-#         ##------ histogram of dt_cc and dt_res
-#         # ax1 = fig.add_axes([0.5,0.28,0.4,0.15])
-#         # n, bins, patches = ax1.hist(dt_cc, 50, facecolor='green', alpha=0.75)
-#         # amp = max(abs(dt_cc))
-#         # ax1.set_xlim([-amp, amp])
-#         # ax1.set_title('dt_cc: mean=%.2f std=%.2f' % (np.mean(dt_cc), np.std(dt_cc)))
-#         # ax1.tick_params(labelsize=10)
-#         #
-#         # ax2 = fig.add_axes([0.5,0.07,0.4,0.15])
-#         # n, bins, patches = ax2.hist(dt_res, 50, facecolor='green', alpha=0.75)
-#         # amp = max(abs(dt_cc))
-#         # ax2.set_xlim([-amp, amp])
-#         # ax2.set_title('dt_res: mean=%.2f std=%.2f' % (np.mean(dt_res), np.std(dt_res)))
-#         # ax2.set_xlabel('dt (sec)')
-#         # ax2.tick_params(labelsize=10)
-#
-#         # ------ save figure
-#         if not out_file:
-#             out_file = "%s_%s.pdf" % (event_id, window_id)
-#         fig.savefig(out_file, format="pdf")
-#         # fig.savefig("misfit.pdf", bbox_inches='tight', format='pdf')
-#
+
 #     #
 #     # ======================================================
 #     #

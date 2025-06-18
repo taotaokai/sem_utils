@@ -1487,11 +1487,11 @@ class Misfit(object):
             if is_diff:
                 if syn_tag in g_sta:
                     syn = g_sta[syn_tag]
-                    assert syn.attrs["origin_time"] == event_t0
                     if is_grn:
                         if not syn.attrs["is_grn"]:
                             msg = f"{syn._v_pathname}.attrs[is_grn]==False but is_grn is set to True!"
                             raise ValueError(msg)
+                        assert syn.attrs["origin_time"] == event_t0
                 else:
                     msg = f"{syn_tag} does not exist under {g_sta._v_pathname}, skip"
                     warnings.warn(msg)
@@ -1566,21 +1566,24 @@ class Misfit(object):
             solver_tb = tr.stats.starttime
             solver_te = solver_tb + (solver_nt - 1) * solver_dt
 
-            if is_grn:  # for green function, use event['t0'] for the o time
-                solver_tb = event_t0 - (tr.stats.sac["o"] - tr.stats.sac["b"])
-            if is_diff and (
-                solver_tb != syn.attrs["solver_tb"]
-                or solver_nt != syn.attrs["solver_nt"]
-                or solver_dt != syn.attrs["solver_dt"]
-            ):
-                msg = f"perturbed synthetics ({syn_sac_files}) do not have equal time samples as the initial synthetics."
-                raise Exception(msg)
+            # commented out to enforce consistency between sac o time and event t0 even for Green's function
+            # if is_grn:  # for green function, use event['t0'] for the o time 
+            #    solver_tb = event_t0 - (tr.stats.sac["o"] - tr.stats.sac["b"])
 
             # check if the origin time in sac files is consistent with event['t0']
             syn_origin_time = solver_tb + (tr.stats.sac["o"] - tr.stats.sac["b"])
             if abs(syn_origin_time - event_t0) > 1.0e-6:
                 err = f"{g_sta._v_name}: Inconsistent origin time between sac headers ({syn_origin_time}) and event['t0'] ({event_t0})"
                 raise Exception(err)
+
+            if is_diff:
+                if (
+                    solver_tb != syn.attrs["solver_tb"]
+                    or solver_nt != syn.attrs["solver_nt"]
+                    or solver_dt != syn.attrs["solver_dt"]
+                ):
+                    msg = f"perturbed synthetics ({syn_sac_files}) do not have equal time samples as the initial synthetics."
+                    raise Exception(msg)
 
             # use_tb = max(first_arrtime - left_pad, solver_tb - left_pad, obs_tb)
             # use_te = min(solver_te, obs_te)
@@ -1702,24 +1705,6 @@ class Misfit(object):
             ca.attrs["is_grn"] = is_grn
             if is_grn:
                 ca.attrs["origin_time"] = event_t0
-
-            # # ------ rotate obs to ENZ
-            # # projection matrix: obs = proj * ENZ => ENZ = inv(proj) * obs
-            # proj_matrix = np.zeros((3, 3))
-            # for i in range(3):
-            #     chan = channel[i]
-            #     sin_az = np.sin(np.deg2rad(chan["azimuth"]))
-            #     cos_az = np.cos(np.deg2rad(chan["azimuth"]))
-            #     sin_dip = np.sin(np.deg2rad(chan["dip"]))
-            #     cos_dip = np.cos(np.deg2rad(chan["dip"]))
-            #     # column vector = obs channel polarization
-            #     proj_matrix[i, 0] = cos_dip * sin_az  # proj to E
-            #     proj_matrix[i, 1] = cos_dip * cos_az  # proj to N
-            #     proj_matrix[i, 2] = -sin_dip  # proj to Z
-            # # inverse projection matrix: ENZ = inv(proj) * obs
-            # inv_proj = np.linalg.inv(proj_matrix)
-            # obs_ENZ = np.dot(inv_proj, obs_ENZ)
-
         h5f.close()
 
     def setup_windows(self):
@@ -3937,6 +3922,7 @@ class Misfit(object):
             msg = "no source information"
             raise Exception(msg)
         event = tbl_src[0]
+        event_t0 = UTCDateTime(event["t0"])
 
         if "dtau" in dm:
             tau = dm["dtau"] + event["tau"]
@@ -4006,7 +3992,7 @@ class Misfit(object):
                 msg = (
                     f"unknown obs/syn types ({obs_type}/{syn_type}) in {g_sta._v_name}"
                 )
-                raise RuntimeError(msg)
+                raise ValueError(msg)
 
             for _, dsyn_tag in dsyn_tags.items():
                 assert g_sta[dsyn_tag].attrs["is_grn"] == g_sta[syn_tag].attrs["is_grn"]
@@ -4031,6 +4017,8 @@ class Misfit(object):
             conv_stf = False
             if g_sta[syn_tag].attrs["is_grn"]:
                 conv_stf = True
+                assert g_sta[syn_tag].attrs["origin_time"] == event_t0
+                assert g_sta[dsyn_tag].attrs["origin_time"] == event_t0
 
             dsyn_dm = {}
             for model_name in dm:

@@ -3084,6 +3084,7 @@ class Misfit(object):
         projection = CRS(**map_params)
 
         min_weight = config["plot"]["min_weight"]
+        min_SNR = min(config["misfit"]["window_weight"]["SNR"])
 
         with PdfPages(out_fig) as pdf:
             while bin_idx0 < nwin:
@@ -3450,6 +3451,7 @@ class Misfit(object):
                     win_tshift = win["cc_time_shift"]
 
                     win_weight = win["weight"]
+                    win_SNR = win["SNR"]
 
                     # plot seismograms
                     Amax_obs = win["obs_maxamp"]
@@ -3469,7 +3471,8 @@ class Misfit(object):
                     #     )
 
                     alpha = 1
-                    if win_weight < min_weight:
+                    # if win_weight < min_weight:
+                    if win_SNR < min_SNR:
                         alpha = 0.1
 
                     y = obs_filt_proj[plot_idx] / Amax_obs

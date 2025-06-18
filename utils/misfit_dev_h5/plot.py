@@ -21,12 +21,14 @@ def plot(arg):
 if __name__ == '__main__':
     print(f"======= [{datetime.now()}] plot_seismogram_1comp")
 
-    with pt.open_file(args.misfit_h5file, 'r') as h5f:
-        win_tbl = h5f.root['window']
-        win_ids = [w.decode() for w in set(win_tbl.read(field='id'))]
-    inputs = [(win_id, os.path.join(args.out_fig_dir, f"{win_id}.pdf")) for win_id in win_ids]
+    misfit = Misfit(args.misfit_h5file)
+    window_ids = misfit.get_window_ids()
 
     pool = multiprocessing.Pool(processes=args.nproc)
+    inputs = [(win_id, os.path.join(args.out_fig_dir, f"{win_id}.pdf")) for win_id in window_ids]
     pool.map(plot, inputs)
+
+    print(f"======= [{datetime.now()}] plot_histogram")
+    misfit.plot_histogram(out_fig=os.path.join(args.out_fig_dir, "misfit_hist.pdf"))
 
     print(f"======= [{datetime.now()}] END")

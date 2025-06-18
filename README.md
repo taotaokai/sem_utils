@@ -22,16 +22,16 @@
 
 ```shell
 project/
-		sem_utils/ # utility scripts and excutables to run the inversion
+    sem_utils/ # utility scripts and excutables to run the inversion
     |   
-		sem_config/ # configuration files for SEM (model setup,)
+    sem_config/ # configuration files for SEM (model setup,)
     |   setup/ # these header files are used to build specfem3d_globe
-    |   |   *   constants.h.in
-    |   |   *   precision.h (optional)
-    |   |   *   values_from_mesher.h (optional)
+    |   |   constants.h.in
+    |   |   precision.h (optional)
+    |   |   values_from_mesher.h (optional)
     |   DATA/
-    |   |   *   Par_file #used to build specfem3d_globe
-    |   *   starting_model/
+    |   |   Par_file #used to build specfem3d_globe
+    |   starting_model/
     |   ...
     |
     specfem3d_globe/ # build directory of SEM excutables (xmesher3D, xspecfem3D)
@@ -40,44 +40,45 @@ project/
     |
     events/ # waveform data
     |   <event_id>/
-    |   |   |		channel.txt # fdsnws-station: text output at channel level  
-    |   |   |   CMTSOLUTION # SEM inputs
-    |   |   |   STATIONS # SEM inputs
-    |		|		|		data.h5
-    |   ...   
+    |   |   channel.txt # fdsnws-station: text output at channel level  
+    |   |   CMTSOLUTION # SEM inputs
+    |   |   STATIONS # SEM inputs
+    |   |   data.h5
+    |   ...
     |   
-		stage??.[source|structure]/ # iteration database
+    stage??.[source|structure]/ # iteration database
     |   iter??/
     |   |   control_file.00 # a shell script contains control parameters
-    |  	|		|
+    |   |   |
     |   |   model/
-    |   |   |   *   DATABASES_MPI/
-    |   |   |   |   *   prco***_reg1_<model_name>_dmodel.bin # model updates
-    |   |   |   |   *   prco***_reg1_<v??,rho,eta>.bin # updated model files
+    |   |   |   DATABASES_MPI/
+    |   |   |   |   prco***_reg1_<model_name>_dmodel.bin # model updates
+    |   |   |   |   prco***_reg1_<v??,rho,eta>.bin # updated model files
     |   |   |   |
     |   |   mesh/
-    |   |   |   *   DATABASES_MPI/proc*_reg1_solver_data.bin
-    |   |   |   *   DATA/ # necessary data files, Par_file 
+    |   |   |   DATABASES_MPI/proc*_reg1_solver_data.bin
+    |   |   |   DATA/ # necessary data files, Par_file 
     |   |   |   
-    |   |   <event_id>/
-    |   |   |   DATABASES_MPI/ 
-    |   |   |   DATA/ 
-    |   |   |   output_syn/ 
-    |   |   |   |   *   sac/
-    |   |   |   output_kernel/ 
-    |   |   |   |   *   kernel/ proc*_reg1_cijkl,rho_kernel.bin
-    |   |   |   output_hess/ 
-    |   |   |   |   *   kernel/ proc*_reg1_cijkl,rho_kernel.bin
-    |   |   |   output_perturb/ # simulation for perturbed model
-    |   |   |   |   *   sac/
-    |   |   |   misfit/ 
-    |   |   |   |   CMTSOLUTION.reloc # relocated source parameter
-    |   |   |   |   misfit.h5 # misfit measurments (e.g. CC0, CCmax, ...)
-    |   |   |   SEM/ # adjoint source for kernel calculation 
+    |   |   events/
+    |   |   |   <event_id>/
+    |   |   |   |   DATABASES_MPI/ 
+    |   |   |   |   DATA/ 
+    |   |   |   |   output_syn/ 
+    |   |   |   |   |   sac/
+    |   |   |   |   output_kernel/ 
+    |   |   |   |   |   kernel/ proc*_reg1_cijkl,rho_kernel.bin
+    |   |   |   |   output_hess/ 
+    |   |   |   |   |   kernel/ proc*_reg1_cijkl,rho_kernel.bin
+    |   |   |   |   output_perturb/ # simulation for perturbed model
+    |   |   |   |   |   sac/
+    |   |   |   |   misfit/ 
+    |   |   |   |   |   CMTSOLUTION.reloc # relocated source parameter
+    |   |   |   |   |   misfit.h5 # misfit measurments (e.g. CC0, CCmax, ...)
+    |   |   |   |   SEM/ # adjoint source for kernel calculation 
+    |   |   |   ...
     |   |   |
-    |   |   ...
     |   |   kernel_sum/ # summed kernel (with precondition, smoothing, thresholding etc.)
-    |   |   |   				# *_dkernel.bin, *_kernel.bin
+    |   |   |           # *_dkernel.bin, *_kernel.bin
     |   |   |
     |   iter??/
     |   |   ...
@@ -149,17 +150,17 @@ project/
 
 ```mermaid
 flowchart LR
-		classDef GPU fill:#f96
-		
-		A[initial CMTSOLUTION] --> e1f
+    classDef GPU fill:#f96
+    
+    A[initial CMTSOLUTION] --> e1f
 
-		
+    
       direction LR
-    	e1f[green]:::GPU --> e1m[misfit] --> e1k[srcfrechet]:::GPU --> e1p[perturb] --> es1f[N x forward]:::GPU --> es1d[diff] --> es1s[search]
+      e1f[green]:::GPU --> e1m[misfit] --> e1k[srcfrechet]:::GPU --> e1p[perturb] --> es1f[N x forward]:::GPU --> es1d[diff] --> es1s[search]
     
     
-	
-		es1s --> o[updated CMTSOLUTION]
+  
+    es1s --> o[updated CMTSOLUTION]
 ```
 
 ```pseudocode
@@ -173,10 +174,10 @@ flowchart LR
 [forward_perturb_job] forward simulation for perturbed models
 
 [search_job]
-		get waveform differences for each search direction in model space
-		while changes in the optimal step lengths greater than a threshold:
-			calculate misfit for a range of step lengths, assuming linear relationship between waveform differences and step length
-		get optimal step lengths
+    get waveform differences for each search direction in model space
+    while changes in the optimal step lengths greater than a threshold:
+      calculate misfit for a range of step lengths, assuming linear relationship between waveform differences and step length
+    get optimal step lengths
 ```
 
 
@@ -185,25 +186,25 @@ flowchart LR
 
 ``` mermaid
 flowchart LR
-		classDef GPU fill:#f96
-		
-		A[initial model] --> e1f
-		A --> edf
-		A --> enf
+    classDef GPU fill:#f96
+    
+    A[initial model] --> e1f
+    A --> edf
+    A --> enf
 
-		subgraph e1 [event 1]
+    subgraph e1 [event 1]
         direction LR
-    	e1f[forward]:::GPU --> e1m[misfit] --> e1k[kernel]:::GPU
+      e1f[forward]:::GPU --> e1m[misfit] --> e1k[kernel]:::GPU
     end
     
     subgraph ed [event ...]
       direction LR
-    	edf[forward] --> edm[misfit] --> edk[kernel]
+      edf[forward] --> edm[misfit] --> edk[kernel]
     end
     
     subgraph en [event N]
         direction LR
-    	enf[forward] --> enm[misfit] --> enk[kernel]
+      enf[forward] --> enm[misfit] --> enk[kernel]
     end
 
     e1k --> ks[sum kernel \n preconditioning \n non-linear CG \n search directions]
@@ -220,14 +221,14 @@ flowchart LR
         direction LR
         esdf[forward] --> esdd[diff] --> esds[search]
     end
- 		subgraph esn [event N]
+     subgraph esn [event N]
         direction LR
         esnf[forward] --> esnd[diff] --> esns[search]
     end
     
     mp --> es1f & esdf & esnf
-		
-		es1s & esds & esns --> o[optimal step lengths]
+    
+    es1s & esds & esns --> o[optimal step lengths]
 ```
 
 ```pseudocode
@@ -243,15 +244,15 @@ for each event:
 [perturb_model_job] perturb model parameters along some chosen search directions (e.g. dVp, dVs) based on averaged gradients and also nonliear-cg
 
 for each event:
-	[forward_perturb_job] forward simulation for perturbed models
+  [forward_perturb_job] forward simulation for perturbed models
 
 [search_job]
-	for each event:
-		get waveform differences for each search direction in model space
-	while changes in the optimal step lengths greater than a threshold:
-		for each event:
-			calculate misfit for a range of step lengths, assuming linear relationship between waveform differences and step length
-		sum search results for all event, get optimal step lengths
+  for each event:
+    get waveform differences for each search direction in model space
+  while changes in the optimal step lengths greater than a threshold:
+    for each event:
+      calculate misfit for a range of step lengths, assuming linear relationship between waveform differences and step length
+    sum search results for all event, get optimal step lengths
 ```
 
 

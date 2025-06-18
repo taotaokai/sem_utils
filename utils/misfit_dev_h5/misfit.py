@@ -3039,6 +3039,9 @@ class Misfit(object):
         stla_all = np.array([sta._v_attrs["latitude"] for _, sta in windows])
         stlo_all = np.array([sta._v_attrs["longitude"] for _, sta in windows])
         dist_all = np.array([sta._v_attrs["dist_degree"] for _, sta in windows])
+        weight_all = np.array([win["weight"] for win, _ in windows])
+        ccdt_all = np.array([win["cc_time_shift"] for win, _ in windows])
+        cc0_all = np.array([win["cc0"] for win, _ in windows])
         winb_all = np.array(
             [UTCDateTime(win["starttime"]) - evt0 for win, _ in windows]
         )
@@ -3051,12 +3054,12 @@ class Misfit(object):
         # round to integer
         plot_rayp = np.round(plot_rayp)
 
-        # map configuration
-        parallels = np.arange(-90.0, 90, 10.0)
-        meridians = np.arange(0.0, 360, 10.0)
-        map_lat0, map_lon0, map_width, map_height = centerMap(
-            [*stla_all, evla], [*stlo_all, evlo], 1.1
-        )
+        # # map configuration
+        # parallels = np.arange(-90.0, 90, 10.0)
+        # meridians = np.arange(0.0, 360, 10.0)
+        # map_lat0, map_lon0, map_width, map_height = centerMap(
+        #     [*stla_all, evla], [*stlo_all, evlo], 1.1
+        # )
 
         # ------ calculate traveltime curves (only for body wave)
         phases = set([w["phase"].decode() for w, _ in windows if w["type"] == b"body"])
@@ -3090,6 +3093,12 @@ class Misfit(object):
         )  # sort windows by azimuth
         nwin = len(windows)
         bin_idx0 = 0  # start index of windowes in the bin
+
+        CRS = getattr(ccrs, config["plot"]["map_type"])
+        map_params = config["plot"]["map_params"]
+        projection = CRS(**map_params)
+
+        min_weight = config["plot"]["min_weight"]
 
         with PdfPages(out_fig) as pdf:
             while bin_idx0 < nwin:
@@ -3153,59 +3162,150 @@ class Misfit(object):
                 str_title = "{:s} ({:s} az:{:04.1f}~{:04.1f} dep:{:.1f})".format(
                     evnm, plot_window_id, bin_azmin, bin_azmax, evdp
                 )
-                fig.text(
-                    0.5, 0.965, str_title, size="x-large", horizontalalignment="center"
-                )
+                fig.suptitle(str_title)
+                # fig.text(
+                #    0.5, 0.965, str_title, size="x-large", horizontalalignment="center"
+                # )
 
-                # create axis for event,station map
-                ax_width = 0.25
-                ax_height = ax_width * map_height / map_width
-                ax_size = [ax_width, ax_height]
-                ax_origin = [0.05, 0.5 - ax_height / 2]
-                ax_map = fig.add_axes(ax_origin + ax_size)
-                # ax_bm = Basemap(projection='poly', resolution='l', area_thresh=1000.,
-                #     llcrnrlat=min_lat, llcrnrlon=min_lon,
-                #     urcrnrlat=max_lat, urcrnrlon=max_lon,
-                #     lat_0=lat_0, lon_0=lon_0, ax=ax_map)
-                # ax_bm = Basemap(projection='ortho', resolution='l', lat_0=lat_0, lon_0=lon_0)
-                ax_bm = Basemap(
-                    projection="stere",
-                    resolution="l",  # area_thresh=10000.,
-                    width=map_width,
-                    height=map_height,
-                    lat_0=map_lat0,
-                    lon_0=map_lon0,
-                    ax=ax_map,
-                )
-                ax_bm.drawcoastlines(linewidth=0.1)
-                ax_bm.drawcountries(linewidth=0.1)
-                ax_bm.drawlsmask()
-                ax_bm.drawparallels(
-                    parallels, linewidth=0.1, labels=[1, 0, 0, 0], fontsize=10
-                )  # , fmt='%3.0f')
-                ax_bm.drawmeridians(
-                    meridians, linewidth=0.1, labels=[0, 0, 0, 1], fontsize=10
-                )  # , fmt='%3.0f')
-                # plot all stations
-                sx, sy = ax_bm(stlo_all, stla_all)
-                ax_bm.scatter(sx, sy, s=5, marker="^", facecolor="black")
-                # plot stations in the bin
                 stla_bin = np.array(
                     [sta._v_attrs["latitude"] for _, sta in windows_bin]
                 )
                 stlo_bin = np.array(
                     [sta._v_attrs["longitude"] for _, sta in windows_bin]
                 )
-                sx, sy = ax_bm(stlo_bin, stla_bin)
-                ax_bm.scatter(sx, sy, s=5, marker="^", facecolor="red")
+                weight_bin = np.array([win["weight"] for win, _ in windows_bin])
+                ccdt_bin = np.array([win["cc_time_shift"] for win, _ in windows_bin])
+                cc0_bin = np.array([win["cc0"] for win, _ in windows_bin])
+
+                # event,station map with cc_dt
+                ax_size = [0.35, 0.4]
+                ax_origin = [0.02, 0.55]
+                ax = fig.add_axes(ax_origin + ax_size, projection=projection)
+                ax.gridlines()
+                ax.coastlines(linewidth=0.2)
+                ax.stock_img()
+                max_size = 4
+                sizes = max_size * weight_all**0.5
+                sizes[weight_all < min_weight] = max_size * min_weight**0.5
+                im = ax.scatter(
+                    stlo_all,
+                    stla_all,
+                    s=sizes,
+                    # s=2,
+                    c=ccdt_all,
+                    marker="o",
+                    cmap="seismic",
+                    edgecolors="none",
+                    # facecolors='none',
+                    linewidth=0.1,
+                    vmin=-10,
+                    vmax=10,
+                    # alpha=0.3,
+                    transform=ccrs.Geodetic(),
+                )
+                max_size = 6
+                sizes = max_size * weight_bin**0.5
+                sizes[weight_bin < min_weight] = max_size * min_weight**0.5
+                # sizes = 3 * weight_bin
+                # sizes[sizes < 1] = 1
+                im = ax.scatter(
+                    stlo_bin,
+                    stla_bin,
+                    s=sizes,
+                    # s=5,
+                    c=ccdt_bin,
+                    marker="o",
+                    cmap="seismic",
+                    edgecolors="yellow",
+                    linewidth=0.4,
+                    vmin=-10,
+                    vmax=10,
+                    transform=ccrs.Geodetic(),
+                )
+                fig.colorbar(
+                    im,
+                    ax=ax,
+                    location="bottom",
+                    extend="both",
+                    shrink=0.5,
+                    fraction=0.1,
+                    aspect=40,
+                    label="cc_dt[sec]",
+                )
                 # plot focal mechanism
-                sx, sy = ax_bm(evlo, evla)
+                sx, sy = projection.transform_point(evlo, evla, ccrs.Geodetic())
                 # bb_width = 110000.0 * np.abs(max(stlo_all)-min(stlo_all)) * 0.1
-                bb_width = max(map_width, map_height) * 0.05
+                # bb_width = max(map_width, map_height) * 0.05
+                x0, x1 = ax.get_xlim()
+                bb_width = 0.05 * abs(x1 - x0)
                 b = beach(
                     focmec, xy=(sx, sy), width=bb_width, linewidth=0.2, facecolor="r"
                 )
-                ax_map.add_collection(b)
+                ax.add_collection(b)
+
+                # event,station map with cc0
+                ax_size = [0.35, 0.4]
+                ax_origin = [0.02, 0.05]
+                ax = fig.add_axes(ax_origin + ax_size, projection=projection)
+                ax.gridlines()
+                ax.coastlines(linewidth=0.2)
+                ax.stock_img()
+                max_size = 4
+                sizes = max_size * weight_all**0.5
+                sizes[weight_all < min_weight] = max_size * min_weight**0.5
+                im = ax.scatter(
+                    stlo_all,
+                    stla_all,
+                    s=sizes,
+                    # s=2,
+                    c=cc0_all,
+                    marker="o",
+                    cmap="seismic",
+                    edgecolors="none",
+                    # facecolors='none',
+                    linewidth=0.1,
+                    vmin=0,
+                    vmax=1,
+                    # alpha=0.3,
+                    transform=ccrs.Geodetic(),
+                )
+                max_size = 6
+                sizes = max_size * weight_bin**0.5
+                sizes[weight_bin < min_weight] = max_size * min_weight**0.5
+                im = ax.scatter(
+                    stlo_bin,
+                    stla_bin,
+                    s=sizes,
+                    # s=5,
+                    c=cc0_bin,
+                    marker="o",
+                    cmap="seismic",
+                    edgecolors="yellow",
+                    linewidth=0.4,
+                    vmin=0,
+                    vmax=1,
+                    transform=ccrs.Geodetic(),
+                )
+                fig.colorbar(
+                    im,
+                    ax=ax,
+                    location="bottom",
+                    extend="both",
+                    shrink=0.5,
+                    fraction=0.1,
+                    aspect=40,
+                    label="cc0",
+                )
+                # plot focal mechanism
+                sx, sy = projection.transform_point(evlo, evla, ccrs.Geodetic())
+                # bb_width = 110000.0 * np.abs(max(stlo_all)-min(stlo_all)) * 0.1
+                # bb_width = max(map_width, map_height) * 0.05
+                x0, x1 = ax.get_xlim()
+                bb_width = 0.05 * abs(x1 - x0)
+                b = beach(
+                    focmec, xy=(sx, sy), width=bb_width, linewidth=0.2, facecolor="r"
+                )
+                ax.add_collection(b)
 
                 # create axis for seismograms
                 ax_origin = [0.42, 0.06]
@@ -3364,6 +3464,8 @@ class Misfit(object):
                     # win_idx = (times > win_starttime) & (times < win_endtime)
                     win_tshift = win["cc_time_shift"]
 
+                    win_weight = win["weight"]
+
                     # plot seismograms
                     Amax_obs = win["obs_maxamp"]
                     Amax_syn = win["syn_maxamp"]
@@ -3381,6 +3483,10 @@ class Misfit(object):
                     #         linewidth=0.5,
                     #     )
 
+                    alpha = 1
+                    if win_weight < min_weight:
+                        alpha = 0.1
+
                     y = obs_filt_proj[plot_idx] / Amax_obs
                     idx = abs(y) > plot_clip + 1.0e-3
                     y[idx] = np.nan
@@ -3389,6 +3495,7 @@ class Misfit(object):
                         plot_flip * plot_dy * y + dist_degree,
                         "k-",
                         linewidth=0.5,
+                        alpha=alpha,
                     )
 
                     y = syn_filt_proj[plot_idx] / Amax_syn
@@ -3399,6 +3506,7 @@ class Misfit(object):
                         plot_flip * plot_dy * y + dist_degree,
                         "r-",
                         linewidth=0.5,
+                        alpha=alpha,
                     )
                     if align_time:
                         ax_1comp.plot(
@@ -3406,11 +3514,12 @@ class Misfit(object):
                             plot_flip * plot_dy * y + dist_degree,
                             "r--",
                             linewidth=0.5,
+                            alpha=alpha,
                         )
 
                     # mark measure window range
-                    ax_1comp.plot(win_t0, dist_degree, "k|", markersize=8)
-                    ax_1comp.plot(win_t1, dist_degree, "k|", markersize=8)
+                    ax_1comp.plot(win_t0, dist_degree, "k|", markersize=8, alpha=alpha)
+                    ax_1comp.plot(win_t1, dist_degree, "k|", markersize=8, alpha=alpha)
                     ## annotate amplitude
                     #  ax.text(max(plot_time), dist_degree, '%.1e ' % (Amax_obs),
                     #      verticalalignment='bottom',
@@ -3428,8 +3537,9 @@ class Misfit(object):
                     #  ax.text(max(plot_time), dist_degree, ' %.1f' % (window['weight']),
                     #      verticalalignment='center', fontsize=7)
                     ##annotate station names
-                    str_annot = " %s (%.3f,%.3f,%.1f)" % (
-                        g_sta._v_name,
+                    str_annot = " %s.%s (%.3f,%.3f,%.1f)" % (
+                        net,
+                        sta,
                         win["cc0"],
                         win["cc_time_shift"],
                         win["weight"],
@@ -3440,6 +3550,7 @@ class Misfit(object):
                         str_annot,
                         verticalalignment="center",
                         fontsize=7,
+                        alpha=alpha,
                     )
                     # ax_1comp.text(160, dist_degree, str_annot,
                     #    verticalalignment='center', fontsize=7)
@@ -4289,10 +4400,10 @@ class Misfit(object):
     def get_window_ids(self):
         with pt.open_file(self.h5_path, "r") as h5f:
             win_tbl = h5f.root["window"]
-            win_ids = [w.decode() for w in set(win_tbl.read(field="id"))]
+            win_ids = sorted([w.decode() for w in set(win_tbl.read(field="id"))])
         return win_ids
 
-    def plot_misfit(self, out_fig, **kwargs):
+    def plot_misfit(self, out_fig):
         """Plot misfit for a certain event and window_id"""
 
         h5f = pt.open_file(self.h5_path, "r")
@@ -4350,18 +4461,18 @@ class Misfit(object):
             return
 
         # map configuration
-        parallels = np.arange(-90.0, 90, 10.0)
-        meridians = np.arange(0.0, 360, 10.0)
+        # parallels = np.arange(-90.0, 90, 10.0)
+        # meridians = np.arange(0.0, 360, 10.0)
 
         stla_all = np.array([sta._v_attrs["latitude"] for _, sta in data])
         stlo_all = np.array([sta._v_attrs["longitude"] for _, sta in data])
 
-        map_latc = kwargs.get("center_lat", np.median(stla_all))
-        map_lonc = kwargs.get("center_lon", np.median(stlo_all))
-        min_lon = kwargs.get("min_lon", min(min(stlo_all), evlo))
-        max_lon = kwargs.get("max_lon", max(max(stlo_all), evlo))
-        min_lat = kwargs.get("min_lat", min(min(stla_all), evla))
-        max_lat = kwargs.get("max_lat", max(max(stla_all), evla))
+        # map_latc = kwargs.get("center_lat", np.median(stla_all))
+        # map_lonc = kwargs.get("center_lon", np.median(stlo_all))
+        # min_lon = kwargs.get("min_lon", min(min(stlo_all), evlo))
+        # max_lon = kwargs.get("max_lon", max(max(stlo_all), evlo))
+        # min_lat = kwargs.get("min_lat", min(min(stla_all), evla))
+        # max_lat = kwargs.get("max_lat", max(max(stla_all), evla))
 
         # map_lat0, map_lon0, map_width, map_height = centerMap(
         #     [*stla_all, evla], [*stlo_all, evlo], 1.1
@@ -4372,11 +4483,10 @@ class Misfit(object):
         # projection = ccrs.TransverseMercator(central_latitude=map_latc, central_longitude=map_lonc)
         # projection = ccrs.Mercator(central_longitude=map_lonc, min_latitude=min_lat, max_latitude=max_lat,
         #                            latitude_true_scale=map_latc)
-        projection = ccrs.NearsidePerspective(
-            central_latitude=map_latc,
-            central_longitude=map_lonc,
-            satellite_height=5000 * 1000,
-        )
+        # map_config['type']
+        CRS = getattr(ccrs, config["plot"]["map_type"])
+        map_params = config["plot"]["map_params"]
+        projection = CRS(**map_params)
 
         with PdfPages(out_fig) as pdf:
             for window_id in window_ids:
@@ -4492,11 +4602,15 @@ class Misfit(object):
 
         h5f.close()
 
-    def plot_histogram(self, out_fig, min_dt=-20, max_dt=20, min_cc=0, min_weight=0.1, nbins=50):
+    def plot_histogram(self, out_fig):
         h5f = pt.open_file(self.h5_path, "r")
 
         # config
         config = h5f.root._v_attrs["config"]
+        # min_weight = config['plot']['min_weight']
+        nbins = config["plot"]["nbins"]
+        max_dt = max(config["misfit"]["window_weight"]["cc_tshift"])
+        min_SNR = min(config["misfit"]["window_weight"]["SNR"])
 
         # event info
         if "/source" not in h5f:
@@ -4519,30 +4633,14 @@ class Misfit(object):
         tbl_win = h5f.get_node("/window")
 
         # event info
-        evt0 = UTCDateTime(event["t0"])
-        evtau = event["tau"]
-        evla = event["latitude"]
-        evlo = event["longitude"]
-        evdp = event["depth"]
         evnm = event["id"].decode()
-        # evdp has to be >=0 otherwise taup would crash
-        if evdp < 0.0:
-            evdp = 0.0
-        mt = event["mt_rtp"]
-        Mrr = mt[0][0]
-        Mtt = mt[1][1]
-        Mpp = mt[2][2]
-        Mrt = mt[0][1]
-        Mrp = mt[0][2]
-        Mtp = mt[1][2]
-        focmec = [Mrr, Mtt, Mpp, Mrt, Mrp, Mtp]
+        evdp = event["depth"]
 
         # get all windows
         data = [
             (win, g_wav[stnm])
             for win in tbl_win.read()
             if (stnm := f'{win["network"].decode()}_{win["station"].decode()}') in g_wav
-            and win['weight'] >= min_weight
         ]
         if not data:
             warnings.warn("No data to plot!")
@@ -4551,19 +4649,30 @@ class Misfit(object):
         window_ids = sorted(set([win["id"].decode() for win, _ in data]))
 
         with PdfPages(out_fig) as pdf:
+            snr_list = np.array([win["SNR"] for win, _ in data])
+            ccdt_list = np.array([win["cc_time_shift"] for win, _ in data])
+            cc0_list = np.array([win["cc0"] for win, _ in data])
+            weight_list = np.array([win["cc0"] for win, _ in data])
+            wcc_sum = sum(cc0_list * weight_list)
+
             fig = plt.figure(figsize=(10, 5))
-            str_title = "{:s} (dep:{:.1f}): all (num={:d})".format(evnm, evdp, len(data))
+            str_title = "{:s} (dep:{:.1f}): all (sum(weight*cc0)={:.1f})".format(
+                evnm, evdp, wcc_sum
+            )
             fig.suptitle(str_title)
-            ccdt_list = [win["cc_time_shift"] for win, _ in data]
-            cc0_list = [win["cc0"] for win, _ in data]
             ax = fig.add_subplot(121)
-            ax.hist(ccdt_list, nbins)
+            dt_used = ccdt_list[abs(ccdt_list) <= max_dt]
+            mean_dt = np.mean(dt_used)
+            std_dt = np.std(dt_used)
+            label = f"mean(std) = {mean_dt:.3f}({std_dt:.1f})"
+            ax.hist(dt_used, nbins, label=label)
             ax.set_xlabel("dt_cc [obs-syn] (second)")
-            ax.set_xlim([min_dt, max_dt])
+            ax.set_xlim([-max_dt, max_dt])
+            ax.legend()
             ax = fig.add_subplot(122)
-            ax.hist(cc0_list, nbins)
+            ax.hist(cc0_list[snr_list >= min_SNR], nbins)
             ax.set_xlabel("cc0")
-            ax.set_xlim([min_cc, 1])
+            ax.set_xlim([0, 1])
             pdf.savefig(fig)
             plt.close(fig)
 
@@ -4571,24 +4680,36 @@ class Misfit(object):
                 data_sel = [
                     (win, sta) for win, sta in data if win["id"].decode() == window_id
                 ]
-                ccdt_list = [win["cc_time_shift"] for win, _ in data_sel]
-                cc0_list = [win["cc0"] for win, _ in data_sel]
+                snr_list = np.array([win["SNR"] for win, _ in data_sel])
+                ccdt_list = np.array([win["cc_time_shift"] for win, _ in data_sel])
+                cc0_list = np.array([win["cc0"] for win, _ in data_sel])
+                weight_list = np.array([win["cc0"] for win, _ in data_sel])
+                wcc_sum = sum(cc0_list * weight_list)
 
                 fig = plt.figure(figsize=(10, 5))
-                str_title = "{:s} (dep:{:.1f}): {:s} (num={:d})".format(evnm, evdp, window_id, len(data_sel))
+                str_title = "{:s} (dep:{:.1f}): {:s} (sum(weight*cc0)={:.1f})".format(
+                    evnm, evdp, window_id, wcc_sum
+                )
                 fig.suptitle(str_title)
                 ax = fig.add_subplot(121)
-                ax.hist(ccdt_list, nbins)
+                dt_used = ccdt_list[abs(ccdt_list) <= max_dt]
+                mean_dt = np.mean(dt_used)
+                std_dt = np.std(dt_used)
+                label = f"mean(std) = {mean_dt:.3f}({std_dt:.1f})"
+                ax.hist(dt_used, nbins, label=label)
                 ax.set_xlabel("dt_cc [obs-syn] (second)")
-                ax.set_xlim([min_dt, max_dt])
+                ax.set_xlim([-max_dt, max_dt])
+                ax.legend()
+                # ax.set_title(f"mean(std) = {mean_dt}({std_dt})")
                 ax = fig.add_subplot(122)
-                ax.hist(cc0_list, nbins)
+                ax.hist(cc0_list[snr_list >= min_SNR], nbins)
                 ax.set_xlabel("cc0")
-                ax.set_xlim([min_cc, 1])
+                ax.set_xlim([0, 1])
                 pdf.savefig(fig)
                 plt.close(fig)
 
         h5f.close()
+
 
 #
 #     def output_misfit(self, out_file):

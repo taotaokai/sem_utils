@@ -22,9 +22,9 @@ if __name__ == '__main__':
     print(f"======= [{datetime.now()}] plot_seismogram_1comp")
 
     misfit = Misfit(args.misfit_h5file)
-    window_ids = misfit.get_window_ids()
 
     pool = multiprocessing.Pool(processes=args.nproc)
+    window_ids = misfit.get_window_ids()
     inputs = [(win_id, os.path.join(args.out_fig_dir, f"{win_id}.pdf")) for win_id in window_ids]
     pool.map(plot, inputs)
 

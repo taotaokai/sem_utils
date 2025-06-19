@@ -23,6 +23,7 @@ misfit_job=$slurm_dir/misfit.job
 srcfrechet_job=$slurm_dir/srcfrechet.job
 dgreen_job=$slurm_dir/dgreen.job
 search_job=$slurm_dir/search.job
+plot_job=$slurm_dir/plot.job
 
 # database file
 #mkdir -p $misfit_dir
@@ -390,6 +391,37 @@ $python_exec $sem_utils_dir/misfit/make_updated_cmtsolution.py \\
   \$dt0_opt \$dtau_opt \$dxs_opt \$dmt_opt
 
 cp $misfit_dir/CMTSOLUTION.updated $updated_cmt_dir/${event_id}.cmt
+
+echo
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+
+EOF
+
+#====== plot misfit and waveforms
+cat <<EOF > $plot_job
+#!/bin/bash
+#SBATCH -J ${event_id}.plot
+#SBATCH -o $plot_job.o%j
+#SBATCH -n $slurm_nproc_plot
+#SBATCH -p $slurm_partition_cpu
+#SBATCH -t $slurm_timelimit_plot
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+
+cd $event_dir
+
+if [ -d "$figure_dir" ]
+then
+  chmod -R u+w $figure_dir
+  rm -rf $figure_dir
+fi
+mkdir -p $figure_dir
+
+$python_exec $sem_utils_dir/misfit/plot.py \\
+  $db_file $figure_dir --nproc=$slurm_nproc_plot
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

@@ -27,11 +27,11 @@
 # 5. calculate the finite difference between original and perturbed green's functions and iteratively update hdur and location&moment tensor based on the linear approximation dU = dG * source 
 
 # project root directory
-base_dir=$(readlink -f /home/taokai/EuropeFWI)
+base_dir=$(readlink -f .)
 
 # current stage and iteration number
 stage_dir=${base_dir}/stage00.source
-iter_num=01
+iter_num=00
 
 #======== Data directories
 
@@ -60,11 +60,11 @@ initial_cmt_dir=${prev_iter_dir}/CMTSOLUTION_updated
 updated_cmt_dir=${iter_dir}/CMTSOLUTION_updated
 
 # mesh/DATABASES_MPI/*solver_data.bin,..
-mesh_dir=${stage_dir}/mesh
+mesh_dir=${base_dir}/mesh
 
 #model_dir=${iter_dir}/model
 
-misfit_par_dir=${stage_dir}/misfit_par
+misfit_par_dir=${base_dir}/misfit_par
 
 #precond_dir=${iter_dir}/preconditioner # proc*_reg1_inv_hess_diag.bin
 
@@ -79,16 +79,17 @@ sem_nproc=4  # actual mesh slices defined in Par_file
 # number of MPI processors to run xspecfem jobs
 slurm_nnode=1
 slurm_nproc=4
-#
-slurm_nproc_misfit=12  # nproc to run misfit_job
+# number of MPI processors to run pre/post-process jobs
+slurm_nproc_misfit=12  # misfit_job
+slurm_nproc_plot=10  # plot_job
 
 # mpi executable
 slurm_mpiexec="srun --mpi=pmix_v3" # SCNET
 # slurm_mpiexec="mpirun -np ${slurm_nproc}"
 
 # slurm partition
-slurm_partition_dcu="xahdnormal" # SCNET GPU
 slurm_partition_cpu="xahcnormal" # SCNET CPU
+slurm_partition_dcu="xahdnormal" # SCNET GPU
 
 slurm_dcu_extra_args="--exclusive --gres=dcu:4" # SCNET
 
@@ -99,6 +100,7 @@ slurm_timelimit_adjoint=00:30:00 # adjoint for source
 slurm_timelimit_misfit=01:00:00 # misfit
 slurm_timelimit_dgreen=00:30:00 # dgreen
 slurm_timelimit_search=01:00:00 # grid search
+slurm_timelimit_plot=01:00:00 # grid search
 
 #----- update model
 

@@ -367,7 +367,7 @@ def _get_syn_ENZ(g_sta, syn_tag):
 
 
 def _extract_obs_syn_ENZ(
-    sta_attrs, obs_data, obs_attrs, syn_data, syn_attrs, event_tau
+    sta_attrs, obs_data, obs_attrs, syn_data, syn_attrs  # , event_tau
 ):
     net = sta_attrs["network"]
     sta = sta_attrs["station"]
@@ -449,21 +449,21 @@ def _extract_obs_syn_ENZ(
 
     # np.savez('extract', syn_ENZ=syn_ENZ)
 
-    # apply source time function and/or time derivative
-    if syn_attrs["is_grn"] or obs_type == "VEL":
-        npad = int(5 * event_tau * data_fs)
-        # npad = data_nt  #DEBUG
-        nfft = scipy.fft.next_fast_len(data_nt + npad)
-        freqs = np.fft.rfftfreq(nfft, d=data_dt)
-        Fsyn = np.fft.rfft(syn_ENZ, nfft)
-        if syn_attrs["is_grn"]:
-            # source spectrum (moment-rate function)
-            # print("event_tau=", event_tau)
-            F_src = stf_gauss_spectrum(freqs, event_tau)
-            Fsyn *= F_src
-        if obs_type == "VEL":
-            Fsyn *= 2j * np.pi * freqs
-        syn_ENZ[:] = np.fft.irfft(Fsyn, nfft)[:, :data_nt]
+    # # apply source time function and/or time derivative
+    # if syn_attrs["is_grn"] or obs_type == "VEL":
+    #     npad = int(5 * event_tau * data_fs)
+    #     # npad = data_nt  #DEBUG
+    #     nfft = scipy.fft.next_fast_len(data_nt + npad)
+    #     freqs = np.fft.rfftfreq(nfft, d=data_dt)
+    #     Fsyn = np.fft.rfft(syn_ENZ, nfft)
+    #     if syn_attrs["is_grn"]:
+    #         # source spectrum (moment-rate function)
+    #         # print("event_tau=", event_tau)
+    #         F_src = stf_gauss_spectrum(freqs, event_tau)
+    #         Fsyn *= F_src
+    #     if obs_type == "VEL":
+    #         Fsyn *= 2j * np.pi * freqs
+    #     syn_ENZ[:] = np.fft.irfft(Fsyn, nfft)[:, :data_nt]
 
     return obs_ENZ, syn_ENZ, no_Hchan
 
@@ -475,6 +475,7 @@ def _measure_adj_one_sta(
     syn_data,
     syn_attrs,
     wins,
+    event_t0,
     event_tau,
     cfg_noise_before_first_arrival,
     cci_dt,
@@ -491,7 +492,7 @@ def _measure_adj_one_sta(
 
     try:
         obs_ENZ, syn_ENZ, no_Hchan = _extract_obs_syn_ENZ(
-            sta_attrs, obs_data, obs_attrs, syn_data, syn_attrs, event_tau
+            sta_attrs, obs_data, obs_attrs, syn_data, syn_attrs  # , event_tau
         )
         # debug
         # np.savez(f'{net}_{sta}_new.npz', obs_ENZ=obs_ENZ, syn_ENZ=syn_ENZ, no_Hchan=no_Hchan)
@@ -513,6 +514,21 @@ def _measure_adj_one_sta(
     pre_filters = obs_attrs["filter"]
     # data_butter_N = obs.attrs["filter"]["N"]
     # data_butter_Wn = obs.attrs["filter"]["Wn"]
+
+    obs_type = obs_attrs["type"]
+    syn_type = syn_attrs["type"]
+    if obs_type == "VEL" and syn_type == "DISP":
+        syn_to_vel = True
+    elif obs_type == "DISP" and syn_type == "DISP":
+        syn_to_vel = False
+    else:
+        msg = f"{stnm}: unknown obs/syn types ({obs_type}/{syn_type})"
+        raise ValueError(msg)
+
+    conv_stf = False
+    if syn_attrs["is_grn"]:
+        conv_stf = True
+        assert syn_attrs["origin_time"] == event_t0
 
     # sum of adjoint sources from all windows
     dchi_du = np.zeros((3, data_nt))
@@ -596,14 +612,22 @@ def _measure_adj_one_sta(
         # Fd: pre-filter used during preprocessing (e.g. rmresp)
         # Fw: bandpass filter used on this window
         # w: window function
+        # S: source spectrum
+        # Ft: time derivative in frequency domain
         #
         # obs = w*(Fw*Fd*d), syn = w*(Fw*Fd*u)
 
         # apply filter to obs, syn
         # obs = Fw * (Fd * d), obs_ENZ = Fd * d, d = disp. or vel.
         obs_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ, nfft), nfft)[:, :data_nt]
-        # syn = Fw * (Fd * [Ft] * u), (syn_ENZ = Fd * [Ft] *[S] * u)
-        syn_filt = np.fft.irfft(Fw * np.fft.rfft(syn_ENZ, nfft), nfft)[:, :data_nt]
+        # syn = Fw * (Fd * [Ft] * [S] * u), (syn_ENZ = Fd * u)
+        f_syn = np.fft.rfft(syn_ENZ, nfft)
+        if syn_to_vel:
+            f_syn *= Ft
+        if conv_stf:
+            f_src = stf_gauss_spectrum(freqs, event_tau)
+            f_syn *= f_src
+        syn_filt = np.fft.irfft(Fw * f_syn, nfft)[:, :data_nt]
         # noise
         taper_width = 0.5 / min(butter_Wn)
         noise_win = cosine_sac_taper(
@@ -1567,7 +1591,7 @@ class Misfit(object):
             solver_te = solver_tb + (solver_nt - 1) * solver_dt
 
             # commented out to enforce consistency between sac o time and event t0 even for Green's function
-            # if is_grn:  # for green function, use event['t0'] for the o time 
+            # if is_grn:  # for green function, use event['t0'] for the o time
             #    solver_tb = event_t0 - (tr.stats.sac["o"] - tr.stats.sac["b"])
 
             # check if the origin time in sac files is consistent with event['t0']
@@ -2015,7 +2039,7 @@ class Misfit(object):
 
         return syn_ENZ
 
-    def _extract_obs_syn_ENZ(self, g_sta, obs_tag, syn_tag, event_tau):
+    def __obsolete_extract_obs_syn_ENZ(self, g_sta, obs_tag, syn_tag, event_tau):
 
         if obs_tag not in g_sta:
             msg = f"{g_sta._v_name}: {obs_tag} does not exist, skip"
@@ -2162,6 +2186,7 @@ class Misfit(object):
             raise Exception(msg)
         event = tbl_src[0]
         event_t0 = UTCDateTime(event["t0"])
+        event_tau = event["tau"]
 
         if "/channel" not in h5f:
             msg = '"/channel" not existing, run read_channel_file first!'
@@ -2189,22 +2214,43 @@ class Misfit(object):
             attrs = g_sta._v_attrs
             net = attrs["network"]
             sta = attrs["station"]
+            stnm = f"{net}_{sta}"
             # loc = attrs['location']
             first_arrtime = attrs["first_arrtime"]
 
+            obs = g_sta[obs_tag]
+            syn = g_sta[syn_tag]
+
+            sta_attrs = {k: g_sta._v_attrs[k] for k in g_sta._v_attrs._f_list("user")}
+            obs_attrs = {k: obs.attrs[k] for k in obs.attrs._f_list("user")}
+            syn_attrs = {k: syn.attrs[k] for k in syn.attrs._f_list("user")}
             try:
-                obs_ENZ, syn_ENZ, no_Hchan = self._extract_obs_syn_ENZ(
-                    g_sta, obs_tag, syn_tag, event["tau"]
+                # obs_ENZ, syn_ENZ, no_Hchan = self._extract_obs_syn_ENZ(
+                #     g_sta, obs_tag, syn_tag, event["tau"]
+                # )
+                obs_ENZ, syn_ENZ, no_Hchan = _extract_obs_syn_ENZ(
+                    sta_attrs, obs[:], obs_attrs, syn[:], syn_attrs
                 )
                 # debug
                 # np.savez(f'{net}_{sta}_old.npz', obs_ENZ=obs_ENZ, syn_ENZ=syn_ENZ, no_Hchan=no_Hchan)
             except Exception as e:
-                msg = f"failed to get obs,syn_ENZ for {g_sta._v_name}, ({e})"
+                msg = f"{stnm}: failed to get obs_ENZ,syn_ENZ ({e})"
                 warnings.warn(msg)
                 continue
 
-            obs = g_sta[obs_tag]
-            syn = g_sta[syn_tag]
+            obs_type = obs_attrs["type"]
+            syn_type = syn_attrs["type"]
+            if obs_type == "VEL" and syn_type == "DISP":
+                syn_to_vel = True
+            elif obs_type == "DISP" and syn_type == "DISP":
+                syn_to_vel = False
+            else:
+                msg = f"{stnm}: unknown obs/syn types ({obs_type}/{syn_type})"
+                raise ValueError(msg)
+            conv_stf = False
+            if syn_attrs["is_grn"]:
+                conv_stf = True
+                assert syn_attrs["origin_time"] == event_t0
 
             data_tb = obs.attrs["starttime"]
             data_fs = obs.attrs["sampling_rate"]
@@ -2330,10 +2376,18 @@ class Misfit(object):
                 obs_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ, nfft), nfft)[
                     :, :data_nt
                 ]
-                # syn = Fw * (Fd * [Ft] * u), (syn_ENZ = Fd * [Ft] *[S] * u)
-                syn_filt = np.fft.irfft(Fw * np.fft.rfft(syn_ENZ, nfft), nfft)[
-                    :, :data_nt
-                ]
+                # syn = Fw * (Fd * [Ft] * [S] * u), (syn_ENZ = Fd * u)
+                f_syn = np.fft.rfft(syn_ENZ, nfft)
+                if syn_to_vel:
+                    f_syn *= Ft
+                if conv_stf:
+                    f_src = stf_gauss_spectrum(freqs, event_tau)
+                    f_syn *= f_src
+                syn_filt = np.fft.irfft(Fw * f_syn, nfft)[:, :data_nt]
+                # # syn = Fw * (Fd * [Ft] * u), (syn_ENZ = Fd * [Ft] *[S] * u)
+                # syn_filt = np.fft.irfft(Fw * np.fft.rfft(syn_ENZ, nfft), nfft)[
+                #     :, :data_nt
+                # ]
                 # noise
                 taper_width = 0.5 / min(butter_Wn)
                 noise_win = cosine_sac_taper(
@@ -2770,6 +2824,7 @@ class Misfit(object):
             proc_num,
             net_sta_list,
             config,
+            event_t0,
             event_tau,
         ):
             self.read_queue = read_queue
@@ -2778,6 +2833,7 @@ class Misfit(object):
             self.proc_num = proc_num
             self.net_sta_list = net_sta_list
             self.config = config
+            self.event_t0 = event_t0
             self.event_tau = event_tau
             super().__init__()
 
@@ -2792,6 +2848,7 @@ class Misfit(object):
             weight_param = self.config["misfit"]["window_weight"]
             adj_tag = self.config["adj"]["tag"]
             adj_band_code = self.config["adj"]["band_code"]
+            event_t0 = self.event_t0
             event_tau = self.event_tau
 
             for net, sta in self.net_sta_list:
@@ -2808,6 +2865,7 @@ class Misfit(object):
                     syn_data,
                     syn_attrs,
                     wins,
+                    event_t0,
                     event_tau,
                     cfg_noise_before_first_arrival,
                     cci_dt,
@@ -2839,6 +2897,7 @@ class Misfit(object):
             msg = "no source information"
             raise Exception(msg)
         event = tbl_src[0]
+        event_t0 = UTCDateTime(event["t0"])
         event_tau = event["tau"]
 
         if "/channel" not in h5f:
@@ -2878,6 +2937,7 @@ class Misfit(object):
                 i,
                 net_sta_list[i::nproc],
                 config,
+                event_t0,
                 event_tau,
             )
             processors.append(processor)
@@ -3365,25 +3425,50 @@ class Misfit(object):
                     attrs = g_sta._v_attrs
                     net = attrs["network"]
                     sta = attrs["station"]
+                    stnm = f"{net}_{sta}"
                     first_arrtime = attrs["first_arrtime"]
                     dist_degree = attrs["dist_degree"]
-                    # read in obs and syn seismograms
+
+                    obs = g_sta[obs_tag]
+                    syn = g_sta[syn_tag]
+
+                    sta_attrs = {
+                        k: g_sta._v_attrs[k] for k in g_sta._v_attrs._f_list("user")
+                    }
+                    obs_attrs = {k: obs.attrs[k] for k in obs.attrs._f_list("user")}
+                    syn_attrs = {k: syn.attrs[k] for k in syn.attrs._f_list("user")}
                     try:
-                        obs_ENZ, syn_ENZ, no_Hchan = self._extract_obs_syn_ENZ(
-                            g_sta, obs_tag, syn_tag, evtau
+                        # obs_ENZ, syn_ENZ, no_Hchan = self._extract_obs_syn_ENZ(
+                        #     g_sta, obs_tag, syn_tag, event["tau"]
+                        # )
+                        obs_ENZ, syn_ENZ, no_Hchan = _extract_obs_syn_ENZ(
+                            sta_attrs, obs[:], obs_attrs, syn[:], syn_attrs
                         )
+                        # debug
+                        # np.savez(f'{net}_{sta}_old.npz', obs_ENZ=obs_ENZ, syn_ENZ=syn_ENZ, no_Hchan=no_Hchan)
                     except Exception as e:
-                        msg = f"failed to get obs,syn_ENZ for {g_sta._v_name}, ({e})"
+                        msg = f"{stnm}: failed to get obs_ENZ,syn_ENZ ({e})"
                         warnings.warn(msg)
                         continue
 
-                    obs_h5 = g_sta[obs_tag]
-                    # syn_h5 = g_sta[syn_tag]
+                    obs_type = obs_attrs["type"]
+                    syn_type = syn_attrs["type"]
+                    if obs_type == "VEL" and syn_type == "DISP":
+                        syn_to_vel = True
+                    elif obs_type == "DISP" and syn_type == "DISP":
+                        syn_to_vel = False
+                    else:
+                        msg = f"{stnm}: unknown obs/syn types ({obs_type}/{syn_type})"
+                        raise ValueError(msg)
+                    conv_stf = False
+                    if syn_attrs["is_grn"]:
+                        conv_stf = True
+                        assert syn_attrs["origin_time"] == evt0
 
-                    data_tb = obs_h5.attrs["starttime"]
-                    data_fs = obs_h5.attrs["sampling_rate"]
+                    data_tb = obs.attrs["starttime"]
+                    data_fs = obs.attrs["sampling_rate"]
                     data_dt = 1.0 / data_fs
-                    data_nt = obs_h5.attrs["npts"]
+                    data_nt = obs.attrs["npts"]
                     # data_te = data_tb + (data_nt - 1) * data_dt
                     # data_times = np.arange(data_nt, dtype=float) * data_dt
                     # noise_te = (first_arrtime - data_tb) - cfg_noise_before_first_arrival
@@ -3402,15 +3487,21 @@ class Misfit(object):
                     )
                     _, filter_h = scipy.signal.freqz_sos(sos, worN=freqs, fs=data_fs)
                     Fw = abs(filter_h)  # zero-phase filter response
+                    # time derivative in frequency domain
+                    Ft = 2j * np.pi * freqs
 
                     # obs = Fw * (Fd * d), obs_ENZ = Fd * d, d = disp. or vel.
                     obs_ENZ_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ, nfft), nfft)[
                         :, :data_nt
                     ]
-                    # syn = Fw * (Fd * [Ft] * u), (syn_ENZ = Fd * [Ft] *[S] * u)
-                    syn_ENZ_filt = np.fft.irfft(Fw * np.fft.rfft(syn_ENZ, nfft), nfft)[
-                        :, :data_nt
-                    ]
+                    # syn = Fw * (Fd * [Ft] * [S] * u), (syn_ENZ = Fd * u)
+                    f_syn = np.fft.rfft(syn_ENZ, nfft)
+                    if syn_to_vel:
+                        f_syn *= Ft
+                    if conv_stf:
+                        f_src = stf_gauss_spectrum(freqs, evtau)
+                        f_syn *= f_src
+                    syn_ENZ_filt = np.fft.irfft(Fw * f_syn, nfft)[:, :data_nt]
 
                     # project to polarity defined by the window
                     cmpaz = win["cmpaz"]
@@ -3893,7 +3984,7 @@ class Misfit(object):
         """
         # check model vectors in dm have the same length
         if (not dm) or len(dm) == 0:
-            msg = "dm must not be empty"
+            msg = "dm is empty!"
             raise ValueError(msg)
         # model_num = len(dm)
 
@@ -3963,7 +4054,7 @@ class Misfit(object):
         # print(dsyn_tags)
 
         for g_sta in g_wav:
-            print(f"cc_linearize for {g_sta._v_name}")
+            # print(f"cc_linearize for {g_sta._v_name}")
 
             attrs = g_sta._v_attrs
             net = attrs["network"]
@@ -4051,11 +4142,11 @@ class Misfit(object):
                 # window weight
                 weight = win["weight"]
 
-                # skip window with zero weight
-                if np.isclose(weight, 0.0):
-                    msg = f"Window has near zero weight ({win['weight']}) (WIN: {win}), SKIP"
-                    warnings.warn(msg)
-                    continue
+                # # skip window with zero weight
+                # if np.isclose(weight, 0.0):
+                #     msg = f"Window has near zero weight ({win['weight']}) (WIN: {win}), SKIP"
+                #     warnings.warn(msg)
+                #     continue
 
                 weight_sum += weight
 
@@ -4643,7 +4734,7 @@ class Misfit(object):
             snr_list = np.array([win["SNR"] for win, _ in data])
             ccdt_list = np.array([win["cc_time_shift"] for win, _ in data])
             cc0_list = np.array([win["cc0"] for win, _ in data])
-            weight_list = np.array([win["cc0"] for win, _ in data])
+            weight_list = np.array([win["weight"] for win, _ in data])
             wcc_sum = sum(cc0_list * weight_list)
 
             fig = plt.figure(figsize=(10, 5))
@@ -4674,7 +4765,7 @@ class Misfit(object):
                 snr_list = np.array([win["SNR"] for win, _ in data_sel])
                 ccdt_list = np.array([win["cc_time_shift"] for win, _ in data_sel])
                 cc0_list = np.array([win["cc0"] for win, _ in data_sel])
-                weight_list = np.array([win["cc0"] for win, _ in data_sel])
+                weight_list = np.array([win["weight"] for win, _ in data_sel])
                 wcc_sum = sum(cc0_list * weight_list)
 
                 fig = plt.figure(figsize=(10, 5))

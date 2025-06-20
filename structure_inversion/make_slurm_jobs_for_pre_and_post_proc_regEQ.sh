@@ -1,5 +1,5 @@
 #!/bin/bash
-# Make jobs files for slurm 
+# Make jobs files for slurm
 # structure inversion with regional earthquake
 
 control_file=${1:?[arg]need control_file}
@@ -8,7 +8,7 @@ control_file=${1:?[arg]need control_file}
 #====== source control_file
 source $control_file
 #event_list=$(readlink -f $event_list)
- 
+
 #====== define directories
 mesh_dir=$iter_dir/mesh # DATABASES_MPI/proc*_reg1_solver_data.bin
 #hess_dir=$iter_dir/hess_sum
@@ -22,11 +22,11 @@ mkdir -p $slurm_dir
 
 #====== define variables
 mesh_job=$slurm_dir/mesh.job
-#kernel_sum_job=$slurm_dir/kernel_sum.job
-#pcg_dmodel_job=$slurm_dir/pcg_dmodel.job
-#model_perturb_job=$slurm_dir/model_perturb.job
-#mesh_perturb_job=$slurm_dir/mesh_perturb.job
-#model_update_job=$slurm_dir/model_update.job
+kernel_sum_job=$slurm_dir/kernel_sum.job
+pcg_dmodel_job=$slurm_dir/pcg_dmodel.job
+model_perturb_job=$slurm_dir/model_perturb.job
+mesh_perturb_job=$slurm_dir/mesh_perturb.job
+model_update_job=$slurm_dir/model_update.job
 #
 #model_random_job=$slurm_dir/model_random.job
 #mesh_hess_job=$slurm_dir/mesh_hess.job
@@ -65,7 +65,7 @@ cd \$mesh_dir
 mkdir DATA DATABASES_MPI OUTPUT_FILES
 
 cd \$mesh_dir/DATA
-chmod u+w * 
+chmod u+w *
 ln -sf $sem_build_dir/DATA/* \$mesh_dir/DATA/
 rm Par_file GLL CMTSOLUTION
 ln -sf \$model_dir GLL
@@ -212,10 +212,10 @@ then
   previous_kernel_names=alpha_kernel,beta_kernel,phi_kernel,xi_kernel,eta_kernel
   previous_dmodel_names=alpha_dmodel,beta_dmodel,phi_dmodel,xi_dmodel,eta_dmodel
   out_dmodel_names=alpha_dmodel,beta_dmodel,phi_dmodel,xi_dmodel,eta_dmodel
-  
+
   previous_kernel_dir=$prev_iter_dir/kernel
   previous_dmodel_dir=$prev_iter_dir/model_updated
-  
+
   $slurm_mpiexec $sem_utils_dir/bin/xsem_pcg_dmodel_n \
     $sem_nproc $mesh_dir/DATABASES_MPI \
     $kernel_dir  \$current_precond_kernel_names \
@@ -489,19 +489,19 @@ do
 
   mesh_dir=$iter_dir/mesh_\${hess_tag}
   model_dir=$iter_dir/model_\${hess_tag}
-  
+
   if [ ! -d "\$model_dir" ]
   then
     echo "[ERROR] \$model_dir does not exist!"
     exit -1
   fi
-  
+
   #rm -rf \$mesh_dir
   mkdir -p \$mesh_dir
-  
+
   cd \$mesh_dir
   mkdir DATA DATABASES_MPI OUTPUT_FILES
-  
+
   cd \$mesh_dir/DATA
   ln -sf $sem_build_dir/DATA/* \$mesh_dir/DATA/
   rm Par_file GLL CMTSOLUTION
@@ -509,9 +509,9 @@ do
   cp -L $sem_config_dir/DATA/Par_file .
   cp -L $sem_config_dir/DATA/CMTSOLUTION .
   cp -L Par_file CMTSOLUTION \$mesh_dir/OUTPUT_FILES/
-  
+
   sed -i "/^MODEL/s/=.*/= GLL/" \$mesh_dir/DATA/Par_file
-  
+
   cd \$mesh_dir
   ${slurm_mpiexec} $sem_build_dir/bin/xmeshfem3D
 
@@ -564,7 +564,7 @@ for hess_tag in $hess_model_names
 do
 
   echo ====== \$hess_tag
- 
+
   hess_dir=${iter_dir}/hess_\${hess_tag}
   #rm -rf \$hess_dir
   mkdir \$hess_dir
@@ -579,22 +579,22 @@ do
     \$hess_dir/kernel_dir.list cijkl_kernel \
     1 "mask" \
     \$hess_dir cijkl_kernel
-  
+
   ${slurm_mpiexec} $sem_utils_dir/bin/xsem_sum_event_kernels_1 \
     $sem_nproc $mesh_dir/DATABASES_MPI \
     \$hess_dir/kernel_dir.list rho_kernel \
     1 "mask" \
     \$hess_dir rho_kernel
-  
+
   echo "------ convert cijkl,rho_kernel to aijkl,rhoprime kernel [\$(date)]"
-  
+
   ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
     $sem_nproc $mesh_dir/DATABASES_MPI ${iter_dir}/model_\${hess_tag} \
     \$hess_dir \
     \$hess_dir
-  
+
   echo "------ reduce aijkl_kernel to alpha,beta,phi,xi,eta_kernel [\$(date)]"
-  
+
   ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_tiso_in_alpha_beta_phi_xi_eta \
     $sem_nproc $mesh_dir/DATABASES_MPI ${iter_dir}/model_\${hess_tag} \
     \$hess_dir \
@@ -632,23 +632,23 @@ do
   done
 
   model_tags=alpha_hess_mask_sq,beta_hess_mask_sq,xi_hess_mask_sq,rhoprime_hess_mask_sq
-  
+
   $slurm_mpiexec $sem_utils_dir/bin/xsem_smooth \
     $sem_nproc $mesh_dir/DATABASES_MPI \
     \$hess_dir \${model_tags} \
     $hess_smooth_1sigma_h $hess_smooth_1sigma_v \
     \$hess_dir "_smooth"
-  
+
   for kernel_tag in alpha beta xi rhoprime
   do
     echo ====== \$kernel_tag
-  
+
     $slurm_mpiexec $sem_utils_dir/bin/xsem_math_unary \
       $sem_nproc $mesh_dir/DATABASES_MPI \
       \$hess_dir \${kernel_tag}_hess_mask_sq_smooth \
       "sqrt" \
       \$hess_dir \${kernel_tag}_hess_mask_sq_smooth_sqrt
-  
+
     $slurm_mpiexec $sem_utils_dir/bin/xsem_inverse_hess_diag_water_level \
       $sem_nproc $mesh_dir/DATABASES_MPI \
       \$hess_dir \${kernel_tag}_hess_mask_sq_smooth_sqrt \

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# structure inversion 
+# structure inversion  for regional earthquake
 
 # Work flows contain:
 #--  kernel
@@ -18,17 +18,19 @@
 #work_flow=kernel_random
 
 #------ read command line args
-control_file=${1:?[arg] need control_file}
+control_file=${1:?[arg]need control_file}
 event_list=${2:?[arg]need event_list}
 
 # load parameters in control_file
 source $control_file
 
 #------ process each event
-for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
+# for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
+for event_id in $(awk 'NF&&$1!~/#/{print $1}' $event_list)
 do
   echo "====== $event_id"
 
+  # create event dir
   event_dir=$iter_dir/$event_id
   mkdir -p $event_dir
 
@@ -38,18 +40,21 @@ do
 
   # copy CMTSOLUTION file
   #cmt_file=$(find -L $source_dir -path "*/iter0?/CMTSOLUTION_updated/${event_id}.cmt" | sort | tail -n1)
-  cmt_file=$(find -L $source_dir -name ${event_id}.cmt | sort | tail -n1)
+  #cmt_file=$(find -L $source_dir -name ${event_id}.cmt | sort | tail -n1)
+  cmt_file=$(find -L $source_dir -path "*/iter??/${event_id}/misfit/CMTSOLUTION.updated" | sort | tail -n1)
   echo ------ use: $(readlink -f $cmt_file)
-  if [ ! -f "$cmt_file" ]; then
+  if [ ! -f "$cmt_file" ]
+  then
     echo "[ERROR] $cmt_file not found"
     exit -1
   fi
+
   chmod u+w $event_dir/DATA/CMTSOLUTION.init
   cp $cmt_file $event_dir/DATA/CMTSOLUTION.init
-  chmod a-w $event_dir/DATA/CMTSOLUTION.init
+  # chmod a-w $event_dir/DATA/CMTSOLUTION.init
 
   # copy STATIONS
-  station_file=$data_dir/$event_id/data/STATIONS
+  station_file=$data_dir/$event_id/STATIONS
   if [ ! -f "$station_file" ]; then
     echo "[ERROR] $station_file not found"
     exit -1
@@ -57,7 +62,8 @@ do
   cp $station_file $event_dir/DATA/STATIONS
 
   # copy misfit_par file
-  cp $misfit_par_dir/${event_id}_misfit_par.py $event_dir/DATA/misfit_par.py
+  # cp $misfit_par_dir/${event_id}_misfit.yaml $event_dir/DATA/misfit.yaml
+  cp $misfit_par_dir/misfit.yaml $event_dir/DATA/misfit.yaml
 
   # create batch scripts
   $sem_utils_dir/structure_inversion/make_slurm_jobs_for_event_regEQ.sh $control_file $event_id

@@ -18,7 +18,7 @@ figure_dir=$misfit_dir/figure
 slurm_dir=$event_dir/slurm
 # job scripts for slurm
 mkdir -p $slurm_dir
-syn_job=$slurm_dir/syn.job
+forward_job=$slurm_dir/forward.job
 misfit_job=$slurm_dir/misfit.job
 kernel_job=$slurm_dir/kernel.job
 #hess_job=$slurm_dir/hess.job
@@ -35,7 +35,7 @@ search_job=$slurm_dir/search.job
 
 # database file
 #mkdir -p $misfit_dir
-db_file=$misfit_dir/misfit.pkl
+db_file=$misfit_dir/misfit.h5
 # station file
 station_file=$event_dir/DATA/STATIONS
 if [ ! -f "$station_file" ]
@@ -51,7 +51,7 @@ then
   exit -1
 fi
 # misfit par file
-misfit_par=$event_dir/DATA/misfit_par.py
+misfit_par=$event_dir/DATA/misfit.yaml
 if [ ! -f "$misfit_par" ]
 then
   echo "[ERROR] $misfit_par does NOT exist!"
@@ -59,23 +59,21 @@ then
 fi
 
 #====== syn: forward simulation
-cat <<EOF > $syn_job
+cat <<EOF > $forward_job
 #!/bin/bash
-#SBATCH -J ${event_id}.syn
-#SBATCH -o $syn_job.o%j
+#SBATCH -J ${event_id}.forward
+#SBATCH -o $forward_job.o%j
 #SBATCH -N $slurm_nnode
 #SBATCH -n $slurm_nproc
-#SBATCH -p $slurm_partition
 #SBATCH -t $slurm_timelimit_forward
-##SBATCH --mail-user=kai.tao@utexas.edu
-##SBATCH --mail-type=begin
-##SBATCH --mail-type=end
+#SBATCH -p $slurm_partition_dcu
+#SBATCH $slurm_dcu_extra_args
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
-out_dir=output_syn
+out_dir=output_forward
 
 mkdir -p $event_dir/DATA
 cd $event_dir/DATA
@@ -84,7 +82,7 @@ cp $cmt_file $event_dir/DATA/CMTSOLUTION
 
 cp $mesh_dir/DATA/Par_file .
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
-sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
+sed -i "/^SAVE_FORWARD/s/=.*/= .true./" Par_file
 
 #
 sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
@@ -111,16 +109,18 @@ ${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
 mkdir $event_dir/\$out_dir/sac
 mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 
-#chmod a+w -R $event_dir/forward_saved_frames
-#rm -rf $event_dir/forward_saved_frames
-#mv $event_dir/DATABASES_MPI $event_dir/forward_saved_frames
-#chmod a-w -R $event_dir/forward_saved_frames
+chmod a+w -R $event_dir/forward_saved_frames
+rm -rf $event_dir/forward_saved_frames
+mv $event_dir/DATABASES_MPI $event_dir/forward_saved_frames
+chmod a-w -R $event_dir/forward_saved_frames
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
 EOF
+
+exit -1
 
 #====== misfit
 cat <<EOF > $misfit_job
@@ -129,11 +129,8 @@ cat <<EOF > $misfit_job
 #SBATCH -o $misfit_job.o%j
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -p $slurm_partition
 #SBATCH -t $slurm_timelimit_misfit
-##SBATCH --mail-user=kai.tao@utexas.edu
-##SBATCH --mail-type=begin
-##SBATCH --mail-type=end
+#SBATCH -p $slurm_partition_cpu
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -184,11 +181,9 @@ cat <<EOF > $kernel_job
 #SBATCH -o $kernel_job.o%j
 #SBATCH -N $slurm_nnode
 #SBATCH -n $slurm_nproc
-#SBATCH -p $slurm_partition
-#SBATCH -t $slurm_timelimit_adjoint
-#SBATCH --mail-user=kai.tao@utexas.edu
-#SBATCH --mail-type=begin
-#SBATCH --mail-type=end
+#SBATCH -t $slurm_timelimit_kernel
+#SBATCH -p $slurm_partition_dcu
+#SBATCH $slurm_dcu_extra_args
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -245,11 +240,9 @@ cat <<EOF > $perturb_job
 #SBATCH -o $perturb_job.o%j
 #SBATCH -N $slurm_nnode
 #SBATCH -n $slurm_nproc
-#SBATCH -p $slurm_partition
-#SBATCH -t $slurm_timelimit_forward
-#SBATCH --mail-user=kai.tao@utexas.edu
-#SBATCH --mail-type=begin
-#SBATCH --mail-type=end
+#SBATCH -t $slurm_timelimit_perturb
+#SBATCH -p $slurm_partition_dcu
+#SBATCH $slurm_dcu_extra_args
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

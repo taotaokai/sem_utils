@@ -802,6 +802,250 @@ def _measure_adj_one_sta(
     return dchi_du, adj_attrs, wins
 
 
+def _linearized_search_cc_by_stations(args):
+    # h5_path, # path to misfit.h5 file
+    # dm,  # dict of model values, e.g. {"dt0": None, "dtau": None, "dxs": None, "dmt": None},
+    # stations,  # list of stations, e.g. ['NET.STA', 'NN,SS']
+    h5_path, dm, stations = args
+
+    # check model vectors in dm have the same length
+    if (not dm) or len(dm) == 0:
+        msg = "dm is empty!"
+        raise ValueError(msg)
+    # model_num = len(dm)
+
+    for model_name in dm:
+        if model_name not in ["dt0", "dtau", "dxs", "dmt"]:
+            msg = f"model_name[{model_name}] must be one of [t0, tau, xs, mt]"
+            raise ValueError(msg)
+
+    nstep = []
+    for model_name in dm:
+        if dm[model_name].ndim != 1:
+            msg = f"dm[{model_name}] must be 1-D vector"
+            raise ValueError(msg)
+        nstep.append(np.size(dm[model_name]))
+
+    if len(set(nstep)) != 1 or nstep[0] < 1:
+        msg = "vectors in dm must have the same length"
+        raise Exception(msg)
+    nstep = nstep[0]
+
+    h5f = pt.open_file(h5_path, "r")
+
+    # check parameters
+    if "/source" not in h5f:
+        msg = '"/source" not existing, run read_cmtsolution first!'
+        raise KeyError(msg)
+    tbl_src = h5f.get_node("/source")
+    if tbl_src.nrows == 0:
+        msg = "no source information"
+        raise Exception(msg)
+    event = tbl_src[0]
+    event_t0 = UTCDateTime(event["t0"])
+
+    if "dtau" in dm:
+        tau = dm["dtau"] + event["tau"]
+        if any(tau < 0):
+            msg = f"too small dm['dtau'] ({dm['dtau']}) for event['tau']={event['tau']}"
+            raise ValueError(msg)
+
+    # syn_components = ["E", "N", "Z"]
+
+    config = h5f.root._v_attrs["config"]
+    obs_tag = config["data"]["tag"]
+    syn_tag = config["syn"]["tag"]
+    dsyn_grp = config["syn"]["dsyn_grp"]
+
+    # sum of weighted normalized zero-lag cc at each model grid
+    wcc_sum = np.zeros(nstep)
+    # sum of all windows' weighting
+    weight_sum = 0.0
+
+    if "/waveform" not in h5f:
+        msg = '"/waveform" not existing, run read_data_h5 first!'
+        raise KeyError(msg)
+    g_wav = h5f.get_node("/waveform")
+
+    if "/window" not in h5f:
+        msg = '"/window" not existing, run setup_window/measure_adj first!'
+        raise KeyError(msg)
+    tbl_win = h5f.get_node("/window")
+
+    dsyn_tags = {}
+    for model_name in dm:
+        if model_name not in ["dt0", "dtau"]:
+            dsyn_tags[model_name] = f"{dsyn_grp}/{model_name}"
+
+    # print(dsyn_tags)
+
+    for g_sta in g_wav:
+        # print(f"cc_linearize for {g_sta._v_name}")
+        if g_sta._v_name not in stations:
+            continue
+
+        attrs = g_sta._v_attrs
+        net = attrs["network"]
+        sta = attrs["station"]
+
+        windows = tbl_win.read_where(
+            f'(network == b"{net}") & (station == b"{sta}") & (valid == True) & (weight > 0)'
+        )
+        if len(windows) == 0:
+            msg = f"No windows found for {g_sta._v_name}, SKIP"
+            warnings.warn(msg)
+            continue
+
+        assert obs_tag in g_sta
+        assert syn_tag in g_sta
+        for _, tag in dsyn_tags.items():
+            assert tag in g_sta
+
+        obs = g_sta[obs_tag]
+        syn = g_sta[syn_tag]
+
+        obs_type = obs.attrs["type"]
+        syn_type = syn.attrs["type"]
+        if obs_type == "VEL" and syn_type == "DISP":
+            syn_to_vel = True
+        elif obs_type == "DISP" and syn_type == "DISP":
+            syn_to_vel = False
+        else:
+            msg = f"unknown obs/syn types ({obs_type}/{syn_type}) in {g_sta._v_name}"
+            raise ValueError(msg)
+
+        for _, dsyn_tag in dsyn_tags.items():
+            assert g_sta[dsyn_tag].attrs["is_grn"] == g_sta[syn_tag].attrs["is_grn"]
+            assert g_sta[dsyn_tag].attrs["type"] == g_sta[syn_tag].attrs["type"]
+
+        try:
+            dsyn_dm = {}
+            obs_ENZ, no_Hchan = _get_obs_ENZ(g_sta, obs_tag)
+            syn_ENZ = _get_syn_ENZ(g_sta, syn_tag)
+            for m, tag in dsyn_tags.items():
+                dsyn_dm[m] = _get_syn_ENZ(g_sta, tag)
+        except Exception as e:
+            msg = f"failed to get {obs_tag},{syn_tag},{dsyn_tags} from {g_sta._v_name}, ({e})"
+            warnings.warn(msg)
+            continue
+
+        if "dtau" in dm:
+            assert g_sta[syn_tag].attrs["is_grn"] == True
+            # for m, tag in dsyn_tags:
+            #     assert g_sta[tag].attrs["is_grn"] == True
+
+        conv_stf = False
+        if g_sta[syn_tag].attrs["is_grn"]:
+            conv_stf = True
+            assert g_sta[syn_tag].attrs["origin_time"] == event_t0
+            assert g_sta[dsyn_tag].attrs["origin_time"] == event_t0
+
+        # time samples
+        data_tb = obs.attrs["starttime"]
+        data_fs = obs.attrs["sampling_rate"]
+        data_dt = 1.0 / data_fs
+        data_nt = obs.attrs["npts"]
+        data_times = np.arange(data_nt, dtype=float) * data_dt
+
+        for win in windows:
+            # print(win["id"])
+            # skip bad windows
+            if not win["valid"]:
+                msg = f"Window not measured for adj (WIN: {win}), SKIP"
+                warnings.warn(msg)
+                continue
+
+            # window weight
+            weight = win["weight"]
+
+            # # skip window with zero weight
+            # if np.isclose(weight, 0.0):
+            #     msg = f"Window has near zero weight ({win['weight']}) (WIN: {win}), SKIP"
+            #     warnings.warn(msg)
+            #     continue
+
+            weight_sum += weight
+
+            # filter
+            butter_N = win["butter_N"]
+            butter_Wn = win["butter_Wn"]
+            # fft
+            npad = int(2 * data_fs / min(butter_Wn))
+            nfft = scipy.fft.next_fast_len(data_nt + npad)
+            freqs = np.fft.rfftfreq(nfft, d=data_dt)
+            # window filter
+            sos = scipy.signal.butter(
+                butter_N, butter_Wn, "bandpass", fs=data_fs, output="sos"
+            )
+            _, filter_h = scipy.signal.freqz_sos(sos, worN=freqs, fs=data_fs)
+            Fw = abs(filter_h)  # zero-phase filter response
+            # time derivative in frequency domain
+            Ft = 2j * np.pi * freqs
+            # time window
+            win_tb = UTCDateTime(win["starttime"])
+            win_te = UTCDateTime(win["endtime"])
+            win_taper = win["taper"]
+            # window function
+            b = win_tb - data_tb
+            e = win_te - data_tb
+            win_len = e - b
+            width = win_len * min(win_taper, 0.4)
+            win_c = [b, b + width, e - width, e]
+            win_func = cosine_sac_taper(data_times, win_c)
+            # polarity projection
+            proj_matrix = win["proj_matrix"]
+            #
+            obs_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ, nfft), nfft)[:, :data_nt]
+            obs_filt_win = np.dot(proj_matrix, obs_filt) * win_func
+            norm_obs = np.sqrt(np.sum(obs_filt_win**2))
+
+            f_syn = np.fft.rfft(syn_ENZ, nfft)
+            if syn_to_vel:
+                f_syn *= Ft
+            f_dsyn_dm = {}
+            for m, dsyn in dsyn_dm.items():
+                f_dsyn = np.fft.rfft(dsyn, nfft)
+                if syn_to_vel:
+                    f_dsyn *= Ft
+                f_dsyn_dm[m] = f_dsyn
+
+            # search each model grid
+            for istep in range(nstep):
+                f_syn1 = np.zeros_like(f_syn)
+                f_syn1 += f_syn
+                for m, f_dsyn in f_dsyn_dm.items():
+                    f_syn1 += dm[m][istep] * f_dsyn
+
+                # perturbed source time function
+                dt0 = 0.0
+                if "dt0" in dm:
+                    dt0 = dm["dt0"][istep]
+                    f_tshift = np.exp(-2.0j * np.pi * freqs * dt0)
+                    f_syn1 *= f_tshift
+
+                dtau = 0.0
+                if "dtau" in dm:
+                    dtau = dm["dtau"][istep]
+                if conv_stf:
+                    f_src = stf_gauss_spectrum(freqs, event["tau"] + dtau)
+                    f_syn1 *= f_src
+
+                syn1_filt = np.fft.irfft(Fw * f_syn1, nfft)[:, :data_nt]
+                syn1_filt_win = np.dot(proj_matrix, syn1_filt) * win_func
+                norm_syn1 = np.sqrt(np.sum(syn1_filt_win**2))
+
+                # normalized cc between obs and perturbed syn
+                Nw = norm_obs * norm_syn1
+                cc = np.sum(obs_filt_win * syn1_filt_win) / Nw
+
+                # weighted cc
+                wcc_sum[istep] += weight * cc
+
+    h5f.close()
+
+    return wcc_sum, weight_sum
+
+
 class Misfit(object):
     """Class managing all misfit windows
 
@@ -1939,7 +2183,7 @@ class Misfit(object):
 
         h5f.close()
 
-    def _get_obs_ENZ(self, g_sta, obs_tag):
+    def __obsolete_get_obs_ENZ(self, g_sta, obs_tag):
         """get observed seismogram in array(ENZ,nt)"""
         if obs_tag not in g_sta:
             msg = f"{g_sta._v_name}: {obs_tag} does not exist, skip"
@@ -1992,7 +2236,7 @@ class Misfit(object):
 
         return obs_ENZ, no_Hchan
 
-    def _get_syn_ENZ(self, g_sta, syn_tag):
+    def __obsolete_get_syn_ENZ(self, g_sta, syn_tag):
 
         if syn_tag not in g_sta:
             msg = f"{g_sta._v_name}: {syn_tag} does not exist, skip"
@@ -4094,10 +4338,10 @@ class Misfit(object):
 
             try:
                 dsyn_dm = {}
-                obs_ENZ, no_Hchan = self._get_obs_ENZ(g_sta, obs_tag)
-                syn_ENZ = self._get_syn_ENZ(g_sta, syn_tag)
+                obs_ENZ, no_Hchan = _get_obs_ENZ(g_sta, obs_tag)
+                syn_ENZ = _get_syn_ENZ(g_sta, syn_tag)
                 for m, tag in dsyn_tags.items():
-                    dsyn_dm[m] = self._get_syn_ENZ(g_sta, tag)
+                    dsyn_dm[m] = _get_syn_ENZ(g_sta, tag)
             except Exception as e:
                 msg = f"failed to get {obs_tag},{syn_tag},{dsyn_tags} from {g_sta._v_name}, ({e})"
                 warnings.warn(msg)
@@ -4114,15 +4358,15 @@ class Misfit(object):
                 assert g_sta[syn_tag].attrs["origin_time"] == event_t0
                 assert g_sta[dsyn_tag].attrs["origin_time"] == event_t0
 
-            dsyn_dm = {}
-            for model_name in dm:
-                if model_name not in ["dt0", "dtau"]:
-                    dsyn_tag = f"{dsyn_grp}/{model_name}"
-                    try:
-                        dsyn_ENZ = self._get_syn_ENZ(g_sta, dsyn_tag)
-                    except Exception as e:
-                        msg = f"failed to get obs,syn_ENZ for {g_sta._v_name}, ({e})"
-                    dsyn_dm[model_name] = dsyn_ENZ
+            # dsyn_dm = {}
+            # for model_name in dm:
+            #     if model_name not in ["dt0", "dtau"]:
+            #         dsyn_tag = f"{dsyn_grp}/{model_name}"
+            #         try:
+            #             dsyn_ENZ = self._get_syn_ENZ(g_sta, dsyn_tag)
+            #         except Exception as e:
+            #             msg = f"failed to get obs,syn_ENZ for {g_sta._v_name}, ({e})"
+            #         dsyn_dm[model_name] = dsyn_ENZ
 
             # time samples
             data_tb = obs.attrs["starttime"]
@@ -4247,6 +4491,81 @@ class Misfit(object):
 
         h5f.close()
 
+        return wcc_sum, weight_sum
+
+    def linearized_search_cc_multiprocess(
+        self,
+        nproc=5,
+        dm={"dt0": None, "dtau": None, "dxs": None, "dmt": None},
+    ):
+        """
+        calculate normalized zero-lag cc for perturbed seismograms
+        by linear combination of waveform derivatives of source parameters (t0,tau,xs,mt)
+
+        dm={<model_name>:<model_step_sizes>, ...}
+
+        return wcc_sum, weight_sum
+        """
+        # check model vectors in dm have the same length
+        if (not dm) or len(dm) == 0:
+            msg = "dm is empty!"
+            raise ValueError(msg)
+        # model_num = len(dm)
+
+        for model_name in dm:
+            if model_name not in ["dt0", "dtau", "dxs", "dmt"]:
+                msg = f"model_name[{model_name}] must be one of [t0, tau, xs, mt]"
+                raise ValueError(msg)
+
+        nstep = []
+        for model_name in dm:
+            if dm[model_name].ndim != 1:
+                msg = f"dm[{model_name}] must be 1-D vector"
+                raise ValueError(msg)
+            nstep.append(np.size(dm[model_name]))
+
+        if len(set(nstep)) != 1 or nstep[0] < 1:
+            msg = "vectors in dm must have the same length"
+            raise Exception(msg)
+        nstep = nstep[0]
+
+        h5f = pt.open_file(self.h5_path, "r")
+
+        # check parameters
+        if "/source" not in h5f:
+            msg = '"/source" not existing, run read_cmtsolution first!'
+            raise KeyError(msg)
+        tbl_src = h5f.get_node("/source")
+        if tbl_src.nrows == 0:
+            msg = "no source information"
+            raise Exception(msg)
+        event = tbl_src[0]
+        event_t0 = UTCDateTime(event["t0"])
+
+        if "dtau" in dm:
+            tau = dm["dtau"] + event["tau"]
+            if any(tau < 0):
+                msg = f"too small dm['dtau'] ({dm['dtau']}) for event['tau']={event['tau']}"
+                raise ValueError(msg)
+
+        if "/waveform" not in h5f:
+            msg = '"/waveform" not existing, run read_data_h5 first!'
+            raise KeyError(msg)
+        g_wav = h5f.get_node("/waveform")
+
+        # get all station names
+        stations = [g_sta._v_name for g_sta in g_wav]
+        h5f.close()
+
+        pool = multiprocessing.Pool(processes=nproc)
+        inputs = [(self.h5_path, dm, stations[i::nproc]) for i in range(nproc)]
+        results = pool.map(_linearized_search_cc_by_stations, inputs)
+
+        wcc_sum = np.zeros(nstep)
+        weight_sum = 0
+        for wcc, weight in results:
+            wcc_sum += wcc
+            weight_sum += weight
         return wcc_sum, weight_sum
 
     def grid_search_source(self, out_txt, out_fig, max_niter=5):

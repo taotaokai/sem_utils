@@ -360,6 +360,10 @@ echo
 
 cd $event_dir
 
+echo
+echo "READ DERIVATIVES OF GREEN'S FUCTION [\$(date)]"
+echo
+
 # read derivatives of green's fuction
 for tag in dxs dmt
 do
@@ -369,6 +373,10 @@ do
     \${tag} \\
     --syn_is_grn
 done
+
+echo
+echo "GRID SEARCH OF SOURCE MODEL [\$(date)]"
+echo
 
 # grid search of source model
 $python_exec $sem_utils_dir/misfit/grid_search_source.py \\

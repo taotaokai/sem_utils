@@ -4495,8 +4495,8 @@ class Misfit(object):
 
     def linearized_search_cc_multiprocess(
         self,
-        nproc=5,
         dm={"dt0": None, "dtau": None, "dxs": None, "dmt": None},
+        nproc=5,
     ):
         """
         calculate normalized zero-lag cc for perturbed seismograms
@@ -4568,7 +4568,8 @@ class Misfit(object):
             weight_sum += weight
         return wcc_sum, weight_sum
 
-    def grid_search_source(self, out_txt, out_fig, max_niter=5):
+    def grid_search_source(self, out_txt, out_fig, max_niter=5, nproc=5):
+        assert nproc >= 1
 
         range_shrink_ratio = 0.618
 
@@ -4582,17 +4583,18 @@ class Misfit(object):
         dxs_opt = 0.0
         dmt_opt = 0.0
 
-        h5f = pt.open_file(self.h5_path, "r")
-
-        if "/source" not in h5f:
-            msg = '"/source" not existing, run read_cmtsolution first!'
-            raise KeyError(msg)
-        tbl_src = h5f.get_node("/source")
-        if tbl_src.nrows == 0:
-            msg = "no source information"
-            raise Exception(msg)
-        event = tbl_src[0]
-        tau0 = event["tau"]
+        # h5f = pt.open_file(self.h5_path, "r")
+        with pt.open_file(self.h5_path, "r") as h5f:
+            if "/source" not in h5f:
+                msg = '"/source" not existing, run read_cmtsolution first!'
+                raise KeyError(msg)
+            tbl_src = h5f.get_node("/source")
+            if tbl_src.nrows == 0:
+                msg = "no source information"
+                raise Exception(msg)
+            event = tbl_src[0]
+            tau0 = event["tau"]
+        # h5f.close()
 
         f = open(out_txt, "w")
 
@@ -4633,7 +4635,8 @@ class Misfit(object):
                     "dmt": dmt_opt * np.ones(dt0_2d.size),
                     "dtau": dtau_opt * np.ones(dt0_2d.size),
                 }
-                wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
+                # wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
+                wcc_sum, weight_sum = self.linearized_search_cc_multiprocess(dm=dm, nproc=nproc)
                 # wcc = wcc_sum / weight_sum
                 interp = scipy.interpolate.RectBivariateSpline(
                     dt0_1d, dxs_1d, wcc_sum.reshape(dt0_2d.shape)
@@ -4670,7 +4673,8 @@ class Misfit(object):
                     "dxs": dxs_opt * np.ones(dmt_1d.size),
                     "dtau": dtau_opt * np.ones(dmt_1d.size),
                 }
-                wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
+                # wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
+                wcc_sum, weight_sum = self.linearized_search_cc_multiprocess(dm=dm, nproc=nproc)
                 wcc = wcc_sum / weight_sum
                 interp = scipy.interpolate.interp1d(dmt_1d, wcc_sum, kind="cubic")
                 dmt_1d_fine = np.linspace(dmt_min, dmt_max, 100)
@@ -4699,7 +4703,8 @@ class Misfit(object):
                     "dxs": dxs_opt * np.ones(dtau_1d.size),
                     "dmt": dmt_opt * np.ones(dtau_1d.size),
                 }
-                wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
+                # wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
+                wcc_sum, weight_sum = self.linearized_search_cc_multiprocess(dm=dm, nproc=nproc)
                 wcc = wcc_sum / weight_sum
                 interp = scipy.interpolate.interp1d(dtau_1d, wcc_sum, kind="cubic")
                 dtau_1d_fine = np.linspace(dtau_min, dtau_max, 100)
@@ -4739,7 +4744,7 @@ class Misfit(object):
         # ====== close file
         f.close()
 
-        h5f.close()
+        # h5f.close()
 
     def make_updated_cmtsolution(
         self, cmtfile="CMTSOLUTION.updated", dt0=0.0, dtau=0.0, dxs=0.0, dmt=0.0

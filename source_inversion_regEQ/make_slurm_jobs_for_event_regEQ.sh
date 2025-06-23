@@ -133,6 +133,7 @@ cat <<EOF > $misfit_job
 #!/bin/bash
 #SBATCH -J ${event_id}.misfit
 #SBATCH -o $misfit_job.o%j
+#SBATCH -N 1
 #SBATCH -n $slurm_nproc_misfit
 #SBATCH -p $slurm_partition_cpu
 #SBATCH -t $slurm_timelimit_misfit
@@ -348,7 +349,8 @@ cat <<EOF > $search_job
 #!/bin/bash
 #SBATCH -J ${event_id}.search
 #SBATCH -o $search_job.o%j
-#SBATCH -n 1
+#SBATCH -N 1
+#SBATCH -n $slurm_nproc_search
 #SBATCH -p $slurm_partition_cpu
 #SBATCH -t $slurm_timelimit_search
 
@@ -372,7 +374,9 @@ done
 $python_exec $sem_utils_dir/misfit/grid_search_source.py \\
   $db_file \\
   $misfit_dir/grid_search_source.txt \\
-  $misfit_dir/grid_search_source.pdf
+  $misfit_dir/grid_search_source.pdf \\
+  --nproc=$slurm_nproc_search \\
+  --niter=5
 
 # get optimal model
 dxs_opt=\$(grep dxs_opt $misfit_dir/grid_search_source.txt | tail -n1 | awk '{print \$3}')

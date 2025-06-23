@@ -82,6 +82,7 @@ slurm_nproc=4
 # number of MPI processors to run pre/post-process jobs
 slurm_nproc_misfit=12  # misfit_job
 slurm_nproc_plot=10  # plot_job
+slurm_nproc_search=10  # search_job
 
 # mpi executable
 slurm_mpiexec="srun --mpi=pmix_v3" # SCNET

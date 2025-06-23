@@ -21,6 +21,6 @@ misfit = Misfit(args.misfit_h5file)
 
 print(f"======= [{datetime.now()}] grid_search_source")
 
-misfit.grid_search_source(args.out_txt, args.out_fig, args.niter, args.nproc)
+misfit.grid_search_source(args.out_txt, args.out_fig, max_niter=args.niter, nproc=args.nproc)
 
 print(f"======= [{datetime.now()}] END")

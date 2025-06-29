@@ -165,6 +165,11 @@ $python_exec $sem_utils_dir/misfit/measure_adj.py \\
   --cmt_in_ECEF \\
   --syn_is_grn
 
+if [ \$? -ne 0 ]
+then
+  echo "measure_adj.py failed!"
+  exit 1
+fi
 
 # make STATIONS_ADJOINT
 cd $event_dir/SEM
@@ -214,7 +219,7 @@ ln -sf \$out_dir OUTPUT_FILES
 chmod u+w $event_dir/DATA/STATIONS_ADJOINT
 cp SEM/STATIONS_ADJOINT DATA/
 
-cp $mesh_dir/OUTPUT_FILES/addressing.txt OUTPUT_FILES
+# cp $mesh_dir/OUTPUT_FILES/addressing.txt OUTPUT_FILES
 cp -L DATA/Par_file OUTPUT_FILES
 cp -L DATA/STATIONS_ADJOINT OUTPUT_FILES
 cp -L DATA/CMTSOLUTION OUTPUT_FILES

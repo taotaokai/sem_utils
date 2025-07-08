@@ -257,3 +257,60 @@ for each event:
 
 
 
+**Starting model**: S362ani + Crust1.0, smoothing through Moho, 410-/660-km discontinuities (no discon. in the starting model)
+
+**Anisotropy**: radial anisotropy above 220-km, isotropy below 220 km; maybe TTI later…
+
+**Preconditioning** (Filtering):  Hessian approximation, point-spread or random Hessian-vector test: estimate local illumination strength (Hessian diagonal) or local convolution kernel; maybe as an deep-learning image to image transformer?
+
+
+
+spatial variant (non-stationary), direction-dependent (anisotropic) smoothing via solving the diffusion equation: 
+$$
+\partial_{t}{m} - \nabla \cdot(\mathbf{K}\cdot\nabla) m = 0, x\in V \subset \R^d, t \in [0, 1] \\
+ m(x,t=0) = g(x)
+$$
+. $ m(x,t=1)$ is taken as the smoothed model of $g(x)$. For homogeneous and isotropic $\mathbf{K} = k\mathbf{I}$ the solution in infinite space is equivalent to convolving a Gaussian kernel $(4{\pi}kt)^{d/2}\exp(-\frac{r^2}{4kt})$ with the initial value $g(x)$.
+
+Weak form ($\psi$: test function)
+$$
+\int_{V}\partial_{t}u(\mathbf{x},t) \psi(\mathbf x)d^3x + \int_{V}\nabla{u}(\mathbf x, t)\cdot \mathbf{K} \cdot \nabla{\psi}(\mathbf x)d^3x = 0
+$$
+Discretization
+
+- subdividing $V$ into disjoint elements $V_e$: 
+  - $V = \bigcup_{e=1}^{N_e} V_e$
+- mapping reference cube $[-1,1]^3$ to $V_e$: 
+  - $\mathbf{F}_e: \boldsymbol \xi \mapsto \mathbf{x}$
+- local basis function in the reference cube: 
+  - $\psi^e_{ijk}(\xi,\eta,\gamma) = \ell_{i}^{N}(\xi) \ell_{j}^{N}(\eta) \ell_{k}^{N}(\gamma)$ 
+  - N-th order Lagrange polynomials with **GLL** nodes: $(\xi^{gll}_i,\eta^{gll}_j,\gamma^{gll}_k)$
+  - **GLL** quadrature: $\int_{V_e} f(\boldsymbol \xi)dV \approx \sum_{ijk}w_{ijk}f(\boldsymbol\xi^{gll}_{ijk})$
+- local to global mapping:
+  - $g = G(e,ijk)$  
+  - collocated nodes shared by two elements are assigned to unique indices
+- test/trial function space $\{\psi_g\}$: 
+  - $\psi_g = \sum_{G(e,ijk)=g} \psi_{ijk}^{e}$
+  - continuous across elements
+  - $u(\mathbf x, t) \approx \sum_{g}{u_g(t) \psi_g(\boldsymbol \xi(\mathbf x))}$
+
+Weak solution after discretization:
+$$
+\int_{V}\sum_{g'}{\dot{u}_{g'}(t) \psi_{g'}(\boldsymbol \xi(\mathbf x))} \psi_g(\boldsymbol \xi(\mathbf x))dV + \int_{V}\sum_{g'}{{u}_{g'}(t) \nabla_{\mathbf x}\psi_{g'}(\boldsymbol \xi(\mathbf x))} \cdot \mathbf{K} \cdot \nabla{\psi_g}(\boldsymbol\xi(\mathbf x)dV = 0
+$$
+for any $\psi_g$.
+$$
+\int_{V}\sum_{g'}{\dot{u}_{g'}(t) \psi_{g'}(\boldsymbol \xi(\mathbf x))} \sum_{G(e,ijk)=g} \psi_{ijk}^{e}(\boldsymbol \xi(\mathbf x)) dV + \int_{V}\sum_{g'}{{u}_{g'}(t) \nabla_{\mathbf x}\psi_{g'}(\boldsymbol \xi(\mathbf x))} \cdot \mathbf{K} \cdot \nabla{\psi_g}(\boldsymbol\xi(\mathbf x)dV = 0
+$$
+
+
+
+
+Contribution from each element:
+$$
+\int_{V_e}{u}(\xi,\eta,\gamma,t)\psi_{qrs}(\xi,\eta,\gamma)d{\xi}d{\eta}d{\gamma} + \int_{\Omega_e}\sum_{ijk}{{u}^e_{ijk}(t)\nabla{\psi}_{ijk}(\mathbf x)}\cdot \mathbf{K} \cdot \nabla{\psi}_{qrs}(\mathbf x)d^3x = 0
+$$
+
+$$
+\int_{\Omega_e}\sum_{ijk}{\ddot{u}^e_{ijk}(t)\psi_{ijk}(\mathbf x)}\psi_{qrs}(\mathbf x)d^3x + \int_{\Omega_e}\sum_{ijk}{{u}^e_{ijk}(t)\nabla{\psi}_{ijk}(\mathbf x)}\cdot \mathbf{K} \cdot \nabla{\psi}_{qrs}(\mathbf x)d^3x = 0
+$$

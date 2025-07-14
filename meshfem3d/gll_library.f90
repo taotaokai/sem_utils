@@ -1,13 +1,13 @@
 !========================================================================
 !
-!               S p e c f e m 3 D  V e r s i o n  3 . 0
-!               ---------------------------------------
+!                       S p e c f e m 3 D  G l o b e
+!                       ----------------------------
 !
 !     Main historical authors: Dimitri Komatitsch and Jeroen Tromp
-!                              CNRS, France
-!                       and Princeton University, USA
+!                        Princeton University, USA
+!                and CNRS / University of Marseille, France
 !                 (there are currently many more authors!)
-!                           (c) October 2017
+! (c) Princeton University and CNRS / University of Marseille, April 2014
 !
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -41,14 +41,13 @@
 
   implicit none
 
-  integer n
-  double precision alpha,beta
+  integer, intent(in) :: n
+  double precision, intent(in) :: alpha,beta
 
-  double precision, parameter :: zero=0.0, one=1.0, two=2.0, three=3.0, four=4.0
-  !double precision, parameter :: zero=0.d0, one=1.d0, two=2.d0, three=3.d0, four=4.d0
-  double precision apb,f1,fint1,fint2,f2,di,abn,abnn,a1,a2,a3,f3
+  double precision, parameter :: zero = 0.d0,one = 1.d0,two = 2.d0,three = 3.d0,four = 4.d0
+  double precision :: apb,f1,fint1,fint2,f2,di,abn,abnn,a1,a2,a3,f3
   double precision, external :: gammaf
-  integer i
+  integer :: i
 
   f3 = zero
   apb = alpha+beta
@@ -71,7 +70,7 @@
     endw1 = f2
     return
   endif
-  do i=3,n
+  do i = 3,n
     di   = dble(i-1)
     abn  = alpha+beta+di
     abnn = abn+di
@@ -94,14 +93,13 @@
 
   implicit none
 
-  integer n
-  double precision alpha,beta
+  integer, intent(in) :: n
+  double precision, intent(in) :: alpha,beta
 
-  double precision, parameter :: zero=0.0,one=1.0,two=2.0,three=3.0,four=4.0
-  !double precision, parameter :: zero=0.d0,one=1.d0,two=2.d0,three=3.d0,four=4.d0
-  double precision apb,f1,fint1,fint2,f2,di,abn,abnn,a1,a2,a3,f3
+  double precision, parameter :: zero = 0.d0,one = 1.d0,two = 2.d0,three = 3.d0,four = 4.d0
+  double precision :: apb,f1,fint1,fint2,f2,di,abn,abnn,a1,a2,a3,f3
   double precision, external :: gammaf
-  integer i
+  integer :: i
 
   apb = alpha+beta
   f3 = zero
@@ -124,7 +122,7 @@
     endw2 = f2
     return
   endif
-  do i=3,n
+  do i = 3,n
     di   = dble(i-1)
     abn  = alpha+beta+di
     abnn = abn+di
@@ -147,13 +145,11 @@
 
   implicit none
 
-  !double precision, parameter :: pi = 3.141592653589793d0
-  double precision, parameter :: pi = 3.141592653589793
+  double precision, parameter :: pi = 3.141592653589793d0
 
-  double precision x
+  double precision, intent(in) :: x
 
-  !double precision, parameter :: half=0.5d0,one=1.d0,two=2.d0
-  double precision, parameter :: half=0.5,one=1.0,two=2.0
+  double precision, parameter :: half = 0.5d0,one = 1.d0,two = 2.d0
 
   gammaf = one
 
@@ -189,18 +185,17 @@
 
   implicit none
 
-  integer np
-  double precision alpha,beta
-  double precision xjac(np)
+  integer, intent(in) :: np
+  double precision, intent(in) :: alpha,beta
+  double precision, intent(inout) :: xjac(np)
 
   ! local parameters
-  integer k,j,i,jmin,jm,n
-  double precision xlast,dth,x,x1,x2,recsum,delx,xmin,swap
-  double precision p,pd,pm1,pdm1,pm2,pdm2
+  integer :: k,j,i,jmin,jm,n
+  double precision :: xlast,dth,x,x1,x2,recsum,delx,xmin,swap
+  double precision :: p,pd,pm1,pdm1,pm2,pdm2
 
   integer, parameter :: K_MAX_ITER = 10
-  !double precision, parameter :: zero = 0.d0, eps = 1.0d-12
-  double precision, parameter :: zero = 0.0, eps = 1.0e-12
+  double precision, parameter :: zero = 0.d0, eps = 1.0d-12
 
   pm1 = zero
   pm2 = zero
@@ -213,7 +208,7 @@
   p = 0.d0
   pd = 0.d0
 
-  do j=1,np
+  do j = 1,np
     if (j == 1) then
       x = dcos((2.d0*(dble(j)-1.d0)+1.d0)*dth)
     else
@@ -222,11 +217,11 @@
       x  = (x1+x2)/2.d0
     endif
 
-    do k=1,K_MAX_ITER
+    do k = 1,K_MAX_ITER
       call jacobf (p,pd,pm1,pdm1,pm2,pdm2,np,alpha,beta,x)
       recsum = 0.d0
       jm = j-1
-      do i=1,jm
+      do i = 1,jm
         recsum = recsum+1.d0/(x-xjac(np-i+1))
       enddo
       delx = -p/(pd-recsum*p)
@@ -247,12 +242,12 @@
   jmin = 0
 
   ! orders xjac array in increasing values
-  do i=1,np
+  do i = 1,np
     xmin = 2.d0
     jmin = i
 
     ! looks for index with minimum value
-    do j=i,np
+    do j = i,np
       ! note: some compilers (cray) might be too aggressive in optimizing this loop,
       !       thus we need this temporary array value x to store and compare values
       x = xjac(j)
@@ -290,11 +285,12 @@
 
   implicit none
 
-  double precision poly,pder,polym1,pderm1,polym2,pderm2,alp,bet,x
-  integer n
+  double precision, intent(inout) :: poly,pder,polym1,pderm1,polym2,pderm2
+  double precision, intent(in) :: alp,bet,x
+  integer, intent(in) :: n
 
-  double precision apb,polyl,pderl,dk,a1,a2,b3,a3,a4,polyn,pdern,psave,pdsave
-  integer k
+  double precision :: apb,polyl,pderl,dk,a1,a2,b3,a3,a4,polyn,pdern,psave,pdsave
+  integer :: k
 
   apb  = alp+bet
   poly = 1.d0
@@ -310,7 +306,7 @@
   pder  = (apb+2.d0)/2.d0
   if (n == 1) return
 
-  do k=2,n
+  do k = 2,n
     dk = dble(k)
     a1 = 2.d0*dk*(dk+apb)*(2.d0*dk+apb-2.d0)
     a2 = (2.d0*dk+apb-1.d0)*(alp**2-bet**2)
@@ -348,11 +344,11 @@
 !------------------------------------------------------------------------
   implicit none
 
-  double precision z
-  integer n
+  double precision, intent(in) :: z
+  integer, intent(in) :: n
 
-  double precision P1,P2,P1D,P2D,P3D,DBLE_K,P3
-  integer k
+  double precision :: P1,P2,P1D,P2D,P3D,DBLE_K,P3
+  integer :: k
 
   P1   = 1.d0
   P2   = Z
@@ -388,11 +384,11 @@
 !------------------------------------------------------------------------
   implicit none
 
-  double precision z
-  integer n
+  double precision, intent(in) :: z
+  integer, intent(in) :: n
 
-  double precision P1,P2,P3,DBLE_K
-  integer k
+  double precision :: P1,P2,P3,DBLE_K
+  integer :: k
 
   P1   = 1.d0
   P2   = Z
@@ -417,12 +413,12 @@
 
   implicit none
 
-  double precision alpha,beta
-  integer n
+  double precision, intent(in) :: alpha,beta
+  integer, intent(in) :: n
 
-  double precision one,two,dn,const,prod,dindx,frac
+  double precision :: one,two,dn,const,prod,dindx,frac
   double precision, external :: gammaf
-  integer i
+  integer :: i
 
   one   = 1.d0
   two   = 2.d0
@@ -441,7 +437,7 @@
   prod  = prod*(one+alpha)*(two+alpha)
   prod  = prod*(one+beta)*(two+beta)
 
-  do i=3,n
+  do i = 3,n
     dindx = dble(i)
     frac  = (dindx+alpha)*(dindx+beta)/(dindx*(dindx+alpha+beta))
     prod  = prod*frac
@@ -468,17 +464,16 @@
 
   implicit none
 
-  !double precision, parameter :: zero=0.d0,one=1.d0,two=2.d0
-  double precision, parameter :: zero=0.0,one=1.0,two=2.0
+  double precision, parameter :: zero = 0.d0,one = 1.d0,two = 2.d0
 
-  integer np
-  double precision z(np),w(np)
-  double precision alpha,beta
+  integer, intent(in) :: np
+  double precision, intent(inout) :: z(np),w(np)
+  double precision, intent(in) :: alpha,beta
 
   ! local parameters
-  integer n,np1,np2,i
-  double precision p,pd,pm1,pdm1,pm2,pdm2
-  double precision apb,dnp1,dnp2,fac1,fac2,fac3,fnorm,rcoef
+  integer :: n,np1,np2,i
+  double precision :: p,pd,pm1,pdm1,pm2,pdm2
+  double precision :: apb,dnp1,dnp2,fac1,fac2,fac3,fnorm,rcoef
   double precision, external :: gammaf,pnormj
 
   pd = zero
@@ -513,7 +508,7 @@
   fac3  = fac2+one
   fnorm = pnormj(np1,alpha,beta)
   rcoef = (fnorm*fac2*fac3)/(two*fac1*dnp2)
-  do i=1,np
+  do i = 1,np
     call jacobf(p,pd,pm1,pdm1,pm2,pdm2,np2,alpha,beta,z(i))
     w(i) = -rcoef/(p*pdm1)
   enddo
@@ -540,18 +535,17 @@
 
   implicit none
 
-  !double precision, parameter :: zero=0.d0,one=1.d0,two=2.d0,tol_zero=1.d-30
-  double precision, parameter :: zero=0.0,one=1.0,two=2.0,tol_zero=1.e-30
-
   integer, intent(in) :: np
   double precision, intent(in) :: alpha,beta
   double precision, intent(out) :: z(np), w(np)
 
   ! local parameters
-  integer n,nm1,i
-  double precision p,pd,pm1,pdm1,pm2,pdm2
-  double precision alpg,betg
+  integer :: n,nm1,i
+  double precision :: p,pd,pm1,pdm1,pm2,pdm2
+  double precision :: alpg,betg
   double precision, external :: endw1,endw2
+
+  double precision, parameter :: zero = 0.d0,one = 1.d0,two = 2.d0,tol_zero = 1.d-30
 
   p = zero
   pm1 = zero
@@ -587,7 +581,7 @@
   endif
 
 ! weights
-  do i=2,np-1
+  do i = 2,np-1
     w(i) = w(i)/(one-z(i)**2)
   enddo
 
@@ -604,65 +598,60 @@
 !------------------------------------------------------------------------
 !
 
-  double precision function pnglj(z,n)
+!! routines not used yet, but for reference...
 
-!------------------------------------------------------------------------
+!  double precision function pnglj(z,n)
 !
-!     Compute the value of the Nth order polynomial of the
-!     Gauss-Lobatto-Jacobi (0,1) at Z. from Legendre polynomials.
+!!------------------------------------------------------------------------
+!!
+!!     Compute the value of the Nth order polynomial of the
+!!     Gauss-Lobatto-Jacobi (0,1) at Z. from Legendre polynomials.
+!!
+!!------------------------------------------------------------------------
 !
-!------------------------------------------------------------------------
-
-  implicit none
-  !include "constants.h"
-
-  !double precision, parameter :: ZERO = 0.d0, ONE = 1.d0, TWO = 2.d0, HALF = 0.5d0
-  !double precision, parameter :: HUGEVAL = 1.d+30,TINYVAL = 1.d-9
-  double precision, parameter :: ONE = 1.0, TINYVAL = 1.e-9
-
-  double precision z
-  integer n
-  double precision, external :: pnleg
-
-  if (abs(z+1.d0) > TINYVAL) then  ! if (z /= -1.d0)
-    pnglj = (pnleg(z,n)+pnleg(z,n+1))/(ONE+z)
-  else
-    pnglj = (dble(n)+ONE)*(-1)**n
-  endif
-
-  end function pnglj
-
+!  implicit none
+!  include "constants.h"
 !
-!------------------------------------------------------------------------
+!  double precision z
+!  integer n
+!  double precision, external :: pnleg
 !
-
-  double precision function pndglj(z,n)
-
-!------------------------------------------------------------------------
+!  if (abs(z+1.d0) > TINYVAL) then  ! if (z /= -1.d0)
+!    pnglj = (pnleg(z,n)+pnleg(z,n+1))/(ONE+z)
+!  else
+!    pnglj = (dble(n)+ONE)*(-1)**n
+!  endif
 !
-!     Compute the value of the derivative of Nth order polynomial of the
-!     Gauss-Lobatto-Jacobi (0,1) at Z. from Legendre polynomials.
+!  end function pnglj
 !
-!------------------------------------------------------------------------
-
-  implicit none
-  !include "constants.h"
-
-  !double precision, parameter :: ZERO = 0.d0, ONE = 1.d0, TWO = 2.d0, HALF = 0.5d0
-  !double precision, parameter :: HUGEVAL = 1.d+30,TINYVAL = 1.d-9
-  double precision, parameter :: ONE = 1.0, TINYVAL = 1.e-9
-
-  double precision z
-  integer n
-  double precision, external :: pnleg, pndleg
-
-  if (abs(z+1.d0) > TINYVAL) then  ! if (z /= -1.d0)
-    pndglj = (pndleg(z,n)+pndleg(z,n+1))/(ONE+z) - (pnleg(z,n)+pnleg(z,n+1))/((ONE+z)**2)
-  else
-    pndglj = pnleg(-1.d0,n)+pnleg(-1.d0,n+1)
-  endif
-
-  end function pndglj
+!!
+!!------------------------------------------------------------------------
+!!
+!
+!  double precision function pndglj(z,n)
+!
+!!------------------------------------------------------------------------
+!!
+!!     Compute the value of the derivative of Nth order polynomial of the
+!!     Gauss-Lobatto-Jacobi (0,1) at Z. from Legendre polynomials.
+!!
+!!------------------------------------------------------------------------
+!
+!  implicit none
+!  include "constants.h"
+!
+!  double precision z
+!  integer n
+!  double precision, external :: pnleg, pndleg
+!
+!  if (abs(z+1.d0) > TINYVAL) then  ! if (z /= -1.d0)
+!    pndglj = (pndleg(z,n)+pndleg(z,n+1))/(ONE+z) - (pnleg(z,n)+pnleg(z,n+1))/((ONE+z)**2)
+!  else
+!    pndglj = pnleg(-1.d0,n)+pnleg(-1.d0,n+1)
+!  endif
+!
+!  end function pndglj
+!
 
 !
 !------------------------------------------------------------------------
@@ -706,3 +695,48 @@ subroutine lagrange_poly(ngll, xgll, nx, x, lagrange)
   end do
 
 end subroutine lagrange_poly
+
+!
+!=====================================================================
+!
+
+! subroutine to compute the derivative of the Lagrange interpolants
+! at any given GLL point
+
+  double precision function lagrange_deriv_GLL(i,j,ZGLL,NZ)
+
+!------------------------------------------------------------------------
+!
+!     Compute the value of the derivative of the I-th
+!     Lagrange interpolant through the
+!     NZ Gauss-Lobatto Legendre points ZGLL at point ZGLL(j)
+!
+!------------------------------------------------------------------------
+
+  implicit none
+
+  integer, intent(in) :: i,j,nz
+  double precision, intent(in) :: zgll(0:nz-1)
+
+  ! local parameters
+  integer :: degpoly
+
+  double precision, external :: pnleg,pndleg
+
+  degpoly = nz - 1
+  if (i == 0 .and. j == 0) then
+    lagrange_deriv_GLL = - dble(degpoly)*(dble(degpoly)+1.d0) * 0.25d0  ! / 4.d0
+  else if (i == degpoly .and. j == degpoly) then
+    lagrange_deriv_GLL = dble(degpoly)*(dble(degpoly)+1.d0) * 0.25d0  ! / 4.d0
+  else if (i == j) then
+    lagrange_deriv_GLL = 0.d0
+  else
+    lagrange_deriv_GLL = pnleg(zgll(j),degpoly) / &
+      (pnleg(zgll(i),degpoly)*(zgll(j)-zgll(i))) &
+      + (1.d0-zgll(j)*zgll(j))*pndleg(zgll(j),degpoly) / (dble(degpoly)* &
+      (dble(degpoly)+1.d0)*pnleg(zgll(i),degpoly)*(zgll(j)-zgll(i))*(zgll(j)-zgll(i)))
+  endif
+
+  end function lagrange_deriv_GLL
+
+

@@ -25,6 +25,7 @@ import pandas as pd
 
 #
 from obspy import UTCDateTime, read, Trace, Stream
+UTCDateTime.DEFAULT_PRECISION = 9 # nanoseconds precision
 
 # from obspy.geodetics import gps2dist_azimuth, kilometer2degrees
 from obspy.taup import TauPyModel
@@ -42,7 +43,7 @@ import pyproj
 #
 import matplotlib
 
-# matplotlib.use("pdf")
+matplotlib.use("pdf")
 from matplotlib import colors, ticker, cm
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
@@ -1834,6 +1835,8 @@ class Misfit(object):
             solver_tb = tr.stats.starttime
             solver_te = solver_tb + (solver_nt - 1) * solver_dt
 
+            assert solver_fs > obs_fs
+
             # commented out to enforce consistency between sac o time and event t0 even for Green's function
             # if is_grn:  # for green function, use event['t0'] for the o time
             #    solver_tb = event_t0 - (tr.stats.sac["o"] - tr.stats.sac["b"])
@@ -1862,9 +1865,9 @@ class Misfit(object):
 
             nt_lpad = nt_rpad = 0
             if solver_tb > obs_tb:
-                nt_lpad = int((solver_tb - obs_tb) * solver_fs + 1)
+                nt_lpad = int((solver_tb - obs_tb) * solver_fs + 5)
             if solver_te < obs_te:
-                nt_rpad = int((obs_te - solver_te) * solver_fs + 1)
+                nt_rpad = int((obs_te - solver_te) * solver_fs + 5)
 
             # syn_fs = obs_fs
             # syn_dt = obs_dt
@@ -1909,15 +1912,28 @@ class Misfit(object):
                 # st_tmp = Stream()
                 # st_tmp += tr.copy()
                 assert tr.id[-1] == syn_components[i]
-                x = np.zeros(nt, dtype=tr.data.dtype)
+                x = np.zeros(nt)
                 x[nt_lpad : (solver_nt + nt_lpad)] = tr.data
-                fx = np.fft.rfft(x, nfft) * abs(filter_h)
-                tr.data = np.fft.irfft(fx, nfft)[:nt]
-                tr.stats.starttime = t0
-                # st_tmp += tr.copy()
-                tr.interpolate(
-                    obs_fs, starttime=obs_tb, npts=obs_nt, method="lanczos", a=20
-                )
+                x[:] = np.fft.irfft(np.fft.rfft(x, nfft) * abs(filter_h))[:nt]
+                
+                # # NOTE: different precision between UTCDateTime.timestamp and (t1 -t2) 
+                # #       UTCDateTime internally stores time in nanoseconds as an integer
+                # #       t.timestamp = float64(t.ns * 1.e-9)
+                # #       t1 - t2 = round((t1.ns - t2.ns)*1.e-9, UTCDateTime.precision)
+                # #       to make things consistent, set UTCDateTime.DEFAULT_PRECISION = 9 after import 
+                # #       (t1.timestamp - t2.timestamp) used in tr.interpolate has less precision than (t1-t2)
+                # tr.stats.starttime = t0
+                # tr.data = x
+                # # st_tmp += tr.copy()
+                # tr.interpolate(
+                #     obs_fs, starttime=obs_tb, npts=obs_nt, method="lanczos", a=20
+                # )
+                
+                # call lanczos_interpolation directly 
+                tr.data = lanczos_interpolation(x, 0, solver_dt, obs_tb - t0, obs_dt, obs_nt, a=20)
+                tr.stats.starttime = obs_tb 
+                tr.stats.sampling_rate = obs_fs
+
                 # st_tmp += tr.copy()
                 # st_tmp[0].stats.location = '00'
                 # st_tmp[1].stats.location = '01'

@@ -274,18 +274,19 @@ $$
 
 Weak form ($\psi$: test function)
 $$
-\int_{V}\partial_{t}u(\mathbf{x},t) \psi(\mathbf x)d^3x + \int_{V}\nabla{u}(\mathbf x, t)\cdot \mathbf{K} \cdot \nabla{\psi}(\mathbf x)d^3x = 0
+\int_V {{\partial _t}u\left( {{\bf{x}},t} \right)\phi \left( {\bf{x}} \right)dV}  + \int_V {\nabla u\left( {{\bf{x}},t} \right) \cdot {\bf{K}} \cdot \nabla \phi \left( {\bf{x}} \right)dV}  = 0
 $$
-Discretization
+**Discretization**
 
 - subdividing $V$ into disjoint elements $V_e$: 
   - $V = \bigcup_{e=1}^{N_e} V_e$
-- mapping reference cube $[-1,1]^3$ to $V_e$: 
-  - $\mathbf{F}_e: \boldsymbol \xi \mapsto \mathbf{x}$
+- mapping between $V_e$ and the reference cube $[-1,1]^3$ : 
+  - $\mathbf{F}_e: [-1,1]^3 \to V_e$
+  - ${{\bf{x}}^e}\left( {\boldsymbol{\xi }} \right) =  {{\bf{F}^e}} \left( \boldsymbol \xi \right)$
 - local basis function in the reference cube: 
   - $\psi^e_{ijk}(\xi,\eta,\gamma) = \ell_{i}^{N}(\xi) \ell_{j}^{N}(\eta) \ell_{k}^{N}(\gamma)$ 
-  - N-th order Lagrange polynomials with **GLL** nodes: $(\xi^{gll}_i,\eta^{gll}_j,\gamma^{gll}_k)$
-  - **GLL** quadrature: $\int_{V_e} f(\boldsymbol \xi)dV \approx \sum_{ijk}w_{ijk}f(\boldsymbol\xi^{gll}_{ijk})$
+  - N-th order Lagrange polynomials with **GLL** nodes: $(\xi^{GLL}_i,\eta^{GLL}_j,\gamma^{GLL}_k)$
+  - **GLL** quadrature: $\int\limits_{ - 1}^1 {f\left( \xi  \right)d\xi }  \approx \sum\limits_i {{w_i}f\left( {\xi _i^{GLL}} \right)} $
 - local to global mapping:
   - $g = G(e,ijk)$  
   - collocated nodes shared by two elements are assigned to unique indices
@@ -296,21 +297,84 @@ Discretization
 
 Weak solution after discretization:
 $$
+\begin{equation} 
+
+\label{weak}
 \int_{V}\sum_{g'}{\dot{u}_{g'}(t) \psi_{g'}(\boldsymbol \xi(\mathbf x))} \psi_g(\boldsymbol \xi(\mathbf x))dV + \int_{V}\sum_{g'}{{u}_{g'}(t) \nabla_{\mathbf x}\psi_{g'}(\boldsymbol \xi(\mathbf x))} \cdot \mathbf{K} \cdot \nabla{\psi_g}(\boldsymbol\xi(\mathbf x)dV = 0
+
+\end{equation}
 $$
 for any $\psi_g$.
+
+After substituting GLL basis function in the first term on the left hand side of $\eqref{weak}$:
 $$
-\int_{V}\sum_{g'}{\dot{u}_{g'}(t) \psi_{g'}(\boldsymbol \xi(\mathbf x))} \sum_{G(e,ijk)=g} \psi_{ijk}^{e}(\boldsymbol \xi(\mathbf x)) dV + \int_{V}\sum_{g'}{{u}_{g'}(t) \nabla_{\mathbf x}\psi_{g'}(\boldsymbol \xi(\mathbf x))} \cdot \mathbf{K} \cdot \nabla{\psi_g}(\boldsymbol\xi(\mathbf x)dV = 0
+\begin{align} 
+
+\int_V {\left( {\sum\limits_{g'} {{{\dot u}_{g'}}{\psi _{g'}}} } \right){\psi _g}dV}  
+& = \int_V {\left( {\sum\limits_{g'} {\sum\limits_{G(e',prs) = g'} {\dot u_{prs}^{e'}\psi _{prs}^{e'}} } } \right)\sum\limits_{G(e,ijk) = g} {\psi _{ijk}^e} dV}  \cr
+
+\label{weak1}
+& = \sum\limits_{G(e,ijk) = g} {\sum\limits_{g'} {\sum\limits_{G(e',prs) = g'} {\dot u_{prs}^{e'}\int_V {\psi _{prs}^{e'}\psi _{ijk}^edV} } } } 
+
+\end{align}
+$$
+Apply the GLL quadrature to the integral in $\eqref{weak1}$: 
+$$
+\begin{align}
+
+ \int_V {\psi _{prs}^{e'}\psi _{ijk}^edV}  & = {\delta _{ee'}}\int_{{V_e}} {\psi _{prs}^e\psi _{ijk}^edV } \cr
+ 
+ & = {\delta _{ee'}}\int_{{{\left[ { - 1,1} \right]}^3}} {{L_{prs}}{L_{ijk}}\det \left( {{{\bf{J}}^e}} \right){d^3}\xi }   \cr 
+ 
+ &  \approx {\delta _{ee'}}\sum\limits_{nml} {{w_{nml}}{L_{prs}}\left( {{\bf{\xi }}_{nml}^{GLL}} \right){L_{ijk}}\left( {{\bf{\xi }}_{nml}^{GLL}} \right)\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{nml}^{GLL}} \right)}  \cr
+ 
+ \label{int1}
+ & = {\delta _{ee'}}{\delta _{prs,ijk}}{w_{ijk}}\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{ijk}^{GLL}} \right) 
+ 
+\end{align}
+$$
+Substituting $\eqref{int1}$ into $\eqref{weak1}$ we have
+$$
+\begin{align} 
+
+\int_V {\left( {\sum\limits_{g'} {{{\dot u}_{g'}}{\psi _{g'}}} } \right){\psi _g}dV}  
+& = \sum\limits_{G(e,ijk) = g} {\sum\limits_{g'} {\sum\limits_{G(e',prs) = g'} {\dot u_{prs}^{e'}{\delta _{ee'}}{\delta _{prs,ijk}}{w_{ijk}}\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{ijk}^{GLL}} \right)} } }  \cr
+& = \sum\limits_{G(e,ijk) = g} {\dot u_{ijk}^e{w_{ijk}}\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{ijk}^{GLL}} \right)}
+
+\end{align}
 $$
 
 
+The second term on the left hand side of $\eqref{weak}$: 
+$$
+\begin{align}
 
+\label{stiff}
+\int_V {\left( {\sum\limits_{g'} {{u_{g'}}\nabla {\psi _{g'}}} } \right) \cdot {\bf{K}} \cdot \nabla {\psi _g}dV}  = \sum\limits_{G(e,ijk) = g} {\sum\limits_{g'} {\sum\limits_{G(e',prs) = g'} {u_{prs}^{e'}\int_V {\nabla \psi _{prs}^{e'} \cdot {\bf{K}} \cdot \nabla \psi _{ijk}^edV} } } } 
 
-Contribution from each element:
+\end{align}
 $$
-\int_{V_e}{u}(\xi,\eta,\gamma,t)\psi_{qrs}(\xi,\eta,\gamma)d{\xi}d{\eta}d{\gamma} + \int_{\Omega_e}\sum_{ijk}{{u}^e_{ijk}(t)\nabla{\psi}_{ijk}(\mathbf x)}\cdot \mathbf{K} \cdot \nabla{\psi}_{qrs}(\mathbf x)d^3x = 0
+The integral on the right hand side of $\eqref{stiff}$ is
+$$
+\begin{align}
+
+\int_V {\nabla \psi _{prs}^{e'} \cdot {\bf{K}} \cdot \nabla \psi _{ijk}^edV}  
+& = {\delta _{ee'}}\int_{{V_e}} {\nabla \psi _{prs}^e \cdot {\bf{K}} \cdot \nabla \psi _{ijk}^edV}  \cr
+& = {\delta _{ee'}}\int_{{{\left[ { - 1,1} \right]}^3}} {\sum\limits_{\alpha \beta } {{K_{\alpha \beta }}\left( {\sum\limits_{nm} {\frac{{\partial \xi _n^e}}{{\partial {x_\alpha }}}\frac{{\partial \xi _m^e}}{{\partial {x_\beta }}}\frac{{\partial {L_{prs}}}}{{\partial {\xi _n}}}\frac{{\partial {L_{ijk}}}}{{\partial {\xi _m}}}} } \right)} \det {{\bf{J}}^e}{d^3}\xi } 
+
+\end{align}
 $$
 
+So $\eqref{stiff}$ can be simplified as 
 $$
-\int_{\Omega_e}\sum_{ijk}{\ddot{u}^e_{ijk}(t)\psi_{ijk}(\mathbf x)}\psi_{qrs}(\mathbf x)d^3x + \int_{\Omega_e}\sum_{ijk}{{u}^e_{ijk}(t)\nabla{\psi}_{ijk}(\mathbf x)}\cdot \mathbf{K} \cdot \nabla{\psi}_{qrs}(\mathbf x)d^3x = 0
+\begin{align}
+
+& \int_V {\left( {\sum\limits_{g'} {{u_{g'}}\nabla {\psi _{g'}}} } \right) \cdot {\bf{K}} \cdot \nabla {\psi _g}dV} \cr
+
+& = \sum\limits_{G(e,ijk) = g} {\sum\limits_{prs} {u_{prs}^e\sum\limits_{\alpha \beta } {\sum\limits_{nm} {\int_{{{\left[ { - 1,1} \right]}^3}} {{K_{\alpha \beta }}\frac{{\partial \xi _n^e}}{{\partial {x_\alpha }}}\frac{{\partial \xi _m^e}}{{\partial {x_\beta }}}\frac{{\partial {L_{prs}}}}{{\partial {\xi _n}}}\frac{{\partial {L_{ijk}}}}{{\partial {\xi _m}}}\det {{\bf{J}}^e}{d^3}\xi } } } } } \cr
+
+& \approx \sum\limits_{G(e,ijk) = g} {\sum\limits_{prs} {u_{prs}^e\sum\limits_{\alpha \beta } {\sum\limits_{nm} {\sum\limits_{\mu \nu \lambda } {{w_{\mu \nu \lambda }}\left( {{K_{\alpha \beta }}\frac{{\partial \xi _n^e}}{{\partial {x_\alpha }}}\frac{{\partial \xi _m^e}}{{\partial {x_\beta }}}\frac{{\partial {L_{prs}}}}{{\partial {\xi _n}}}\frac{{\partial {L_{ijk}}}}{{\partial {\xi _m}}}\det {{\bf{J}}^e}} \right)\left( {{\bf{\xi }}_{\mu \nu \lambda }^{GLL}} \right)} } } } }
+
+\end{align}
 $$
+

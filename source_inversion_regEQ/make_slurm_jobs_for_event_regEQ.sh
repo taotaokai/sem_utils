@@ -57,9 +57,9 @@ cat <<EOF > $green_job
 #SBATCH -o ${green_job}.o%j
 #SBATCH -N $slurm_nnode
 #SBATCH -n $slurm_nproc
-#SBATCH -p $slurm_partition_dcu
+#SBATCH -p $slurm_partition_cpu
 #SBATCH -t $slurm_timelimit_forward
-#SBATCH $slurm_dcu_extra_args
+##SBATCH $slurm_dcu_extra_args
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -191,9 +191,9 @@ cat <<EOF > $srcfrechet_job
 #SBATCH -o $srcfrechet_job.o%j
 #SBATCH -N $slurm_nnode
 #SBATCH -n $slurm_nproc
-#SBATCH -p $slurm_partition_dcu
+#SBATCH -p $slurm_partition_cpu
 #SBATCH -t $slurm_timelimit_forward
-#SBATCH $slurm_dcu_extra_args
+##SBATCH $slurm_dcu_extra_args
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -244,9 +244,9 @@ cat <<EOF > $dgreen_job
 #SBATCH -o $dgreen_job.o%j
 #SBATCH -N $slurm_nnode
 #SBATCH -n $slurm_nproc
-#SBATCH -p $slurm_partition_dcu
+#SBATCH -p $slurm_partition_cpu
 #SBATCH -t $slurm_timelimit_dgreen
-#SBATCH $slurm_dcu_extra_args
+##SBATCH $slurm_dcu_extra_args
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

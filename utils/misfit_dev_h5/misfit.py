@@ -608,6 +608,7 @@ def _measure_adj_one_sta(
         else:
             msg = f"unrecognized component code ({cmpnm}), SKIP"
             warnings.warn(msg)
+            win['valid'] = False
             continue
 
         # Fd: pre-filter used during preprocessing (e.g. rmresp)
@@ -654,11 +655,13 @@ def _measure_adj_one_sta(
         if Amax_obs == 0:  # bad record
             msg = f"empty obs trace ({win}), skip"
             warnings.warn(msg)
+            win['valid'] = False
             continue
         if Amax_noise == 0:
             # could occure when the data begin time is too close to the first arrival
             msg = f"empty noise trace ({win}), SKIP."
             warnings.warn(msg)
+            win['valid'] = False
             continue
         snr = 20.0 * np.log10(Amax_obs / Amax_noise)
 
@@ -1037,6 +1040,10 @@ def _linearized_search_cc_by_stations(args):
 
                 # normalized cc between obs and perturbed syn
                 Nw = norm_obs * norm_syn1
+                if Nw == 0:
+                    msg = f'{net}.{sta}: obs data is zero for window({win})'
+                    warnings.warn(msg)
+                    continue
                 cc = np.sum(obs_filt_win * syn1_filt_win) / Nw
 
                 # weighted cc
@@ -4618,6 +4625,7 @@ class Misfit(object):
         with PdfPages(out_fig) as pdf:
             while niter < max_niter:
                 f.write("====== iter = {:02d}\n".format(niter))
+                # print("DEBUG: iter = {:02d}\n".format(niter))
 
                 # define search range
                 dtau_min = dtau_opt - dtau_range
@@ -4653,6 +4661,8 @@ class Misfit(object):
                 }
                 # wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
                 wcc_sum, weight_sum = self.linearized_search_cc_multiprocess(dm=dm, nproc=nproc)
+                # print(f'DEBUG: {wcc_sum=}, {weight_sum=}')
+
                 # wcc = wcc_sum / weight_sum
                 interp = scipy.interpolate.RectBivariateSpline(
                     dt0_1d, dxs_1d, wcc_sum.reshape(dt0_2d.shape)

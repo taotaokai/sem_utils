@@ -282,16 +282,21 @@ $$
   - $V = \bigcup_{e=1}^{N_e} V_e$
 - mapping between $V_e$ and the reference cube $[-1,1]^3$ : 
   - $\mathbf{F}_e: [-1,1]^3 \to V_e$
-  - ${{\bf{x}}^e}\left( {\boldsymbol{\xi }} \right) =  {{\bf{F}^e}} \left( \boldsymbol \xi \right)$
-- local basis function in the reference cube: 
-  - $\psi^e_{ijk}(\xi,\eta,\gamma) = \ell_{i}^{N}(\xi) \ell_{j}^{N}(\eta) \ell_{k}^{N}(\gamma)$ 
-  - N-th order Lagrange polynomials with **GLL** nodes: $(\xi^{GLL}_i,\eta^{GLL}_j,\gamma^{GLL}_k)$
-  - **GLL** quadrature: $\int\limits_{ - 1}^1 {f\left( \xi  \right)d\xi }  \approx \sum\limits_i {{w_i}f\left( {\xi _i^{GLL}} \right)} $
+  - ${{\bf{x}}^e}\left( {\bf{\xi }} \right) =  {{\bf{F}^e}} \left( \bf \xi \right)$
+  - $${{\bf{\xi }}^e}\left( {\bf{x}} \right) = {\left( {{{\bf{F}}^e}} \right)^{ - 1}}\left( {\bf{x}} \right)$$
+- Gauss-Legendre-Labotto interpolation/quadrature:
+  - basis function: $$\ell _\alpha ^{GLL}\left( \xi  \right) = {\left( {\prod\limits_{\beta  \ne \alpha }^N {\left( {\xi _\alpha ^{GLL} - \xi _\beta ^{GLL}} \right)} } \right)^{ - 1}}\prod\limits_{\beta  \ne \alpha }^N {\left( {\xi  - \xi _\beta ^{GLL}} \right)} $$
+  - Lagrange polynomial of N **GLL** nodes: $\xi^{GLL}_\alpha, ~ \alpha=1,\ldots,N$
+  - **GLL** quadrature: $\int\limits_{ - 1}^1 {f\left( \xi  \right)d\xi }  \approx \sum\limits_\alpha {{w_\alpha}f\left( {\xi _{\alpha}^{GLL}} \right)} $
+- local basis function: 
+  - $$\psi _\alpha ^e\left( {\bf{x}} \right) = {L_\alpha }\left( {{{\bf{\xi }}^e}\left( {\bf{x}} \right)} \right){I_{{V_e}}}\left( {\bf{x}} \right)$$ 
+  - ${L_{\bf{\alpha }}}\left( {\bf{\xi }} \right) = \prod\limits_{i = 1}^3 {\ell _{{\alpha _i}}^{GLL}\left( {{\xi _i}} \right)} ,{\alpha _i} = 1, \ldots ,{N_{GLL}}$
+  - $$\frac{{\partial {L_\alpha }}}{{\partial {\xi _i}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right) = \dot \ell _{{\alpha _i}}^{GLL}\left( {\xi _{{\beta _i}}^{GLL}} \right)\prod\limits_{j \ne i} {\ell _{{\alpha _j}}^{GLL}\left( {\xi _{{\beta _j}}^{GLL}} \right)}  = \dot \ell _{{\alpha _i}}^{GLL}\left( {\xi _{{\beta _i}}^{GLL}} \right)\prod\limits_{j \ne i} {{\delta _{{\alpha _j}{\beta _j}}}} $$
 - local to global mapping:
-  - $g = G(e,ijk)$  
-  - collocated nodes shared by two elements are assigned to unique indices
+  - $g = G(e,\alpha)$  
+  - nodes shared by two elements (e.g. on element faces/corners) are assigned to unique indices
 - test/trial function space $\{\psi_g\}$: 
-  - $\psi_g = \sum_{G(e,ijk)=g} \psi_{ijk}^{e}$
+  - $\psi_g = \sum_{G(e,\alpha)=g} \psi_{\alpha}^{e}$
   - continuous across elements
   - $u(\mathbf x, t) \approx \sum_{g}{u_g(t) \psi_g(\boldsymbol \xi(\mathbf x))}$
 
@@ -311,10 +316,10 @@ $$
 \begin{align} 
 
 \int_V {\left( {\sum\limits_{g'} {{{\dot u}_{g'}}{\psi _{g'}}} } \right){\psi _g}dV}  
-& = \int_V {\left( {\sum\limits_{g'} {\sum\limits_{G(e',prs) = g'} {\dot u_{prs}^{e'}\psi _{prs}^{e'}} } } \right)\sum\limits_{G(e,ijk) = g} {\psi _{ijk}^e} dV}  \cr
+& = \int_V {\left( {\sum\limits_{g'} {\sum\limits_{G(e',\alpha') = g'} {\dot u_{\alpha'}^{e'}\psi _{\alpha'}^{e'}} } } \right)\sum\limits_{G(e,\alpha) = g} {\psi _{\alpha}^e} dV}  \cr
 
 \label{weak1}
-& = \sum\limits_{G(e,ijk) = g} {\sum\limits_{g'} {\sum\limits_{G(e',prs) = g'} {\dot u_{prs}^{e'}\int_V {\psi _{prs}^{e'}\psi _{ijk}^edV} } } } 
+& = \sum\limits_{G(e,\alpha) = g} {\sum\limits_{g'} {\sum\limits_{G(e',\alpha') = g'} {\dot u_{\alpha'}^{e'}\int_V {\psi _{\alpha'}^{e'}\psi _{\alpha}^edV} } } } 
 
 \end{align}
 $$
@@ -322,14 +327,14 @@ Apply the GLL quadrature to the integral in $\eqref{weak1}$:
 $$
 \begin{align}
 
- \int_V {\psi _{prs}^{e'}\psi _{ijk}^edV}  & = {\delta _{ee'}}\int_{{V_e}} {\psi _{prs}^e\psi _{ijk}^edV } \cr
+ \int_V {\psi _{\alpha'}^{e'}\psi _{\alpha}^edV}  & = {\delta _{ee'}}\int_{{V_e}} {\psi _{\alpha'}^e\psi _{\alpha}^edV } \cr
  
- & = {\delta _{ee'}}\int_{{{\left[ { - 1,1} \right]}^3}} {{L_{prs}}{L_{ijk}}\det \left( {{{\bf{J}}^e}} \right){d^3}\xi }   \cr 
+ & = {\delta _{ee'}}\int_{{{\left[ { - 1,1} \right]}^3}} {{L_{\alpha'}}{L_{\alpha}}\det \left( {{{\bf{J}}^e}} \right){d^3}\xi }   \cr 
  
- &  \approx {\delta _{ee'}}\sum\limits_{nml} {{w_{nml}}{L_{prs}}\left( {{\bf{\xi }}_{nml}^{GLL}} \right){L_{ijk}}\left( {{\bf{\xi }}_{nml}^{GLL}} \right)\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{nml}^{GLL}} \right)}  \cr
+ &  \approx {\delta _{ee'}}\sum\limits_{\beta} {{w_{\beta}}{L_{\alpha'}}\left( {{\bf{\xi }}_{\beta}^{GLL}} \right){L_{\alpha}}\left( {{\bf{\xi }}_{\beta}^{GLL}} \right)\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{\beta}^{GLL}} \right)}  \cr
  
  \label{int1}
- & = {\delta _{ee'}}{\delta _{prs,ijk}}{w_{ijk}}\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{ijk}^{GLL}} \right) 
+ & = {\delta _{ee'}}{\delta _{\alpha\alpha'}}{w_{\alpha}}\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{\alpha}^{GLL}} \right) 
  
 \end{align}
 $$
@@ -338,8 +343,8 @@ $$
 \begin{align} 
 
 \int_V {\left( {\sum\limits_{g'} {{{\dot u}_{g'}}{\psi _{g'}}} } \right){\psi _g}dV}  
-& = \sum\limits_{G(e,ijk) = g} {\sum\limits_{g'} {\sum\limits_{G(e',prs) = g'} {\dot u_{prs}^{e'}{\delta _{ee'}}{\delta _{prs,ijk}}{w_{ijk}}\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{ijk}^{GLL}} \right)} } }  \cr
-& = \sum\limits_{G(e,ijk) = g} {\dot u_{ijk}^e{w_{ijk}}\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{ijk}^{GLL}} \right)}
+& = \sum\limits_{G(e,\alpha) = g} {\sum\limits_{g'} {\sum\limits_{G(e',\alpha') = g'} {\dot u_{\alpha'}^{e'}{\delta _{ee'}}{\delta _{\alpha\alpha'}}{w_{\alpha}}\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{\alpha}^{GLL}} \right)} } }  \cr
+& = \sum\limits_{G(e,\alpha) = g} {\dot u_{\alpha}^e{w_{\alpha}}\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{ijk}^{GLL}} \right)}
 
 \end{align}
 $$
@@ -350,7 +355,7 @@ $$
 \begin{align}
 
 \label{stiff}
-\int_V {\left( {\sum\limits_{g'} {{u_{g'}}\nabla {\psi _{g'}}} } \right) \cdot {\bf{K}} \cdot \nabla {\psi _g}dV}  = \sum\limits_{G(e,ijk) = g} {\sum\limits_{g'} {\sum\limits_{G(e',prs) = g'} {u_{prs}^{e'}\int_V {\nabla \psi _{prs}^{e'} \cdot {\bf{K}} \cdot \nabla \psi _{ijk}^edV} } } } 
+\int_V {\left( {\sum\limits_{g'} {{u_{g'}}\nabla {\psi _{g'}}} } \right) \cdot {\bf{K}} \cdot \nabla {\psi _g}dV}  = \sum\limits_{G(e,\alpha) = g} {\sum\limits_{g'} {\sum\limits_{G(e',\alpha') = g'} {u_{\alpha'}^{e'}\int_V {\nabla \psi _{\alpha'}^{e'} \cdot {\bf{K}} \cdot \nabla \psi _{\alpha}^edV} } } } 
 
 \end{align}
 $$
@@ -358,9 +363,10 @@ The integral on the right hand side of $\eqref{stiff}$ is
 $$
 \begin{align}
 
-\int_V {\nabla \psi _{prs}^{e'} \cdot {\bf{K}} \cdot \nabla \psi _{ijk}^edV}  
-& = {\delta _{ee'}}\int_{{V_e}} {\nabla \psi _{prs}^e \cdot {\bf{K}} \cdot \nabla \psi _{ijk}^edV}  \cr
-& = {\delta _{ee'}}\int_{{{\left[ { - 1,1} \right]}^3}} {\sum\limits_{\alpha \beta } {{K_{\alpha \beta }}\left( {\sum\limits_{nm} {\frac{{\partial \xi _n^e}}{{\partial {x_\alpha }}}\frac{{\partial \xi _m^e}}{{\partial {x_\beta }}}\frac{{\partial {L_{prs}}}}{{\partial {\xi _n}}}\frac{{\partial {L_{ijk}}}}{{\partial {\xi _m}}}} } \right)} \det {{\bf{J}}^e}{d^3}\xi } 
+\int_V {\nabla \psi _{\alpha '}^{e'} \cdot {\bf{K}} \cdot \nabla \psi _\alpha ^edV}  
+& = {\delta _{ee'}}\int_{{V_e}} {\nabla \psi _{\alpha '}^e \cdot {\bf{K}} \cdot \nabla \psi _\alpha ^edV}   \cr
+
+& = {\delta _{ee'}}\int_{{{\left[ { - 1,1} \right]}^3}} {\sum\limits_{i,j} {{K_{ij}}\left( {\sum\limits_n {\frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\frac{{\partial \xi _n^e}}{{\partial {x_i}}}} } \right)\left( {\sum\limits_m {\frac{{\partial {L_\alpha }}}{{\partial {\xi _m}}}\frac{{\partial \xi _m^e}}{{\partial {x_j}}}} } \right)} \det {{\bf{J}}^e}{d^3}\xi } 
 
 \end{align}
 $$
@@ -369,11 +375,12 @@ So $\eqref{stiff}$ can be simplified as
 $$
 \begin{align}
 
-& \int_V {\left( {\sum\limits_{g'} {{u_{g'}}\nabla {\psi _{g'}}} } \right) \cdot {\bf{K}} \cdot \nabla {\psi _g}dV} \cr
+& \int_V {\left( {\sum\limits_{g'} {{u_{g'}}\nabla {\psi _{g'}}} } \right) \cdot {\bf{K}} \cdot \nabla {\psi _g}dV}  \nonumber \cr 
 
-& = \sum\limits_{G(e,ijk) = g} {\sum\limits_{prs} {u_{prs}^e\sum\limits_{\alpha \beta } {\sum\limits_{nm} {\int_{{{\left[ { - 1,1} \right]}^3}} {{K_{\alpha \beta }}\frac{{\partial \xi _n^e}}{{\partial {x_\alpha }}}\frac{{\partial \xi _m^e}}{{\partial {x_\beta }}}\frac{{\partial {L_{prs}}}}{{\partial {\xi _n}}}\frac{{\partial {L_{ijk}}}}{{\partial {\xi _m}}}\det {{\bf{J}}^e}{d^3}\xi } } } } } \cr
-
-& \approx \sum\limits_{G(e,ijk) = g} {\sum\limits_{prs} {u_{prs}^e\sum\limits_{\alpha \beta } {\sum\limits_{nm} {\sum\limits_{\mu \nu \lambda } {{w_{\mu \nu \lambda }}\left( {{K_{\alpha \beta }}\frac{{\partial \xi _n^e}}{{\partial {x_\alpha }}}\frac{{\partial \xi _m^e}}{{\partial {x_\beta }}}\frac{{\partial {L_{prs}}}}{{\partial {\xi _n}}}\frac{{\partial {L_{ijk}}}}{{\partial {\xi _m}}}\det {{\bf{J}}^e}} \right)\left( {{\bf{\xi }}_{\mu \nu \lambda }^{GLL}} \right)} } } } }
+& = \sum\limits_{G(e,\alpha ) = g} {\int_{{{\left[ { - 1,1} \right]}^3}} {\sum\limits_{i,j} {{K_{ij}}\left( {\sum\limits_n {\sum\limits_{\alpha '} {u_{\alpha '}^e} \frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\frac{{\partial \xi _n^e}}{{\partial {x_i}}}} } \right)\left( {\sum\limits_m {\frac{{\partial {L_\alpha }}}{{\partial {\xi _m}}}\frac{{\partial \xi _m^e}}{{\partial {x_\beta }}}} } \right)} \det {{\bf{J}}^e}{d^3}\xi } }   \cr 
+  
+ &  \approx \sum\limits_{G(e,\alpha ) = g} {\sum\limits_\beta  {{w_\beta }\sum\limits_{i,j} {\left[ {{K_{ij}}\left( {\sum\limits_n {\sum\limits_{\alpha '} {u_{\alpha '}^e} \frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\frac{{\partial \xi _n^e}}{{\partial {x_i}}}} } \right)\left( {\sum\limits_m {\frac{{\partial {L_\alpha }}}{{\partial {\xi _m}}}\frac{{\partial \xi _m^e}}{{\partial {x_j }}}} } \right)\det {{\bf{J}}^e}} \right]\left( {{\bf{\xi }}_\beta ^{GLL}} \right)} } }  
+  
 
 \end{align}
 $$

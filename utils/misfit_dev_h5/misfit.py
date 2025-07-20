@@ -25,8 +25,6 @@ import pandas as pd
 
 #
 from obspy import UTCDateTime, read, Trace, Stream
-UTCDateTime.DEFAULT_PRECISION = 9 # nanoseconds precision
-
 # from obspy.geodetics import gps2dist_azimuth, kilometer2degrees
 from obspy.taup import TauPyModel
 from obspy.imaging.beachball import beach
@@ -60,8 +58,11 @@ import yaml
 
 _DEBUG = False
 
-
+#
 # ====== utility functions
+#
+
+
 def is_equal(lst):
     return len(lst) >= 2 and [lst[0]] * len(lst) == lst
 
@@ -194,6 +195,11 @@ def centerMap(lats, lons, scale):
         minLat = 0
     mapW = spheredist(minLat, westLon, minLat, eastLon) * earthRadius
     return lat0, lon0, mapW * scale, mapH * scale
+
+
+#
+# ======== for use internally
+#
 
 
 class Channel(pt.IsDescription):
@@ -608,7 +614,7 @@ def _measure_adj_one_sta(
         else:
             msg = f"unrecognized component code ({cmpnm}), SKIP"
             warnings.warn(msg)
-            win['valid'] = False
+            win["valid"] = False
             continue
 
         # Fd: pre-filter used during preprocessing (e.g. rmresp)
@@ -655,13 +661,13 @@ def _measure_adj_one_sta(
         if Amax_obs == 0:  # bad record
             msg = f"empty obs trace ({win}), skip"
             warnings.warn(msg)
-            win['valid'] = False
+            win["valid"] = False
             continue
         if Amax_noise == 0:
             # could occure when the data begin time is too close to the first arrival
             msg = f"empty noise trace ({win}), SKIP."
             warnings.warn(msg)
-            win['valid'] = False
+            win["valid"] = False
             continue
         snr = 20.0 * np.log10(Amax_obs / Amax_noise)
 
@@ -1041,7 +1047,7 @@ def _linearized_search_cc_by_stations(args):
                 # normalized cc between obs and perturbed syn
                 Nw = norm_obs * norm_syn1
                 if Nw == 0:
-                    msg = f'{net}.{sta}: obs data is zero for window({win})'
+                    msg = f"{net}.{sta}: obs data is zero for window({win})"
                     warnings.warn(msg)
                     continue
                 cc = np.sum(obs_filt_win * syn1_filt_win) / Nw
@@ -1159,6 +1165,7 @@ class Misfit(object):
 
     def read_cmtsolution(self, cmt_file, ECEF=False):
         """cmt_file (str): CMTSOLUTION format file"""
+
         with open(cmt_file, "r") as f:
             lines = [x for x in f.readlines() if not (x.startswith("#"))]
 
@@ -1210,7 +1217,8 @@ class Misfit(object):
         header[3] = "{:02d}".format(t0.day)
         header[4] = "{:02d}".format(t0.hour)
         header[5] = "{:02d}".format(t0.minute)
-        header[6] = "{:09.6f}".format(t0.second + 1.0e-6 * t0.microsecond)
+        header[6] = "{:02d}.{:03d}".format(t0.second, round(t0.microsecond * 1e-3))
+        header_line = " ".join(header)
 
         # moment tensor
         # ECEF=false: 1,2,3 -> r,theta,phi
@@ -1256,7 +1264,7 @@ class Misfit(object):
             tbl_src = h5f.create_table("/", "source", Source)
 
             src_row = tbl_src.row
-            src_row["header"] = " ".join(header)
+            src_row["header"] = header_line
             src_row["id"] = event_id
             src_row["t0"] = t0.isoformat()
             src_row["tau"] = tau
@@ -1265,7 +1273,7 @@ class Misfit(object):
             src_row["mt_rtp"] = mt_rtp
             src_row["latitude"] = lat
             src_row["longitude"] = lon
-            src_row["depth"] = dep
+            src_row["depth"] = dep  # km
             src_row.append()
             tbl_src.flush()
 
@@ -1922,12 +1930,12 @@ class Misfit(object):
                 x = np.zeros(nt)
                 x[nt_lpad : (solver_nt + nt_lpad)] = tr.data
                 x[:] = np.fft.irfft(np.fft.rfft(x, nfft) * abs(filter_h))[:nt]
-                
-                # # NOTE: different precision between UTCDateTime.timestamp and (t1 -t2) 
+
+                # # NOTE: different precision between UTCDateTime.timestamp and (t1 -t2)
                 # #       UTCDateTime internally stores time in nanoseconds as an integer
                 # #       t.timestamp = float64(t.ns * 1.e-9)
                 # #       t1 - t2 = round((t1.ns - t2.ns)*1.e-9, UTCDateTime.precision)
-                # #       to make things consistent, set UTCDateTime.DEFAULT_PRECISION = 9 after import 
+                # #       to make things consistent, set UTCDateTime.DEFAULT_PRECISION = 9 after import
                 # #       (t1.timestamp - t2.timestamp) used in tr.interpolate has less precision than (t1-t2)
                 # tr.stats.starttime = t0
                 # tr.data = x
@@ -1935,10 +1943,12 @@ class Misfit(object):
                 # tr.interpolate(
                 #     obs_fs, starttime=obs_tb, npts=obs_nt, method="lanczos", a=20
                 # )
-                
-                # call lanczos_interpolation directly 
-                tr.data = lanczos_interpolation(x, 0, solver_dt, obs_tb - t0, obs_dt, obs_nt, a=20)
-                tr.stats.starttime = obs_tb 
+
+                # call lanczos_interpolation directly
+                tr.data = lanczos_interpolation(
+                    x, 0, solver_dt, obs_tb - t0, obs_dt, obs_nt, a=20
+                )
+                tr.stats.starttime = obs_tb
                 tr.stats.sampling_rate = obs_fs
 
                 # st_tmp += tr.copy()
@@ -2307,7 +2317,6 @@ class Misfit(object):
         return syn_ENZ
 
     def __obsolete_extract_obs_syn_ENZ(self, g_sta, obs_tag, syn_tag, event_tau):
-
         if obs_tag not in g_sta:
             msg = f"{g_sta._v_name}: {obs_tag} does not exist, skip"
             raise KeyError(msg)
@@ -4660,7 +4669,9 @@ class Misfit(object):
                     "dtau": dtau_opt * np.ones(dt0_2d.size),
                 }
                 # wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
-                wcc_sum, weight_sum = self.linearized_search_cc_multiprocess(dm=dm, nproc=nproc)
+                wcc_sum, weight_sum = self.linearized_search_cc_multiprocess(
+                    dm=dm, nproc=nproc
+                )
                 # print(f'DEBUG: {wcc_sum=}, {weight_sum=}')
 
                 # wcc = wcc_sum / weight_sum
@@ -4700,7 +4711,9 @@ class Misfit(object):
                     "dtau": dtau_opt * np.ones(dmt_1d.size),
                 }
                 # wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
-                wcc_sum, weight_sum = self.linearized_search_cc_multiprocess(dm=dm, nproc=nproc)
+                wcc_sum, weight_sum = self.linearized_search_cc_multiprocess(
+                    dm=dm, nproc=nproc
+                )
                 wcc = wcc_sum / weight_sum
                 interp = scipy.interpolate.interp1d(dmt_1d, wcc_sum, kind="cubic")
                 dmt_1d_fine = np.linspace(dmt_min, dmt_max, 100)
@@ -4730,7 +4743,9 @@ class Misfit(object):
                     "dmt": dmt_opt * np.ones(dtau_1d.size),
                 }
                 # wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
-                wcc_sum, weight_sum = self.linearized_search_cc_multiprocess(dm=dm, nproc=nproc)
+                wcc_sum, weight_sum = self.linearized_search_cc_multiprocess(
+                    dm=dm, nproc=nproc
+                )
                 wcc = wcc_sum / weight_sum
                 interp = scipy.interpolate.interp1d(dtau_1d, wcc_sum, kind="cubic")
                 dtau_1d_fine = np.linspace(dtau_min, dtau_max, 100)
@@ -4802,8 +4817,8 @@ class Misfit(object):
         header[3] = "{:02d}".format(t1.day)
         header[4] = "{:02d}".format(t1.hour)
         header[5] = "{:02d}".format(t1.minute)
-        header[6] = "{:07.4f}".format(t1.second + 1.0e-6 * t1.microsecond)
-        header = " ".join(header)
+        header[6] = "{:02d}.{:03d}".format(t1.second, round(t1.microsecond * 1e-3))
+        header_line = " ".join(header)
 
         xs1 = xs + dxs * dxs_vec
 
@@ -4813,7 +4828,7 @@ class Misfit(object):
         mt1 = m0 * mt1 / (0.5 * np.sum(mt1**2)) ** 0.5
 
         with open(cmtfile, "w") as fp:
-            fp.write("%s\n" % header)
+            fp.write("%s\n" % (header_line))
             fp.write("%-18s %s\n" % ("event name:", evnm))
             fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
             fp.write("%-18s %+15.8E\n" % ("tau(s):", tau + dtau))

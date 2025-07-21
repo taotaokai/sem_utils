@@ -25,6 +25,7 @@ import pandas as pd
 
 #
 from obspy import UTCDateTime, read, Trace, Stream
+
 # from obspy.geodetics import gps2dist_azimuth, kilometer2degrees
 from obspy.taup import TauPyModel
 from obspy.imaging.beachball import beach
@@ -1217,8 +1218,10 @@ class Misfit(object):
         header[3] = "{:02d}".format(t0.day)
         header[4] = "{:02d}".format(t0.hour)
         header[5] = "{:02d}".format(t0.minute)
-        header[6] = "{:02d}.{:03d}".format(t0.second, round(t0.microsecond * 1e-3))
+        minisecond = round(t0.microsecond * 1e-3)
+        header[6] = "{:02d}.{:03d}".format(t0.second, minisecond)
         header_line = " ".join(header)
+        t0 = t0.replace(microsecond=minisecond * 1000)
 
         # moment tensor
         # ECEF=false: 1,2,3 -> r,theta,phi
@@ -4817,7 +4820,8 @@ class Misfit(object):
         header[3] = "{:02d}".format(t1.day)
         header[4] = "{:02d}".format(t1.hour)
         header[5] = "{:02d}".format(t1.minute)
-        header[6] = "{:02d}.{:03d}".format(t1.second, round(t1.microsecond * 1e-3))
+        minisecond = round(t1.microsecond * 1e-3)
+        header[6] = "{:02d}.{:03d}".format(t1.second, minisecond)
         header_line = " ".join(header)
 
         xs1 = xs + dxs * dxs_vec

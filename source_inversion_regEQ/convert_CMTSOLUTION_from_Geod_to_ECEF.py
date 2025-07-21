@@ -66,7 +66,8 @@ header[2] = "{:02d}".format(t0.month)
 header[3] = "{:02d}".format(t0.day)
 header[4] = "{:02d}".format(t0.hour)
 header[5] = "{:02d}".format(t0.minute)
-header[6] = "{:02d}.{:03d}".format(t0.second, round(t0.microsecond * 1e-3))
+minisecond = round(t0.microsecond * 1e-3)
+header[6] = "{:02d}.{:03d}".format(t0.second, minisecond)
 header_line = " ".join(header)
 
 # moment tensor

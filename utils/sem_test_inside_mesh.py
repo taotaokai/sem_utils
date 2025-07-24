@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 import pandas as pd
+from misfit.misfit import get_dist_from_mesh_boundary
 
 def vector2latlon_deg(v):
     lon = np.arctan2(v[1], v[0])
@@ -99,7 +100,7 @@ if __name__ == '__main__':
     for line in sys.stdin:
         line = line.strip()
         lat, lon, name = line.strip().split()
-        xi, eta = check_bound(mesh_central_lat, mesh_central_lon, mesh_gamma_rot, float(lat), float(lon))
+        xi, eta = get_dist_from_mesh_boundary(mesh_central_lat, mesh_central_lon, mesh_gamma_rot, float(lat), float(lon))
         dist_xi = 0.5 * mesh_width_xi - abs(xi)
         dist_eta = 0.5 * mesh_width_eta - abs(eta)
         min_dist = min(dist_xi, dist_eta)

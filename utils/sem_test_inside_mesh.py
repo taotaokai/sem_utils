@@ -16,43 +16,43 @@ def geodetic_lat2geocentric_lat(geodetic_lat):
     factor = (1 - f)**2
     return np.arctan(factor * np.tan(geodetic_lat))
 
-def check_bound(lat_center, lon_center, gamma_rot, lat_test, lon_test):
-    lat0 = np.deg2rad(lat_center)
-    lon0 = np.deg2rad(lon_center)
-    # assume zero altitude from the reference ellipsoid
-    theta = 0.5*np.pi - geodetic_lat2geocentric_lat(lat0)
-    phi = lon0
-    # radial/easting/northing direction at (lat_center, lon_center)
-    v0_r = np.array([np.sin(theta) * np.cos(phi),
-                     np.sin(theta) * np.sin(phi),
-                     np.cos(theta)])
-    v0_e = np.array([-np.sin(phi), np.cos(phi), 0])
-    v0_n = np.array([-np.cos(theta) * np.cos(phi),
-                     -np.cos(theta) * np.sin(phi),
-                     np.sin(theta)])
-
-    # rotate (v0_e, v0_n) to (v0_xi, v0_eta) through v0_r by gamma_rot counter-clockwise
-    gamma = np.deg2rad(gamma_rot)
-    v0_xi = np.cos(gamma) * v0_e + np.sin(gamma) * v0_n
-    v0_eta = -np.sin(gamma) * v0_e + np.cos(gamma) * v0_n
-    # print(v_xi, v_eta)
-
-    # test point
-    lat1 = np.deg2rad(lat_test)
-    lon1 = np.deg2rad(lon_test)
-    theta = 0.5*np.pi - geodetic_lat2geocentric_lat(lat1)
-    phi = lon1
-    v1 = np.array([np.sin(theta) * np.cos(phi),
-                   np.sin(theta) * np.sin(phi),
-                   np.cos(theta)])
-    # project to v0_r, v0_xi, v0_eta
-    l_r = np.dot(v0_r, v1)
-    l_xi = np.dot(v0_xi, v1)
-    l_eta = np.dot(v0_eta, v1)
-    angle_xi = np.rad2deg(np.arctan2(l_xi, l_r))
-    angle_eta = np.rad2deg(np.arctan2(l_eta, l_r))
-
-    return angle_xi, angle_eta
+# def check_bound(lat_center, lon_center, gamma_rot, lat_test, lon_test):
+#     lat0 = np.deg2rad(lat_center)
+#     lon0 = np.deg2rad(lon_center)
+#     # assume zero altitude from the reference ellipsoid
+#     theta = 0.5*np.pi - geodetic_lat2geocentric_lat(lat0)
+#     phi = lon0
+#     # radial/easting/northing direction at (lat_center, lon_center)
+#     v0_r = np.array([np.sin(theta) * np.cos(phi),
+#                      np.sin(theta) * np.sin(phi),
+#                      np.cos(theta)])
+#     v0_e = np.array([-np.sin(phi), np.cos(phi), 0])
+#     v0_n = np.array([-np.cos(theta) * np.cos(phi),
+#                      -np.cos(theta) * np.sin(phi),
+#                      np.sin(theta)])
+#
+#     # rotate (v0_e, v0_n) to (v0_xi, v0_eta) through v0_r by gamma_rot counter-clockwise
+#     gamma = np.deg2rad(gamma_rot)
+#     v0_xi = np.cos(gamma) * v0_e + np.sin(gamma) * v0_n
+#     v0_eta = -np.sin(gamma) * v0_e + np.cos(gamma) * v0_n
+#     # print(v_xi, v_eta)
+#
+#     # test point
+#     lat1 = np.deg2rad(lat_test)
+#     lon1 = np.deg2rad(lon_test)
+#     theta = 0.5*np.pi - geodetic_lat2geocentric_lat(lat1)
+#     phi = lon1
+#     v1 = np.array([np.sin(theta) * np.cos(phi),
+#                    np.sin(theta) * np.sin(phi),
+#                    np.cos(theta)])
+#     # project to v0_r, v0_xi, v0_eta
+#     l_r = np.dot(v0_r, v1)
+#     l_xi = np.dot(v0_xi, v1)
+#     l_eta = np.dot(v0_eta, v1)
+#     angle_xi = np.rad2deg(np.arctan2(l_xi, l_r))
+#     angle_eta = np.rad2deg(np.arctan2(l_eta, l_r))
+#
+#     return angle_xi, angle_eta
 
 
 if __name__ == '__main__':

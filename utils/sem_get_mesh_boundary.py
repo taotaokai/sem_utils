@@ -1,14 +1,8 @@
+import sys
+import pandas as pd
 import numpy as np
 import pyvista as pv
 import simplekml
-
-lat_center = 57
-lon_center = 6
-
-xi_width = 80
-eta_width = 80
-
-gamma_rot = 5
 
 def vector2latlon_deg(v):
     lon = np.arctan2(v[1], v[0])
@@ -22,6 +16,33 @@ def geodetic_lat2geocentric_lat(geodetic_lat):
     f = 1/299.8
     factor = (1 - f)**2
     return np.arctan(factor * np.tan(geodetic_lat))
+
+
+
+sem_parfile = sys.argv[1]
+
+sem_params = pd.read_csv(
+    sem_parfile,
+    delimiter=r"\s*=\s*",
+    header=None,
+    comment="#",
+    names=["key", "value"],
+    dtype=dict(key=object, value=object),
+    index_col=["key"],
+    engine='python',
+).to_dict()["value"]
+
+mesh_central_lat = sem_params['CENTER_LATITUDE_IN_DEGREES']
+mesh_central_lon = sem_params['CENTER_LONGITUDE_IN_DEGREES']
+mesh_width_xi =    sem_params['ANGULAR_WIDTH_XI_IN_DEGREES']
+mesh_width_eta =   sem_params['ANGULAR_WIDTH_ETA_IN_DEGREES']
+mesh_gamma_rot =   sem_params['GAMMA_ROTATION_AZIMUTH']
+
+lat_center = float(mesh_central_lat.lower().replace('d', 'e'))
+lon_center = float(mesh_central_lon.lower().replace('d', 'e'))
+xi_width = float(mesh_width_xi.lower().replace('d', 'e'))
+eta_width = float(mesh_width_eta.lower().replace('d', 'e'))
+gamma_rot = float(mesh_gamma_rot.lower().replace('d', 'e'))
 
 lat0 = np.deg2rad(lat_center)
 lon0 = np.deg2rad(lon_center)

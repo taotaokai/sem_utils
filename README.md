@@ -265,18 +265,24 @@ for each event:
 
 
 
-spatial variant (non-stationary), direction-dependent (anisotropic) smoothing via solving the diffusion equation: 
-$$
-\partial_{t}{m} - \nabla \cdot(\mathbf{K}\cdot\nabla) m = 0, x\in V \subset \R^d, t \in [0, 1] \\
- m(x,t=0) = g(x)
-$$
-. $ m(x,t=1)$ is taken as the smoothed model of $g(x)$. For homogeneous and isotropic $\mathbf{K} = k\mathbf{I}$ the solution in infinite space is equivalent to convolving a Gaussian kernel $(4{\pi}kt)^{d/2}\exp(-\frac{r^2}{4kt})$ with the initial value $g(x)$.
+## Heat equation in SEM
 
-Weak form ($\psi$: test function)
+Spatial variant (non-stationary), direction-dependent (anisotropic) smoothing via solving the diffusion equation: 
+$$
+\partial_{t}{u} - \nabla \cdot(\mathbf{K}\cdot\nabla) u = 0, x\in V \subset \R^3, t \in [0, 1] \\
+\text{(I.C.) } u(x,t=0) = g(x) \cr
+\text{(B.C.) } {\bf{n}}\cdot (\mathbf{K}\cdot\nabla u) = 0, x \in \partial V\cr
+$$
+. $u(x,t=1)$ is taken as the smoothed model of $g(x)$. For homogeneous and isotropic $\mathbf{K} = k\mathbf{I}$ the solution in infinite space is equivalent to convolving a Gaussian kernel $(4{\pi}kt)^{-3/2}\exp(-\frac{r^2}{4kt})$ with the initial value $g(x)$.
+
+### Weak form
+
 $$
 \int_V {{\partial _t}u\left( {{\bf{x}},t} \right)\phi \left( {\bf{x}} \right)dV}  + \int_V {\nabla u\left( {{\bf{x}},t} \right) \cdot {\bf{K}} \cdot \nabla \phi \left( {\bf{x}} \right)dV}  = 0
 $$
-**Discretization**
+$\phi$ is the test function.
+
+### **Discretization**
 
 - subdividing $V$ into disjoint elements $V_e$: 
   - $V = \bigcup_{e=1}^{N_e} V_e$
@@ -289,18 +295,19 @@ $$
   - Lagrange polynomial of N **GLL** nodes: $\xi^{GLL}_\alpha, ~ \alpha=1,\ldots,N$
   - **GLL** quadrature: $\int\limits_{ - 1}^1 {f\left( \xi  \right)d\xi }  \approx \sum\limits_\alpha {{w_\alpha}f\left( {\xi _{\alpha}^{GLL}} \right)} $
 - local basis function: 
-  - $$\psi _\alpha ^e\left( {\bf{x}} \right) = {L_\alpha }\left( {{{\bf{\xi }}^e}\left( {\bf{x}} \right)} \right){I_{{V_e}}}\left( {\bf{x}} \right)$$ 
-  - ${L_{\bf{\alpha }}}\left( {\bf{\xi }} \right) = \prod\limits_{i = 1}^3 {\ell _{{\alpha _i}}^{GLL}\left( {{\xi _i}} \right)} ,{\alpha _i} = 1, \ldots ,{N_{GLL}}$
+  - $$\psi _\alpha ^e\left( {\bf{x}} \right) = {L_\alpha }\left( {{{\bf{\xi }}^e}\left( {\bf{x}} \right)} \right){I_{{V_e}}}\left( {\bf{x}} \right)$$  ($N^3$ basis functions in each element)
+  - ${L_{\bf{\alpha }}}\left( {\bf{\xi }} \right) = \prod\limits_{i = 1}^3 {\ell _{{\alpha _i}}^{GLL}\left( {{\xi _i}} \right)} ,{\alpha _i} = 1, \ldots ,{N_{GLL}}$  note: $\alpha = (\alpha_1, \alpha_2, \alpha_3)$
   - $$\frac{{\partial {L_\alpha }}}{{\partial {\xi _i}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right) = \dot \ell _{{\alpha _i}}^{GLL}\left( {\xi _{{\beta _i}}^{GLL}} \right)\prod\limits_{j \ne i} {\ell _{{\alpha _j}}^{GLL}\left( {\xi _{{\beta _j}}^{GLL}} \right)}  = \dot \ell _{{\alpha _i}}^{GLL}\left( {\xi _{{\beta _i}}^{GLL}} \right)\prod\limits_{j \ne i} {{\delta _{{\alpha _j}{\beta _j}}}} $$
 - local to global mapping:
   - $g = G(e,\alpha)$  
   - nodes shared by two elements (e.g. on element faces/corners) are assigned to unique indices
-- test/trial function space $\{\psi_g\}$: 
+- test/trial basis function $\{\psi_g\}$: 
   - $\psi_g = \sum_{G(e,\alpha)=g} \psi_{\alpha}^{e}$
-  - continuous across elements
+  - any test or trial function is continuous across elements
   - $u(\mathbf x, t) \approx \sum_{g}{u_g(t) \psi_g(\boldsymbol \xi(\mathbf x))}$
 
-Weak solution after discretization:
+### Weak solution after discretization
+
 $$
 \begin{equation} 
 
@@ -309,7 +316,7 @@ $$
 
 \end{equation}
 $$
-for any $\psi_g$.
+for any test function $\psi_g$.
 
 After substituting GLL basis function in the first term on the left hand side of $\eqref{weak}$:
 $$
@@ -344,7 +351,7 @@ $$
 
 \int_V {\left( {\sum\limits_{g'} {{{\dot u}_{g'}}{\psi _{g'}}} } \right){\psi _g}dV}  
 & = \sum\limits_{G(e,\alpha) = g} {\sum\limits_{g'} {\sum\limits_{G(e',\alpha') = g'} {\dot u_{\alpha'}^{e'}{\delta _{ee'}}{\delta _{\alpha\alpha'}}{w_{\alpha}}\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{\alpha}^{GLL}} \right)} } }  \cr
-& = \sum\limits_{G(e,\alpha) = g} {\dot u_{\alpha}^e{w_{\alpha}}\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{ijk}^{GLL}} \right)}
+& = \sum\limits_{G(e,\alpha) = g} {\dot u_{\alpha}^e{w_{\alpha}}\det {{\bf{J}}^e}\left( {{\bf{\xi }}_{\alpha}^{GLL}} \right)}
 
 \end{align}
 $$
@@ -379,9 +386,51 @@ $$
 
 & = \sum\limits_{G(e,\alpha ) = g} {\int_{{{\left[ { - 1,1} \right]}^3}} {\sum\limits_{i,j} {{K_{ij}}\left( {\sum\limits_n {\sum\limits_{\alpha '} {u_{\alpha '}^e} \frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\frac{{\partial \xi _n^e}}{{\partial {x_i}}}} } \right)\left( {\sum\limits_m {\frac{{\partial {L_\alpha }}}{{\partial {\xi _m}}}\frac{{\partial \xi _m^e}}{{\partial {x_\beta }}}} } \right)} \det {{\bf{J}}^e}{d^3}\xi } }   \cr 
   
+ \label{stiff2}
  &  \approx \sum\limits_{G(e,\alpha ) = g} {\sum\limits_\beta  {{w_\beta }\sum\limits_{i,j} {\left[ {{K_{ij}}\left( {\sum\limits_n {\sum\limits_{\alpha '} {u_{\alpha '}^e} \frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\frac{{\partial \xi _n^e}}{{\partial {x_i}}}} } \right)\left( {\sum\limits_m {\frac{{\partial {L_\alpha }}}{{\partial {\xi _m}}}\frac{{\partial \xi _m^e}}{{\partial {x_j }}}} } \right)\det {{\bf{J}}^e}} \right]\left( {{\bf{\xi }}_\beta ^{GLL}} \right)} } }  
   
 
 \end{align}
 $$
 
+> [!NOTE]
+>
+> For isotropic smoothing kernel ${K_{ij}}\left( \bf {x} \right) = {K^{ISO}}\left( \bf{x} \right){\delta _{ij}}$  $\eqref{stiff2}$ can be simplified as: 
+> $$
+> \begin{equation}
+> 
+> \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_\beta  {{w_\beta }{K^{ISO}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\frac{{\partial {L_\alpha }}}{{\partial {\xi _m}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\sum\limits_i {\left( {\sum\limits_n {\sum\limits_{\alpha '} {u_{\alpha '}^e} \frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\frac{{\partial \xi _n^e}}{{\partial {x_i}}}} } \right)\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\frac{{\partial \xi _m^e}}{{\partial {x_i}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\det {{\bf{J}}^e}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)} } } } 
+> 
+> \end{equation}
+> $$
+> With further simplication
+> $$
+> \begin{align}
+> \left( {\sum\limits_n {\sum\limits_{\alpha '} {u_{\alpha '}^e} \frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\frac{{\partial \xi _n^e}}{{\partial {x_i}}}} } \right)\left( {{\bf{\xi }}_\beta ^{GLL}} \right) 
+> &  = \sum\limits_n {\frac{{\partial \xi _n^e}}{{\partial {x_i}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\sum\limits_{\alpha '} {u_{\alpha '}^e} \frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)}   \cr 
+> &  = \sum\limits_n {\frac{{\partial \xi _n^e}}{{\partial {x_i}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\sum\limits_{\alpha '} {u_{\alpha '}^e\left[ {\dot \ell _{{{\alpha '}_n}}^{GLL}\left( {\xi _{{\beta _n}}^{GLL}} \right)\prod\limits_{j \ne n} {{\delta _{{\alpha _j}{\beta _j}}}} } \right]} }   \cr 
+> &  = \sum\limits_n {\frac{{\partial \xi _n^e}}{{\partial {x_i}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\sum\limits_{{{\alpha '}_n}} {u_{{{\alpha '}_n},{\beta _{ \cdot  \ne n}}}^e\dot \ell _{{{\alpha '}_n}}^{GLL}\left( {\xi _{{\beta _n}}^{GLL}} \right)} }   \cr 
+> 
+> \end{align}
+> $$
+>
+> and for less visual clutter we define
+> $$
+> {\Psi _{m,\beta }} \triangleq \sum\limits_i {\left( {\sum\limits_n {\sum\limits_{\alpha '} {u_{\alpha '}^e} \frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\frac{{\partial \xi _n^e}}{{\partial {x_i}}}} } \right)\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\frac{{\partial \xi _m^e}}{{\partial {x_i}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\det {{\bf{J}}^e}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)}
+> $$
+> We can finally calculate $\eqref{stiff2}$ as
+> $$
+> \begin{align}
+> 
+> \int_V {\left( {\sum\limits_{g'} {{u_{g'}}\nabla {\psi _{g'}}} } \right) \cdot {\bf{K}} \cdot \nabla {\psi _g}dV} & \approx \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_\beta  {{w_\beta }{K^{ISO}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\frac{{\partial {L_\alpha }}}{{\partial {\xi _m}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right){\varphi _{m,\beta }}} } }   \cr 
+> &  = \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_\beta  {{w_\beta }{K^{ISO}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\left[ {\dot \ell _{{\alpha _m}}^{GLL}\left( {\xi _{{\beta _m}}^{GLL}} \right)\prod\limits_{j \ne m} {{\delta _{{\alpha _j}{\beta _j}}}} } \right]{\Psi _{m,\beta }}} } }   \cr 
+> &  = \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_{{\beta _m}} {{w_{{\beta _m},{\alpha _{ \cdot  \ne m}}}}{K^{ISO}}\left( {{\bf{\xi }}_{{\beta _m},{\alpha _{ \cdot  \ne m}}}^{GLL}} \right)\dot \ell _{{\alpha _m}}^{GLL}\left( {\xi _{{\beta _m}}^{GLL}} \right){\Psi _{m,\left( {{\beta _m},{\alpha _{ \cdot  \ne m}}} \right)}}} } }  \cr
+> 
+> \end{align}
+> $$
+>
+> The final weak solution for heat equation can be written as
+> $$
+> \sum\limits_{G(e,\alpha ) = g} {\dot u_\alpha ^e{w_\alpha }\det {{\bf{J}}^e}\left( {{\bf{\xi }}_\alpha ^{GLL}} \right)}  =- \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_{{\beta _m}} {{w_{{\beta _m},{\alpha _{ \cdot  \ne m}}}}{K^{ISO}}\left( {{\bf{\xi }}_{{\beta _m},{\alpha _{ \cdot  \ne m}}}^{GLL}} \right)\dot \ell _{{\alpha _m}}^{GLL}\left( {\xi _{{\beta _m}}^{GLL}} \right){\Psi _{m,\left( {{\beta _m},{\alpha _{ \cdot  \ne m}}} \right)}}} } }
+> $$
+> for every basis function $\psi_g$ of the test function space. 

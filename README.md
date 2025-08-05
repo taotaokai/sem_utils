@@ -416,21 +416,21 @@ $$
 >
 > and for less visual clutter we define
 > $$
-> {\Psi _{m,\beta }} \triangleq \sum\limits_i {\left( {\sum\limits_n {\sum\limits_{\alpha '} {u_{\alpha '}^e} \frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\frac{{\partial \xi _n^e}}{{\partial {x_i}}}} } \right)\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\frac{{\partial \xi _m^e}}{{\partial {x_i}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\det {{\bf{J}}^e}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)}
+> {\Psi _{m,\beta }} \triangleq {K^{ISO}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\sum\limits_i {\left( {\sum\limits_n {\sum\limits_{\alpha '} {u_{\alpha '}^e} \frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\frac{{\partial \xi _n^e}}{{\partial {x_i}}}} } \right)\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\frac{{\partial \xi _m^e}}{{\partial {x_i}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\det {{\bf{J}}^e}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)}
 > $$
 > We can finally calculate $\eqref{stiff2}$ as
 > $$
 > \begin{align}
 > 
-> \int_V {\left( {\sum\limits_{g'} {{u_{g'}}\nabla {\psi _{g'}}} } \right) \cdot {\bf{K}} \cdot \nabla {\psi _g}dV} & \approx \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_\beta  {{w_\beta }{K^{ISO}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\frac{{\partial {L_\alpha }}}{{\partial {\xi _m}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right){\varphi _{m,\beta }}} } }   \cr 
-> &  = \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_\beta  {{w_\beta }{K^{ISO}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right)\left[ {\dot \ell _{{\alpha _m}}^{GLL}\left( {\xi _{{\beta _m}}^{GLL}} \right)\prod\limits_{j \ne m} {{\delta _{{\alpha _j}{\beta _j}}}} } \right]{\Psi _{m,\beta }}} } }   \cr 
-> &  = \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_{{\beta _m}} {{w_{{\beta _m},{\alpha _{ \cdot  \ne m}}}}{K^{ISO}}\left( {{\bf{\xi }}_{{\beta _m},{\alpha _{ \cdot  \ne m}}}^{GLL}} \right)\dot \ell _{{\alpha _m}}^{GLL}\left( {\xi _{{\beta _m}}^{GLL}} \right){\Psi _{m,\left( {{\beta _m},{\alpha _{ \cdot  \ne m}}} \right)}}} } }  \cr
+> \int_V {\left( {\sum\limits_{g'} {{u_{g'}}\nabla {\psi _{g'}}} } \right) \cdot {\bf{K}} \cdot \nabla {\psi _g}dV} & \approx \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_\beta  {{w_\beta }\frac{{\partial {L_\alpha }}}{{\partial {\xi _m}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right){\Psi _{m,\beta }}} } }   \cr 
+> &  = \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_\beta  {{w_\beta }\left[ {\dot \ell _{{\alpha _m}}^{GLL}\left( {\xi _{{\beta _m}}^{GLL}} \right)\prod\limits_{j \ne m} {{\delta _{{\alpha _j}{\beta _j}}}} } \right]{\Psi _{m,\beta }}} } }   \cr 
+> &  = \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_{{\beta _m}} {{w_{{\beta _m},{\alpha _{ \cdot  \ne m}}}}\dot \ell _{{\alpha _m}}^{GLL}\left( {\xi _{{\beta _m}}^{GLL}} \right){\Psi _{m,\left( {{\beta _m},{\alpha _{ \cdot  \ne m}}} \right)}}} } }  \cr
 > 
 > \end{align}
 > $$
 >
 > The final weak solution for heat equation can be written as
 > $$
-> \sum\limits_{G(e,\alpha ) = g} {\dot u_\alpha ^e{w_\alpha }\det {{\bf{J}}^e}\left( {{\bf{\xi }}_\alpha ^{GLL}} \right)}  =- \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_{{\beta _m}} {{w_{{\beta _m},{\alpha _{ \cdot  \ne m}}}}{K^{ISO}}\left( {{\bf{\xi }}_{{\beta _m},{\alpha _{ \cdot  \ne m}}}^{GLL}} \right)\dot \ell _{{\alpha _m}}^{GLL}\left( {\xi _{{\beta _m}}^{GLL}} \right){\Psi _{m,\left( {{\beta _m},{\alpha _{ \cdot  \ne m}}} \right)}}} } }
+> \sum\limits_{G(e,\alpha ) = g} {\dot u_\alpha ^e{w_\alpha }\det {{\bf{J}}^e}\left( {{\bf{\xi }}_\alpha ^{GLL}} \right)}  =- \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_{{\beta _m}} {{w_{{\beta _m},{\alpha _{ \cdot  \ne m}}}} \dot \ell _{{\alpha _m}}^{GLL}\left( {\xi _{{\beta _m}}^{GLL}} \right){\Psi _{m,\left( {{\beta _m},{\alpha _{ \cdot  \ne m}}} \right)}}} } }
 > $$
 > for every basis function $\psi_g$ of the test function space. 

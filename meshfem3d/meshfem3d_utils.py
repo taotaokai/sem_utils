@@ -43,8 +43,60 @@ import numba
 #  ('dgam_dz','f4')                   ,
 #  ]
 
+def geodetic_lat2geocentric_lat(geodetic_lat):
+    f = EARTH_FLATTENING
+    factor = (1 - f)**2
+    return np.arctan(factor * np.tan(geodetic_lat))
 
-# //////////////////////////////////////////////
+def xyz2latlon_deg(v):
+    lon = np.arctan2(v[1], v[0])
+    latc = np.arctan2(v[2], (v[0]**2+v[1]**2)**0.5)
+    f = EARTH_FLATTENING
+    factor = 1.0 / (1 - f)**2
+    lat = np.arctan(factor * np.tan(latc))
+    return lat, lon
+
+def sem_latlon2xieta(lat_center, lon_center, gamma_rot, lat_test, lon_test):
+    """ convert lat/lon to SEM mesh local coordinates xi/eta
+    """
+    lat0 = np.deg2rad(lat_center)
+    lon0 = np.deg2rad(lon_center)
+    # assume zero altitude from the reference ellipsoid
+    theta = 0.5*np.pi - geodetic_lat2geocentric_lat(lat0)
+    phi = lon0
+    # radial/easting/northing direction at (lat_center, lon_center)
+    v0_r = np.array([np.sin(theta) * np.cos(phi),
+                     np.sin(theta) * np.sin(phi),
+                     np.cos(theta)])
+    v0_e = np.array([-np.sin(phi), np.cos(phi), 0])
+    v0_n = np.array([-np.cos(theta) * np.cos(phi),
+                     -np.cos(theta) * np.sin(phi),
+                     np.sin(theta)])
+
+    # rotate (v0_e, v0_n) to (v0_xi, v0_eta) through v0_r by gamma_rot counter-clockwise
+    gamma = np.deg2rad(gamma_rot)
+    v0_xi = np.cos(gamma) * v0_e + np.sin(gamma) * v0_n
+    v0_eta = -np.sin(gamma) * v0_e + np.cos(gamma) * v0_n
+    # print(v_xi, v_eta)
+
+    # conver test point to (xi, eta)
+    lat1 = np.deg2rad(lat_test)
+    lon1 = np.deg2rad(lon_test)
+    theta = 0.5*np.pi - geodetic_lat2geocentric_lat(lat1)
+    phi = lon1
+    v1 = np.array([np.sin(theta) * np.cos(phi),
+                   np.sin(theta) * np.sin(phi),
+                   np.cos(theta)])
+    # project to v0_r, v0_xi, v0_eta
+    l_r = np.dot(v0_r, v1)
+    l_xi = np.dot(v0_xi, v1)
+    l_eta = np.dot(v0_eta, v1)
+    angle_xi = np.rad2deg(np.arctan2(l_xi, l_r))
+    angle_eta = np.rad2deg(np.arctan2(l_eta, l_r))
+
+    return angle_xi, angle_eta
+
+
 def rotmat_enu_to_ecef(lon, lat):
     """rotation matrix from local ENU to ECEF coordinate basises
     rotmat[:,0] = Ve # column vector of the Easting direction in ECEF coordinate
@@ -69,7 +121,6 @@ def rotmat_enu_to_ecef(lon, lat):
     return rotmat
 
 
-# ///////////////////////////////////////////////////
 def sem_mesh_read(mesh_file):
     """read in SEM solver_data.bin slice"""
     from scipy.io import FortranFile
@@ -182,7 +233,6 @@ def sem_mesh_read(mesh_file):
     return mesh_data
 
 
-# ///////////////////////////////////////////////////
 def sem_mesh_mpi_read(mesh_mpi_file):
     """read in SEM solver_data_mpi.bin"""
     from scipy.io import FortranFile
@@ -212,7 +262,6 @@ def sem_mesh_mpi_read(mesh_mpi_file):
     return mesh_mpi_data
 
 
-# ///////////////////////////////////////////////////
 def sem_mesh_get_vol_gll(mesh_data):
     """get xyz and volume weights of each gll point"""
 
@@ -238,7 +287,6 @@ def sem_mesh_get_vol_gll(mesh_data):
     return vol_gll
 
 
-# ///////////////////////////////////////////////////
 def sem_locate_points_hex27(
     mesh_data, xyz, idoubling=-1, kdtree_num_element=2.0, max_dist_ratio=2.0
 ):
@@ -379,7 +427,6 @@ def sem_locate_points_hex27(
     return status_all, ispec_all, uvw_all, misloc_all, misratio_all
 
 
-# ///////////////////////////////////////////////////
 def sem_boundary_mesh_read(mesh_file):
     """read in SEM mesh slice"""
     from scipy.io import FortranFile
@@ -454,7 +501,6 @@ def sem_boundary_mesh_read(mesh_file):
     return mesh_data
 
 
-# ///////////////////////////////////////////////////
 def get_gll_weights():
     import gll_library
 
@@ -585,7 +631,7 @@ def gll2glob(
 
 
 @numba.jit
-def laplacian(
+def laplacian_iso(
     u_glob,
     kappa,
     wgll,
@@ -715,7 +761,7 @@ def laplacian(
                     idof = ibool[e, k, j, i]
                     out_glob[idof] += stif[k, j, i]
 
-    return out_glob
+    return -1 * out_glob
 
 
 @numba.jit

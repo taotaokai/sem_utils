@@ -18,7 +18,7 @@ from mpi4py import MPI
 from meshfem3d_constants import *
 
 from meshfem3d_utils import sem_mesh_read, sem_mesh_get_vol_gll, sem_mesh_mpi_read
-from meshfem3d_utils import gll2glob, laplacian, assemble_MPI_scalar, get_gll_weights
+from meshfem3d_utils import gll2glob, laplacian_iso, assemble_MPI_scalar, get_gll_weights
 
 
 # ====== parameters
@@ -130,7 +130,7 @@ GLL_Data = get_gll_weights()
 
 
 def Kx(x_glob):
-    kx_glob = -1.0 * laplacian(
+    kx_glob = -1.0 * laplacian_iso(
         x_glob,
         kappa,
         GLL_Data["wgll"],
@@ -189,10 +189,6 @@ def solve_cg(u):
     return x
 
 
-# trapzoidal method
-# M * (u_{n+1} - u_n) = dt * K * (u_{n+1} + u_n) / 2
-# (M - dt/2 * K) * u_{n+1} = (M + dt/2 * K) * u_n
-# (1 - dt/2 * M^{-1} * K) * u_{n+1} = (1 + dt/2 * M^{-1} * K) * u_n
 if mpi_rank == 0:
     elapsed_time = time.time() - tic
     print(f"====== start iterative smoothing (diffusion), {elapsed_time=}")

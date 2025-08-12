@@ -154,12 +154,9 @@ flowchart LR
     
     A[initial CMTSOLUTION] --> e1f
 
-    
-      direction LR
+    direction LR
       e1f[green]:::GPU --> e1m[misfit] --> e1k[srcfrechet]:::GPU --> e1p[perturb] --> es1f[N x forward]:::GPU --> es1d[diff] --> es1s[search]
     
-    
-  
     es1s --> o[updated CMTSOLUTION]
 ```
 
@@ -167,7 +164,7 @@ flowchart LR
 # Note: [***_job] is a slurm job
 
 [green_job] forward simulation
-[misfit_job] measure misfit
+[misfit_job] measure misfit, get adjoint source (dchi_du)
 [srcfrechet_job] adjoint simulation, get source gradients (e.g. dchi_dxs, dchi_dmt)
 
 [perturb_job] perturb source parameters along some chosen search directions (e.g. dxs, dmt)
@@ -431,6 +428,6 @@ $$
 >
 > The final weak solution for heat equation can be written as
 > $$
-> \sum\limits_{G(e,\alpha ) = g} {\dot u_\alpha ^e{w_\alpha }\det {{\bf{J}}^e}\left( {{\bf{\xi }}_\alpha ^{GLL}} \right)}  =- \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_{{\beta _m}} {{w_{{\beta _m},{\alpha _{ \cdot  \ne m}}}} \dot \ell _{{\alpha _m}}^{GLL}\left( {\xi _{{\beta _m}}^{GLL}} \right){\Psi _{m,\left( {{\beta _m},{\alpha _{ \cdot  \ne m}}} \right)}}} } }
+> \sum\limits_{G(e,\alpha ) = g} {\dot u_\alpha ^e{w_\alpha }\det {{\bf{J}}^e}\left( {{\bf{\xi }}_\alpha ^{GLL}} \right)}  =- \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_{{\beta _m}} {{w_{{\beta _m},{\alpha _{ \cdot  \ne m}}}}\dot \ell _{{\alpha _m}}^{GLL}\left( {\xi _{{\beta _m}}^{GLL}} \right){\Psi _{m,\left( {{\beta _m},{\alpha _{ \cdot  \ne m}}} \right)}}} } }
 > $$
 > for every basis function $\psi_g$ of the test function space. 

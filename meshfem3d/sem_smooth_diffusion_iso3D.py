@@ -127,7 +127,7 @@ comm.Barrier()
 # GLL points weights
 GLL_Data = get_gll_weights()
 
-# trapzoidal method
+# trapezoidal method
 # M * (u_{n+1} - u_n) = dt * K * (u_{n+1} + u_n) / 2
 # (M - dt/2 * K) * u_{n+1} = (M + dt/2 * K) * u_n
 # (1 - dt/2 * M^{-1} * K) * u_{n+1} = (1 + dt/2 * M^{-1} * K) * u_n
@@ -190,10 +190,6 @@ def solve_cg(u):
         #     sys.stdout.flush()
     return x
 
-# trapzoidal method
-# M * (u_{n+1} - u_n) = dt * K * (u_{n+1} + u_n) / 2
-# (M - dt/2 * K) * u_{n+1} = (M + dt/2 * K) * u_n
-# (1 - dt/2 * M^{-1} * K) * u_{n+1} = (1 + dt/2 * M^{-1} * K) * u_n
 if mpi_rank == 0:
     elapsed_time = time.time() - tic
     print(f"====== start iterative smoothing (diffusion), {elapsed_time=}")

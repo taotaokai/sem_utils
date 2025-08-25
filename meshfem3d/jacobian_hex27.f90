@@ -58,13 +58,15 @@ subroutine xyz2cube_bounded_hex27(xyz_anchor, xyz, uvw, misloc, flag_inside)
     uvw = uvw + duvw
 
     ! limit inside the cube
+    flag_inside = .true.
     if (any(uvw < MINUS_ONE .or. uvw > ONE)) then 
       where (uvw < MINUS_ONE) uvw = MINUS_ONE
       where (uvw > ONE) uvw = ONE
-      ! set is_inside to false based on the last iteration
-      if (iter == niter) then
-        flag_inside = .false.
-      endif
+      flag_inside = .false.
+      ! ! set is_inside to false based on the last iteration
+      ! if (iter == niter) then
+      !   flag_inside = .false.
+      ! endif
     endif
 
   enddo ! do iter_loop = 1,NUM_ITER
@@ -206,12 +208,12 @@ subroutine jacobian_hex27(xyz_anchor, uvw, xyz, DuvwDxyz)
             + DxyzDuvw(1,2)*DuvwDxyz(2,1) &
             + DxyzDuvw(1,3)*DuvwDxyz(3,1)
 
-  if (jacobian <= 0.d0) then
-    print *, "[ERROR] jacobian_hex27: 3D Jacobian undefined jacobian=", jacobian
-    print *, "xyz_anchor(3,27)=", xyz_anchor
-    print *, "uvw(3)=", uvw
-    stop
-  endif
+  ! if (jacobian <= 0.d0) then
+  !   print *, "[ERROR] jacobian_hex27: 3D Jacobian undefined jacobian=", jacobian
+  !   print *, "xyz_anchor(3,27)=", xyz_anchor
+  !   print *, "uvw(3)=", uvw
+  !   stop
+  ! endif
 
   ! inverse matrix: Duvw/Dxyz = inv(Dxyz/Duvw) = adj(DxyzDuvw)/det(DxyzDuvw)  
   DuvwDxyz = DuvwDxyz / jacobian

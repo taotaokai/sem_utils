@@ -1,4 +1,4 @@
-import sys
+import sys, os
 import pandas as pd
 import numpy as np
 import pyvista as pv
@@ -9,7 +9,7 @@ from meshfem3d_utils import xyz2latlon_deg, geodetic_lat2geocentric_lat
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("par_file", help="SEM Par_file") 
+parser.add_argument("par_file", help="SEM Par_file")
 parser.add_argument(
     "-n",
     "--ngrid",
@@ -28,9 +28,13 @@ parser.add_argument(
     type=float,
 )
 parser.add_argument("--vtk", default="pointspread_points.vtk", help="output VTK file")
+
+parser.add_argument("-o", "--out_dir", default="output", help="output directory")
+
 parser.add_argument(
     "--vertical_list", default="vertical_slices.csv", help="filename of vertical slices list"
 )
+
 parser.add_argument(
     "--horizontal_list", default="horizontal_slices.csv", help="filename of vertical slices list"
 )
@@ -39,7 +43,7 @@ args = parser.parse_args()
 print(args)
 
 sem_parfile = args.par_file
-vtk_file = args.vtk
+vtk_file = f"{args.out_dir}/{args.vtk}"
 # slice_file = args.slice
 
 sem_params = pd.read_csv(
@@ -184,16 +188,16 @@ for ixi in np.arange(n_xi):
     )
     slice_params.append(params)
 
-column_names = ["xi", "eta", "lat", "lon", "azimuth", "min_theta", "max_theta"] 
+column_names = ["xi", "eta", "lat", "lon", "azimuth", "min_theta", "max_theta"]
 df = pd.DataFrame(slice_params, columns=column_names)
-df.to_csv(args.vertical_list, float_format="%15.5e", index=False)
+df.to_csv(os.path.join(args.out_dir, args.vertical_list), float_format="%15.5e", index=False)
 
 
 # make horizontal cross-sections (spherical cap)
-column_names = ["radius", "central_lat", "central_lon", "width_xi", "width_eta", "rotation_angle"] 
+column_names = ["radius", "central_lat", "central_lon", "width_xi", "width_eta", "rotation_angle"]
 slice_params = [ (r, lat_center, lon_center, xi_width, eta_width, gamma_rot) for r in r_grid]
 df = pd.DataFrame(slice_params, columns=column_names)
-df.to_csv(args.horizontal_list, float_format="%15.5e", index=False)
+df.to_csv(os.path.join(args.out_dir, args.horizontal_list), float_format="%15.5e", index=False)
 
 # with open(slice_file, "w") as fp:
 #     fp.write("xi  eta  lat  lon  azimuth  min_theta max_theta\n")

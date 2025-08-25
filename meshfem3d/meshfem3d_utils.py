@@ -43,35 +43,37 @@ import numba
 #  ('dgam_dz','f4')                   ,
 #  ]
 
+
 def geodetic_lat2geocentric_lat(geodetic_lat):
     f = EARTH_FLATTENING
-    factor = (1 - f)**2
+    factor = (1 - f) ** 2
     return np.arctan(factor * np.tan(geodetic_lat))
+
 
 def xyz2latlon_deg(v):
     lon = np.arctan2(v[1], v[0])
-    latc = np.arctan2(v[2], (v[0]**2+v[1]**2)**0.5)
+    latc = np.arctan2(v[2], (v[0] ** 2 + v[1] ** 2) ** 0.5)
     f = EARTH_FLATTENING
-    factor = 1.0 / (1 - f)**2
+    factor = 1.0 / (1 - f) ** 2
     lat = np.arctan(factor * np.tan(latc))
     return lat, lon
 
+
 def sem_latlon2xieta(lat_center, lon_center, gamma_rot, lat_test, lon_test):
-    """ convert lat/lon to SEM mesh local coordinates xi/eta
-    """
+    """convert lat/lon to SEM mesh local coordinates xi/eta"""
     lat0 = np.deg2rad(lat_center)
     lon0 = np.deg2rad(lon_center)
     # assume zero altitude from the reference ellipsoid
-    theta = 0.5*np.pi - geodetic_lat2geocentric_lat(lat0)
+    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0)
     phi = lon0
     # radial/easting/northing direction at (lat_center, lon_center)
-    v0_r = np.array([np.sin(theta) * np.cos(phi),
-                     np.sin(theta) * np.sin(phi),
-                     np.cos(theta)])
+    v0_r = np.array(
+        [np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)]
+    )
     v0_e = np.array([-np.sin(phi), np.cos(phi), 0])
-    v0_n = np.array([-np.cos(theta) * np.cos(phi),
-                     -np.cos(theta) * np.sin(phi),
-                     np.sin(theta)])
+    v0_n = np.array(
+        [-np.cos(theta) * np.cos(phi), -np.cos(theta) * np.sin(phi), np.sin(theta)]
+    )
 
     # rotate (v0_e, v0_n) to (v0_xi, v0_eta) through v0_r by gamma_rot counter-clockwise
     gamma = np.deg2rad(gamma_rot)
@@ -82,11 +84,11 @@ def sem_latlon2xieta(lat_center, lon_center, gamma_rot, lat_test, lon_test):
     # conver test point to (xi, eta)
     lat1 = np.deg2rad(lat_test)
     lon1 = np.deg2rad(lon_test)
-    theta = 0.5*np.pi - geodetic_lat2geocentric_lat(lat1)
+    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat1)
     phi = lon1
-    v1 = np.array([np.sin(theta) * np.cos(phi),
-                   np.sin(theta) * np.sin(phi),
-                   np.cos(theta)])
+    v1 = np.array(
+        [np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)]
+    )
     # project to v0_r, v0_xi, v0_eta
     l_r = np.dot(v0_r, v1)
     l_xi = np.dot(v0_xi, v1)
@@ -287,7 +289,180 @@ def sem_mesh_get_vol_gll(mesh_data):
     return vol_gll
 
 
-def sem_locate_points_hex27(
+# @numba.jit("void(float64[:,:], float64[:], float64[:], float64[:,:])")
+# def sem_jacobian_hex27(anchors_xyz, uvw, xyz, dudx):
+# @numba.jit
+# @numba.jit("void(float64[:,::1], float64[::1], float64[::1], float64[:,::1])")
+@numba.jit()
+def sem_jacobian_hex27(anchors_xyz, uvw, xyz, dudx):
+    """
+    compute 3D jacobian at a given point for a 27-node element
+    map from local coordinate (uvw) to physical position (xyz)
+    the shape the element is defined by the anchor points (xyz_anchor)
+    !
+    !-input
+    ! anchors_xyz(27,3): xyz of anchor points, the order of the 27 nodes must be from
+    !   subroutine anchor_index_hex27()
+    ! uvw(3): local coordinate
+    !
+    !-output
+    ! xyz(3): map uvw to physical space
+    ! dudx(3,3): jacobian matrix
+    """
+    # lagrangian polynomials of colocation points [-1,0,1] evaluated at uvw
+    lag = np.zeros((3, 3))
+    lag[0, :] = uvw * (uvw - 1.0) / 2.0
+    lag[1, :] = 1.0 - uvw**2
+    lag[2, :] = uvw * (uvw + 1.0) / 2.0
+
+    # derivative of lagrange polynomials at uvw
+    dlag = np.zeros((3, 3))
+    dlag[0, :] = uvw - 0.5
+    dlag[1, :] = -2.0 * uvw
+    dlag[2, :] = uvw + 0.5
+
+    # HEX27_IJK = np.array(
+    #     [
+    #         # 8 corners
+    #         [0, 0, 0], [2, 0, 0], [2, 2, 0], [0, 2, 0], [0, 0, 2], [2, 0, 2], [2, 2, 2], [0, 2, 2],
+    #         # 16 edge centers
+    #         [1, 0, 0], [2, 1, 0], [1, 2, 0], [0, 1, 0], [0, 0, 1], [2, 0, 1], [2, 2, 1], [0, 2, 1],
+    #         [1, 0, 2], [2, 1, 2], [1, 2, 2], [0, 1, 2],
+    #         # 6 face centers
+    #         [1, 1, 0], [1, 0, 1], [2, 1, 1], [1, 2, 1], [0, 1, 1], [1, 1, 2],
+    #         # 1 body center
+    #         [1, 1, 1],
+    #     ],
+    #     dtype=np.int64,
+    # )
+    ii, jj, kk = ANCHOR_NODES[:, 0], ANCHOR_NODES[:, 1], ANCHOR_NODES[:, 2]
+    shape3D = lag[ii, 0] * lag[jj, 1] * lag[kk, 2]
+    dershape3D = np.zeros((3, 27))
+    dershape3D[0, :] = dlag[ii, 0] *  lag[jj, 1] *  lag[kk, 2]
+    dershape3D[1, :] =  lag[ii, 0] * dlag[jj, 1] *  lag[kk, 2]
+    dershape3D[2, :] =  lag[ii, 0] *  lag[jj, 1] * dlag[kk, 2]
+
+    # for a in range(27):
+    #     i, j, k = ANCHOR_NODES[a, :]
+    #     # xyz += anchors_xyz[a,:] * (lag[i, 0] * lag[j, 1] * lag[k, 2])
+    #     # dxdu[0, :] += anchors_xyz[a, 0] * (dlag[i,0] * lag[j,1] * lag[k, 2])
+    #     # dxdu[1, :] += anchors_xyz[a, 1] * (lag[i,0] * dlag[j,1] * lag[k, 2])
+    #     # dxdu[2, :] += anchors_xyz[a, 2] * (lag[i,0] * lag[j,1] * dlag[k, 2])
+    #     shape3D[a] = lag[i, 0] * lag[j, 1] * lag[k, 2]
+    #     dershape3D[a, 0] = dlag[i, 0] * lag[j, 1] * lag[k, 2]
+    #     dershape3D[a, 1] = lag[i, 0] * dlag[j, 1] * lag[k, 2]
+    #     dershape3D[a, 2] = lag[i, 0] * lag[j, 1] * dlag[k, 2]
+
+    # xyz[:] = 0
+    # xyz = np.zeros(3)
+    # dxdu = np.zeros((3, 3))
+    xyz[:] = np.dot(shape3D, anchors_xyz)
+    dxdu = np.transpose(np.dot(dershape3D, anchors_xyz))
+    # for a in range(27):
+    #     xyz += shape3D[a] * anchors_xyz[a, :]
+    #     dxdu[0, :] += anchors_xyz[a, 0] * dershape3D[a, :]
+    #     dxdu[1, :] += anchors_xyz[a, 1] * dershape3D[a, :]
+    #     dxdu[2, :] += anchors_xyz[a, 2] * dershape3D[a, :]
+
+    # dudx = np.linalg.inv(dxdu)
+
+    # transpose(adjoint(dxdu))
+    # dudx = np.zeros((3, 3))
+    dudx[0, 0] = dxdu[1, 1] * dxdu[2, 2] - dxdu[2, 1] * dxdu[1, 2]
+    dudx[1, 0] = -(dxdu[1, 0] * dxdu[2, 2] - dxdu[2, 0] * dxdu[1, 2])
+    dudx[2, 0] = dxdu[1, 0] * dxdu[2, 1] - dxdu[2, 0] * dxdu[1, 1]
+    dudx[0, 1] = -(dxdu[0, 1] * dxdu[2, 2] - dxdu[2, 1] * dxdu[0, 2])
+    dudx[1, 1] = dxdu[0, 0] * dxdu[2, 2] - dxdu[2, 0] * dxdu[0, 2]
+    dudx[2, 1] = -(dxdu[0, 0] * dxdu[2, 1] - dxdu[2, 0] * dxdu[0, 1])
+    dudx[0, 2] = dxdu[0, 1] * dxdu[1, 2] - dxdu[1, 1] * dxdu[0, 2]
+    dudx[1, 2] = -(dxdu[0, 0] * dxdu[1, 2] - dxdu[1, 0] * dxdu[0, 2])
+    dudx[2, 2] = dxdu[0, 0] * dxdu[1, 1] - dxdu[1, 0] * dxdu[0, 1]
+    # det(dxdu)
+    det = dxdu[0, 0] * dudx[0, 0] + dxdu[0, 1] * dudx[1, 0] + dxdu[0, 2] * dudx[2, 0]
+    # inverse of dxdu: transpose(adjoint(dxdu)) / det(dxdu)
+    dudx[:] = dudx[:] / det
+
+    # return xyz, dudx
+
+
+# @numba.njit("Tuple((float64, boolean))(float64[:,:], float64[:], float64[:], int64)")
+# @numba.jit()
+# @numba.njit("Tuple((float64, boolean))(float64[:,::1], float64[::1], float64[::1], int64)")
+@numba.jit()
+def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
+    """
+    !-map a given point in physical space (xyz) to the
+    ! reference cube (uvw) for a 27-node hexahedron element (8 vertex, 12 egde
+    ! centers, 6 face centers and 1 body center),
+    ! and also flag whether the point is inside the cube
+    ! if the point lies outside the element, calculate the bounded (xi,eta,gamma)
+    ! inside or on the surface of the reference unit cube.
+    !
+    !-inputs:
+    ! (real) xyz_anchor(27,3): anchor points of the element
+    ! (real) xyz(3): coordinates of the target point
+    !
+    !-outputs:
+    ! (real) uvw(3): local coordinates in reference cube
+    ! (real) misloc: location misfit abs(xyz - XYZ(uvw))
+    ! (logical) flag_inside: flag whether the target point locates inside the element
+    """
+    # find nearest anchor nodes as initial uvw
+    # min_dist_sq = 1.0e5
+    # best_a = 0
+    # for a in range(27):
+    #     dist_sq = sum((anchors_xyz[a, :] - target_xyz[:]) ** 2)
+    #     if dist_sq < min_dist_sq:
+    #         min_dist_sq = dist_sq
+    #         best_a = a
+    # i, j, k = ANCHOR_GLL_INDEX[best_a, :]
+    # located_uvw[0] = GLL_NODES[i]
+    # located_uvw[1] = GLL_NODES[j]
+    # located_uvw[2] = GLL_NODES[k]
+
+    # TODO the above found initial value actually increases final mis-location???
+    located_uvw[:] = 0.0  
+
+    # iteratively update local coordinate uvw to approach the target xyz
+    xyz = np.zeros(3)
+    dudx = np.zeros((3,3))
+    is_inside = True
+    for iter in range(max_niter):
+        # predicted xyzi and Jacobian for the current uvw
+        sem_jacobian_hex27(anchors_xyz, located_uvw, xyz, dudx)
+        # xyz, dudx = sem_jacobian_hex27(anchors_xyz, located_uvw)
+        # print(f"{iter=}, {located_uvw=}, {xyz=}")
+
+        # update
+        located_uvw[:] = located_uvw[:] + np.dot(dudx, target_xyz - xyz)
+
+        is_inside = True
+        mask = located_uvw < -1
+        if np.any(mask): is_inside = False
+        located_uvw[mask] = -1
+        mask = located_uvw > 1
+        if np.any(mask): is_inside = False
+        located_uvw[mask] = 1
+
+        # # limit inside the reference cube
+        # is_inside = True
+        # for i in range(3):
+        #     if located_uvw[i] < -1:
+        #         located_uvw[i] = -1
+        #         is_inside = False
+        #     elif located_uvw[i] > 1:
+        #         located_uvw[i] = 1
+        #         is_inside = False
+
+    sem_jacobian_hex27(anchors_xyz, located_uvw, xyz, dudx)
+    # xyz, dudx = sem_jacobian_hex27(anchors_xyz, located_uvw)
+    misloc = (sum(target_xyz - xyz) ** 2) ** 0.5
+    # print(f"{iter=}, {located_uvw=}, {xyz=}")
+
+    return misloc, is_inside
+
+
+def sem_mesh_locate_points(
     mesh_data, xyz, idoubling=-1, kdtree_num_element=2.0, max_dist_ratio=2.0
 ):
     """locate points in the SEM mesh.
@@ -308,7 +483,7 @@ def sem_locate_points_hex27(
     from scipy import spatial
 
     # from gll_library import zwgljd, lagrange_poly
-    from jacobian_hex27 import xyz2cube_bounded_hex27, anchor_index_hex27
+    # from jacobian_hex27 import xyz2cube_bounded_hex27, anchor_index_hex27
 
     if max_dist_ratio < 1:
         warnings.warn(
@@ -316,7 +491,7 @@ def sem_locate_points_hex27(
         )
         max_dist_ratio = 2.0
 
-    npoints = xyz.shape[1]
+    npoints = xyz.shape[0]
     idoubling = np.array(idoubling, dtype="int")
     if idoubling.size == 1:
         idoubling = np.ones(npoints, dtype="int") * int(idoubling)
@@ -344,7 +519,7 @@ def sem_locate_points_hex27(
         # distance between gll points and the central gll point
         iglob1 = ibool[ispec, :, :, :].ravel()
         dist = (
-            np.sum((xyz_elem[ispec : ispec + 1, :] - xyz_glob[iglob1, :]) ** 2, axis=0)
+            np.sum((xyz_elem[ispec, :] - xyz_glob[iglob1, :]) ** 2, axis=1)
             ** 0.5
         )
         element_half_size[ispec] = np.max(dist)
@@ -355,7 +530,9 @@ def sem_locate_points_hex27(
     )
 
     # --- loop over each point, get the location info
-    iax, iay, iaz = anchor_index_hex27(NGLLX, NGLLY, NGLLZ)
+    iax = ANCHOR_GLL_INDEX[:,0]
+    iay = ANCHOR_GLL_INDEX[:,1]
+    iaz = ANCHOR_GLL_INDEX[:,2]
 
     # xigll, wx = zwgljd(NGLLX,GAUSSALPHA,GAUSSBETA)
     # yigll, wy = zwgljd(NGLLY,GAUSSALPHA,GAUSSBETA)
@@ -370,16 +547,19 @@ def sem_locate_points_hex27(
     misratio_all = np.zeros(npoints)
 
     ipoint_select = [ipoint for ipoint in range(npoints) if neighbor_lists[ipoint]]
+    uvw = np.zeros(3)
     # for ipoint in range(npoints):
     for ipoint in ipoint_select:
         # if not neighbor_lists[ipoint]: continue
         # get neibouring elements
-        ispec_list = np.array(
-            neighbor_lists[ipoint]
-        )  # convert list to numpy array to have index slicing
+        # convert list to numpy array to have index slicing
+        ispec_list = np.array(neighbor_lists[ipoint])  
         # ratio between the distance from target point to the element center and the element size
+        # print(ispec_list.shape)
+        # print(xyz_elem.shape)
+        # print(xyz.shape)
         dist_ratio = (
-            np.sum((xyz_elem[ispec_list, :] - xyz[ipoint : ipoint + 1, :]) ** 2, axis=0)
+            np.sum((xyz_elem[ispec_list, :] - xyz[ipoint, :]) ** 2, axis=1)
             ** 0.5
             / element_half_size[ispec_list]
         )
@@ -397,7 +577,7 @@ def sem_locate_points_hex27(
             #  continue
             iglob = ibool[ispec, iaz, iay, iax]
             xyz_anchor = xyz_glob[iglob, :]
-            uvw, misloc, is_inside = xyz2cube_bounded_hex27(xyz_anchor, xyz[ipoint, :])
+            misloc, is_inside = sem_map2cube_hex27(xyz_anchor, xyz[ipoint, :], uvw)
             ##DEBUG
             # if is_inside and status_all[ipoint]==1:
             #  warnings.warn("point is located inside more than one element",

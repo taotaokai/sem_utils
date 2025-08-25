@@ -18,13 +18,103 @@ NGLLX = 5
 NGLLY = NGLLX
 NGLLZ = NGLLX
 
-GLL5_NODES = np.array([-1, -((3.0 / 7.0) ** 0.5), 0, (3.0 / 7.0) ** 0.5, 1])
-GLL5_WEIGHTS = np.array([0.1, 49.0 / 90.0, 32.0 / 45.0, 49.0 / 90.0, 0.1])
+GLL_NODES = np.array([-1, -((3.0 / 7.0) ** 0.5), 0, (3.0 / 7.0) ** 0.5, 1])
+GLL_WEIGHTS = np.array([0.1, 49.0 / 90.0, 32.0 / 45.0, 49.0 / 90.0, 0.1])
 
 #! mid-points inside a GLL element
 MIDX = NGLLX // 2
 MIDY = NGLLY // 2
 MIDZ = NGLLZ // 2
+
+ENDX = NGLLX - 1
+ENDY = NGLLY - 1
+ENDZ = NGLLZ - 1
+
+# [0, 2, 2, 0, 0, 2, 2, 0, 1, 2, 1, 0, 0, 2, 2, 0, 1, 2, 1, 0, 1, 1, 2, 1, 0, 1, 1],
+# [0, 0, 2, 2, 0, 0, 2, 2, 0, 1, 2, 1, 0, 0, 2, 2, 0, 1, 2, 1, 1, 0, 1, 2, 1, 1, 1],
+# [0, 0, 0, 0, 2, 2, 2, 2, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 0, 1, 1, 1, 1, 2, 1]
+
+# HEX27_KK, HEX27_JJ, HEX27_II = np.meshgrid([0,1,2], [0,1,2], [0,1,2], indexing='ij')
+# HEX27_KK = HEX27_KK.flatten() 
+# HEX27_JJ = HEX27_JJ.flatten() 
+# HEX27_II = HEX27_II.flatten() 
+# HEX27_GLL_IJK = np.meshgrid([0,MIDZ,ENDZ], [0,MIDY,ENDY], [0,MIDX,ENDX], indexing='ij')
+
+# anchor nodes to define shape function
+ANCHOR_NODES = np.array(
+    [
+        # 8 corners
+        [0, 0, 0],
+        [2, 0, 0],
+        [2, 2, 0],
+        [0, 2, 0],
+        [0, 0, 2],
+        [2, 0, 2],
+        [2, 2, 2],
+        [0, 2, 2],
+        # 16 edge centers
+        [1, 0, 0],
+        [2, 1, 0],
+        [1, 2, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+        [2, 0, 1],
+        [2, 2, 1],
+        [0, 2, 1],
+        [1, 0, 2],
+        [2, 1, 2],
+        [1, 2, 2],
+        [0, 1, 2],
+        # 6 face centers
+        [1, 1, 0],
+        [1, 0, 1],
+        [2, 1, 1],
+        [1, 2, 1],
+        [0, 1, 1],
+        [1, 1, 2],
+        # 1 body center
+        [1, 1, 1],
+    ],
+    dtype=np.int64,
+)
+
+# index of anchor nodes in GLL element [Nanchor, ijk]
+ANCHOR_GLL_INDEX = np.array(
+    [
+        # 8 corners
+        [0, 0, 0],
+        [ENDX, 0, 0],
+        [ENDX, ENDY, 0],
+        [0, ENDY, 0],
+        [0, 0, ENDZ],
+        [ENDX, 0, ENDZ],
+        [ENDX, ENDY, ENDZ],
+        [0, ENDY, ENDZ],
+        # 16 edge centers
+        [MIDX, 0, 0],
+        [ENDX, MIDY, 0],
+        [MIDX, ENDY, 0],
+        [0, MIDY, 0],
+        [0, 0, MIDZ],
+        [ENDX, 0, MIDZ],
+        [ENDX, ENDY, MIDZ],
+        [0, ENDY, MIDZ],
+        [MIDX, 0, ENDZ],
+        [ENDX, MIDY, ENDZ],
+        [MIDX, ENDY, ENDZ],
+        [0, MIDY, ENDZ],
+        # 6 face centers
+        [MIDX, MIDY, 0],
+        [MIDX, 0, MIDZ],
+        [ENDX, MIDY, MIDZ],
+        [MIDX, ENDY, MIDZ],
+        [0, MIDY, MIDZ],
+        [MIDX, MIDY, ENDZ],
+        # 1 body center
+        [MIDX, MIDY, MIDZ],
+    ],
+    dtype=int,
+)
 
 #! for the Gauss-Lobatto-Legendre points and weights
 GAUSSALPHA = 0

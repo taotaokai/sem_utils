@@ -18,8 +18,8 @@ NGLLX = 5
 NGLLY = NGLLX
 NGLLZ = NGLLX
 
-GLL_NODES = np.array([-1, -((3.0 / 7.0) ** 0.5), 0, (3.0 / 7.0) ** 0.5, 1])
-GLL_WEIGHTS = np.array([0.1, 49.0 / 90.0, 32.0 / 45.0, 49.0 / 90.0, 0.1])
+# GLL_NODES = np.array([-1, -((3.0 / 7.0) ** 0.5), 0, (3.0 / 7.0) ** 0.5, 1])
+# GLL_WEIGHTS = np.array([0.1, 49.0 / 90.0, 32.0 / 45.0, 49.0 / 90.0, 0.1])
 
 #! mid-points inside a GLL element
 MIDX = NGLLX // 2

@@ -12,7 +12,7 @@ import numpy as np
 
 def gll_nodes_weights(n):
     # Use the Chebyshev-Gauss-Lobatto nodes as the first guess
-    x = np.cos(np.pi * np.arange(n) / (n-1))
+    x = np.cos(np.pi*np.linspace(1,0,n))
     # n1 = n - 1
     # The Legendre Vandermonde Matrix
     P = np.zeros((n, n))
@@ -21,17 +21,14 @@ def gll_nodes_weights(n):
     # update x using the Newton-Raphson method.
     xold = 2 * np.ones_like(x)
     while max(abs(x - xold)) > 1e-5:
+        print(x)
         xold = x
         P[:, 0] = 1
         P[:, 1] = x
         for k in range(1, n-1):
-            P[:, k + 1] = ((2 * k - 1) * x * P[:, k] - (k - 1) * P[:, k - 1]) / k
-
+            P[:, k + 1] = ((2 * k + 1) * x * P[:, k] - (k) * P[:, k - 1]) / (k + 1)
         x = xold - (x * P[:, -1] - P[:, -2]) / (n * P[:, -1])
-        print(x)
-
     w = 2 / (n * (n -1) * P[:, -1] ** 2)
-
     return x, w
 
 

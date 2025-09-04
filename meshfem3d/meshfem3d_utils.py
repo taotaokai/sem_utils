@@ -43,6 +43,88 @@ import numba
 #  ('dgam_dz','f4')                   ,
 #  ]
 
+#==================================================#
+
+@numba.jit("Tuple((float64[:], float64[:]))(int64)")
+def gll_nodes_weights(n :int):
+    if n == 5:
+        x = np.array([-1, -((3.0 / 7.0) ** 0.5), 0, (3.0 / 7.0) ** 0.5, 1])
+        w = np.array([0.1, 49.0 / 90.0, 32.0 / 45.0, 49.0 / 90.0, 0.1])
+        return x, w
+    else:
+        # Use the Chebyshev-Gauss-Lobatto nodes as the first guess
+        x = -1 * np.cos(np.pi * np.arange(n) / (n-1))
+        # n1 = n - 1
+        # The Legendre Vandermonde Matrix
+        P = np.zeros((n, n))
+        # Compute P_(N) using the recursion relation
+        # Compute its first and second derivatives and
+        # update x using the Newton-Raphson method.
+        xold = 2 * np.ones_like(x)
+        while np.max(np.abs(x - xold)) > 1e-7:
+            xold = x
+            P[:, 0] = 1
+            P[:, 1] = x
+            for k in range(1, n-1):
+                P[:, k + 1] = ((2 * k + 1) * x * P[:, k] - (k) * P[:, k - 1]) / (k + 1)
+            x = xold - (x * P[:, -1] - P[:, -2]) / (n * P[:, -1])
+        w = 2 / (n * (n -1) * P[:, -1] ** 2)
+        return x, w
+
+@numba.jit("float64[:](float64[:], float64)")
+def lagrange_poly(nodes, x:float):
+    """
+    n-node Lagrange basis evaluated at x
+    """
+    z = nodes
+    n = len(nodes)
+    # lag_i(x)
+    lag = np.zeros(n)
+    ind = np.arange(n)
+    for i in range(n):
+        zj = z[ind != i]
+        lag[i] = np.prod(x - zj) / np.prod(z[i] - zj)
+    return lag
+
+@numba.jit("float64[:,:](float64[:], float64[:])")
+def lagrange_poly_derivative(nodes, xx):
+    """
+    derivative of n-node Lagrange basis at xx
+    """
+    z = nodes
+    nz = len(nodes)
+    nx = len(xx)
+    # a[i,j] = dlag_i/dx(x_j)
+    dlag_dx = np.zeros((nz, nx))
+    ind = np.arange(nz)
+    for i in range(nz):
+        denominator = np.prod((z[i] - z[ind != i]))
+        for j in range(nx):
+            x = xx[j] 
+            numerator = 0
+            for k in range(nz):
+                if k == i: 
+                    continue
+                mask = (ind != i) & (ind != k)
+                numerator += np.prod(x - z[mask])
+            dlag_dx[i, j] = numerator / denominator
+    return dlag_dx
+
+def get_gll_weights():
+    """ use sem build-in gll_library
+    """
+    import gll_library
+    # GLL points and weights
+    zgll, wgll = gll_library.zwgljd(NGLLX, GAUSSALPHA, GAUSSBETA)
+    # Get derivatives of langrange basis at gll nodes
+    dlag_dzgll = np.zeros((NGLLX, NGLLX))
+    for i in range(NGLLX):
+        for j in range(NGLLX):
+            # dlagP_i/dx(xgll[j])
+            dlag_dzgll[i, j] = gll_library.lagrange_deriv_gll(i, j, zgll, NGLLX)
+    return zgll, wgll, dlag_dzgll
+
+#==================================================#
 
 def geodetic_lat2geocentric_lat(geodetic_lat):
     f = EARTH_FLATTENING
@@ -309,7 +391,7 @@ def sem_jacobian_hex27(anchors_xyz, uvw, xyz, dudx):
     ! xyz(3): map uvw to physical space
     ! dudx(3,3): jacobian matrix
     """
-    # lagrangian polynomials of colocation points [-1,0,1] evaluated at uvw
+    # lagrange basis at nodes [-1,0,1] evaluated at uvw
     lag = np.zeros((3, 3))
     lag[0, :] = uvw * (uvw - 1.0) / 2.0
     lag[1, :] = 1.0 - uvw**2
@@ -679,23 +761,6 @@ def sem_boundary_mesh_read(mesh_file):
     ]
 
     return mesh_data
-
-
-def get_gll_weights():
-    import gll_library
-
-    # GLL points weights
-    xgll, wgll = gll_library.zwgljd(NGLLX, GAUSSALPHA, GAUSSBETA)
-    # if mpi_rank == 0: print(f"{xgll=}, {wgll=}")
-    # Get derivative matrices
-    dlag_gll = np.zeros((NGLLX, NGLLX))  # , dtype=u_glob.dtype)
-    # dlag_wgll = np.zeros((NGLLX, NGLLX), dtype=u_glob.dtype)
-    for i in range(NGLLX):
-        for j in range(NGLLX):
-            # dLag_i/dx(xgll[j])
-            dlag_gll[i, j] = gll_library.lagrange_deriv_gll(i, j, xgll, NGLLX)
-
-    return {"xgll": xgll, "wgll": wgll, "dlag_gll": dlag_gll}
 
 
 # @numba.jit

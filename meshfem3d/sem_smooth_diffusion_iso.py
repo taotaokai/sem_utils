@@ -121,7 +121,7 @@ u_glob = u_dv_glob / dv_glob
 comm.Barrier()
 
 # GLL points weights
-GLL_Data = get_gll_weights()
+zgll, wgll, dlag_dzgll = get_gll_weights()
 
 # trapzoidal method
 # M * (u_{n+1} - u_n) = dt * K * (u_{n+1} + u_n) / 2
@@ -133,8 +133,8 @@ def Kx(x_glob):
     kx_glob = -1.0 * laplacian_iso(
         x_glob,
         kappa,
-        GLL_Data["wgll"],
-        GLL_Data["dlag_gll"],
+        wgll,
+        dlag_dzgll,
         mesh["ibool"],
         mesh["dxsi_dx"],
         mesh["dxsi_dy"],

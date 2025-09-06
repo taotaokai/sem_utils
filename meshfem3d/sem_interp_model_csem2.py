@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import sys
+import os, sys
+import argparse
 
 import numpy as np
 from scipy.io import FortranFile
@@ -13,22 +14,34 @@ from meshfem3d_constants import R_EARTH
 from meshfem3d_utils import sem_mesh_read
 
 #====== parameters
+parser = argparse.ArgumentParser()
+
+parser.add_argument("nproc", type=int)
+parser.add_argument("model_file", help="EMC model file (.nc)")
+parser.add_argument("--mesh_dir", default="DATABASES_MPI", help="mesh dir")
+parser.add_argument("--model_tag", default="VSV", help="parameter name in EMC model")
+parser.add_argument("--etopo_dir", default="ETOPO1", help="ETOPO dir")
+parser.add_argument("--out_dir", default="interp_model", help="output dir")
+parser.add_argument("--out_tag", default="vsv", help="output model name")
+
+args = parser.parse_args()
+print(args)
 
 # mesh files for which to get interpolated values
-nproc_target = 2
-mesh_dir_target = "DATABASES_MPI"
-model_dir_target = "DATABASES_MPI"
+nproc_target = args.nproc
+mesh_dir_target = args.mesh_dir
 
-model_name = 'VSV'
-
-out_dir = "interp_model"
-out_tag = 'vsv'
+model_file = args.model_file
+model_name = args.model_tag
+etopo_dir = args.etopo_dir
+out_dir = args.out_dir
+out_tag = args.out_tag
 
 ecef2gps = pyproj.Transformer.from_crs("EPSG:4978", "EPSG:4326")  # ECEF to GPS
 
 #====== read in topo file
-bedrock = Dataset("etopo1/ETOPO_2022_v1_60s_N90W180_bed.nc", "r", format="NETCDF4")
-geoid = Dataset("etopo1/ETOPO_2022_v1_60s_N90W180_geoid.nc", "r", format="NETCDF4")
+bedrock = Dataset(os.path.join(etopo_dir, "ETOPO_2022_v1_60s_N90W180_bed.nc"), "r", format="NETCDF4")
+geoid = Dataset(os.path.join(etopo_dir,"ETOPO_2022_v1_60s_N90W180_geoid.nc"), "r", format="NETCDF4")
 etopo1_heights = np.array(bedrock.variables['z']) + np.array(geoid.variables['z']) # z(lat, lon) height from WGS84 ellipsoid
 etopo1_lons = np.array(geoid.variables['lon'])
 etopo1_lats = np.array(geoid.variables['lat'])
@@ -37,7 +50,7 @@ bedrock.close()
 geoid.close()
 
 #====== read in model file
-model = Dataset("Europe_3ppd.nc", "r")
+model = Dataset(model_file, "r")
 model_depths = np.array(model.variables['depth'])
 model_lats = np.array(model.variables['latitude'])
 model_lons = np.array(model.variables['longitude'])

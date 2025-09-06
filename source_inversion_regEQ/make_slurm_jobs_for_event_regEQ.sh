@@ -55,11 +55,7 @@ cat <<EOF > $green_job
 #!/bin/bash
 #SBATCH -J ${event_id}.green
 #SBATCH -o ${green_job}.o%j
-#SBATCH -N $slurm_nnode
-#SBATCH -n $slurm_nproc
-#SBATCH -p $slurm_partition_cpu
-#SBATCH -t $slurm_timelimit_forward
-##SBATCH $slurm_dcu_extra_args
+#SBATCH ${slurm_args_green}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -77,7 +73,7 @@ sed -i "/^tau(s)/s/.*/tau(s):            +0.0E+00/" CMTSOLUTION
 
 # cp $data_dir/$event_id/STATIONS .
 
-cp $mesh_dir/DATA/Par_file .
+# cp $mesh_dir/DATA/Par_file .
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
 sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
@@ -133,10 +129,7 @@ cat <<EOF > $misfit_job
 #!/bin/bash
 #SBATCH -J ${event_id}.misfit
 #SBATCH -o $misfit_job.o%j
-#SBATCH -N 1
-#SBATCH -n $slurm_nproc_misfit
-#SBATCH -p $slurm_partition_cpu
-#SBATCH -t $slurm_timelimit_misfit
+#SBATCH ${slurm_args_misfit}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -161,7 +154,7 @@ $python_exec $sem_utils_dir/misfit/measure_adj.py \\
   $data_dir/$event_id/data.h5 \\
   $event_dir/output_green/sac \\
   $event_dir/SEM \\
-  --nproc=$slurm_nproc_misfit \\
+  --nproc=\$SLURM_NPROCS \\
   --cmt_in_ECEF \\
   --syn_is_grn
 
@@ -189,11 +182,7 @@ cat <<EOF > $srcfrechet_job
 #!/bin/bash
 #SBATCH -J ${event_id}.srcfrechet
 #SBATCH -o $srcfrechet_job.o%j
-#SBATCH -N $slurm_nnode
-#SBATCH -n $slurm_nproc
-#SBATCH -p $slurm_partition_cpu
-#SBATCH -t $slurm_timelimit_forward
-##SBATCH $slurm_dcu_extra_args
+#SBATCH ${slurm_args_srcfrechet}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -242,11 +231,7 @@ cat <<EOF > $dgreen_job
 #!/bin/bash
 #SBATCH -J ${event_id}.dgreen
 #SBATCH -o $dgreen_job.o%j
-#SBATCH -N $slurm_nnode
-#SBATCH -n $slurm_nproc
-#SBATCH -p $slurm_partition_cpu
-#SBATCH -t $slurm_timelimit_dgreen
-##SBATCH $slurm_dcu_extra_args
+#SBATCH ${slurm_args_dgreen}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -354,10 +339,7 @@ cat <<EOF > $search_job
 #!/bin/bash
 #SBATCH -J ${event_id}.search
 #SBATCH -o $search_job.o%j
-#SBATCH -N 1
-#SBATCH -n $slurm_nproc_search
-#SBATCH -p $slurm_partition_cpu
-#SBATCH -t $slurm_timelimit_search
+#SBATCH ${slurm_args_search}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -388,7 +370,7 @@ $python_exec $sem_utils_dir/misfit/grid_search_source.py \\
   $db_file \\
   $misfit_dir/grid_search_source.txt \\
   $misfit_dir/grid_search_source.pdf \\
-  --nproc=$slurm_nproc_search \\
+  --nproc=\$SLURM_NPROCS \\
   --niter=5
 
 # get optimal model
@@ -420,9 +402,7 @@ cat <<EOF > $plot_job
 #!/bin/bash
 #SBATCH -J ${event_id}.plot
 #SBATCH -o $plot_job.o%j
-#SBATCH -n $slurm_nproc_plot
-#SBATCH -p $slurm_partition_cpu
-#SBATCH -t $slurm_timelimit_plot
+#SBATCH ${slurm_args_plot}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -438,7 +418,7 @@ fi
 mkdir -p $figure_dir
 
 $python_exec $sem_utils_dir/misfit/plot.py \\
-  $db_file $figure_dir --nproc=$slurm_nproc_plot
+  $db_file $figure_dir --nproc=\$SLURM_NPROCS
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

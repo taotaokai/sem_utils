@@ -36,6 +36,15 @@ do
   fi
   mkdir -p $event_dir/DATA
 
+  # copy Par_file
+  par_file=${sem_config_dir}/DATA/Par_file
+  if [ ! -f "$par_file" ]
+  then
+    echo "[WARN] $par_file does NOT exist!"
+    exit -1
+  fi
+  cp $par_file $event_dir/DATA/Par_file
+
   # copy initial CMTSOLUTION file
   if (( $iter_num == 0 ))
   then

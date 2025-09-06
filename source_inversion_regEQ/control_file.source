@@ -16,12 +16,6 @@
 # |   |   |   |   C202006211907A/ 
 # |   |   |   |   | ... 
 # |   |   |   CMTSOLUTION_updated
-# |   |   iter01/
-# |   |   |   events/
-# |   |   |   |   C202411201443A/
-# |   |   |   |   | ... 
-# |   |   |   CMTSOLUTION_updated
-# |   |   ... 
 #
 #
 #====== Basic workflow:
@@ -37,7 +31,7 @@ base_dir=$(readlink -f .)
 
 # current stage and iteration number
 stage_dir=${base_dir}/stage00.source
-iter_num=00
+iter_num=01
 
 #======== Data directories
 
@@ -51,7 +45,7 @@ sem_build_dir=${base_dir}/build # build/: bin/xmeshfem3D,xspecfem3D
 sem_utils_dir=${base_dir}/sem_utils  # sem_utils/: misfit/, source_inversion_regEQ/
 
 # event data dir
-data_dir=${base_dir}/data # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTION, data.h5
+data_dir=${base_dir}/events # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTION, data.h5
 
 # current iteration directory, e.g. iter01/
 iter_num=$(printf "%02d" $iter_num)
@@ -77,18 +71,7 @@ misfit_par_dir=${base_dir}/misfit_par
 #======== slurm jobs
 
 # cluster cpu/node
-nproc_per_node=24
-
-# number of SEM slices
-sem_nproc=4  # actual mesh slices defined in Par_file
-
-# number of MPI processors to run xspecfem jobs
-slurm_nnode=1
-slurm_nproc=4
-# number of MPI processors to run pre/post-process jobs
-slurm_nproc_misfit=12  # misfit_job
-slurm_nproc_plot=10  # plot_job
-slurm_nproc_search=10  # search_job
+nproc_per_node=64
 
 # mpi executable
 slurm_mpiexec="srun --mpi=pmix_v3" # SCNET
@@ -98,16 +81,27 @@ slurm_mpiexec="srun --mpi=pmix_v3" # SCNET
 slurm_partition_cpu="xahcnormal" # SCNET CPU
 slurm_partition_dcu="xahdnormal" # SCNET GPU
 
-slurm_dcu_extra_args="--exclusive --gres=dcu:4" # SCNET
+# slurm_dcu_extra_args="--exclusive --gres=dcu:4" # SCNET
+# slurm_dcu_extra_args="--exclusive" # SCNET
 
-# time limit
-slurm_timelimit_mesh=01:00:00 # mesh
-slurm_timelimit_forward=00:30:00 # forward
-slurm_timelimit_adjoint=00:30:00 # adjoint for source
-slurm_timelimit_misfit=01:00:00 # misfit
-slurm_timelimit_dgreen=00:30:00 # dgreen
-slurm_timelimit_search=01:00:00 # grid search
-slurm_timelimit_plot=01:00:00 # grid search
+# number of mpi processes for sem
+sem_par_file=${sem_config_dir}/DATA/Par_file
+if [ ! -f "$sem_par_file" ]
+then
+    echo "[ERROR] $sem_par_file does NOT exist!"
+    exit 1
+fi
+sem_nproc_xi=$(grep NPROC_XI $sem_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
+sem_nproc_eta=$(grep NPROC_ETA $sem_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
+sem_nproc_total=$(echo $sem_nproc_xi $sem_nproc_eta | awk '{print $1*$2}')
+# nnode=$(echo "$sem_nproc_total $nproc_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
+
+slurm_args_green="-n ${sem_nproc_total} -p ${slurm_partition_cpu} -t 01:00:00" #--exclusive"
+slurm_args_misfit="-N 1 -n 20 -p ${slurm_partition_cpu} -t 01:00:00"
+slurm_args_srcfrechet=${slurm_args_green}
+slurm_args_dgreen="-n ${sem_nproc_total} -p ${slurm_partition_cpu} -t 02:00:00" #--exclusive"
+slurm_args_search=${slurm_args_misfit}
+slurm_args_plot=${slurm_args_misfit}
 
 #----- update model
 

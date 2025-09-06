@@ -45,7 +45,7 @@ import numba
 
 #==================================================#
 
-@numba.jit("Tuple((float64[:], float64[:]))(int64)")
+@numba.jit("Tuple((float64[:], float64[:]))(int64)", nogil=True, cache=True)
 def gll_nodes_weights(n :int):
     if n == 5:
         x = np.array([-1, -((3.0 / 7.0) ** 0.5), 0, (3.0 / 7.0) ** 0.5, 1])
@@ -71,7 +71,7 @@ def gll_nodes_weights(n :int):
         w = 2 / (n * (n -1) * P[:, -1] ** 2)
         return x, w
 
-@numba.jit("float64[:](float64[:], float64)")
+@numba.jit("float64[:](float64[:], float64)", nogil=True, cache=True)
 def lagrange_poly(nodes, x:float):
     """
     n-node Lagrange basis evaluated at x
@@ -86,7 +86,7 @@ def lagrange_poly(nodes, x:float):
         lag[i] = np.prod(x - zj) / np.prod(z[i] - zj)
     return lag
 
-@numba.jit("float64[:,:](float64[:], float64[:])")
+@numba.jit("float64[:,:](float64[:], float64[:])", nogil=True, cache=True)
 def lagrange_poly_derivative(nodes, xx):
     """
     derivative of n-node Lagrange basis at xx
@@ -100,10 +100,10 @@ def lagrange_poly_derivative(nodes, xx):
     for i in range(nz):
         denominator = np.prod((z[i] - z[ind != i]))
         for j in range(nx):
-            x = xx[j] 
+            x = xx[j]
             numerator = 0
             for k in range(nz):
-                if k == i: 
+                if k == i:
                     continue
                 mask = (ind != i) & (ind != k)
                 numerator += np.prod(x - z[mask])
@@ -375,7 +375,7 @@ def sem_mesh_get_vol_gll(mesh_data):
 # def sem_jacobian_hex27(anchors_xyz, uvw, xyz, dudx):
 # @numba.jit
 # @numba.jit("void(float64[:,::1], float64[::1], float64[::1], float64[:,::1])")
-@numba.jit()
+@numba.jit(nogil=True, cache=True)
 def sem_jacobian_hex27(anchors_xyz, uvw, xyz, dudx):
     """
     compute 3D jacobian at a given point for a 27-node element
@@ -470,7 +470,7 @@ def sem_jacobian_hex27(anchors_xyz, uvw, xyz, dudx):
 # @numba.njit("Tuple((float64, boolean))(float64[:,:], float64[:], float64[:], int64)")
 # @numba.jit()
 # @numba.njit("Tuple((float64, boolean))(float64[:,::1], float64[::1], float64[::1], int64)")
-@numba.jit()
+@numba.jit(nogil=True, cache=True)
 def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
     """
     !-map a given point in physical space (xyz) to the
@@ -503,7 +503,7 @@ def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
     # located_uvw[2] = GLL_NODES[k]
 
     # TODO the above found initial value actually increases final mis-location???
-    located_uvw[:] = 0.0  
+    located_uvw[:] = 0.0
 
     # iteratively update local coordinate uvw to approach the target xyz
     xyz = np.zeros(3)
@@ -635,7 +635,7 @@ def sem_mesh_locate_points(
         # if not neighbor_lists[ipoint]: continue
         # get neibouring elements
         # convert list to numpy array to have index slicing
-        ispec_list = np.array(neighbor_lists[ipoint])  
+        ispec_list = np.array(neighbor_lists[ipoint])
         # ratio between the distance from target point to the element center and the element size
         # print(ispec_list.shape)
         # print(xyz_elem.shape)
@@ -851,7 +851,7 @@ def assemble_MPI_scalar(
     array_glob[:] = sum_glob[:]
 
 
-@numba.jit
+@numba.jit(nogil=True, cache=True)
 def gll2glob(
     u_gll,
     nglob,
@@ -875,7 +875,7 @@ def gll2glob(
     return u_glob
 
 
-@numba.jit
+@numba.jit(nogil=True, cache=True)
 def laplacian_iso(
     u_glob,
     kappa,
@@ -1009,7 +1009,7 @@ def laplacian_iso(
     return -1 * out_glob
 
 
-@numba.jit
+@numba.jit(nogil=True, cache=True)
 def laplacian_iso3D(
     u_glob,
     kappa_gll,

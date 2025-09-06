@@ -199,7 +199,7 @@ for iproc_target in range(mpi_rank, nproc_target, mpi_size):
             )
 
         elapsed_time = time.time() - tic
-        print(f"{iproc_target=}, {iproc_source=}, {elapsed_time=}")
+        print(f"{iproc_target=:03d}, {iproc_source=:03d}, {elapsed_time=:8.3f} seconds")
         sys.stdout.flush()
 
     # rehape results

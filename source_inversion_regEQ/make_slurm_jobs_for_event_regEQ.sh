@@ -28,6 +28,14 @@ plot_job=$slurm_dir/plot.job
 # database file
 #mkdir -p $misfit_dir
 db_file=$misfit_dir/misfit.h5
+
+# SEM Par_file
+sem_par_file=${event_dir}/DATA/Par_file
+if [ ! -f "$sem_par_file" ]
+then
+  echo "[ERROR] $sem_par_file does NOT exist!"
+  exit -1
+fi
 # station file
 station_file=$event_dir/DATA/STATIONS
 if [ ! -f "$station_file" ]
@@ -49,6 +57,11 @@ then
   echo "[ERROR] $misfit_par does NOT exist!"
   exit -1
 fi
+
+# set USTER_T0 in Par_file to at least 3 * tau
+tau=$(grep "tau" ${cmt_file} | awk -F: '{printf "%f", $2}')
+min_user_t0=$(echo "3 * $tau + 1" | bc -l | awk '{printf "%d", $1}')
+sed -i "/^T0/s/=.*/= $min_user_t0/" ${sem_par_file}
 
 #====== green's function
 cat <<EOF > $green_job
@@ -216,6 +229,13 @@ cp -L DATA/CMTSOLUTION OUTPUT_FILES
 cd $event_dir
 $slurm_mpiexec $sem_build_dir/bin/xspecfem3D
 
+grep "End of the simulation" OUTPUT_FILES/output_solver.txt
+if [ \$? -ne 0 ]
+then
+  echo "[ERROR] check if srcfrechet.job finished OK!"
+  exit -1
+fi
+
 # mv DATABASES_MPI/*.sem OUTPUT_FILES
 
 cp $event_dir/\$out_dir/src_frechet.000001 $misfit_dir/srcfrechet
@@ -244,6 +264,11 @@ $python_exec $sem_utils_dir/misfit/make_perturbed_cmtsolution.py \\
   $misfit_dir/diff_CMTSOLUTION \\
   $misfit_dir/CMTSOLUTION_dxs \\
   $misfit_dir/CMTSOLUTION_dmt
+if [ \$? -ne 0 ]
+then
+  echo "make_perturbed_cmtsolution.py failed!"
+  exit 1
+fi
 
 for tag in dxs dmt
 do
@@ -274,6 +299,13 @@ do
 
   cd $event_dir
   $slurm_mpiexec $sem_build_dir/bin/xspecfem3D
+
+  grep "End of the simulation" OUTPUT_FILES/output_solver.txt
+  if [ \$? -ne 0 ]
+  then
+    echo "[ERROR] check if dgreen.job finished OK!"
+    exit -1
+  fi
 
   mkdir $event_dir/\$out_dir/sac
   mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac

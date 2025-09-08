@@ -1140,4 +1140,4 @@ def laplacian_iso3D(
                     idof = ibool[e, k, j, i]
                     out_glob[idof] += stif[k, j, i]
 
-    return out_glob
+    return -1 * out_glob

@@ -133,7 +133,7 @@ zgll, wgll, dlag_dzgll = get_gll_weights()
 # (1 - dt/2 * M^{-1} * K) * u_{n+1} = (1 + dt/2 * M^{-1} * K) * u_n
 
 def Kx(x_glob):
-    kx_glob = -1.0 * laplacian_iso3D(
+    kx_glob = laplacian_iso3D(
         x_glob,
         kappa_gll,
         wgll,

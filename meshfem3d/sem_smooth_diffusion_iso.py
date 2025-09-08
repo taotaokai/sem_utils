@@ -150,7 +150,7 @@ zgll, wgll, dlag_dzgll = get_gll_weights()
 
 
 def Kx(x_glob):
-    kx_glob = -1.0 * laplacian_iso(
+    kx_glob = laplacian_iso(
         x_glob,
         kappa,
         wgll,

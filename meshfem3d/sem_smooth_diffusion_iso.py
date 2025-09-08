@@ -37,22 +37,42 @@ from mpi4py import MPI
 from meshfem3d_constants import *
 
 from meshfem3d_utils import sem_mesh_read, sem_mesh_get_vol_gll, sem_mesh_mpi_read
-from meshfem3d_utils import gll2glob, laplacian_iso, assemble_MPI_scalar, get_gll_weights
+from meshfem3d_utils import (
+    gll2glob,
+    laplacian_iso,
+    assemble_MPI_scalar,
+    get_gll_weights,
+)
 
 
 # ====== parameters
 parser = argparse.ArgumentParser()
 
 parser.add_argument("nproc", type=int)  # number of slices
-parser.add_argument("mesh_dir", help="e.g. DATABASES_MPI/")  # <mesh_dir>/*_solver_data[_mpi].bin
+parser.add_argument(
+    "mesh_dir", help="e.g. DATABASES_MPI/"
+)  # <mesh_dir>/*_solver_data[_mpi].bin
 parser.add_argument("model_dir", help="e.g. DATABASES_MPI/")  #
-parser.add_argument("model_name", help="e.g. vsv")  # <model_dir>/proc***_<model_name>.bin
-parser.add_argument("smooth_length", type=float, help="full width at half maximum (FWHM) of Gaussian kernel in km")  #
+parser.add_argument(
+    "model_name", help="e.g. vsv"
+)  # <model_dir>/proc***_<model_name>.bin
+parser.add_argument(
+    "smooth_length",
+    type=float,
+    help="full width at half maximum (FWHM) of Gaussian kernel in km",
+)  #
 parser.add_argument("nstep", type=int)  # nt
 parser.add_argument("out_dir")  # num of processes
 # control parameters for CG solver
-parser.add_argument("--max_iter", type=int, default=100, help="maximum number of iteration")
-parser.add_argument("--max_tolerance", type=float, default=1e-5, help="relative residual to stop iteration")
+parser.add_argument(
+    "--max_iter", type=int, default=100, help="maximum number of iteration"
+)
+parser.add_argument(
+    "--max_tolerance",
+    type=float,
+    default=1e-5,
+    help="relative residual to stop iteration",
+)
 
 args = parser.parse_args()
 
@@ -74,7 +94,7 @@ smooth_length /= R_EARTH_KM  # non-dimensionalize as SEM
 # smooth_length = FWHM = 2*sqrt(2*log2(2)) * sigma
 # for wavelength of smooth_length, the smoothing kernel amplitude is about 2.84% of the peak value at zero wave number
 sigma = smooth_length / (2 * np.sqrt(2 * np.log(2)))
-# diffsivity coefficient kappa = sigma^2 / 2 
+# diffsivity coefficient kappa = sigma^2 / 2
 kappa = 0.5 * sigma**2
 
 # ====== smooth each target mesh slice
@@ -197,7 +217,13 @@ def solve_cg(u):
     # x = np.zeros_like(b)
     iter = 0
     threshold = rsold * max_tolerance
-    while (rsold > threshold) and (iter < max_iter):
+    while rsold > threshold:
+        if iter > max_iter:
+            print(
+                f"{mpi_rank=}: stop iteration at {max_iter=}, {rsold=}, {pAp=}. "
+                f"unconvergence might occur, consider increase number of steps! {nt=}"
+            )
+            break
         # print(f"{mpi_rank=}, {rsold=}")
         # for i in range(100):
         Ap = Ax(p)

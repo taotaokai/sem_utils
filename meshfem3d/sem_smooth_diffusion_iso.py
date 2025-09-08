@@ -193,6 +193,7 @@ def solve_cg(u):
     i = 0
     threshold = rsold * 1e-4
     while rsold > threshold:
+        print(f"{rsold=}")
         # for i in range(100):
         Ap = Ax(p)
         pAp = comm.allreduce(sum(p * Ap), op=MPI.SUM)

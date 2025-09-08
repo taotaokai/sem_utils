@@ -20,3 +20,7 @@ include/*.h
 *.o
 *.so
 *.pyc
+
+# numba cache files
+*.nbc
+*.nbi

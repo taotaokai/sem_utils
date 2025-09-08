@@ -2,7 +2,26 @@
 # -*- coding: utf-8 -*-
 """smoothing specfem3D GLL model in the lateral and vertical directions using Gaussian window of spatially varying size
 
-ECEF x,y,z coordinates
+smooth the model using Gaussian kernel by solving the heat equation
+
+Gauss(r,sigma) = exp(- 0.5 * r^2 / sigma^2) / (2 * PI * sigma^2)^(d/2)   (d = 3 for 3-D, 2 for 2-D)
+
+Heat equation:
+
+Du/Dt - k * D^2(u)/Dx^2 = 0
+
+I.C. u(t=0) = m (model before smoothing)
+B.C. n .dot. Du/Dx = 0 (adiabatic boundary condition)
+
+Fundamental solution: P(x, t; k) = exp(-r^2/(4kt)) / (4*PI*k*t)^(d/2) for whole space
+
+for k = 0.5 * sigma^2 and t = 1: P(x,1;k) = Gauss(r,sigma)
+
+Since the solution of the intitial value problem is u(t) = P(x, t) * u(x, t=0) (* is spatial convolution)
+
+, it approximates the smoothing by convolution with a Gaussian window except difference near the boundary:
+
+(e.g. initial value is even extended from the boundary)
 
 """
 import sys
@@ -25,10 +44,10 @@ from meshfem3d_utils import gll2glob, laplacian_iso, assemble_MPI_scalar, get_gl
 parser = argparse.ArgumentParser()
 
 parser.add_argument("nproc", type=int)  # number of slices
-parser.add_argument("mesh_dir")  # <mesh_dir>/*_solver_data[_mpi].bin
-parser.add_argument("model_dir")  #
-parser.add_argument("model_name")  # <model_dir>/proc***_<model_name>.bin
-parser.add_argument("smooth_length", type=float)  #
+parser.add_argument("mesh_dir", help="e.g. DATABASES_MPI/")  # <mesh_dir>/*_solver_data[_mpi].bin
+parser.add_argument("model_dir", help="e.g. DATABASES_MPI/")  #
+parser.add_argument("model_name", help="e.g. vsv")  # <model_dir>/proc***_<model_name>.bin
+parser.add_argument("smooth_length", type=float, help="full width at half maximum (FWHM) of Gaussian kernel in km")  #
 parser.add_argument("nstep", type=int)  # nt
 parser.add_argument("out_dir")  # num of processes
 
@@ -46,11 +65,12 @@ out_dir = args.out_dir
 dt = 1.0 / nt
 
 smooth_length /= R_EARTH_KM  # non-dimensionalize as SEM
-# smooth_length is defined as the full width at half maximum (FWHM) of gaussian function
+# smooth_length is defined as the full width at half maximum (FWHM) of Gaussian function
 # smooth_length = FWHM = 2*sqrt(2*log2(2)) * sigma
+# for wavelength of smooth_length, the smoothing kernel amplitude is about 2.84% of the peak value at zero wave number
 sigma = smooth_length / (2 * np.sqrt(2 * np.log(2)))
-# kappa = sigma^2 / 2
-kappa = 0.5 * smooth_length**2
+# diffsivity coefficient kappa = sigma^2 / 2 
+kappa = 0.5 * sigma**2
 
 # ====== smooth each target mesh slice
 comm = MPI.COMM_WORLD

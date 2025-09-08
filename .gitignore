@@ -3,6 +3,7 @@ others/
 bak/
 old/
 test/
+__pycache__/
 
 # Build time
 bin/

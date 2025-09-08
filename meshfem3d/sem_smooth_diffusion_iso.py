@@ -50,6 +50,9 @@ parser.add_argument("model_name", help="e.g. vsv")  # <model_dir>/proc***_<model
 parser.add_argument("smooth_length", type=float, help="full width at half maximum (FWHM) of Gaussian kernel in km")  #
 parser.add_argument("nstep", type=int)  # nt
 parser.add_argument("out_dir")  # num of processes
+# control parameters for CG solver
+parser.add_argument("--max_iter", type=int, default=100, help="maximum number of iteration")
+parser.add_argument("--max_tolerance", type=float, default=1e-5, help="relative residual to stop iteration")
 
 args = parser.parse_args()
 
@@ -60,6 +63,8 @@ model_name = args.model_name  # e.g. vpv,vsv,rho,qmu,qkappa
 smooth_length = args.smooth_length
 nt = args.nstep
 out_dir = args.out_dir
+max_iter = args.max_iter
+max_tolerance = args.max_tolerance
 
 # time range [0, 1]
 dt = 1.0 / nt
@@ -190,10 +195,10 @@ def solve_cg(u):
     p = r.copy()
     rsold = comm.allreduce(sum(r**2), op=MPI.SUM)
     # x = np.zeros_like(b)
-    i = 0
-    threshold = rsold * 1e-4
-    while rsold > threshold:
-        print(f"{rsold=}")
+    iter = 0
+    threshold = rsold * max_tolerance
+    while (rsold > threshold) and (iter < max_iter):
+        # print(f"{mpi_rank=}, {rsold=}")
         # for i in range(100):
         Ap = Ax(p)
         pAp = comm.allreduce(sum(p * Ap), op=MPI.SUM)
@@ -203,6 +208,7 @@ def solve_cg(u):
         rsnew = comm.allreduce(sum(r**2), op=MPI.SUM)
         p = r + (rsnew / rsold) * p
         rsold = rsnew
+        iter += 1
         # if mpi_rank == 0:
         #     i += 1
         #     print(f"{i=}, {rsold=}, {pAp=}")

@@ -4201,11 +4201,9 @@ class Misfit(object):
         xs = event["xs"]
         mt = event["mt"]
         grad_xs = event["grad_xs"]
-        grad_xs /= np.max(grad_xs)  # normalize in case of loss of precision
+        grad_xs /= np.max(np.abs(grad_xs))  # normalize in case of loss of precision
         grad_mt = event["grad_mt"]
-        grad_mt /= np.max(
-            grad_mt
-        )  # normalize in case of loss of precision, e.g. for very small x, x*x would be 0
+        grad_mt /= np.max(np.abs(grad_mt))  # normalize in case of loss of precision, e.g. for very small x, x*x would be 0
 
         # correlation between mt and dchi_dmt
         # cc = np.sum(dchi_dmt * mt) / np.sum(mt**2) ** 0.5 / np.sum(dchi_dmt**2) ** 0.5
@@ -4218,18 +4216,14 @@ class Misfit(object):
             # dxs_scaled = max_dxs_ratio * r0 * grad_xs / norm_grad_xs
             dxs_scaled = max_dxs_norm * grad_xs / norm_grad_xs
 
+        # make grad_mt orthogonal to mt, i.e. keep scalar moment unchanged
+        grad_mt = grad_mt - mt * np.sum(grad_mt * mt) / np.sum(mt**2)
         m0 = (0.5 * np.sum(mt**2)) ** 0.5
         norm_grad_mt = (0.5 * np.sum(grad_mt**2)) ** 0.5
         dmt_scaled = grad_mt
         if norm_grad_mt > 0:
             dmt_scaled = max_dmt_ratio * m0 * grad_mt / norm_grad_mt
         # print(m0, norm_grad_mt, dmt_scaled)
-
-        # # make dchi_dmt orthogonal to mt, i.e. keep scalar moment unchanged
-        # dchi_dmt_ratio_ortho = dchi_dmt_ratio - mt * np.sum(
-        #     dchi_dmt_ratio * mt
-        # ) / np.sum(mt**2)
-        # # print(dchi_dmt_ratio_ortho)
 
         event["dxs"] = dxs_scaled
         event["dmt"] = dmt_scaled

@@ -34,10 +34,12 @@ from scipy.io import FortranFile
 
 from mpi4py import MPI
 
-from meshfem3d_constants import *
+from meshfem3d_constants import R_EARTH_KM
 
-from meshfem3d_utils import sem_mesh_read, sem_mesh_get_vol_gll, sem_mesh_mpi_read
 from meshfem3d_utils import (
+    sem_mesh_read, 
+    sem_mesh_get_vol_gll, 
+    sem_mesh_mpi_read,
     gll2glob,
     laplacian_iso,
     assemble_MPI_scalar,
@@ -89,7 +91,7 @@ max_tolerance = args.max_tolerance
 # time range [0, 1]
 dt = 1.0 / nt
 
-smooth_length /= R_EARTH_KM  # non-dimensionalize as SEM
+smooth_length /= R_EARTH_KM  # non-dimensionalize as in SEM
 # smooth_length is defined as the full width at half maximum (FWHM) of Gaussian function
 # smooth_length = FWHM = 2*sqrt(2*log2(2)) * sigma
 # for wavelength of smooth_length, the smoothing kernel amplitude is about 2.84% of the peak value at zero wave number

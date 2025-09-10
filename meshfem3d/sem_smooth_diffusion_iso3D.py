@@ -15,11 +15,17 @@ from scipy.io import FortranFile
 
 from mpi4py import MPI
 
-from meshfem3d_constants import *
+from meshfem3d_constants import R_EARTH_KM
 
-from meshfem3d_utils import sem_mesh_read, sem_mesh_get_vol_gll, sem_mesh_mpi_read
-from meshfem3d_utils import gll2glob, laplacian_iso3D, assemble_MPI_scalar, get_gll_weights
-
+from meshfem3d_utils import (
+    sem_mesh_read, 
+    sem_mesh_get_vol_gll, 
+    sem_mesh_mpi_read,
+    gll2glob,
+    laplacian_iso3D,
+    assemble_MPI_scalar,
+    get_gll_weights,
+)
 
 # ====== parameters
 parser = argparse.ArgumentParser()
@@ -32,6 +38,16 @@ parser.add_argument("ref_model_name")  # reference velocity model name
 parser.add_argument("min_period", type=float)  # minimum resolved period
 parser.add_argument("nstep", type=int)  # nt
 parser.add_argument("out_dir")  # num of processes
+# control parameters for CG solver
+parser.add_argument(
+    "--max_iter", type=int, default=100, help="maximum number of iteration"
+)
+parser.add_argument(
+    "--max_tolerance",
+    type=float,
+    default=1e-5,
+    help="relative residual to stop iteration",
+)
 
 args = parser.parse_args()
 
@@ -43,6 +59,8 @@ ref_model_name = args.ref_model_name  # e.g. vpv,vsv,rho,qmu,qkappa
 min_period = args.min_period
 nt = args.nstep
 out_dir = args.out_dir
+max_iter = args.max_iter
+max_tolerance = args.max_tolerance
 
 # time range [0, 1]
 dt = 1.0 / nt
@@ -172,9 +190,15 @@ def solve_cg(u):
     p = r.copy()
     rsold = comm.allreduce(sum(r**2), op=MPI.SUM)
     # x = np.zeros_like(b)
-    i = 0
-    threshold = rsold * 1e-4
+    iter = 0
+    threshold = rsold * max_tolerance
     while rsold > threshold:
+        if iter > max_iter:
+            print(
+                f"{mpi_rank=}: stop iteration at {max_iter=}, {rsold=}, {pAp=}. "
+                f"unconvergence might occur, consider increase number of steps! {nt=}"
+            )
+            break
         # for i in range(100):
         Ap = Ax(p)
         pAp = comm.allreduce(sum(p * Ap), op=MPI.SUM)
@@ -184,6 +208,7 @@ def solve_cg(u):
         rsnew = comm.allreduce(sum(r**2), op=MPI.SUM)
         p = r + (rsnew / rsold) * p
         rsold = rsnew
+        iter += 1
         # if mpi_rank == 0:
         #     i += 1
         #     print(f"{i=}, {rsold=}, {pAp=}")

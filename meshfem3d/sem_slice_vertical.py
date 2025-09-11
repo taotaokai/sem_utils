@@ -190,6 +190,8 @@ for i, params in xsection_params.iterrows():
 
     model_interp = model_interp.reshape((nmodel, ntheta, nr))
 
+    points = points.reshape((ntheta, nr, 3))
+
     if args.vtk:
         for i, tag in enumerate(model_names):
             model = model_interp[i, :, :]

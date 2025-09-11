@@ -83,7 +83,7 @@ ntheta, nr = args.ngrid
 rmin, rmax = args.r_range
 r_grid = np.linspace(rmin, rmax, nr)
 
-ds_xsection = xr.Dataset()
+
 
 for i, params in xsection_params.iterrows():
 
@@ -178,22 +178,23 @@ for i, params in xsection_params.iterrows():
         blocks.save(f"{args.out_dir}/vert_xsection_{i:02d}.vtmb")
 
     #
-    da = xr.DataArray(
-        output_model,
-        dims=("theta", "radius"),
-        coords={
-            "theta": ("theta", np.rad2deg(theta_grid), {"unit": "degree"}),
-            "radius": (
-                "radius",
-                r_grid,
-                {"unit": "R_EARTH"},
-            ),
-            # "dim3": ("dim3", [0,1,2], {"unit":"xyz"}),
-        },
-        attrs={"latc": params["lat"], "lonc": params["lon"], "azimuth": params["azimuth"]},
-        name=args.model_name,
-    )
-    da.to_netcdf(f"{args.out_dir}/vert_xsection_{i:02d}.nc")
+    # ds_xsection = xr.Dataset()
+    # da = xr.DataArray(
+    #     output_model,
+    #     dims=("theta", "radius"),
+    #     coords={
+    #         "theta": ("theta", np.rad2deg(theta_grid), {"unit": "degree"}),
+    #         "radius": (
+    #             "radius",
+    #             r_grid,
+    #             {"unit": "R_EARTH"},
+    #         ),
+    #         # "dim3": ("dim3", [0,1,2], {"unit":"xyz"}),
+    #     },
+    #     attrs={"latc": params["lat"], "lonc": params["lon"], "azimuth": params["azimuth"]},
+    #     name=args.model_name,
+    # )
+    # da.to_netcdf(f"{args.out_dir}/vert_xsection_{i:02d}.nc")
     # ds_xsection[f"vertical_xsection_{i:02d}"] = da
 
 # ds_xsection.to_netcdf("vertical_xsections.netcdf")

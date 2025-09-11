@@ -131,7 +131,7 @@ for ieta in np.arange(n_eta):
     xi = 0
     eta = -half_angle_eta + deta * ieta
 
-    r = v0_eta * np.tan(eta) + v0_r
+    r = v0_eta * np.sin(eta) + v0_r * np.cos(eta)
     r = r / sum(r**2) ** 0.5
     lat, lon = xyz2latlon_deg(r)
 
@@ -162,7 +162,7 @@ for ixi in np.arange(n_xi):
     xi = -half_angle_xi + dxi * ixi
     eta = 0
 
-    r = v0_xi * np.tan(xi) + v0_r
+    r = v0_xi * np.sin(xi) + v0_r * np.cos(xi)
     r = r / sum(r**2) ** 0.5
     lat, lon = xyz2latlon_deg(r)
 

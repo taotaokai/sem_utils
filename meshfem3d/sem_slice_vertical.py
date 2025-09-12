@@ -79,7 +79,9 @@ r_grid = np.linspace(rmin, rmax, nr)
 zgll, wgll, dlag_dzgll = get_gll_weights()
 
 xsection_params = pd.read_csv(args.xsection_list)
-for i, params in xsection_params.iterrows():
+for islice, params in xsection_params.iterrows():
+    print(f"{islice=:03d}, {params=}")
+    sys.stdout.flush()
 
     lat = np.deg2rad(params["lat"])
     lon = np.deg2rad(params["lon"])
@@ -122,6 +124,7 @@ for i, params in xsection_params.iterrows():
     misloc_target[:] = np.inf
     misratio_target = np.zeros(npoints)
     model_interp = np.zeros((nmodel, npoints))
+    model_interp[:] = np.nan
 
     # -- loop over each slice of source SEM mesh
     for iproc in range(nproc):
@@ -228,7 +231,7 @@ for i, params in xsection_params.iterrows():
                 line.point_data[tag] = m0
                 blocks.append(line)
             blocks.append(mesh)
-            blocks.save(f"{args.out_dir}/vert_xsection_{i:02d}_{tag}.vtmb")
+            blocks.save(f"{args.out_dir}/vert_xsection_{islice:02d}_{tag}.vtmb")
 
 #     ds_xsection = xr.Dataset()
 #     da = xr.DataArray(

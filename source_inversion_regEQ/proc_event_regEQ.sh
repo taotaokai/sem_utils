@@ -46,7 +46,12 @@ do
   cp $par_file $event_dir/DATA/Par_file
 
   # copy initial CMTSOLUTION file
-  if (( $iter_num == 0 ))
+  if [ x${iter_num} == x ]
+  then
+    echo "[WARN] wrong iter_num ($iter_num)!"
+    exit -1
+  fi
+  if [ "$iter_num" -eq 0 ]
   then
     cmt_file=$data_dir/${event_id}/CMTSOLUTION.ecef
   else

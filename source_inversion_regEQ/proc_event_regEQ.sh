@@ -40,7 +40,7 @@ do
   par_file=${sem_config_dir}/DATA/Par_file
   if [ ! -f "$par_file" ]
   then
-    echo "[WARN] $par_file does NOT exist!"
+    echo "[ERROR] $par_file does NOT exist!"
     exit -1
   fi
   cp $par_file $event_dir/DATA/Par_file
@@ -48,7 +48,7 @@ do
   # copy initial CMTSOLUTION file
   if [ x${iter_num} == x ]
   then
-    echo "[WARN] wrong iter_num ($iter_num)!"
+    echo "[ERROR] iter_num not set!"
     exit -1
   fi
   if [ "$iter_num" -eq 0 ]
@@ -60,7 +60,7 @@ do
   echo ------ use: $(readlink -f $cmt_file)
   if [ ! -f "$cmt_file" ]
   then
-    echo "[WARN] $cmt_file does NOT exist!"
+    echo "[ERROR] $cmt_file does NOT exist!"
     exit -1
   fi
 

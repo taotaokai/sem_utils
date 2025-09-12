@@ -651,7 +651,7 @@ def sem_mesh_locate_points(
         if idoubling[ipoint] != -1:
             idx = idx & (source_idoubling[ispec_list] == idoubling[ipoint])
         if not np.any(idx):
-            break
+            continue
         ispec_list = ispec_list[idx]
         dist_ratio = dist_ratio[idx]
         # loop each element, start from the closest element

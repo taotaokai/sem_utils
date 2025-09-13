@@ -124,7 +124,7 @@ def get_gll_weights():
             dlag_dzgll[i, j] = gll_library.lagrange_deriv_gll(i, j, zgll, NGLLX)
     return zgll, wgll, dlag_dzgll
 
-@numba.jit("float64[:,:](float64[:], float64)", nogil=True)
+@numba.jit("float64[:](float64[:], float64)", nogil=True)
 def interp1d_linear(xi, x):
     """ xi[:] must in ascending order
     return: interpolation weights wi[:] s.t. f(x) = sum(wi[:] * yi[:]), yi = f(xi)

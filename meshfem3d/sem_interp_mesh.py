@@ -10,6 +10,7 @@ import numpy as np
 from scipy.io import FortranFile
 from scipy.interpolate import interpn
 from mpi4py import MPI
+import numba
 
 # from meshfem3d_constants import NGLLX, NGLLY, NGLLZ, GAUSSALPHA, GAUSSBETA
 from meshfem3d_constants import (
@@ -42,7 +43,9 @@ parser.add_argument("model_dir_target", help="output model dir")
 parser.add_argument(
     "model_tags", nargs="+", help="model tags to interpolate (e.g. vsv vsh)"
 )
-parser.add_argument("--linear", action="store_true", help="use linear interpolation instead of GLL")
+parser.add_argument(
+    "--linear", action="store_true", help="use linear interpolation instead of GLL"
+)
 
 args = parser.parse_args()
 print(args)
@@ -73,7 +76,7 @@ mpi_rank = comm.Get_rank()
 zgll, wgll, dlag_dzgll = get_gll_weights()
 
 # --- loop over each slice of target SEM mesh
-#for iproc_target in range(nproc_target):
+# for iproc_target in range(nproc_target):
 for iproc_target in range(mpi_rank, nproc_target, mpi_size):
     # print("====== iproc_target ", iproc_target)
     # sys.stdout.flush()
@@ -155,9 +158,9 @@ for iproc_target in range(mpi_rank, nproc_target, mpi_size):
         # merge interpolation results of mesh slice (iproc_souce) into
         # the final results based on misloc and status
 
-        # index selection for merge: 
-        # (not located inside an element yet) and 
-        # (located for the current mesh slice) and 
+        # index selection for merge:
+        # (not located inside an element yet) and
+        # (located for the current mesh slice) and
         # ( smaller misloc or located inside an element in this mesh slice )
         ii = (
             (status_target != 1)
@@ -189,22 +192,46 @@ for iproc_target in range(mpi_rank, nproc_target, mpi_size):
             # status_gll_target[ipoint] = status_all[ipoint]
             # misloc_gll_target[ipoint] = misloc_all[ipoint]
             # misratio_gll_target[ipoint] = misratio_all[ipoint]
+            # if args.linear:
+            #     # data = source_model_gll[:, ispec_all[ipoint], :, :, :]
+            #     # data = np.moveaxis(data, 0, -1)
+            #     # model_target[:, ipoint] = interpn(
+            #     #     (zgll, zgll, zgll),
+            #     #     data,
+            #     #     uvw_all[ipoint, :],
+            #     #     bounds_error=False,
+            #     #     fill_value=None,
+            #     # )
+            @numba.jit()
+            def _linear_weight(xi, x):
+                """ xi[:] must in ascending order"""
+                w = np.zeros_like(xi)
+                if x <= xi[0]:
+                    w[0] = 1
+                    return w
+                if x >= xi[-1]:
+                    w[-1] = 1
+                    return w
+                ii = np.where(x >= xi)[0][-1]
+                h = (x - xi[ii]) / (xi[ii + 1] - xi[ii])
+                w[ii] = 1 - h
+                w[ii + 1] = h
+                return w
             if args.linear:
-                data = source_model_gll[:, ispec_all[ipoint], :, :, :]
-                data = np.moveaxis(data, 0, -1)
-                model_target[:, ipoint] = interpn((zgll, zgll, zgll), data, uvw_all[ipoint, :],
-                                                  bounds_error=False, fill_value=None)
+                hlagx = _linear_weight(zgll, uvw_all[ipoint, 0])
+                hlagy = _linear_weight(zgll, uvw_all[ipoint, 1])
+                hlagz = _linear_weight(zgll, uvw_all[ipoint, 2])
             else:
                 hlagx = lagrange_poly(zgll, uvw_all[ipoint, 0])
                 hlagy = lagrange_poly(zgll, uvw_all[ipoint, 1])
                 hlagz = lagrange_poly(zgll, uvw_all[ipoint, 2])
-                model_target[:, ipoint] = np.sum(
-                    source_model_gll[:, ispec_all[ipoint], :, :, :]
-                    * hlagx[None, None, None, :]
-                    * hlagy[None, None, :, None]
-                    * hlagz[None, :, None, None],
-                    axis=(1, 2, 3),
-                )
+            model_target[:, ipoint] = np.sum(
+                source_model_gll[:, ispec_all[ipoint], :, :, :]
+                * hlagx[None, None, None, :]
+                * hlagy[None, None, :, None]
+                * hlagz[None, :, None, None],
+                axis=(1, 2, 3),
+            )
 
         elapsed_time = time.time() - tic
         print(f"{iproc_target=:03d}, {iproc_source=:03d}, {elapsed_time=:8.3f} seconds")
@@ -238,12 +265,18 @@ for iproc_target in range(mpi_rank, nproc_target, mpi_size):
     # save misloc, status
     model_file = "%s/proc%06d_reg1_status.bin" % (model_dir_target, iproc_target)
     with FortranFile(model_file, "w") as f:
-        f.write_record(np.array(np.ravel(status_target[ibool_target], order="F"), dtype="f4"))
+        f.write_record(
+            np.array(np.ravel(status_target[ibool_target], order="F"), dtype="f4")
+        )
 
     model_file = "%s/proc%06d_reg1_misloc.bin" % (model_dir_target, iproc_target)
     with FortranFile(model_file, "w") as f:
-        f.write_record(np.array(np.ravel(misloc_target[ibool_target], order="F"), dtype="f4"))
+        f.write_record(
+            np.array(np.ravel(misloc_target[ibool_target], order="F"), dtype="f4")
+        )
 
     model_file = "%s/proc%06d_reg1_misratio.bin" % (model_dir_target, iproc_target)
     with FortranFile(model_file, "w") as f:
-        f.write_record(np.array(np.ravel(misratio_target[ibool_target], order="F"), dtype="f4"))
+        f.write_record(
+            np.array(np.ravel(misratio_target[ibool_target], order="F"), dtype="f4")
+        )

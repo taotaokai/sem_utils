@@ -45,7 +45,7 @@ parser.add_argument(
     "model_tags", nargs="+", help="model tags to interpolate (e.g. vsv vsh)"
 )
 parser.add_argument(
-    "method", default='linear', choices=['gll', 'linear'], help="Choose interpolation method (gll, linear)"
+    "--method", default='linear', choices=['gll', 'linear'], help="Choose interpolation method (gll, linear)"
 )
 
 args = parser.parse_args()

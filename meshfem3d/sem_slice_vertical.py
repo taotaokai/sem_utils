@@ -61,7 +61,7 @@ parser.add_argument(
 parser.add_argument("--vtk", action="store_true", help="Output VTK file")
 parser.add_argument("-o", "--out_dir", default="./", help="output directory")
 parser.add_argument(
-    "method", default='linear', choices=['gll', 'linear'], help="Choose interpolation method (gll, linear)"
+    "--method", default='linear', choices=['gll', 'linear'], help="Choose interpolation method (gll, linear)"
 )
 
 args = parser.parse_args()

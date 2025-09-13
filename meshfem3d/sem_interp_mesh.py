@@ -8,6 +8,7 @@ import argparse
 
 import numpy as np
 from scipy.io import FortranFile
+from scipy.interpolate import interpn
 from mpi4py import MPI
 
 # from meshfem3d_constants import NGLLX, NGLLY, NGLLZ, GAUSSALPHA, GAUSSBETA
@@ -41,6 +42,7 @@ parser.add_argument("model_dir_target", help="output model dir")
 parser.add_argument(
     "model_tags", nargs="+", help="model tags to interpolate (e.g. vsv vsh)"
 )
+parser.add_argument("--linear", action="store_true", help="use linear interpolation instead of GLL")
 
 args = parser.parse_args()
 print(args)
@@ -187,16 +189,22 @@ for iproc_target in range(mpi_rank, nproc_target, mpi_size):
             # status_gll_target[ipoint] = status_all[ipoint]
             # misloc_gll_target[ipoint] = misloc_all[ipoint]
             # misratio_gll_target[ipoint] = misratio_all[ipoint]
-            hlagx = lagrange_poly(zgll, uvw_all[ipoint, 0])
-            hlagy = lagrange_poly(zgll, uvw_all[ipoint, 1])
-            hlagz = lagrange_poly(zgll, uvw_all[ipoint, 2])
-            model_target[:, ipoint] = np.sum(
-                source_model_gll[:, ispec_all[ipoint], :, :, :]
-                * hlagx[None, None, None, :]
-                * hlagy[None, None, :, None]
-                * hlagz[None, :, None, None],
-                axis=(1, 2, 3),
-            )
+            if args.linear:
+                data = source_model_gll[:, ispec_all[ipoint], :, :, :]
+                data = np.moveaxis(data, 0, -1)
+                model_target[:, ipoint] = interpn((zgll, zgll, zgll), data, uvw_all[ipoint, :],
+                                                  bounds_error=False, fill_value=None)
+            else:
+                hlagx = lagrange_poly(zgll, uvw_all[ipoint, 0])
+                hlagy = lagrange_poly(zgll, uvw_all[ipoint, 1])
+                hlagz = lagrange_poly(zgll, uvw_all[ipoint, 2])
+                model_target[:, ipoint] = np.sum(
+                    source_model_gll[:, ispec_all[ipoint], :, :, :]
+                    * hlagx[None, None, None, :]
+                    * hlagy[None, None, :, None]
+                    * hlagz[None, :, None, None],
+                    axis=(1, 2, 3),
+                )
 
         elapsed_time = time.time() - tic
         print(f"{iproc_target=:03d}, {iproc_source=:03d}, {elapsed_time=:8.3f} seconds")

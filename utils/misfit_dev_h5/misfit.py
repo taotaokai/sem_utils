@@ -2863,7 +2863,7 @@ class Misfit(object):
                     #   Dcc/Du[3,nt] = conj(Fw * Fd * [Ft]) * transpose(P) * w * (obs - Aw * syn) / obs_norm / syn_norm,
                     #
                     #   where,
-                    #           [Ft] is only applied when d is vel.
+                    #           [Ft] is only applied when data is velocity.
                     #           obs_norm = sqrt(sum(obs**2))
                     #           syn_norm = sqrt(sum(syn**2))
                     #           Aw = sum(syn * obs) / sum(syn**2)

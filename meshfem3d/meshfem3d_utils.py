@@ -124,6 +124,24 @@ def get_gll_weights():
             dlag_dzgll[i, j] = gll_library.lagrange_deriv_gll(i, j, zgll, NGLLX)
     return zgll, wgll, dlag_dzgll
 
+@numba.jit("float64[:,:](float64[:], float64)", nogil=True)
+def interp1d_linear(xi, x):
+    """ xi[:] must in ascending order
+    return: interpolation weights wi[:] s.t. f(x) = sum(wi[:] * yi[:]), yi = f(xi)
+    """
+    wi = np.zeros_like(xi)
+    if x <= xi[0]:
+        wi[0] = 1
+        return wi
+    if x >= xi[-1]:
+        wi[-1] = 1
+        return wi
+    ii = np.where(x >= xi)[0][-1]
+    h = (x - xi[ii]) / (xi[ii + 1] - xi[ii])
+    wi[ii] = 1 - h
+    wi[ii + 1] = h
+    return wi
+
 #==================================================#
 
 def geodetic_lat2geocentric_lat(geodetic_lat):

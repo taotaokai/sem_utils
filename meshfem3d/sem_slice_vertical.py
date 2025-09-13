@@ -15,6 +15,7 @@ from meshfem3d_utils import geodetic_lat2geocentric_lat
 from meshfem3d_utils import (
     get_gll_weights,
     lagrange_poly,
+    interp1d_linear,
     sem_mesh_read,
     sem_mesh_locate_points,
 )
@@ -59,6 +60,9 @@ parser.add_argument(
 )
 parser.add_argument("--vtk", action="store_true", help="Output VTK file")
 parser.add_argument("-o", "--out_dir", default="./", help="output directory")
+parser.add_argument(
+    "method", default='linear', choices=['gll', 'linear'], help="Choose interpolation method (gll, linear)"
+)
 
 args = parser.parse_args()
 print(args)
@@ -72,8 +76,6 @@ nmodel = len(model_names)
 ntheta, nr = args.ngrid
 rmin, rmax = args.r_range
 r_grid = np.linspace(rmin, rmax, nr)
-
-
 
 # GLL nodes
 zgll, wgll, dlag_dzgll = get_gll_weights()
@@ -176,14 +178,23 @@ for islice, params in xsection_params.iterrows():
         # slower than index slicing but use less memory
         ipoint_select = np.nonzero(ii)[0]
         for ipoint in ipoint_select:
-            hlagx = lagrange_poly(zgll, uvw_all[ipoint, 0])
-            hlagy = lagrange_poly(zgll, uvw_all[ipoint, 1])
-            hlagz = lagrange_poly(zgll, uvw_all[ipoint, 2])
+            # interpolation weights
+            if args.method == 'linear':
+                wx = interp1d_linear(zgll, uvw_all[ipoint, 0])
+                wy = interp1d_linear(zgll, uvw_all[ipoint, 1])
+                wz = interp1d_linear(zgll, uvw_all[ipoint, 2])
+            elif args.method == 'gll':
+                wx = lagrange_poly(zgll, uvw_all[ipoint, 0])
+                wy = lagrange_poly(zgll, uvw_all[ipoint, 1])
+                wz = lagrange_poly(zgll, uvw_all[ipoint, 2])
+            else:
+                raise ValueError(f"Unknown interpolation method: {args.method}")
+            # get interpolated values
             model_interp[:, ipoint] = np.sum(
                 model_gll[:, ispec_all[ipoint], :, :, :]
-                * hlagx[None, None, None, :]
-                * hlagy[None, None, :, None]
-                * hlagz[None, :, None, None],
+                * wx[None, None, None, :]
+                * wy[None, None, :, None]
+                * wz[None, :, None, None],
                 axis=(1, 2, 3),
             )
 

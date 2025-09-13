@@ -24,25 +24,10 @@ from meshfem3d_constants import (
 from meshfem3d_utils import (
     get_gll_weights,
     lagrange_poly,
+    interp1d_linear,
     sem_mesh_read,
     sem_mesh_locate_points,
 )
-
-@numba.jit()
-def _linear_weight(xi, x):
-    """ xi[:] must in ascending order"""
-    w = np.zeros_like(xi)
-    if x <= xi[0]:
-        w[0] = 1
-        return w
-    if x >= xi[-1]:
-        w[-1] = 1
-        return w
-    ii = np.where(x >= xi)[0][-1]
-    h = (x - xi[ii]) / (xi[ii + 1] - xi[ii])
-    w[ii] = 1 - h
-    w[ii + 1] = h
-    return w
 
 # ====== parameters
 
@@ -60,7 +45,7 @@ parser.add_argument(
     "model_tags", nargs="+", help="model tags to interpolate (e.g. vsv vsh)"
 )
 parser.add_argument(
-    "--linear", action="store_true", help="use linear interpolation instead of GLL"
+    "method", default='linear', choices=['gll', 'linear'], help="Choose interpolation method (gll, linear)"
 )
 
 args = parser.parse_args()
@@ -193,44 +178,23 @@ for iproc_target in range(mpi_rank, nproc_target, mpi_size):
         # slower than index slicing but use less memory
         ipoint_select = np.nonzero(ii)[0]
         for ipoint in ipoint_select:
-            # if (status_all[ipoint]==1 and status_gll_target[ipoint]==1):
-            #  warnings.warn("point is located inside more than one element",
-            #      xyz_target[:,ipoint])
-            # nothing to do if the point is already located inside an element
-            # this means if multiple elements overlap (should not occur) we only take the first found element where the point locates inside
-            # if status_gll_target[ipoint] == 1:
-            #  continue
-            # if (misloc_all[ipoint] > misloc_gll_target[ipoint]
-            #    and status_all[ipoint]==1):
-            #  warnings.warn("point located inside an element but with a larger misloc(loc/previous)", misloc_all['ipoint'], misloc_gll_target[ipoint])
-            # if (misloc_all[ipoint] < misloc_gll_target[ipoint]
-            #    or status_all[ipoint]==1):
-            # status_gll_target[ipoint] = status_all[ipoint]
-            # misloc_gll_target[ipoint] = misloc_all[ipoint]
-            # misratio_gll_target[ipoint] = misratio_all[ipoint]
-            # if args.linear:
-            #     # data = source_model_gll[:, ispec_all[ipoint], :, :, :]
-            #     # data = np.moveaxis(data, 0, -1)
-            #     # model_target[:, ipoint] = interpn(
-            #     #     (zgll, zgll, zgll),
-            #     #     data,
-            #     #     uvw_all[ipoint, :],
-            #     #     bounds_error=False,
-            #     #     fill_value=None,
-            #     # )
-            if args.linear:
-                hlagx = _linear_weight(zgll, uvw_all[ipoint, 0])
-                hlagy = _linear_weight(zgll, uvw_all[ipoint, 1])
-                hlagz = _linear_weight(zgll, uvw_all[ipoint, 2])
+            # interpolation weights
+            if args.method == 'linear':
+                wx = interp1d_linear(zgll, uvw_all[ipoint, 0])
+                wy = interp1d_linear(zgll, uvw_all[ipoint, 1])
+                wz = interp1d_linear(zgll, uvw_all[ipoint, 2])
+            elif args.method == 'gll':
+                wx = lagrange_poly(zgll, uvw_all[ipoint, 0])
+                wy = lagrange_poly(zgll, uvw_all[ipoint, 1])
+                wz = lagrange_poly(zgll, uvw_all[ipoint, 2])
             else:
-                hlagx = lagrange_poly(zgll, uvw_all[ipoint, 0])
-                hlagy = lagrange_poly(zgll, uvw_all[ipoint, 1])
-                hlagz = lagrange_poly(zgll, uvw_all[ipoint, 2])
+                raise ValueError(f"Unknown interpolation method: {args.method}")
+            # get interpolated values
             model_target[:, ipoint] = np.sum(
                 source_model_gll[:, ispec_all[ipoint], :, :, :]
-                * hlagx[None, None, None, :]
-                * hlagy[None, None, :, None]
-                * hlagz[None, :, None, None],
+                * wx[None, None, None, :]
+                * wy[None, None, :, None]
+                * wz[None, :, None, None],
                 axis=(1, 2, 3),
             )
 

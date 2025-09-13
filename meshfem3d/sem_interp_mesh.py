@@ -28,6 +28,22 @@ from meshfem3d_utils import (
     sem_mesh_locate_points,
 )
 
+@numba.jit()
+def _linear_weight(xi, x):
+    """ xi[:] must in ascending order"""
+    w = np.zeros_like(xi)
+    if x <= xi[0]:
+        w[0] = 1
+        return w
+    if x >= xi[-1]:
+        w[-1] = 1
+        return w
+    ii = np.where(x >= xi)[0][-1]
+    h = (x - xi[ii]) / (xi[ii + 1] - xi[ii])
+    w[ii] = 1 - h
+    w[ii + 1] = h
+    return w
+
 # ====== parameters
 
 parser = argparse.ArgumentParser()
@@ -202,21 +218,6 @@ for iproc_target in range(mpi_rank, nproc_target, mpi_size):
             #     #     bounds_error=False,
             #     #     fill_value=None,
             #     # )
-            @numba.jit()
-            def _linear_weight(xi, x):
-                """ xi[:] must in ascending order"""
-                w = np.zeros_like(xi)
-                if x <= xi[0]:
-                    w[0] = 1
-                    return w
-                if x >= xi[-1]:
-                    w[-1] = 1
-                    return w
-                ii = np.where(x >= xi)[0][-1]
-                h = (x - xi[ii]) / (xi[ii + 1] - xi[ii])
-                w[ii] = 1 - h
-                w[ii + 1] = h
-                return w
             if args.linear:
                 hlagx = _linear_weight(zgll, uvw_all[ipoint, 0])
                 hlagy = _linear_weight(zgll, uvw_all[ipoint, 1])

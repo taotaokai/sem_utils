@@ -170,8 +170,9 @@ def interp_model_gll(
             model_gll[:, ispec_all[ipoint], :, :, :]
             * wx[None, None, None, :]
             * wy[None, None, :, None]
-            * wz[None, :, None, None],
+            * wz[None, :, None, None]
         )
+
         model_interp[:, ipoint] = values.reshape((nmodel, -1)).sum(axis=1)
 
 

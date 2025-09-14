@@ -25,6 +25,7 @@ from meshfem3d_utils import (
     get_gll_weights,
     lagrange_poly,
     interp1d_linear,
+    interp_model_gll,
     sem_mesh_read,
     sem_mesh_locate_points,
 )
@@ -176,27 +177,29 @@ for iproc_target in range(mpi_rank, nproc_target, mpi_size):
         # NOTE avoid too many for loops reduces computation time
         ##for ipoint in range(npoints):
         # slower than index slicing but use less memory
+
         ipoint_select = np.nonzero(ii)[0]
-        for ipoint in ipoint_select:
-            # interpolation weights
-            if args.method == 'linear':
-                wx = interp1d_linear(zgll, uvw_all[ipoint, 0])
-                wy = interp1d_linear(zgll, uvw_all[ipoint, 1])
-                wz = interp1d_linear(zgll, uvw_all[ipoint, 2])
-            elif args.method == 'gll':
-                wx = lagrange_poly(zgll, uvw_all[ipoint, 0])
-                wy = lagrange_poly(zgll, uvw_all[ipoint, 1])
-                wz = lagrange_poly(zgll, uvw_all[ipoint, 2])
-            else:
-                raise ValueError(f"Unknown interpolation method: {args.method}")
-            # get interpolated values
-            model_target[:, ipoint] = np.sum(
-                source_model_gll[:, ispec_all[ipoint], :, :, :]
-                * wx[None, None, None, :]
-                * wy[None, None, :, None]
-                * wz[None, :, None, None],
-                axis=(1, 2, 3),
-            )
+        interp_model_gll(ipoint_select, zgll, ispec_all, uvw_all, model_gll, model_target, method=args.method)
+        # for ipoint in ipoint_select:
+        #     # interpolation weights
+        #     if args.method == 'linear':
+        #         wx = interp1d_linear(zgll, uvw_all[ipoint, 0])
+        #         wy = interp1d_linear(zgll, uvw_all[ipoint, 1])
+        #         wz = interp1d_linear(zgll, uvw_all[ipoint, 2])
+        #     elif args.method == 'gll':
+        #         wx = lagrange_poly(zgll, uvw_all[ipoint, 0])
+        #         wy = lagrange_poly(zgll, uvw_all[ipoint, 1])
+        #         wz = lagrange_poly(zgll, uvw_all[ipoint, 2])
+        #     else:
+        #         raise ValueError(f"Unknown interpolation method: {args.method}")
+        #     # get interpolated values
+        #     model_target[:, ipoint] = np.sum(
+        #         source_model_gll[:, ispec_all[ipoint], :, :, :]
+        #         * wx[None, None, None, :]
+        #         * wy[None, None, :, None]
+        #         * wz[None, :, None, None],
+        #         axis=(1, 2, 3),
+        #     )
 
         elapsed_time = time.time() - tic
         print(f"{iproc_target=:03d}, {iproc_source=:03d}, {elapsed_time=:8.3f} seconds")

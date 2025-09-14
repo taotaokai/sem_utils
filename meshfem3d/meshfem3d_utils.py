@@ -142,6 +142,29 @@ def interp1d_linear(xi, x):
     wi[ii + 1] = h
     return wi
 
+@numba.jit()
+def interp_model_gll(ipoint_select, zgll, ispec_all, uvw_all, model_gll, model_interp, method='linear'):
+    for ipoint in ipoint_select:
+        # interpolation weights
+        if method == 'linear':
+            wx = interp1d_linear(zgll, uvw_all[ipoint, 0])
+            wy = interp1d_linear(zgll, uvw_all[ipoint, 1])
+            wz = interp1d_linear(zgll, uvw_all[ipoint, 2])
+        elif method == 'gll':
+            wx = lagrange_poly(zgll, uvw_all[ipoint, 0])
+            wy = lagrange_poly(zgll, uvw_all[ipoint, 1])
+            wz = lagrange_poly(zgll, uvw_all[ipoint, 2])
+        else:
+            raise ValueError(f"Unknown interpolation method: {method}")
+        # get interpolated values
+        model_interp[:, ipoint] = np.sum(
+            model_gll[:, ispec_all[ipoint], :, :, :]
+            * wx[None, None, None, :]
+            * wy[None, None, :, None]
+            * wz[None, :, None, None],
+            axis=(1, 2, 3),
+        )
+
 #==================================================#
 
 def geodetic_lat2geocentric_lat(geodetic_lat):

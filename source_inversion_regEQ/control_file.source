@@ -4,7 +4,7 @@
 
 #====== Structure of work directories 
 #
-# EuropeFWI/
+# Project/
 # |   stage00.source/
 # |   |   iter00/
 # |   |   |   events/
@@ -33,7 +33,7 @@ base_dir=$(readlink -f .)
 stage_dir=${base_dir}/stage00.source
 iter_num=08
 
-#======== Data directories
+#====== Data directories
 
 # specfem3d par files
 sem_config_dir=${base_dir}/sem_config  # sem_config/: DATA/Par_file, setup/constants.h.in, initial_model/
@@ -62,14 +62,12 @@ updated_cmt_dir=${iter_dir}/CMTSOLUTION_updated
 
 # mesh/DATABASES_MPI/*solver_data.bin,..
 mesh_dir=${base_dir}/mesh
-
 #model_dir=${iter_dir}/model
 
+# misfit par 
 misfit_par_dir=${base_dir}/misfit_par
 
-#precond_dir=${iter_dir}/preconditioner # proc*_reg1_inv_hess_diag.bin
-
-#======== slurm jobs
+#====== slurm jobs
 
 # cluster cpu/node
 nproc_per_node=64
@@ -103,8 +101,6 @@ slurm_args_srcfrechet=${slurm_args_green}
 slurm_args_dgreen="-n ${sem_nproc_total} -p ${slurm_partition_cpu} -t 02:00:00" #--exclusive"
 slurm_args_search=${slurm_args_misfit}
 slurm_args_plot=${slurm_args_misfit}
-
-#----- update model
 
 #====== other
 

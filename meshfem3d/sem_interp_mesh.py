@@ -179,7 +179,7 @@ for iproc_target in range(mpi_rank, nproc_target, mpi_size):
         # slower than index slicing but use less memory
 
         ipoint_select = np.nonzero(ii)[0]
-        interp_model_gll(ipoint_select, zgll, ispec_all, uvw_all, model_gll, model_target, method=args.method)
+        interp_model_gll(ipoint_select, zgll, ispec_all, uvw_all, source_model_gll, model_target, method=args.method)
         # for ipoint in ipoint_select:
         #     # interpolation weights
         #     if args.method == 'linear':

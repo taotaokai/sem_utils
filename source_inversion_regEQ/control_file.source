@@ -31,7 +31,7 @@ base_dir=$(readlink -f .)
 
 # current stage and iteration number
 stage_dir=${base_dir}/stage00.source
-iter_num=01
+iter_num=08
 
 #======== Data directories
 
@@ -48,7 +48,8 @@ sem_utils_dir=${base_dir}/sem_utils  # sem_utils/: misfit/, source_inversion_reg
 data_dir=${base_dir}/events # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTION, data.h5
 
 # current iteration directory, e.g. iter01/
-iter_num=$(printf "%02d" $iter_num)
+# iter_num=$(printf "%02d" "$iter_num")  #NOTE 08 is taken as octal number
+iter_num=$(echo "$iter_num" | awk '{printf "%02d", $1}')
 iter_dir=${stage_dir}/iter${iter_num}
 
 # previous iteration directory, e.g. iter00/

@@ -43,17 +43,18 @@ import numba
 #  ('dgam_dz','f4')                   ,
 #  ]
 
-#==================================================#
+# ==================================================#
 
-@numba.jit("Tuple((float64[:], float64[:]))(int64)", nogil=True) #, cache=True)
-def gll_nodes_weights(n :int):
+
+@numba.jit("Tuple((float64[:], float64[:]))(int64)", nogil=True)  # , cache=True)
+def gll_nodes_weights(n: int):
     if n == 5:
         x = np.array([-1, -((3.0 / 7.0) ** 0.5), 0, (3.0 / 7.0) ** 0.5, 1])
         w = np.array([0.1, 49.0 / 90.0, 32.0 / 45.0, 49.0 / 90.0, 0.1])
         return x, w
     else:
         # Use the Chebyshev-Gauss-Lobatto nodes as the first guess
-        x = -1 * np.cos(np.pi * np.arange(n) / (n-1))
+        x = -1 * np.cos(np.pi * np.arange(n) / (n - 1))
         # n1 = n - 1
         # The Legendre Vandermonde Matrix
         P = np.zeros((n, n))
@@ -65,14 +66,15 @@ def gll_nodes_weights(n :int):
             xold = x
             P[:, 0] = 1
             P[:, 1] = x
-            for k in range(1, n-1):
+            for k in range(1, n - 1):
                 P[:, k + 1] = ((2 * k + 1) * x * P[:, k] - (k) * P[:, k - 1]) / (k + 1)
             x = xold - (x * P[:, -1] - P[:, -2]) / (n * P[:, -1])
-        w = 2 / (n * (n -1) * P[:, -1] ** 2)
+        w = 2 / (n * (n - 1) * P[:, -1] ** 2)
         return x, w
 
-@numba.jit("float64[:](float64[:], float64)", nogil=True) #, cache=True)
-def lagrange_poly(nodes, x:float):
+
+@numba.jit("float64[:](float64[:], float64)", nogil=True)  # , cache=True)
+def lagrange_poly(nodes, x: float):
     """
     n-node Lagrange basis evaluated at x
     """
@@ -86,7 +88,8 @@ def lagrange_poly(nodes, x:float):
         lag[i] = np.prod(x - zj) / np.prod(z[i] - zj)
     return lag
 
-@numba.jit("float64[:,:](float64[:], float64[:])", nogil=True) #, cache=True)
+
+@numba.jit("float64[:,:](float64[:], float64[:])", nogil=True)  # , cache=True)
 def lagrange_poly_derivative(nodes, xx):
     """
     derivative of n-node Lagrange basis at xx
@@ -110,10 +113,11 @@ def lagrange_poly_derivative(nodes, xx):
             dlag_dx[i, j] = numerator / denominator
     return dlag_dx
 
+
 def get_gll_weights():
-    """ use sem build-in gll_library
-    """
+    """use sem build-in gll_library"""
     import gll_library
+
     # GLL points and weights
     zgll, wgll = gll_library.zwgljd(NGLLX, GAUSSALPHA, GAUSSBETA)
     # Get derivatives of langrange basis at gll nodes
@@ -124,9 +128,10 @@ def get_gll_weights():
             dlag_dzgll[i, j] = gll_library.lagrange_deriv_gll(i, j, zgll, NGLLX)
     return zgll, wgll, dlag_dzgll
 
+
 @numba.jit("float64[:](float64[:], float64)", nogil=True)
 def interp1d_linear(xi, x):
-    """ xi[:] must in ascending order
+    """xi[:] must in ascending order
     return: interpolation weights wi[:] s.t. f(x) = sum(wi[:] * yi[:]), yi = f(xi)
     """
     wi = np.zeros_like(xi)
@@ -142,30 +147,36 @@ def interp1d_linear(xi, x):
     wi[ii + 1] = h
     return wi
 
+
 @numba.jit()
-def interp_model_gll(ipoint_select, zgll, ispec_all, uvw_all, model_gll, model_interp, method='linear'):
+def interp_model_gll(
+    ipoint_select, zgll, ispec_all, uvw_all, model_gll, model_interp, method="linear"
+):
+    nmodel = model_gll.shape[0]
     for ipoint in ipoint_select:
         # interpolation weights
-        if method == 'linear':
+        if method == "linear":
             wx = interp1d_linear(zgll, uvw_all[ipoint, 0])
             wy = interp1d_linear(zgll, uvw_all[ipoint, 1])
             wz = interp1d_linear(zgll, uvw_all[ipoint, 2])
-        elif method == 'gll':
+        elif method == "gll":
             wx = lagrange_poly(zgll, uvw_all[ipoint, 0])
             wy = lagrange_poly(zgll, uvw_all[ipoint, 1])
             wz = lagrange_poly(zgll, uvw_all[ipoint, 2])
         else:
             raise ValueError(f"Unknown interpolation method: {method}")
         # get interpolated values
-        model_interp[:, ipoint] = np.sum(
+        values = (
             model_gll[:, ispec_all[ipoint], :, :, :]
             * wx[None, None, None, :]
             * wy[None, None, :, None]
             * wz[None, :, None, None],
-            axis=(1, 2, 3),
         )
+        model_interp[:, ipoint] = values.reshape((nmodel, -1)).sum(axis=1)
 
-#==================================================#
+
+# ==================================================#
+
 
 def geodetic_lat2geocentric_lat(geodetic_lat):
     f = EARTH_FLATTENING
@@ -416,7 +427,7 @@ def sem_mesh_get_vol_gll(mesh_data):
 # def sem_jacobian_hex27(anchors_xyz, uvw, xyz, dudx):
 # @numba.jit
 # @numba.jit("void(float64[:,::1], float64[::1], float64[::1], float64[:,::1])")
-@numba.jit(nogil=True) #, cache=True)
+@numba.jit(nogil=True)  # , cache=True)
 def sem_jacobian_hex27(anchors_xyz, uvw, xyz, dudx):
     """
     compute 3D jacobian at a given point for a 27-node element
@@ -461,9 +472,9 @@ def sem_jacobian_hex27(anchors_xyz, uvw, xyz, dudx):
     ii, jj, kk = ANCHOR_NODES[:, 0], ANCHOR_NODES[:, 1], ANCHOR_NODES[:, 2]
     shape3D = lag[ii, 0] * lag[jj, 1] * lag[kk, 2]
     dershape3D = np.zeros((3, 27))
-    dershape3D[0, :] = dlag[ii, 0] *  lag[jj, 1] *  lag[kk, 2]
-    dershape3D[1, :] =  lag[ii, 0] * dlag[jj, 1] *  lag[kk, 2]
-    dershape3D[2, :] =  lag[ii, 0] *  lag[jj, 1] * dlag[kk, 2]
+    dershape3D[0, :] = dlag[ii, 0] * lag[jj, 1] * lag[kk, 2]
+    dershape3D[1, :] = lag[ii, 0] * dlag[jj, 1] * lag[kk, 2]
+    dershape3D[2, :] = lag[ii, 0] * lag[jj, 1] * dlag[kk, 2]
 
     # for a in range(27):
     #     i, j, k = ANCHOR_NODES[a, :]
@@ -511,7 +522,7 @@ def sem_jacobian_hex27(anchors_xyz, uvw, xyz, dudx):
 # @numba.njit("Tuple((float64, boolean))(float64[:,:], float64[:], float64[:], int64)")
 # @numba.jit()
 # @numba.njit("Tuple((float64, boolean))(float64[:,::1], float64[::1], float64[::1], int64)")
-@numba.jit(nogil=True) #, cache=True)
+@numba.jit(nogil=True)  # , cache=True)
 def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
     """
     !-map a given point in physical space (xyz) to the
@@ -548,7 +559,7 @@ def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
 
     # iteratively update local coordinate uvw to approach the target xyz
     xyz = np.zeros(3)
-    dudx = np.zeros((3,3))
+    dudx = np.zeros((3, 3))
     is_inside = True
     for iter in range(max_niter):
         # predicted xyzi and Jacobian for the current uvw
@@ -561,10 +572,12 @@ def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
 
         is_inside = True
         mask = located_uvw < -1
-        if np.any(mask): is_inside = False
+        if np.any(mask):
+            is_inside = False
         located_uvw[mask] = -1
         mask = located_uvw > 1
-        if np.any(mask): is_inside = False
+        if np.any(mask):
+            is_inside = False
         located_uvw[mask] = 1
 
         # # limit inside the reference cube
@@ -641,10 +654,7 @@ def sem_mesh_locate_points(
     for ispec in range(nspec):
         # distance between gll points and the central gll point
         iglob1 = ibool[ispec, :, :, :].ravel()
-        dist = (
-            np.sum((xyz_elem[ispec, :] - xyz_glob[iglob1, :]) ** 2, axis=1)
-            ** 0.5
-        )
+        dist = np.sum((xyz_elem[ispec, :] - xyz_glob[iglob1, :]) ** 2, axis=1) ** 0.5
         element_half_size[ispec] = np.max(dist)
 
     # get neighbouring elements around each target location xyz
@@ -653,9 +663,9 @@ def sem_mesh_locate_points(
     )
 
     # --- loop over each point, get the location info
-    iax = ANCHOR_GLL_INDEX[:,0]
-    iay = ANCHOR_GLL_INDEX[:,1]
-    iaz = ANCHOR_GLL_INDEX[:,2]
+    iax = ANCHOR_GLL_INDEX[:, 0]
+    iay = ANCHOR_GLL_INDEX[:, 1]
+    iaz = ANCHOR_GLL_INDEX[:, 2]
 
     # xigll, wx = zwgljd(NGLLX,GAUSSALPHA,GAUSSBETA)
     # yigll, wy = zwgljd(NGLLY,GAUSSALPHA,GAUSSBETA)
@@ -682,8 +692,7 @@ def sem_mesh_locate_points(
         # print(xyz_elem.shape)
         # print(xyz.shape)
         dist_ratio = (
-            np.sum((xyz_elem[ispec_list, :] - xyz[ipoint, :]) ** 2, axis=1)
-            ** 0.5
+            np.sum((xyz_elem[ispec_list, :] - xyz[ipoint, :]) ** 2, axis=1) ** 0.5
             / element_half_size[ispec_list]
         )
         # remove elements too far away from target point
@@ -894,7 +903,7 @@ def assemble_MPI_scalar(
     array_glob[:] = sum_glob[:]
 
 
-@numba.jit(nogil=True) #, cache=True)
+@numba.jit(nogil=True)  # , cache=True)
 def gll2glob(
     u_gll,
     nglob,
@@ -918,7 +927,7 @@ def gll2glob(
     return u_glob
 
 
-@numba.jit(nogil=True) #, cache=True)
+@numba.jit(nogil=True)  # , cache=True)
 def laplacian_iso(
     u_glob,
     kappa,
@@ -1052,7 +1061,7 @@ def laplacian_iso(
     return -1 * out_glob
 
 
-@numba.jit(nogil=True) #, cache=True)
+@numba.jit(nogil=True)  # , cache=True)
 def laplacian_iso3D(
     u_glob,
     kappa_gll,

@@ -24,6 +24,11 @@ event_list=${2:?[arg]need event_list}
 # load parameters in control_file
 source $control_file
 
+if [ ! -d "$updated_model_dir" ]
+then
+  mkdir -p $updated_model_dir
+fi
+
 #------ process each event
 # for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
 for event_id in $(awk 'NF&&$1!~/#/{print $1}' $event_list)
@@ -31,17 +36,18 @@ do
   echo "====== $event_id"
 
   # create event dir
-  event_dir=$iter_dir/$event_id
-  mkdir -p $event_dir
-
-  #rm -rf $event_dir
-  chmod u+w -R $event_dir/DATA
+  event_dir=$iter_dir/events/$event_id
+  sem_data_dir=$event_dir/DATA
+  if [ -d "$sem_data_dir" ]
+  then
+    chmod u+w -R $event_dir/DATA
+  fi
   mkdir -p $event_dir/DATA
 
+  mkdir -p $event_dir
+
   # copy CMTSOLUTION file
-  #cmt_file=$(find -L $source_dir -path "*/iter0?/CMTSOLUTION_updated/${event_id}.cmt" | sort | tail -n1)
-  #cmt_file=$(find -L $source_dir -name ${event_id}.cmt | sort | tail -n1)
-  cmt_file=$(find -L $source_dir -path "*/iter??/${event_id}/misfit/CMTSOLUTION.updated" | sort | tail -n1)
+  cmt_file=$(find -L $source_dir -path "*/iter??/events/${event_id}/misfit/CMTSOLUTION.updated" | sort | tail -n1)
   echo ------ use: $(readlink -f $cmt_file)
   if [ ! -f "$cmt_file" ]
   then

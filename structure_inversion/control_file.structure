@@ -17,7 +17,10 @@
 # |   |   |   |   |   output_perturb/
 # |   |   |   |   C202006211907A/
 # |   |   |   |   | ...
-# |   |   |   model_updated
+# |   |   |   model/: inital model (e.g. GLL files)
+# |   |   |   gradient/: sum of event kernels
+# |   |   |   model_dvp,dvs,.../: perturbed models
+# |   |   |   model_updated/: updated model
 #
 #====== Basic workflow:
 #
@@ -43,10 +46,14 @@
 #     sum misfit results for all event, get optimal step lengths
 
 # project root directory
-base_dir=$(readlink -f ./)
+base_dir=$(readlink -f .)
 
 # current stage and iteration number
 stage_dir=${base_dir}/stage00.structure
+
+# CMTSOLUTION dir
+source_dir=${base_dir}/stage00.source  # source_dir/iter??/<gcmtID>/misfit/CMTSOLUTION.updated
+
 iter_num=0
 
 #====== Data directories
@@ -60,8 +67,27 @@ sem_build_dir=${base_dir}/build # build/: bin/xmeshfem3D,xspecfem3D
 # shell scripts
 sem_utils_dir=${base_dir}/sem_utils  # sem_utils/: misfit/, structure_inversion/
 
+# event data dir
+data_dir=${base_dir}/events # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTION, data.h5
+
+# current iteration directory, e.g. iter01/
+# iter_num=$(printf "%02d" "$iter_num")  #NOTE 08 is taken as octal number
+iter_num=$(echo "$iter_num" | awk '{printf "%02d", $1}')
+iter_dir=${stage_dir}/iter${iter_num}
+
+# previous iteration directory, e.g. iter00/
+iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
+prev_iter_dir=${stage_dir}/iter${iter_minus_one}
+
+# mesh/DATABASES_MPI/*solver_data.bin,..
+mesh_dir=${iter_dir}/mesh
+
+# initial and updated model dir
+initial_model_dir=${iter_dir}/model
+updated_model_dir=${iter_dir}/model_updated
+
 # misfit par 
-misfit_par_dir=${stage_dir}/misfit_par
+misfit_par_dir=${base_dir}/misfit_par
 
 # mesh_REF dir
 #mesh_REF_dir=$base_dir/mesh_REF.stage09.iter16.polyfit_um.linfit_mtz.vp_vs_voigt
@@ -69,63 +95,40 @@ misfit_par_dir=${stage_dir}/misfit_par
 # preconditioner
 #precond_dir=${iter_dir}/preconditioner # proc*_reg1_inv_hess_diag.bin
 
-# event data dir 
-data_dir=$base_dir/events  # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTION, data.h5
-
-# source dir
-source_dir=${base_dir}/stage00.source  # source_dir/iter??/<gcmtID>/misfit/CMTSOLUTION.updated
-
-# current iteration directory
-iter_num=$(printf "%02d" $iter_num)
-iter_dir=${stage_dir}/iter${iter_num}
-
-# mesh/DATABASES_MPI/*solver_data.bin,..
-mesh_dir=${stage_dir}/mesh
-model_dir=${iter_dir}/model
-
-# previous iteration directory
-iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
-prev_iter_dir=${base_dir}/${stage_dir}/iter${iter_minus_one}
-
 #====== slurm jobs
 
 # cluster cpu/node
-nproc_per_node=24
-
-# number of SEM slices
-sem_nproc=4  # actual mesh slices defined in Par_file
-
-# number of MPI processors to run jobs
-slurm_nnode=1
-slurm_nproc=4
-
-# number of MPI processors to run pre/post-process jobs
-slurm_nproc_misfit=15  # misfit_job
-slurm_nproc_plot=15  # plot_job
+nproc_per_node=64
 
 # mpi executable
 slurm_mpiexec="srun --mpi=pmix_v3" # SCNET
-# slurm_mpiexec="mpirun -np ${slurm_nproc}" # local
+# slurm_mpiexec="mpirun -np ${slurm_nproc}"
 
 # slurm partition
 slurm_partition_cpu="xahcnormal" # SCNET CPU
 slurm_partition_dcu="xahdnormal" # SCNET GPU
 
-slurm_dcu_extra_args="--exclusive --gres=dcu:4"
+# slurm_dcu_extra_args="--exclusive --gres=dcu:4" # SCNET
 # slurm_dcu_extra_args="--exclusive" # SCNET
 
-# time limit
-slurm_timelimit_mesh=00:30:00
-slurm_timelimit_forward=01:30:00
-slurm_timelimit_adjoint=03:00:00
-slurm_timelimit_misfit=03:30:00 # misfit,kernel_sum
-slurm_timelimit_perturb=00:30:00
-slurm_timelimit_search=00:30:00
-slurm_timelimit_plot=01:00:00
-## for hessian simulation
-#slurm_timelimit_hess_forward=02:00:00
-#slurm_timelimit_hess_misfit=03:30:00
-#slurm_timelimit_hess_adjoint=04:30:00
+# number of mpi processes for sem
+sem_par_file=${sem_config_dir}/DATA/Par_file
+if [ ! -f "$sem_par_file" ]
+then
+    echo "[ERROR] $sem_par_file does NOT exist!"
+    exit 1
+fi
+sem_nproc_xi=$(grep NPROC_XI $sem_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
+sem_nproc_eta=$(grep NPROC_ETA $sem_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
+sem_nproc_total=$(echo $sem_nproc_xi $sem_nproc_eta | awk '{print $1*$2}')
+# nnode=$(echo "$sem_nproc_total $nproc_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
+
+slurm_args_forward="-n ${sem_nproc_total} -p ${slurm_partition_cpu} -t 01:00:00" #--exclusive"
+slurm_args_misfit="-N 1 -n 20 -p ${slurm_partition_cpu} -t 01:00:00"
+slurm_args_kernel="-n ${sem_nproc_total} -p ${slurm_partition_cpu} -t 02:00:00" #--exclusive"
+slurm_args_dsyn="-n ${sem_nproc_total} -p ${slurm_partition_cpu} -t 02:00:00" #--exclusive"
+slurm_args_search=${slurm_args_misfit}
+slurm_args_plot=${slurm_args_misfit}
 
 #====== other
 

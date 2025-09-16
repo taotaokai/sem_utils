@@ -1,4 +1,5 @@
 #!/bin/bash
+#set -x
 
 # structure inversion  for regional earthquake
 
@@ -24,10 +25,35 @@ event_list=${2:?[arg]need event_list}
 # load parameters in control_file
 source $control_file
 
+if [ ! -d "$stage_dir" ]
+then
+  mkdir -p $stage_dir
+fi
 if [ ! -d "$updated_model_dir" ]
 then
   mkdir -p $updated_model_dir
 fi
+
+# initial model
+echo ------ model: $(readlink -f ${initial_model_dir})
+if [ ! -d "${initial_model_dir}" ]
+then
+  echo "[ERROR] ${initial_model_dir} does NOT exist!"
+  exit -1
+fi
+ln -sf ${initial_model_dir} $iter_dir/initial_model
+
+# sem Par_file
+sem_par_file=${sem_config_dir}/DATA/Par_file
+if [ ! -f "$sem_par_file" ]
+then
+  echo "[ERROR] $sem_par_file does NOT exist!"
+  exit -1
+fi
+
+# mkdir -p $mesh_dir/DATA
+# cp $sem_par_file $mesh_dir/DATA/Par_file
+$sem_utils_dir/structure_inversion/make_slurm_jobs_for_pre_and_post_proc_regEQ.sh $control_file
 
 #------ process each event
 # for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
@@ -44,20 +70,20 @@ do
   fi
   mkdir -p $event_dir/DATA
 
-  mkdir -p $event_dir
+  # copy Par_file
+  cp $sem_par_file $event_dir/DATA/Par_file
 
   # copy CMTSOLUTION file
-  cmt_file=$(find -L $source_dir -path "*/iter??/events/${event_id}/misfit/CMTSOLUTION.updated" | sort | tail -n1)
-  echo ------ use: $(readlink -f $cmt_file)
+  # cmt_file=$(find -L $source_dir -path "*/iter??/events/${event_id}/misfit/CMTSOLUTION.updated" | sort | tail -n1)
+  cmt_file=$(ls ${source_dir}/iter??/events/${event_id}/misfit/CMTSOLUTION.updated | sort | tail -n1)
+  echo ------ source: $(readlink -f $cmt_file)
   if [ ! -f "$cmt_file" ]
   then
     echo "[ERROR] $cmt_file not found"
     exit -1
   fi
-
-  chmod u+w $event_dir/DATA/CMTSOLUTION.init
-  cp $cmt_file $event_dir/DATA/CMTSOLUTION.init
-  # chmod a-w $event_dir/DATA/CMTSOLUTION.init
+  chmod u+w $event_dir/DATA/CMTSOLUTION
+  cp $cmt_file $event_dir/DATA/CMTSOLUTION
 
   # copy STATIONS
   station_file=$data_dir/$event_id/STATIONS

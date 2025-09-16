@@ -11,7 +11,7 @@ source $control_file
 
 #====== define variables
 # directories
-event_dir=$iter_dir/$event_id
+event_dir=$iter_dir/events/$event_id
 mesh_dir=$iter_dir/mesh
 misfit_dir=$event_dir/misfit
 figure_dir=$misfit_dir/figure
@@ -36,6 +36,14 @@ search_job=$slurm_dir/search.job
 # database file
 #mkdir -p $misfit_dir
 db_file=$misfit_dir/misfit.h5
+
+# SEM Par_file
+sem_par_file=${event_dir}/DATA/Par_file
+if [ ! -f "$sem_par_file" ]
+then
+  echo "[ERROR] $sem_par_file does NOT exist!"
+  exit -1
+fi
 # station file
 station_file=$event_dir/DATA/STATIONS
 if [ ! -f "$station_file" ]
@@ -44,7 +52,7 @@ then
   exit -1
 fi
 # cmt file
-cmt_file=$event_dir/DATA/CMTSOLUTION.init
+cmt_file=$event_dir/DATA/CMTSOLUTION
 if [ ! -f "$cmt_file" ]
 then
   echo "[ERROR] $cmt_file does NOT exist!"
@@ -58,16 +66,17 @@ then
   exit -1
 fi
 
+# set USTER_T0 in Par_file to at least 3 * tau
+tau=$(grep "tau" ${cmt_file} | awk -F: '{printf "%f", $2}')
+min_user_t0=$(echo "3 * $tau + 1" | bc -l | awk '{printf "%d", $1}')
+sed -i "/^T0/s/=.*/= $min_user_t0/" ${sem_par_file}
+
 #====== syn: forward simulation
 cat <<EOF > $forward_job
 #!/bin/bash
 #SBATCH -J ${event_id}.forward
 #SBATCH -o $forward_job.o%j
-#SBATCH -N $slurm_nnode
-#SBATCH -n $slurm_nproc
-#SBATCH -t $slurm_timelimit_forward
-#SBATCH -p $slurm_partition_dcu
-#SBATCH $slurm_dcu_extra_args
+#SBATCH ${slurm_args_forward}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -78,17 +87,12 @@ out_dir=output_forward
 mkdir -p $event_dir/DATA
 cd $event_dir/DATA
 
-cp $cmt_file $event_dir/DATA/CMTSOLUTION
-
-cp $mesh_dir/DATA/Par_file .
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .true./" Par_file
 
-#
-sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
-
+# sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
 # for regional earthquake data
-sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" Par_file
+# sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" Par_file
 
 rm -rf $event_dir/DATABASES_MPI
 mkdir $event_dir/DATABASES_MPI
@@ -120,56 +124,54 @@ echo
 
 EOF
 
-exit -1
-
 #====== misfit
 cat <<EOF > $misfit_job
 #!/bin/bash
 #SBATCH -J ${event_id}.misfit
-#SBATCH -o $misfit_job.o%j
-#SBATCH -N 1
-#SBATCH -n 1
-#SBATCH -t $slurm_timelimit_misfit
-#SBATCH -p $slurm_partition_cpu
+#SBATCH -o ${misfit_job}.o%j
+#SBATCH ${slurm_args_misfit}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
 echo
 
 cd $event_dir
 
+chmod u+w -R $misfit_dir
 rm -rf $misfit_dir
 mkdir -p $misfit_dir
-$python_exec $sem_utils_dir/misfit/read_data.py \
-  $misfit_par \
-  $db_file \
-  $event_dir/DATA/CMTSOLUTION \
-  $data_dir/$event_id/data/channel.txt \
-  $event_dir/output_syn/sac \
-  $data_dir/$event_id/dis
 
-$python_exec $sem_utils_dir/misfit/measure_misfit.py $misfit_par $db_file
+chmod u+w -R $event_dir/SEM
+rm -rf $event_dir/SEM
+mkdir -p $event_dir/SEM
 
-$python_exec $sem_utils_dir/misfit/output_misfit.py $db_file $misfit_dir/misfit.txt
+$python_exec $sem_utils_dir/misfit/measure_adj.py \\
+  $db_file \\
+  $misfit_par \\
+  $event_dir/DATA/Par_file \\
+  $cmt_file \\
+  $data_dir/$event_id/channel.txt \\
+  $data_dir/$event_id/data.h5 \\
+  $event_dir/output_forward/sac \\
+  $event_dir/SEM \\
+  --nproc=\$SLURM_NPROCS \\
+  --cmt_in_ECEF
 
-rm -rf $figure_dir
-mkdir -p $figure_dir
-$python_exec $sem_utils_dir/misfit/plot_misfit.py $misfit_par $db_file $figure_dir
+if [ \$? -ne 0 ]
+then
+  echo "measure_adj.py failed!"
+  exit 1
+fi
 
-##------ adjoint source for kernel simulation
-#rm -rf $event_dir/adj_kernel
-#mkdir -p $event_dir/adj_kernel
-#$python_exec $sem_utils_dir/output_adj.py $misfit_par $db_file $event_dir/adj_kernel
-#
-## make STATIONS_ADJOINT
-#cd $event_dir/adj_kernel
-#ls *Z.adj | sed 's/..Z\.adj$//' |\
-#  awk -F"." '{printf "%s[ ]*%s.%s[ ]\n",\$1,\$2,\$3}' > grep_pattern
-#grep -f $event_dir/adj_kernel/grep_pattern $event_dir/DATA/STATIONS \
-#  > $event_dir/adj_kernel/STATIONS_ADJOINT
+# make STATIONS_ADJOINT
+cd $event_dir/SEM
+ls *Z.adj | sed 's/..Z\.adj$//' |\
+  awk -F"." '{printf "%s[ ]*%s.%s[ ]\n",\$1,\$2,\$3}' > grep_pattern
+grep -f $event_dir/SEM/grep_pattern $event_dir/DATA/STATIONS \
+  > $event_dir/SEM/STATIONS_ADJOINT
 
 echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
 echo
 
 EOF
@@ -179,14 +181,10 @@ cat <<EOF > $kernel_job
 #!/bin/bash
 #SBATCH -J ${event_id}.kernel
 #SBATCH -o $kernel_job.o%j
-#SBATCH -N $slurm_nnode
-#SBATCH -n $slurm_nproc
-#SBATCH -t $slurm_timelimit_kernel
-#SBATCH -p $slurm_partition_dcu
-#SBATCH $slurm_dcu_extra_args
+#SBATCH ${slurm_args_kernel}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
 echo
 
 out_dir=output_kernel
@@ -199,9 +197,9 @@ sed -i "/^ANISOTROPIC_KL/s/=.*/= .true./" Par_file
 sed -i "/^SAVE_TRANSVERSE_KL_ONLY/s/=.*/= .false./" Par_file
 sed -i "/^APPROXIMATE_HESS_KL/s/=.*/= .false./" Par_file
 
-cp -f $event_dir/adj_kernel/STATIONS_ADJOINT $event_dir/DATA/
-rm -rf $event_dir/SEM
-ln -s $event_dir/adj_kernel $event_dir/SEM
+cp -f $event_dir/SEM/STATIONS_ADJOINT $event_dir/DATA/
+# rm -rf $event_dir/SEM
+# ln -s $event_dir/adj_kernel $event_dir/SEM
 
 cd $event_dir
 
@@ -213,7 +211,7 @@ rm -rf $event_dir/DATABASES_MPI
 mkdir $event_dir/DATABASES_MPI
 ln -s $event_dir/forward_saved_frames/*.bin $event_dir/DATABASES_MPI
 
-cp $mesh_dir/OUTPUT_FILES/addressing.txt OUTPUT_FILES
+# cp $mesh_dir/OUTPUT_FILES/addressing.txt OUTPUT_FILES
 cp -L DATA/Par_file OUTPUT_FILES
 cp -L DATA/STATIONS_ADJOINT OUTPUT_FILES
 cp -L DATA/CMTSOLUTION OUTPUT_FILES
@@ -232,6 +230,8 @@ echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 EOF
+
+exit -1
 
 #====== perturb: forward simulation of perturbed model
 cat <<EOF > $perturb_job

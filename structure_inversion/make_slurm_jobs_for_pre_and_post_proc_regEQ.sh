@@ -37,20 +37,15 @@ cat <<EOF > $mesh_job
 #!/bin/bash
 #SBATCH -J mesh
 #SBATCH -o ${mesh_job}.o%j
-#SBATCH -N $slurm_nnode
-#SBATCH -n $slurm_nproc
-#SBATCH -p $slurm_partition_mesh
-#SBATCH -t $slurm_timelimit_mesh
-##SBATCH --mail-user=kai.tao@utexas.edu
-##SBATCH --mail-type=begin
-##SBATCH --mail-type=end
+#SBATCH ${slurm_args_mesh}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
 echo
 
 mesh_dir="$mesh_dir"
-model_dir="$model_dir"
+# model_dir="$initial_model_dir"
+model_dir="${iter_dir}/initial_model"
 
 if [ ! -d "\$model_dir" ]
 then
@@ -71,9 +66,9 @@ rm Par_file GLL CMTSOLUTION
 ln -sf \$model_dir GLL
 cp -L $sem_config_dir/DATA/Par_file .
 cp -L $sem_config_dir/DATA/CMTSOLUTION .
-cp -L Par_file CMTSOLUTION \$mesh_dir/OUTPUT_FILES/
+cp -L Par_file \$mesh_dir/OUTPUT_FILES/
 
-sed -i "/^MODEL/s/=.*/= GLL/" \$mesh_dir/DATA/Par_file
+#sed -i "/^MODEL/s/=.*/= GLL/" \$mesh_dir/DATA/Par_file
 #sed -i "/^USE_ECEF_CMTSOLUTION/s/=.*/= .false./" \$mesh_dir/DATA/Par_file
 #sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" \$mesh_dir/DATA/Par_file
 
@@ -81,7 +76,7 @@ cd \$mesh_dir
 ${slurm_mpiexec} $sem_build_dir/bin/xmeshfem3D
 
 echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
 echo
 
 EOF

@@ -27,7 +27,7 @@ for iproc in range(nproc):
 
   print("# iproc", iproc)
 
-  input_file = "%s/proc%06d_%s.bin"%(model_dir, iproc, model_tag)
+  input_file = "%s/proc%06d_reg1_%s.bin"%(model_dir, iproc, model_tag)
   with FortranFile(input_file, 'r') as f:
     gll = f.read_reals(dtype='f4')
   gll = gll.reshape((-1, 21)) 
@@ -52,6 +52,6 @@ for iproc in range(nproc):
   }
 
   for tag, val in love_param:
-    output_file = "%s/proc%06d_%s_kernel.bin"%(out_dir, iproc, tag)
+    output_file = "%s/proc%06d_reg1_%s_kernel.bin"%(out_dir, iproc, tag)
     with FortranFile(output_file, 'w') as f:
       f.write_record(np.array(val, dtype='f4'))

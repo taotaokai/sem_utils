@@ -51,7 +51,7 @@ for iproc in range(nproc):
     'F': (C13 + C23) / 2.0,
   }
 
-  for tag, val in love_param:
+  for tag in love_param:
     output_file = "%s/proc%06d_reg1_%s_kernel.bin"%(out_dir, iproc, tag)
     with FortranFile(output_file, 'w') as f:
-      f.write_record(np.array(val, dtype='f4'))
+      f.write_record(np.array(love_param[tag], dtype='f4'))

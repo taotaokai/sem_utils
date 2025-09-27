@@ -69,6 +69,7 @@ parser.add_argument(
 args = parser.parse_args()
 if rank_world == 0:
     print(args)
+    sys.stdout.flush()
 
 nproc_source = args.nproc_source
 mesh_dir_source = args.mesh_dir_source
@@ -94,16 +95,15 @@ if size_world % nproc_per_slice != 0:
         f"mpi_size({size_world}) must be divisible by nproc_per_slice({nproc_per_slice})"
     )
 
-# color: rank_world // nproc_per_slice
-# key: rank_world
-comm_group = comm_world.Split(rank_world // nproc_per_slice, rank_world)
+my_group = rank_world // nproc_per_slice
+num_groups = size_world // nproc_per_slice
+
+comm_group = comm_world.Split(my_group, rank_world)
 rank_group = comm_group.Get_rank()
 
 if comm_group != MPI.COMM_NULL:
 
-    for iproc_target in range(
-        rank_world // nproc_per_slice, nproc_target, size_world // nproc_per_slice
-    ):
+    for iproc_target in range(my_group, nproc_target, num_groups):
         
         if rank_group == 0:
             tic = time.time()
@@ -126,5 +126,7 @@ if comm_group != MPI.COMM_NULL:
             elapsed_time = time.time() - tic
             print(f"{iproc_target=:03d}, {elapsed_time=:8.3f} seconds")
             sys.stdout.flush()
+        
+        comm_group.Barrier()
 
-comm_group.Free()
+comm_world.Barrier()

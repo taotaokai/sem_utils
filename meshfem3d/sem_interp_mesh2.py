@@ -127,4 +127,4 @@ if comm_group != MPI.COMM_NULL:
             print(f"{iproc_target=:03d}, {elapsed_time=:8.3f} seconds")
             sys.stdout.flush()
 
-        comm_group.Barrier()
+comm_group.Free()

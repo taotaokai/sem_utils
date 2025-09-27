@@ -955,6 +955,7 @@ def sem_mesh_interp_model(comm,
                     np.array(np.ravel(misratio_glob[ibool_target], order="F"), dtype="f4")
                 )
 
+    comm.Barrier()
 
 def sem_boundary_mesh_read(mesh_file):
     """read in SEM mesh slice"""

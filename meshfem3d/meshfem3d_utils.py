@@ -742,6 +742,220 @@ def sem_mesh_locate_points(
     return status_all, ispec_all, uvw_all, misloc_all, misratio_all
 
 
+def sem_mesh_interp_model(comm,
+                          iproc_target, mesh_dir_target, model_dir_target,
+                          nproc_source, mesh_dir_source, model_dir_source, 
+                          model_tags, 
+                          idoubling_merge=[], method='linear', output_misloc=False):
+    """
+    interpolate model of source mesh to one target mesh slice
+    the targe mesh slice is devided into several sub-chunks for parallel processing
+    This is to reduce the memory usage when the targe mesh slice is big
+    """
+    # import time
+    import numpy as np
+    from scipy.io import FortranFile
+    from mpi4py import MPI
+    from mpi4py.util import dtlib
+
+    mpi_size = comm.Get_size()
+    mpi_rank = comm.Get_rank()
+
+    nmodel = len(model_tags)
+
+    zgll, wgll, dlag_dzgll = get_gll_weights()
+
+    # read in target SEM mesh
+    mesh_file = "%s/proc%06d_reg1_solver_data.bin" % (mesh_dir_target, iproc_target)
+    mesh_data_target = sem_mesh_read(mesh_file)
+    nspec_target = mesh_data_target["nspec"]
+    ibool_target = mesh_data_target["ibool"]
+    idoubling_target = mesh_data_target["idoubling"]
+    xyz_glob_target = mesh_data_target["xyz_glob"]
+
+    # merge regions if required
+    idx_merge = np.zeros(nspec_target, dtype="bool")
+    for ii in idoubling_merge:
+        idx_merge = idx_merge | (idoubling_target == ii)
+    idoubling_target[idx_merge] = IFLAG_DUMMY
+
+    # split into nparts
+    npts_glob = xyz_glob_target.shape[0]
+    npts_per_rank = (npts_glob + mpi_size - 1) // mpi_size
+    part_ind0 = mpi_rank * npts_per_rank
+    part_ind1 = part_ind0 + npts_per_rank
+    if part_ind1 > npts_glob:
+        part_ind1 = npts_glob
+    # xyz_split = xyz_glob_target[split_index::nsplit, :]
+    npts_part = part_ind1 - part_ind0
+    xyz_part = xyz_glob_target[part_ind0:part_ind1, :]
+    idoubling_part = -1
+
+    # array of final results for each part
+    status_part = np.zeros(npts_part, dtype="int")
+    status_part[:] = -1
+    misloc_part = np.zeros(npts_part)
+    misloc_part[:] = np.inf
+    misratio_part = np.zeros(npts_part)
+    model_part = np.zeros((nmodel, npts_part))
+
+    #--- loop over each slice of source SEM mesh
+    for iproc_source in range(nproc_source):
+        # tic = time.time()
+
+        # read in source SEM mesh
+        mesh_file = "%s/proc%06d_reg1_solver_data.bin" % (mesh_dir_source, iproc_source)
+        mesh_data_source = sem_mesh_read(mesh_file)
+
+        # merge regions if required
+        idoubling_source = mesh_data_source["idoubling"]
+        idx_merge = np.zeros(mesh_data_source["nspec"], dtype="bool")
+        for ii in idoubling_merge:
+            idx_merge = idx_merge | (idoubling_source == ii)
+        idoubling_source[idx_merge] = IFLAG_DUMMY
+
+        # read in source model
+        gll_dims = mesh_data_source["gll_dims"]
+        source_model_gll = np.zeros((nmodel,) + gll_dims)
+        for imodel in range(nmodel):
+            model_tag = model_tags[imodel]
+            model_file = "%s/proc%06d_reg1_%s.bin" % (
+                model_dir_source,
+                iproc_source,
+                model_tag,
+            )
+            with FortranFile(model_file, "r") as f:
+                # here gll_dims = [NSPEC, NGLLZ, NGLLY, NGLLX] which is C convention of
+                # Fortran array of [NGLLX, NGLLY, NGLLZ, NSPEC]
+                source_model_gll[imodel, :, :, :, :] = np.reshape(
+                    f.read_ints(dtype="f4"), gll_dims
+                )
+
+        # locate target points
+        status_all, ispec_all, uvw_all, misloc_all, misratio_all = (
+            sem_mesh_locate_points(
+                mesh_data_source,
+                xyz_part,
+                idoubling_part,
+                kdtree_num_element=2.0,
+                max_dist_ratio=2.0,
+            )
+        )
+
+        # merge interpolation results of mesh slice (iproc_souce) into
+        # the final results based on misloc and status
+
+        # index selection for merge:
+        # (not located inside an element yet) and
+        # (located for the current mesh slice) and
+        # ( smaller misloc or located inside an element in this mesh slice )
+        ii = (
+            (status_part != 1)
+            & (status_all != -1)
+            & ((misloc_all < misloc_part) | (status_all == 1))
+        )
+
+        status_part[ii] = status_all[ii]
+        misloc_part[ii] = misloc_all[ii]
+        misratio_part[ii] = misratio_all[ii]
+
+        # NOTE avoid too many for loops reduces computation time
+        ##for ipoint in range(npoints):
+        # slower than index slicing but use less memory
+
+        ipoint_select = np.nonzero(ii)[0]
+        interp_model_gll(ipoint_select, zgll, ispec_all, uvw_all, source_model_gll, model_part, method=method)
+
+        # elapsed_time = time.time() - tic
+        # print(f"{iproc_target=:03d}, {iproc_source=:03d}, {elapsed_time=:8.3f} seconds")
+        # sys.stdout.flush()
+
+    #--- gather results
+    if mpi_rank == 0:
+        begin_indices = comm.gather(part_ind0, root=0)
+    else:
+        comm.gather(part_ind0, root=0)
+    if mpi_rank == 0:
+        npts_counts = comm.gather(npts_part, root=0)
+    else:
+        comm.gather(npts_part, root=0)
+
+    # model_glob
+    if mpi_rank == 0:
+        model_glob = np.zeros((nmodel, npts_glob))
+    else:
+        model_glob = None
+    if output_misloc:
+        if mpi_rank == 0:
+            status_glob = np.zeros(npts_glob, dtype=int)
+            misloc_glob = np.zeros(npts_glob)
+            misratio_glob = np.zeros(npts_glob)
+        else:
+            status_glob = None
+            misloc_glob = None
+            misratio_glob = None
+
+    # gather model_part into model_glob
+    recv_counts, recv_displs = None, None
+    if mpi_rank == 0:
+        recv_counts = np.array(npts_counts, dtype=int) * nmodel
+        recv_displs = np.array(begin_indices, dtype=int) * nmodel
+    mpi_datatype = dtlib.from_numpy_dtype(model_part.dtype)
+    comm.Gatherv(model_part, [model_glob, recv_counts, recv_displs, mpi_datatype], root=0)
+
+    # save interpolated model
+    if mpi_rank == 0:
+        for imodel in range(nmodel):
+            model_tag = model_tags[imodel]
+            model_file = "%s/proc%06d_reg1_%s.bin" % (
+                model_dir_target,
+                iproc_target,
+                model_tag,
+            )
+            model_gll = model_glob[imodel, ibool_target]
+            with FortranFile(model_file, "w") as f:
+                f.write_record(
+                    np.array(
+                        np.ravel(model_gll),
+                        dtype="f4",
+                    )
+                )
+
+    if output_misloc:
+        if mpi_rank == 0:
+            recv_counts = np.array(npts_counts, dtype=int)
+            recv_displs = np.array(begin_indices, dtype=int)
+
+        mpi_datatype = dtlib.from_numpy_dtype(status_part.dtype)
+        comm.Gatherv(status_part, [status_glob, recv_counts, recv_displs, mpi_datatype], root=0)
+
+        mpi_datatype = dtlib.from_numpy_dtype(misloc_part.dtype)
+        comm.Gatherv(misloc_part, [misloc_glob, recv_counts, recv_displs, mpi_datatype], root=0)
+
+        mpi_datatype = dtlib.from_numpy_dtype(misratio_part.dtype)
+        comm.Gatherv(misratio_part, [misratio_glob, recv_counts, recv_displs, mpi_datatype], root=0)
+
+        # save misloc, status
+        if mpi_rank == 0:
+            model_file = "%s/proc%06d_reg1_status.bin" % (model_dir_target, iproc_target)
+            with FortranFile(model_file, "w") as f:
+                f.write_record(
+                    np.array(np.ravel(status_glob[ibool_target], order="F"), dtype="f4")
+                )
+
+            model_file = "%s/proc%06d_reg1_misloc.bin" % (model_dir_target, iproc_target)
+            with FortranFile(model_file, "w") as f:
+                f.write_record(
+                    np.array(np.ravel(misloc_glob[ibool_target], order="F"), dtype="f4")
+                )
+
+            model_file = "%s/proc%06d_reg1_misratio.bin" % (model_dir_target, iproc_target)
+            with FortranFile(model_file, "w") as f:
+                f.write_record(
+                    np.array(np.ravel(misratio_glob[ibool_target], order="F"), dtype="f4")
+                )
+
+
 def sem_boundary_mesh_read(mesh_file):
     """read in SEM mesh slice"""
     from scipy.io import FortranFile

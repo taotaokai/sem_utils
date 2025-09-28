@@ -724,8 +724,8 @@ def sem_mesh_locate_points(
             #      xyz[:,ipoint], xyz_anchor)
             if misloc > misloc_all[ipoint] and is_inside:
                 warnings.warn(
-                    "point located inside an element but with a larger misloc: current/previous = %f/%f"
-                    % (misloc, misloc_all[ipoint])
+                    "point located inside an element but with a larger misloc: current/previous = "
+                    f"({misloc=:e}, {misloc_all[ipoint]=:e}"
                 )
             if misloc < misloc_all[ipoint] or is_inside:
                 status_all[ipoint] = 0
@@ -962,7 +962,6 @@ def sem_mesh_interp_model(comm,
                     np.array(np.ravel(misratio_glob[ibool_target], order="F"), dtype="f4")
                 )
 
-    comm.Barrier()
 
 def sem_boundary_mesh_read(mesh_file):
     """read in SEM mesh slice"""

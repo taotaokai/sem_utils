@@ -125,4 +125,4 @@ if comm_group != MPI.COMM_NULL:
         if rank_group == 0:
             elapsed_time = time.time() - tic
             print(f"{iproc_target=:03d}, {elapsed_time=:8.3f} seconds")
-            sys.stdout.flush()
+            # sys.stdout.flush()

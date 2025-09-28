@@ -152,6 +152,11 @@ def interp1d_linear(xi, x):
 def interp_model_gll(
     ipoint_select, zgll, ispec_all, uvw_all, model_gll, model_interp, method="linear"
 ):
+    """
+    model_gll[nmodel,nspec,ngllz,nglly,ngllx]
+    uvw_all[npoint, 3]
+    model_interp[npoint, nmodel]
+    """
     nmodel = model_gll.shape[0]
     for ipoint in ipoint_select:
         # interpolation weights
@@ -172,8 +177,8 @@ def interp_model_gll(
             * wy[None, None, :, None]
             * wz[None, :, None, None]
         )
-
-        model_interp[:, ipoint] = values.reshape((nmodel, -1)).sum(axis=1)
+        # model_interp[:, ipoint] = values.reshape((nmodel, -1)).sum(axis=1)
+        model_interp[ipoint, :] = values.reshape((nmodel, -1)).sum(axis=1)
 
 
 # ==================================================#
@@ -797,7 +802,7 @@ def sem_mesh_interp_model(comm,
     misloc_part = np.zeros(npts_part)
     misloc_part[:] = np.inf
     misratio_part = np.zeros(npts_part)
-    model_part = np.zeros((nmodel, npts_part))
+    model_part = np.zeros((npts_part, nmodel))
 
     #--- loop over each slice of source SEM mesh
     for iproc_source in range(nproc_source):
@@ -873,16 +878,18 @@ def sem_mesh_interp_model(comm,
     #--- gather results
     if mpi_rank == 0:
         begin_indices = comm.gather(part_ind0, root=0)
+        # print(f"{begin_indices=}")
     else:
         comm.gather(part_ind0, root=0)
     if mpi_rank == 0:
         npts_counts = comm.gather(npts_part, root=0)
+        # print(f"{npts_counts=}")
     else:
         comm.gather(npts_part, root=0)
 
     # model_glob
     if mpi_rank == 0:
-        model_glob = np.zeros((nmodel, npts_glob))
+        model_glob = np.zeros((npts_glob, nmodel))
     else:
         model_glob = None
     if output_misloc:
@@ -912,7 +919,7 @@ def sem_mesh_interp_model(comm,
                 iproc_target,
                 model_tag,
             )
-            model_gll = model_glob[imodel, ibool_target]
+            model_gll = model_glob[ibool_target, imodel]
             with FortranFile(model_file, "w") as f:
                 f.write_record(
                     np.array(

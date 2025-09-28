@@ -112,7 +112,7 @@ for iproc_target in range(mpi_rank, nproc_target, mpi_size):
     misloc_target = np.zeros(npoints)
     misloc_target[:] = np.inf
     misratio_target = np.zeros(npoints)
-    model_target = np.zeros((nmodel, npoints))
+    model_target = np.zeros((npoints, nmodel))
 
     # -- loop over each slice of source SEM mesh
     for iproc_source in range(nproc_source):
@@ -221,7 +221,7 @@ for iproc_target in range(mpi_rank, nproc_target, mpi_size):
             iproc_target,
             model_tag,
         )
-        model_gll = model_target[imodel, ibool_target]
+        model_gll = model_target[ibool_target, imodel]
         with FortranFile(model_file, "w") as f:
             f.write_record(
                 np.array(

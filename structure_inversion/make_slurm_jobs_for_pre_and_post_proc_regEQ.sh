@@ -68,7 +68,7 @@ cp -L $sem_config_dir/DATA/Par_file .
 cp -L $sem_config_dir/DATA/CMTSOLUTION .
 cp -L Par_file \$mesh_dir/OUTPUT_FILES/
 
-#sed -i "/^MODEL/s/=.*/= GLL/" \$mesh_dir/DATA/Par_file
+sed -i '/^MODEL/s/=[[:space:]]*[^[:space:]_#]*/= GLL/' \$mesh_dir/DATA/Par_file
 #sed -i "/^USE_ECEF_CMTSOLUTION/s/=.*/= .false./" \$mesh_dir/DATA/Par_file
 #sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" \$mesh_dir/DATA/Par_file
 

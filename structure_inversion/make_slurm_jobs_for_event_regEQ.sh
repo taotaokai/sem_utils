@@ -312,6 +312,37 @@ echo
 
 EOF
 
+
+#====== plot misfit and waveforms
+cat <<EOF > $plot_job
+#!/bin/bash
+#SBATCH -J ${event_id}.plot
+#SBATCH -o $plot_job.o%j
+#SBATCH ${slurm_args_plot}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
+echo
+
+cd $event_dir
+
+if [ -d "$figure_dir" ]
+then
+  chmod -R u+w $figure_dir
+  rm -rf $figure_dir
+fi
+mkdir -p $figure_dir
+
+$python_exec $sem_utils_dir/misfit/plot.py \\
+  $db_file $figure_dir --nproc=\${SLURM_NTASKS}
+
+echo
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
+echo
+
+EOF
+
+
 exit -1
 
 #///////////////////////// Hessian simulation

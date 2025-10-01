@@ -21,6 +21,7 @@ mkdir -p $slurm_dir
 forward_job=$slurm_dir/forward.job
 misfit_job=$slurm_dir/misfit.job
 kernel_job=$slurm_dir/kernel.job
+plot_job=$slurm_dir/plot.job
 #hess_job=$slurm_dir/hess.job
 #precond_job=$slurm_dir/precond.job
 perturb_job=$slurm_dir/perturb.job

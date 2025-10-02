@@ -4,7 +4,7 @@
 
 #====== Structure of work directories 
 #
-# Project/
+# EuropeFWI/
 # |   stage00.source/
 # |   |   iter00/
 # |   |   |   events/
@@ -30,16 +30,16 @@
 base_dir=$(readlink -f .)
 
 # current stage and iteration number
-stage_dir=${base_dir}/stage00.source
+stage_dir=${base_dir}/stage00.source_dcu
 iter_num=08
 
 #====== Data directories
 
 # specfem3d par files
-sem_config_dir=${base_dir}/sem_config  # sem_config/: DATA/Par_file, setup/constants.h.in, initial_model/
+sem_config_dir=${base_dir}/sem_config_dcu  # sem_config/: DATA/Par_file, setup/constants.h.in, initial_model/
 
 # specfem3d binaries
-sem_build_dir=${base_dir}/build # build/: bin/xmeshfem3D,xspecfem3D
+sem_build_dir=${base_dir}/build_dcu # build/: bin/xmeshfem3D,xspecfem3D
 
 # shell scripts
 sem_utils_dir=${base_dir}/sem_utils  # sem_utils/: misfit/, source_inversion_regEQ/
@@ -61,7 +61,8 @@ initial_cmt_dir=${prev_iter_dir}/CMTSOLUTION_updated
 updated_cmt_dir=${iter_dir}/CMTSOLUTION_updated
 
 # mesh/DATABASES_MPI/*solver_data.bin,..
-mesh_dir=${base_dir}/mesh
+mesh_dir=${base_dir}/mesh_dcu
+
 #model_dir=${iter_dir}/model
 
 # misfit par 
@@ -69,19 +70,15 @@ misfit_par_dir=${base_dir}/misfit_par
 
 #====== slurm jobs
 
-# cluster cpu/node
-nproc_per_node=64
-
 # mpi executable
-slurm_mpiexec="srun --mpi=pmix_v3" # SCNET
-# slurm_mpiexec="mpirun -np ${slurm_nproc}"
+slurm_mpiexec="srun --mpi=pmix" # SCNET
+# slurm_mpiexec="mpirun -np \${SLURM_NTASKS}"
 
 # slurm partition
 slurm_partition_cpu="xahcnormal" # SCNET CPU
+slurm_ncpu_per_node=64
 slurm_partition_dcu="xahdnormal" # SCNET GPU
-
-# slurm_dcu_extra_args="--exclusive --gres=dcu:4" # SCNET
-# slurm_dcu_extra_args="--exclusive" # SCNET
+slurm_ndcu_per_node=4
 
 # number of mpi processes for sem
 sem_par_file=${sem_config_dir}/DATA/Par_file
@@ -93,12 +90,12 @@ fi
 sem_nproc_xi=$(grep NPROC_XI $sem_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
 sem_nproc_eta=$(grep NPROC_ETA $sem_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
 sem_nproc_total=$(echo $sem_nproc_xi $sem_nproc_eta | awk '{print $1*$2}')
-# nnode=$(echo "$sem_nproc_total $nproc_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
+sem_num_nodes=$(echo "$sem_nproc_total $slurm_ndcu_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
 
-slurm_args_green="-n ${sem_nproc_total} -p ${slurm_partition_cpu} -t 01:00:00" #--exclusive"
-slurm_args_misfit="-N 1 -n 20 -p ${slurm_partition_cpu} -t 01:00:00"
+slurm_args_green="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partition_dcu} -t 00:10:00 --exclusive --mem=0 --gres=dcu:4"
+slurm_args_misfit="-N 1 -n 20 -p ${slurm_partition_cpu} -t 00:30:00"
 slurm_args_srcfrechet=${slurm_args_green}
-slurm_args_dgreen="-n ${sem_nproc_total} -p ${slurm_partition_cpu} -t 02:00:00" #--exclusive"
+slurm_args_dgreen="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partition_dcu} -t 00:20:00 --exclusive --mem=0 --gres=dcu:4"
 slurm_args_search=${slurm_args_misfit}
 slurm_args_plot=${slurm_args_misfit}
 

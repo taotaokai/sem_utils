@@ -183,8 +183,8 @@ def main():
     args = parse_arguments()
     print(args)
 
-    if mpi_size != args.nproc:
-        raise ValueError(f"{mpi_size=} != {args.nproc=}")
+    # if mpi_size != args.nproc:
+    #     raise ValueError(f"{mpi_size=} != {args.nproc=}")
 
     # Create output directory if it doesn't exist
     os.makedirs(args.out_dir, exist_ok=True)

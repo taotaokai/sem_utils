@@ -54,6 +54,7 @@ for iproc in range(args.procnum_begin, args.procnum_end + 1):
         # here gll_dims = [NSPEC, NGLLZ, NGLLY, NGLLX] which is C convention of
         # Fortran array of [NGLLX, NGLLY, NGLLZ, NSPEC]
         data = f.read_ints(dtype="f4")
+        print(f"data range = {min(data):e}, {max(data):e}")
         model_gll = np.reshape(data, gll_dims)
 
     # vtk point/cell data

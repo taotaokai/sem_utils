@@ -947,19 +947,19 @@ def sem_mesh_interp_model(comm,
             model_file = "%s/proc%06d_reg1_status.bin" % (model_dir_target, iproc_target)
             with FortranFile(model_file, "w") as f:
                 f.write_record(
-                    np.array(np.ravel(status_glob[ibool_target], order="F"), dtype="f4")
+                    np.array(status_glob[ibool_target], dtype="f4")
                 )
 
             model_file = "%s/proc%06d_reg1_misloc.bin" % (model_dir_target, iproc_target)
             with FortranFile(model_file, "w") as f:
                 f.write_record(
-                    np.array(np.ravel(misloc_glob[ibool_target], order="F"), dtype="f4")
+                    np.array(misloc_glob[ibool_target], dtype="f4")
                 )
 
             model_file = "%s/proc%06d_reg1_misratio.bin" % (model_dir_target, iproc_target)
             with FortranFile(model_file, "w") as f:
                 f.write_record(
-                    np.array(np.ravel(misratio_glob[ibool_target], order="F"), dtype="f4")
+                    np.array(misratio_glob[ibool_target], dtype="f4")
                 )
 
 

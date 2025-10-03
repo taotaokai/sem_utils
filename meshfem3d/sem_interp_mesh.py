@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """create horizontal slice of SEM model at a given depth"""
 import sys
-import warnings
+# import warnings
 import time
 import argparse
 
@@ -10,7 +10,7 @@ import numpy as np
 from scipy.io import FortranFile
 from scipy.interpolate import interpn
 from mpi4py import MPI
-import numba
+# import numba
 
 # from meshfem3d_constants import NGLLX, NGLLY, NGLLZ, GAUSSALPHA, GAUSSBETA
 from meshfem3d_constants import (

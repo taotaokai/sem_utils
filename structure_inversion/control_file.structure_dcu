@@ -150,12 +150,14 @@ python_exec=python
 ## waterlevel for inverse hessian diagonals 
 #hess_inverse_nbin=5000
 #hess_inverse_threshold_percentage=0.90
-## kernel mask around source and receiver points
-## for each event 'e': sum(Me*He, e)*dm = -1 * sum(Me*Ke, e)
-## the masked Hessian diagonals are approximated by its application on a random model perturbation dm
-## sum(Me*He, e)*dm = sum(Me*dKe, e), diag(sum(Me*He, e)) ~ |sum(Me*dKe, e)|
-#source_mask_1sigma_km=50
-#receiver_mask_1sigma_km=10
+
+#====== kernel mask around source and receiver points
+# for each event 'e': sum(Me*He, e)*dm = -1 * sum(Me*Ke, e)
+# the masked Hessian diagonals are approximated by its application on a random model perturbation dm
+# sum(Me*He, e)*dm = sum(Me*dKe, e), diag(sum(Me*He, e)) ~ |sum(Me*dKe, e)|
+source_mask_1sigma_km=50
+receiver_mask_1sigma_km=10
+
 ## kernel smoothing
 #kernel_smooth_1sigma_h=30 # horizontal smoothing 1 sigma (km)
 #kernel_smooth_1sigma_v=15 # vertical smoothing 1 sigma (km)

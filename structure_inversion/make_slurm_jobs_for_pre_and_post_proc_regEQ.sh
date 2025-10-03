@@ -120,7 +120,7 @@ do
 
   ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_tiso_kernel_from_cijkl_rho.py \\
     ${sem_nproc_total} \\
-    ${event_dir}/DATABASES_MPI \\
+    \${event_dir}/DATABASES_MPI \\
     \${ker_dir} \\
     \${out_dir}/ \\
     --with_mask \\
@@ -146,7 +146,7 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
 echo
 
-# kernel_tags=(dvsv_kernel dvsh_kernel dvph_kernel dvpv_kernel deta_kernel drho_kernel)
+sem_kernel_tags=(${sem_kernel_tags[@]})
 
 kernel_tag=\${sem_kernel_tags[\${SLURM_ARRAY_TASK_ID}]}
 

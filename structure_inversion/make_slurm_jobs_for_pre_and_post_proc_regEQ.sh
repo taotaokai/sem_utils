@@ -110,31 +110,27 @@ do
   out_dir=${event_dir}/output_kernel/tiso_kernel_masked
   mkdir -p \$out_dir
 
-  awk 'NR==6{print \$0, a}' a="$sem_kernel_mask_source_sigma_km" \
-    \${event_dir}/output_kernel/source.vtk \
+  awk 'NR==6{print \$0, a}' a="$sem_kernel_mask_source_sigma_km" \\
+    \${event_dir}/output_kernel/source.vtk \\
     > \${out_dir}/mask.lst
 
-  awk 'NR>=6&&NF==3{print \$0, a}' a=$sem_kernel_mask_receiver_sigma_km \
-    \${event_dir}/output_kernel/receiver.vtk \
+  awk 'NR>=6&&NF==3{print \$0, a}' a=$sem_kernel_mask_receiver_sigma_km \\
+    \${event_dir}/output_kernel/receiver.vtk \\
     >> \${out_dir}/mask.lst
 
-  ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_tiso_kernel_from_cijkl_rho.py \
-    ${sem_nproc_total} \
-    ${event_dir}/DATABASES_MPI \
-    \${ker_dir} \
-    \${out_dir}/ \
-    --with_mask \
-    --mesh_dir ${event_dir}/DATABASES_MPI \
+  ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_tiso_kernel_from_cijkl_rho.py \\
+    ${sem_nproc_total} \\
+    ${event_dir}/DATABASES_MPI \\
+    \${ker_dir} \\
+    \${out_dir}/ \\
+    --with_mask \\
+    --mesh_dir ${event_dir}/DATABASES_MPI \\
     --mask_list \${out_dir}/mask.lst
 done
 
 echo
 echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
 echo
-
-echo "====== sum up kernels of all events"
-
-out_dir=${iter_dir}/kernel
 
 EOF
 
@@ -159,13 +155,14 @@ echo "====== sum up all event kernels"
 kernel_dir=${iter_dir}/kernel
 mkdir -p \$kernel_dir
 
-awk 'NF&&\$1!~/#/{printf "%s/events/%s/output_kernel/kernel\\n", a,\$1}' a="$iter_dir" $event_list > \
+awk 'NF&&\$1!~/#/{printf "%s/events/%s/output_kernel/kernel\\n", a,\$1}' \\
+  a="$iter_dir" $event_list > \\
   \${kernel_dir}/event_kernel_dir.list
 
-${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_sum.py \
-  ${sem_nproc_total} \
-  \${kernel_dir}/event_kernel_dir.list \
-  "\${kernel_tag}" \
+${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_sum.py \\
+  ${sem_nproc_total} \\
+  \${kernel_dir}/event_kernel_dir.list \\
+  "\${kernel_tag}" \\
   "\${kernel_dir}"
 
 echo "====== smooth kernel"
@@ -173,14 +170,14 @@ echo "====== smooth kernel"
 out_dir=${iter_dir}/kernel_smooth_precond
 mkdir -p \$out_dir
 
-${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_smooth_diffusion_iso.py \
-  ${sem_nproc_total} \
-  ${mesh_dir} \
-  \${kernel_dir} \
-  \${kernel_tag} \
-  ${sem_kernel_smooth_iso_FWHM_km} \
-  ${sem_kernel_smooth_diffusion_niter} \
-  \${out_dir} \
+${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_smooth_diffusion_iso.py \\
+  ${sem_nproc_total} \\
+  ${mesh_dir} \\
+  \${kernel_dir} \\
+  \${kernel_tag} \\
+  ${sem_kernel_smooth_iso_FWHM_km} \\
+  ${sem_kernel_smooth_diffusion_niter} \\
+  \${out_dir} \\
   --max_tolerance=1e-5
 
 echo

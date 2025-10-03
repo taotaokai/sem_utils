@@ -173,7 +173,7 @@ ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_smooth_diffusion_is
   ${sem_nproc_total} \
   ${mesh_dir} \
   \${kernel_dir} \
-  \${kernel_tag} ${sem_kernel_smooth_iso_sigma_km} ${sem_kernel_smooth_diffusion_niter} \
+  \${kernel_tag} ${sem_kernel_smooth_iso_FWHM_km} ${sem_kernel_smooth_diffusion_niter} \
   \${out_dir} \
   --max_tolerance=1e-5
 

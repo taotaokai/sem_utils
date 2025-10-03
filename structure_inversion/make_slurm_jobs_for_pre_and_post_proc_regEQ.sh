@@ -88,13 +88,7 @@ cat <<EOF > $kernel_sum_job
 #!/bin/bash
 #SBATCH -J kernel_sum
 #SBATCH -o ${kernel_sum_job}.o%j
-#SBATCH -N $slurm_nnode
-#SBATCH -n $slurm_nproc
-#SBATCH -p $slurm_partition
-#SBATCH -t $slurm_timelimit_misfit
-#SBATCH --mail-user=kai.tao@utexas.edu
-#SBATCH --mail-type=begin
-#SBATCH --mail-type=end
+#SBATCH ${slurm_args_mesh}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -111,10 +105,10 @@ do
 
   awk 'NR==6{print \$0, a}' a=$source_mask_1sigma_km \$event_dir/output_kernel/source.vtk > \$out_dir/source.xyz
   awk 'NR>=6&&NF==3{print \$0, a}' a=$receiver_mask_1sigma_km \$event_dir/output_kernel/receiver.vtk >> \$out_dir/source.xyz
-  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_make_gaussian_mask \
+  ${slurm_mpiexec} $sem_utils_dir/meshfem3D/sem_make_gaussian_mask \
     $sem_nproc $mesh_dir/DATABASES_MPI \
     \$out_dir/source.xyz \
-    \$out_dir "mask"
+    \$out_dir
 
   ln -s \$out_dir/*_mask.bin \$event_dir/output_kernel/kernel
 done

@@ -105,9 +105,9 @@ for event_id in \$(awk 'NF&&\$1!~/#/{print \$1}' $event_list)
 do
   echo "------ \$event_id"
   
-  event_dir=${iter_dir}/events/$event_id
-  ker_dir=${event_dir}/output_kernel/kernel  # input files: cijkl_kernel, rho_kernel
-  out_dir=${event_dir}/output_kernel/tiso_kernel_masked
+  event_dir=${iter_dir}/events/\$event_id
+  ker_dir=\${event_dir}/output_kernel/kernel  # input files: cijkl_kernel, rho_kernel
+  out_dir=\${event_dir}/output_kernel/tiso_kernel_masked
   mkdir -p \$out_dir
 
   awk 'NR==6{print \$0, a}' a="$sem_kernel_mask_source_sigma_km" \\
@@ -122,9 +122,9 @@ do
     ${sem_nproc_total} \\
     \${event_dir}/DATABASES_MPI \\
     \${ker_dir} \\
-    \${out_dir}/ \\
+    \${out_dir} \\
     --with_mask \\
-    --mesh_dir ${event_dir}/DATABASES_MPI \\
+    --mesh_dir \${event_dir}/DATABASES_MPI \\
     --mask_list \${out_dir}/mask.lst
 done
 

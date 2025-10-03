@@ -132,8 +132,8 @@ slurm_args_forward="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partiti
 slurm_args_misfit="-N 1 -n 20 -p ${slurm_partition_cpu} -t 00:30:00"
 slurm_args_kernel="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partition_dcu} -t 01:00:00 --exclusive --mem=0 --gres=dcu:4"
 
-slurm_args_kernel_mask_sum=${slurm_args_mesh}
-slurm_args_kernel_smooth_precond=${slurm_args_mesh}
+slurm_args_kernel_convert_mask=${slurm_args_mesh}
+slurm_args_kernel_sum_smooth_precond=${slurm_args_mesh}
 
 slurm_args_dsyn="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partition_dcu} -t 01:00:00 --exclusive --mem=0 --gres=dcu:4"
 slurm_args_search=${slurm_args_misfit}
@@ -161,6 +161,7 @@ python_exec=python
 # for each event 'e': sum(Me*He, e)*dm = -1 * sum(Me*Ke, e)
 # the masked Hessian diagonals are approximated by its application on a random model perturbation dm
 # sum(Me*He, e)*dm = sum(Me*dKe, e), diag(sum(Me*He, e)) ~ |sum(Me*dKe, e)|
+sem_kernel_tags=(dvsv_kernel dvsh_kernel dvph_kernel dvpv_kernel deta_kernel drho_kernel)
 sem_kernel_mask_source_sigma_km=50
 sem_kernel_mask_receiver_sigma_km=10
 

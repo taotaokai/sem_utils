@@ -22,9 +22,12 @@ mkdir -p $slurm_dir
 
 #====== define variables
 mesh_job=$slurm_dir/mesh.job
-kernel_sum_job=$slurm_dir/kernel_sum.job
-kernel_mask_sum_job=$slurm_dir/kernel_sum.job
-kernel_smooth_precond_job=$slurm_dir/kernel_smooth_precond.job
+
+kernel_convert_mask_job=$slurm_dir/kernel_convert_mask.job
+
+kernel_sum_smooth_precond_job=$slurm_dir/kernel_sum_smooth_precond.job
+
+# kernel_sum_job=$slurm_dir/kernel_sum.job
 
 pcg_dmodel_job=$slurm_dir/pcg_dmodel.job
 model_perturb_job=$slurm_dir/model_perturb.job
@@ -85,12 +88,12 @@ echo
 EOF
 
 
-#====== kernel_mask_sum
-cat <<EOF > $kernel_mask_sum_job
+#====== kernel_convert_mask
+cat <<EOF > $kernel_convert_mask_job
 #!/bin/bash
-#SBATCH -J kernel_postproc
-#SBATCH -o ${kernel_mask_sum_job}.o%j
-#SBATCH ${slurm_args_kernel_mask_sum}
+#SBATCH -J kernel_convert_mask
+#SBATCH -o ${kernel_convert_mask_job}.o%j
+#SBATCH ${slurm_args_kernel_convert_mask}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
@@ -135,22 +138,23 @@ out_dir=${iter_dir}/kernel
 
 EOF
 
-#====== kernel_smooth_precond
-cat <<EOF > $kernel_smooth_precond_job
+#====== kernel_sum_smooth_precond
+cat <<EOF > $kernel_sum_smooth_precond_job
 #!/bin/bash
-#SBATCH -J kernel_smooth_precond
-#SBATCH -o ${kernel_mask_sum_job}.o%j
-#SBATCH ${slurm_args_kernel_smooth_precond}
+#SBATCH -J kernel_sum_smooth_precond
+#SBATCH -o ${kernel_sum_smooth_precond_job}.o%A_%a
+#SBATCH --array 0-$(( ${#sem_kernel_tags[@]} - 1 ))
+#SBATCH ${slurm_args_kernel_sum_smooth_precond}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
 echo
 
-kernel_tags=(dvsv_kernel dvsh_kernel dvph_kernel dvpv_kernel deta_kernel drho_kernel)
+# kernel_tags=(dvsv_kernel dvsh_kernel dvph_kernel dvpv_kernel deta_kernel drho_kernel)
 
-kernel_tag=\${kernel_tags[\${SLURM_ARRAY_TASK_ID}]}
+kernel_tag=\${sem_kernel_tags[\${SLURM_ARRAY_TASK_ID}]}
 
-echo "====== sum up kernels of all events"
+echo "====== sum up all event kernels"
 
 kernel_dir=${iter_dir}/kernel
 mkdir -p \$kernel_dir
@@ -158,11 +162,11 @@ mkdir -p \$kernel_dir
 awk 'NF&&\$1!~/#/{printf "%s/events/%s/output_kernel/kernel\\n", a,\$1}' a="$iter_dir" $event_list > \
   \${kernel_dir}/event_kernel_dir.list
 
-${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_kernel_sum.py \
+${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_sum.py \
   ${sem_nproc_total} \
-  \${kernel_dir} \
-  --tag "\$kernel_tag" \
-  --kernel_dirs \${kernel_dir}/event_kernel_dir.list
+  \${kernel_dir}/event_kernel_dir.list \
+  "\${kernel_tag}" \
+  "\${kernel_dir}"
 
 echo "====== smooth kernel"
 
@@ -173,7 +177,9 @@ ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_smooth_diffusion_is
   ${sem_nproc_total} \
   ${mesh_dir} \
   \${kernel_dir} \
-  \${kernel_tag} ${sem_kernel_smooth_iso_FWHM_km} ${sem_kernel_smooth_diffusion_niter} \
+  \${kernel_tag} \
+  ${sem_kernel_smooth_iso_FWHM_km} \
+  ${sem_kernel_smooth_diffusion_niter} \
   \${out_dir} \
   --max_tolerance=1e-5
 

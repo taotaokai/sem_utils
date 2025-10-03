@@ -7,7 +7,7 @@ event_list=${2:?[arg]need event_list}
 
 #====== source control_file
 source $control_file
-#event_list=$(readlink -f $event_list)
+event_list=$(readlink -f $event_list)
 
 #====== define directories
 mesh_dir=$iter_dir/mesh # DATABASES_MPI/proc*_reg1_solver_data.bin

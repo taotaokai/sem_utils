@@ -155,7 +155,7 @@ $python_exec $sem_utils_dir/misfit/measure_adj.py \\
   $data_dir/$event_id/data.h5 \\
   $event_dir/output_forward/sac \\
   $event_dir/SEM \\
-  --nproc=\$SLURM_NPROCS \\
+  --nproc=\${SLURM_NTASKS} \\
   --cmt_in_ECEF
 
 if [ \$? -ne 0 ]

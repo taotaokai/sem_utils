@@ -53,7 +53,7 @@ fi
 
 # mkdir -p $mesh_dir/DATA
 # cp $sem_par_file $mesh_dir/DATA/Par_file
-$sem_utils_dir/structure_inversion/make_slurm_jobs_for_pre_and_post_proc_regEQ.sh $control_file
+$sem_utils_dir/structure_inversion/make_slurm_jobs_for_pre_and_post_proc_regEQ.sh $control_file $event_list
 
 #------ process each event
 # for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)

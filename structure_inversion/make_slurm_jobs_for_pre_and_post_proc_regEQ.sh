@@ -3,7 +3,7 @@
 # structure inversion with regional earthquake
 
 control_file=${1:?[arg]need control_file}
-#event_list=${2:?[arg]need event_list}
+event_list=${2:?[arg]need event_list}
 
 #====== source control_file
 source $control_file
@@ -77,6 +77,105 @@ ${slurm_mpiexec} $sem_build_dir/bin/xmeshfem3D
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo
+
+EOF
+
+
+#====== kernel_mask_sum
+cat <<EOF > $kernel_mask_sum_job
+#!/bin/bash
+#SBATCH -J kernel_postproc
+#SBATCH -o ${kernel_mask_sum_job}.o%j
+#SBATCH ${slurm_args_kernel_mask_sum}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
+echo
+
+echo "====== convert cijkl,rho_kernel to tiso kernel with masks"
+
+for event_id in \$(awk 'NF&&\$1!~/#/{print \$1}' $event_list)
+do
+  echo "------ \$event_id"
+  
+  event_dir=${iter_dir}/events/$event_id
+  ker_dir=${event_dir}/output_kernel/kernel  # input files: cijkl_kernel, rho_kernel
+  out_dir=${event_dir}/output_kernel/tiso_kernel_masked
+  mkdir -p \$out_dir
+
+  awk 'NR==6{print \$0, a}' a="$sem_kernel_mask_source_sigma_km" \
+    \${event_dir}/output_kernel/source.vtk \
+    > \${out_dir}/mask.lst
+
+  awk 'NR>=6&&NF==3{print \$0, a}' a=$sem_kernel_mask_receiver_sigma_km \
+    \${event_dir}/output_kernel/receiver.vtk \
+    >> \${out_dir}/mask.lst
+
+  ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_tiso_kernel_from_cijkl_rho.py \
+    ${sem_nproc_total} \
+    ${event_dir}/DATABASES_MPI \
+    \${ker_dir} \
+    \${out_dir}/ \
+    --with_mask \
+    --mesh_dir ${event_dir}/DATABASES_MPI \
+    --mask_list \${out_dir}/mask.lst
+done
+
+echo
+echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
+echo
+
+echo "====== sum up kernels of all events"
+
+out_dir=${iter_dir}/kernel
+
+EOF
+
+#====== kernel_smooth_precond
+cat <<EOF > $kernel_smooth_precond_job
+#!/bin/bash
+#SBATCH -J kernel_smooth_precond
+#SBATCH -o ${kernel_mask_sum_job}.o%j
+#SBATCH ${slurm_args_kernel_smooth_precond}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
+echo
+
+kernel_tags=(dvsv_kernel dvsh_kernel dvph_kernel dvpv_kernel deta_kernel drho_kernel)
+
+kernel_tag=\${kernel_tags[\${SLURM_ARRAY_TASK_ID}]}
+
+echo "====== sum up kernels of all events"
+
+kernel_dir=${iter_dir}/kernel
+mkdir -p \$kernel_dir
+
+awk 'NF&&\$1!~/#/{printf "%s/events/%s/output_kernel/kernel\\n", a,\$1}' a="$iter_dir" $event_list > \
+  \${kernel_dir}/event_kernel_dir.list
+
+${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_kernel_sum.py \
+  ${sem_nproc_total} \
+  \${kernel_dir} \
+  --tag "\$kernel_tag" \
+  --kernel_dirs \${kernel_dir}/event_kernel_dir.list
+
+echo "====== smooth kernel"
+
+out_dir=${iter_dir}/kernel_smooth_precond
+mkdir -p \$out_dir
+
+${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_smooth_diffusion_iso.py \
+  ${sem_nproc_total} \
+  ${mesh_dir} \
+  \${kernel_dir} \
+  \${kernel_tag} ${sem_kernel_smooth_iso_sigma_km} ${sem_kernel_smooth_diffusion_niter} \
+  \${out_dir} \
+  --max_tolerance=1e-5
+
+echo
+echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
 echo
 
 EOF

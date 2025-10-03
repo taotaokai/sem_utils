@@ -161,8 +161,8 @@ sem_kernel_mask_receiver_sigma_km=10
 # kernel smoothing
 sem_kernel_smooth_diffusion_niter=50 # iteration steps for diffusion based smoothing 
 sem_kernel_smooth_iso_sigma_km=20 # homogeneous isotropic smoothing 1 sigma (km)
-# sem_kernel_smooth_sigma_km=30 # horizontal smoothing 1 sigma (km)
-# sem_kernel_smooth_1sigma_v=15 # vertical smoothing 1 sigma (km)
+# sem_kernel_smooth_sigmaH_km=30 # horizontal smoothing 1 sigma (km)
+# sem_kernel_smooth_sigmaV_km=15 # vertical smoothing 1 sigma (km)
 ## conjugate gradient
 #cg_type=HS
 ## dmodel scale factor

@@ -23,6 +23,9 @@ mkdir -p $slurm_dir
 #====== define variables
 mesh_job=$slurm_dir/mesh.job
 kernel_sum_job=$slurm_dir/kernel_sum.job
+kernel_mask_sum_job=$slurm_dir/kernel_sum.job
+kernel_smooth_precond_job=$slurm_dir/kernel_smooth_precond.job
+
 pcg_dmodel_job=$slurm_dir/pcg_dmodel.job
 model_perturb_job=$slurm_dir/model_perturb.job
 mesh_perturb_job=$slurm_dir/mesh_perturb.job

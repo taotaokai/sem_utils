@@ -127,12 +127,18 @@ sem_nproc_total=$(echo $sem_nproc_xi $sem_nproc_eta | awk '{print $1*$2}')
 sem_num_nodes=$(echo "$sem_nproc_total $slurm_ndcu_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
 
 slurm_args_mesh="-n ${sem_nproc_total} -p ${slurm_partition_cpu} -t 01:00:00" #--exclusive"
+
 slurm_args_forward="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partition_dcu} -t 00:30:00 --exclusive --mem=0 --gres=dcu:4" 
 slurm_args_misfit="-N 1 -n 20 -p ${slurm_partition_cpu} -t 00:30:00"
 slurm_args_kernel="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partition_dcu} -t 01:00:00 --exclusive --mem=0 --gres=dcu:4"
+
+slurm_args_kernel_mask_sum=${slurm_args_mesh}
+slurm_args_kernel_smooth_precond=${slurm_args_mesh}
+
 slurm_args_dsyn="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partition_dcu} -t 01:00:00 --exclusive --mem=0 --gres=dcu:4"
 slurm_args_search=${slurm_args_misfit}
 slurm_args_plot=${slurm_args_misfit}
+
 
 #====== other
 
@@ -163,6 +169,7 @@ sem_kernel_smooth_diffusion_niter=50 # iteration steps for diffusion based smoot
 sem_kernel_smooth_iso_sigma_km=20 # homogeneous isotropic smoothing 1 sigma (km)
 # sem_kernel_smooth_sigmaH_km=30 # horizontal smoothing 1 sigma (km)
 # sem_kernel_smooth_sigmaV_km=15 # vertical smoothing 1 sigma (km)
+
 ## conjugate gradient
 #cg_type=HS
 ## dmodel scale factor

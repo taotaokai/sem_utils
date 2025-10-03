@@ -12,12 +12,12 @@ from meshfem3d_utils import sem_mesh_read, NGLLX, NGLLY, NGLLZ
 
 #====== user input
 parser = argparse.ArgumentParser(description='Make sem mesh vtk file')
-parser.add_argument(dest='procnum_begin', type=int, help="begin number of iproc (>= 0)")
-parser.add_argument(dest='procnum_end', type=int, help="end number of iproc (< nproc)")
+parser.add_argument(dest='nproc',  type=int, help="total number of slices")
 parser.add_argument(dest='mesh_dir', type=str, help="DATABSAES_MPI/")
 parser.add_argument(dest='model_dir', type=str, help="DATABSAES_MPI/")
 parser.add_argument(dest='model_tag', type=str, help="vsv")
 parser.add_argument(dest='vtk_file', type=str, help="output .vtk file name")
+parser.add_argument('--slice_list',  nargs="+", type=int, default=None, help="list of slices to convert to vtk")
 args = parser.parse_args()
 print(args)
 
@@ -40,7 +40,12 @@ corner_inds = [
          0  + NGLLX * (NGLLY-1 + NGLLY * (NGLLZ-1)),  
 ]
 
-for iproc in range(args.procnum_begin, args.procnum_end + 1):
+slice_list = np.arange(args.nproc, dtype=int)
+if args.slice_list is not None:
+    slice_list = args.slice_list
+
+# for iproc in range(args.procnum_begin, args.procnum_end + 1):
+for iproc in slice_list:
 
     print('# iproc = ', iproc)
 

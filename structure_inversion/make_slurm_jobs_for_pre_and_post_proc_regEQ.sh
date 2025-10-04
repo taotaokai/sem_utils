@@ -101,12 +101,14 @@ echo
 
 echo "====== create source and receiver masks"
 
+mesh_dir=${iter_dir}/mesh
+
 for event_id in \$(awk 'NF&&\$1!~/#/{print \$1}' $event_list)
 do
   echo "------ \$event_id"
   
   event_dir=${iter_dir}/events/\$event_id
-  mesh_dir=${iter_dir}/DATABASES_MPI
+
   out_dir=\${event_dir}/output_kernel/kernel
   mkdir -p \$out_dir
 
@@ -120,7 +122,7 @@ do
 
   ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_make_gaussian_mask.py \\
     ${sem_nproc_total} \\
-    \${mesh_dir} \\
+    \${mesh_dir}/DATABASES_MPI \\
     \${out_dir}/mask.lst \\
     \${out_dir}
 done

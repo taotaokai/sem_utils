@@ -14,18 +14,22 @@ rank_world = comm_world.Get_rank()
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Sum up GLL files from different events "
+        description="Sum up GLL files from different events with masks"
     )
 
     parser.add_argument("nproc", type=int, help="number of model slices")
     parser.add_argument(
         "dir_list",
-        help="list of directories with proc*_reg1_[model_tag].bin",
+        help="list of directories with proc*_reg1_[model_tag|mask_tag].bin",
     )
     parser.add_argument("model_tag", help="tag for GLL file as proc*_reg1_[model_tag].bin")
     parser.add_argument(
         "out_dir", help="output dir for proc*_reg1_[model_tag].bin"
     )
+    parser.add_argument(
+        "--ncomp", type=int, help="number of components in GLL file: array shape [nspec,ngllz,nglly,ngllx,ncomp]"
+    )
+    parser.add_argument("--mask_tag", default=None, help="tag for GLL file as proc*_reg1_[mask_tag].bin")
 
     return parser.parse_args()
 
@@ -48,16 +52,25 @@ def write_fortran_file(filename, data, dtype="f4"):
     with FortranFile(filename, "w") as f:
         f.write_record(np.array(data, dtype=dtype))
 
-def process_gll_files(gll_folders, iproc, model_tag):
+def process_gll_files(gll_folders, iproc, model_tag, mask_tag=None, ncomp=1):
     """Process and sum all GLL files for a given processor."""
     model_gll = None
     
     for gll_folder in gll_folders:
+        mask_gll = 1.0
+        if mask_tag is not None:
+            gll_file = os.path.join(gll_folder, f"proc{iproc:06d}_reg1_{mask_tag}.bin")
+            mask_gll = read_fortran_file(gll_file)
+            mask_gll = mask_gll[:,None] # add an extra last dimension for broadcasting
+
         gll_file = os.path.join(gll_folder, f"proc{iproc:06d}_reg1_{model_tag}.bin")
+        data_gll = read_fortran_file(gll_file)
+        data_gll = data_gll.reshape((-1, ncomp))
+
         if model_gll is None:
-            model_gll = read_fortran_file(gll_file)
+            model_gll = mask_gll * data_gll
         else:
-            model_gll += read_fortran_file(gll_file)
+            model_gll += mask_gll * data_gll
             
     return model_gll
 
@@ -75,7 +88,8 @@ def main():
     for iproc in range(rank_world, args.nproc, size_world):
         try:
             # Process and sum all GLL files for this processor
-            model_gll = process_gll_files(gll_folders, iproc, args.model_tag)
+            model_gll = process_gll_files(gll_folders, iproc, args.model_tag, 
+                                          mask_tag=args.mask_tag, ncomp=args.ncomp)
             
             # Write the summed result to output directory
             out_file = os.path.join(args.out_dir, f"proc{iproc:06d}_reg1_{args.model_tag}.bin")

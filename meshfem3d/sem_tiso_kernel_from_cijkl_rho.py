@@ -181,7 +181,9 @@ def process_kernel(iproc, model_dir, kernel_dir, out_dir, mask=None):
 def main():
     """Main function to orchestrate the kernel conversion process."""
     args = parse_arguments()
-    print(args)
+
+    if mpi_rank == 0:
+        print(args)
 
     # if mpi_size != args.nproc:
     #     raise ValueError(f"{mpi_size=} != {args.nproc=}")

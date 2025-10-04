@@ -83,9 +83,7 @@ iter_dir=${stage_dir}/iter${iter_num}
 iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
 prev_iter_dir=${stage_dir}/iter${iter_minus_one}
 
-# mesh/DATABASES_MPI/*solver_data.bin,..
-mesh_dir=${iter_dir}/mesh_dcu
-
+# initial/updated model
 initial_model_dir=${prev_iter_dir}/updated_model
 if [ "$iter_num" -eq 0 ]
 then
@@ -132,8 +130,11 @@ slurm_args_forward="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partiti
 slurm_args_misfit="-N 1 -n 20 -p ${slurm_partition_cpu} -t 00:30:00"
 slurm_args_kernel="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partition_dcu} -t 01:00:00 --exclusive --mem=0 --gres=dcu:4"
 
-slurm_args_kernel_convert_mask=${slurm_args_mesh}
-slurm_args_kernel_sum_smooth_precond=${slurm_args_mesh}
+slurm_args_kernel_mask_sum=${slurm_args_mesh}
+slurm_args_kernel_precond=${slurm_args_mesh}
+
+# slurm_args_kernel_convert_mask=${slurm_args_mesh}
+# slurm_args_kernel_sum_smooth_precond=${slurm_args_mesh}
 
 slurm_args_dsyn="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partition_dcu} -t 01:00:00 --exclusive --mem=0 --gres=dcu:4"
 slurm_args_search=${slurm_args_misfit}

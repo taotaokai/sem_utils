@@ -28,7 +28,7 @@ def parse_arguments():
         help="list of x,y,z,sigma_km, where x,y,z are non-dimensionalized by R_EARTH (e.g. 6371 km)",
     )
     parser.add_argument(
-        "out_dir", help="output dir for proc*_reg1_[vpv,vph,vsv,vsh,eta,rho]_kernel.bin"
+        "out_dir", help="output dir for proc*_reg1_mask.bin"
     )
 
     return parser.parse_args()

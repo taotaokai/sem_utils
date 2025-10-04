@@ -308,98 +308,97 @@ exit -1
 # EOF
 
 
-
-#====== kernel_sum
-cat <<EOF > $kernel_sum_job
-#!/bin/bash
-#SBATCH -J kernel_sum
-#SBATCH -o ${kernel_sum_job}.o%j
-#SBATCH ${slurm_args_mesh}
-
-echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
-echo
-
-echo "====== make source and receiver mask [\$(date)]"
-
-for event_id in \$(awk -F"|" 'NF&&\$1!~/#/{print \$9}' $event_list)
-do
-  echo "------ \$event_id"
-  event_dir=$iter_dir/\$event_id
-  out_dir=\$event_dir/source_receiver_mask
-  mkdir \$out_dir
-
-  awk 'NR==6{print \$0, a}' a=$source_mask_1sigma_km \$event_dir/output_kernel/source.vtk > \$out_dir/source.xyz
-  awk 'NR>=6&&NF==3{print \$0, a}' a=$receiver_mask_1sigma_km \$event_dir/output_kernel/receiver.vtk >> \$out_dir/source.xyz
-  ${slurm_mpiexec} $sem_utils_dir/meshfem3D/sem_make_gaussian_mask \
-    $sem_nproc $mesh_dir/DATABASES_MPI \
-    \$out_dir/source.xyz \
-    \$out_dir
-
-  ln -s \$out_dir/*_mask.bin \$event_dir/output_kernel/kernel
-done
-
-echo "====== sum up event kernels [\$(date)]"
-
-awk -F"|" 'NF&&\$1!~/#/{printf "%s/%s/output_kernel/kernel\\n", a,\$9}' \
-  a="$iter_dir" $event_list > kernel_dir.list
-
-out_dir=$iter_dir/kernel
-mkdir \$out_dir
-
-echo ------ sum up cijkl,rho_kernel with source and receiver mask
-
-${slurm_mpiexec} $sem_utils_dir/bin/xsem_sum_event_kernels_cijkl \
-  $sem_nproc $mesh_dir/DATABASES_MPI \
-  kernel_dir.list cijkl_kernel \
-  1 "mask" \
-  \$out_dir cijkl_kernel
-
-${slurm_mpiexec} $sem_utils_dir/bin/xsem_sum_event_kernels_1 \
-  $sem_nproc $mesh_dir/DATABASES_MPI \
-  kernel_dir.list rho_kernel \
-  1 "mask" \
-  \$out_dir rho_kernel
-
-echo "------ convert cijkl,rho_kernel to aijkl,rhoprime kernel [\$(date)]"
-
-${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
-  $sem_nproc $mesh_dir/DATABASES_MPI $model_dir \
-  \$out_dir \
-  \$out_dir
-
-echo "------ reduce aijkl_kernel to alpha,beta,phi,xi,eta_kernel [\$(date)]"
-
-${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_tiso_in_alpha_beta_phi_xi_eta \
-  $sem_nproc $mesh_dir/DATABASES_MPI $model_dir \
-  \$out_dir \
-  \$out_dir
-
-echo ====== precondition kernel
-
-for kernel_tag in alpha beta phi xi eta
-do
-  ${slurm_mpiexec} $sem_utils_dir/bin/xsem_math \
-    $sem_nproc $mesh_dir/DATABASES_MPI \
-    \$out_dir \${kernel_tag}_kernel \
-    $precond_dir inv_hess_diag \
-    "mul" \
-    \$out_dir \${kernel_tag}_kernel_precond
-done
-
-model_tags=alpha_kernel_precond,beta_kernel_precond,phi_kernel_precond,xi_kernel_precond,eta_kernel_precond
-
-$slurm_mpiexec $sem_utils_dir/bin/xsem_smooth \
-  $sem_nproc $mesh_dir/DATABASES_MPI \
-  \$out_dir \${model_tags} \
-  $kernel_smooth_1sigma_h $kernel_smooth_1sigma_v \
-  \$out_dir "_smooth"
-
-echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
-echo
-
-EOF
+# #====== kernel_sum
+# cat <<EOF > $kernel_sum_job
+# #!/bin/bash
+# #SBATCH -J kernel_sum
+# #SBATCH -o ${kernel_sum_job}.o%j
+# #SBATCH ${slurm_args_mesh}
+# 
+# echo
+# echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+# echo
+# 
+# echo "====== make source and receiver mask [\$(date)]"
+# 
+# for event_id in \$(awk -F"|" 'NF&&\$1!~/#/{print \$9}' $event_list)
+# do
+#   echo "------ \$event_id"
+#   event_dir=$iter_dir/\$event_id
+#   out_dir=\$event_dir/source_receiver_mask
+#   mkdir \$out_dir
+# 
+#   awk 'NR==6{print \$0, a}' a=$source_mask_1sigma_km \$event_dir/output_kernel/source.vtk > \$out_dir/source.xyz
+#   awk 'NR>=6&&NF==3{print \$0, a}' a=$receiver_mask_1sigma_km \$event_dir/output_kernel/receiver.vtk >> \$out_dir/source.xyz
+#   ${slurm_mpiexec} $sem_utils_dir/meshfem3D/sem_make_gaussian_mask \
+#     $sem_nproc $mesh_dir/DATABASES_MPI \
+#     \$out_dir/source.xyz \
+#     \$out_dir
+# 
+#   ln -s \$out_dir/*_mask.bin \$event_dir/output_kernel/kernel
+# done
+# 
+# echo "====== sum up event kernels [\$(date)]"
+# 
+# awk -F"|" 'NF&&\$1!~/#/{printf "%s/%s/output_kernel/kernel\\n", a,\$9}' \
+#   a="$iter_dir" $event_list > kernel_dir.list
+# 
+# out_dir=$iter_dir/kernel
+# mkdir \$out_dir
+# 
+# echo ------ sum up cijkl,rho_kernel with source and receiver mask
+# 
+# ${slurm_mpiexec} $sem_utils_dir/bin/xsem_sum_event_kernels_cijkl \
+#   $sem_nproc $mesh_dir/DATABASES_MPI \
+#   kernel_dir.list cijkl_kernel \
+#   1 "mask" \
+#   \$out_dir cijkl_kernel
+# 
+# ${slurm_mpiexec} $sem_utils_dir/bin/xsem_sum_event_kernels_1 \
+#   $sem_nproc $mesh_dir/DATABASES_MPI \
+#   kernel_dir.list rho_kernel \
+#   1 "mask" \
+#   \$out_dir rho_kernel
+# 
+# echo "------ convert cijkl,rho_kernel to aijkl,rhoprime kernel [\$(date)]"
+# 
+# ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso \
+#   $sem_nproc $mesh_dir/DATABASES_MPI $model_dir \
+#   \$out_dir \
+#   \$out_dir
+# 
+# echo "------ reduce aijkl_kernel to alpha,beta,phi,xi,eta_kernel [\$(date)]"
+# 
+# ${slurm_mpiexec} $sem_utils_dir/bin/xsem_kernel_aijkl_to_tiso_in_alpha_beta_phi_xi_eta \
+#   $sem_nproc $mesh_dir/DATABASES_MPI $model_dir \
+#   \$out_dir \
+#   \$out_dir
+# 
+# echo ====== precondition kernel
+# 
+# for kernel_tag in alpha beta phi xi eta
+# do
+#   ${slurm_mpiexec} $sem_utils_dir/bin/xsem_math \
+#     $sem_nproc $mesh_dir/DATABASES_MPI \
+#     \$out_dir \${kernel_tag}_kernel \
+#     $precond_dir inv_hess_diag \
+#     "mul" \
+#     \$out_dir \${kernel_tag}_kernel_precond
+# done
+# 
+# model_tags=alpha_kernel_precond,beta_kernel_precond,phi_kernel_precond,xi_kernel_precond,eta_kernel_precond
+# 
+# $slurm_mpiexec $sem_utils_dir/bin/xsem_smooth \
+#   $sem_nproc $mesh_dir/DATABASES_MPI \
+#   \$out_dir \${model_tags} \
+#   $kernel_smooth_1sigma_h $kernel_smooth_1sigma_v \
+#   \$out_dir "_smooth"
+# 
+# echo
+# echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+# echo
+# 
+# EOF
 
 #====== pcg_dmodel
 cat <<EOF > $pcg_dmodel_job

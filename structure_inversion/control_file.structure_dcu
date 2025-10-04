@@ -159,7 +159,13 @@ python_exec=python
 #hess_inverse_threshold_percentage=0.90
 
 #====== kernel mask around source and receiver points
-# for each event 'e': sum(Me*He, e)*dm = -1 * sum(Me*Ke, e)
+# for each event e: 
+#   Ke = dChi_e/dm
+#   Me: masks around source and receiver points
+#   He: Hessian of Chi_e, He * dm ~ Ke(m+dm) - Ke(m)
+# Chi = sum(Chi_e)
+# dChi/dm = sum(Ke)
+# sum(Me*He, e)*dm = -1 * sum(Me*Ke, e)
 # the masked Hessian diagonals are approximated by its application on a random model perturbation dm
 # sum(Me*He, e)*dm = sum(Me*dKe, e), diag(sum(Me*He, e)) ~ |sum(Me*dKe, e)|
 sem_kernel_tags=(dvsv_kernel dvsh_kernel dvph_kernel dvpv_kernel deta_kernel drho_kernel)

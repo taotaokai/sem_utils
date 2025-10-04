@@ -152,11 +152,13 @@ ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_sum.py \\
 
 echo "====== convert cijkl,rho_kernel to tiso kernel"
 
+kernel_dir=${iter_dir}/kernel
+
 ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_tiso_kernel_from_cijkl_rho.py \\
   ${sem_nproc_total} \\
   ${initial_model_dir} \\
   \${kernel_dir} \\
-  \${out_dir}
+  \${kernel_dir}
 
 
 echo

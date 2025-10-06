@@ -83,7 +83,7 @@ def write_gll_file(model_dir, model_tag, iproc, data, dtype="f4"):
         f.write_record(np.array(data, dtype=dtype))
 
 
-def process(nproc, mesh_dir, model_dir, model_tag, nbins=100, 
+def process(nproc, mesh_dir, model_dir, model_tag, out_dir, nbins=100, 
             truncate_percentage=0.95, cdf_file="cdf.txt", cdf_only=False):
     """Process and truncate GLL files based on cumulative distribution."""
 
@@ -133,7 +133,7 @@ def process(nproc, mesh_dir, model_dir, model_tag, nbins=100,
             model_gll = read_gll_file(model_dir, model_tag, iproc)
             mask = np.abs(model_gll) > truncate_value
             model_gll[mask] = truncate_value * np.sign(model_gll[mask]) # truncate amplitude 
-            write_gll_file(model_dir, model_tag, iproc, model_gll)
+            write_gll_file(out_dir, model_tag, iproc, model_gll)
 
 
 def main():
@@ -148,6 +148,7 @@ def main():
             args.mesh_dir,
             args.model_dir,
             args.model_tag,
+            args.out_dir,
             nbins=args.nbins,
             truncate_percentage=args.truncate_percentage,
             cdf_file=args.cdf_file,

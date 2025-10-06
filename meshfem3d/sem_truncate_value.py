@@ -93,25 +93,33 @@ def process(nproc, mesh_dir, model_dir, model_tag, nbins=100,
         model_gll = read_gll_file(model_dir, model_tag, iproc)
         max_amp = max(max_amp, np.max(np.abs(model_gll)))
     max_amp = mpi_comm.allreduce(max_amp, op=MPI.MAX)
+    print(f"DEBUG: {mpi_rank=}, {max_amp=}")
 
     # cumulative distribution by bins
-    bin_edges = np.linspace(0, max_amp, nbins + 1)
+    # bin_edges = np.linspace(0, max_amp, nbins + 1)
+    bin_edges = np.geomspace(1, max_amp+1, nbins + 1) - 1
     bin_edges[0] -= 1 # ensure all values in the first bin are included since (, ] is used
-    cdf = np.zeros(nbins)
+    print(f"DEBUG: {mpi_rank=}, {bin_edges=}")
+    pdf = np.zeros(nbins)
     for iproc in range(mpi_rank, nproc, mpi_size):
         pdf_local = np.zeros(nbins)
         mesh_data = read_mesh_file(mesh_dir, iproc)
         model_gll = read_gll_file(model_dir, model_tag, iproc)
-        model_gll = np.abs(model_gll)
+        model_gll = np.abs(model_gll) # amplitude of the model
         vol_gll = sem_mesh_get_vol_gll(mesh_data)
         vol_gll = vol_gll.flatten() # since model_gll is an 1-D array
         for ibin in range(nbins):
             # sum(m * dV), where m in (bin_edges[ibin], bin_edges[ibin+1]]
             mask = (model_gll > bin_edges[ibin]) & (model_gll <= bin_edges[ibin + 1])
-            pdf_local[ibin] = np.sum(model_gll[mask] * vol_gll[mask])
-        cdf += np.cumsum(pdf_local)
-    mpi_comm.Allreduce(MPI.IN_PLACE, cdf, op=MPI.SUM)
-    cdf /= np.sum(cdf)  # normalize
+            # pdf_local[ibin] = np.sum(model_gll[mask] * vol_gll[mask])
+            pdf_local[ibin] = np.sum(vol_gll[mask])
+        pdf += pdf_local
+    print(f"DEBUG: {mpi_rank=}, {pdf=}")
+    mpi_comm.Allreduce(MPI.IN_PLACE, pdf, op=MPI.SUM)
+    pdf /= np.sum(pdf)  # normalize
+    print(f"DEBUG: {mpi_rank=}, {pdf=}")
+    cdf = np.cumsum(pdf)
+    print(f"DEBUG: {mpi_rank=}, {cdf=}")
     ind = (cdf >= truncate_percentage).nonzero()[0][0]
     truncate_value = bin_edges[ind+1]
 

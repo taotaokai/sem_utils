@@ -104,6 +104,7 @@ def process(nproc, mesh_dir, model_dir, model_tag, nbins=100,
         model_gll = read_gll_file(model_dir, model_tag, iproc)
         model_gll = np.abs(model_gll)
         vol_gll = sem_mesh_get_vol_gll(mesh_data)
+        vol_gll = vol_gll.flatten() # since model_gll is an 1-D array
         for ibin in range(nbins):
             # sum(m * dV), where m in (bin_edges[ibin], bin_edges[ibin+1]]
             mask = (model_gll > bin_edges[ibin]) & (model_gll <= bin_edges[ibin + 1])

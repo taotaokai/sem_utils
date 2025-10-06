@@ -44,6 +44,14 @@ def parse_arguments():
         default=0.95,
         help="threshold percentage for truncation (default 0.95)",
     )
+    parser.add_argument(
+        "--cdf_file",
+        default="cdf.txt",
+        help="filename to write out cumulative distribution function",
+    )
+    parser.add_argument(
+        "--cdf_only", action="store_true", help="only output cumulative distribution function"
+    )
 
     return parser.parse_args()
 
@@ -75,7 +83,8 @@ def write_gll_file(model_dir, model_tag, iproc, data, dtype="f4"):
         f.write_record(np.array(data, dtype=dtype))
 
 
-def process(nproc, mesh_dir, model_dir, model_tag, nbins=100, truncate_percentage=0.95):
+def process(nproc, mesh_dir, model_dir, model_tag, nbins=100, 
+            truncate_percentage=0.95, cdf_file="cdf.txt", cdf_only=False):
     """Process and truncate GLL files based on cumulative distribution."""
 
     # get maximum amplitude
@@ -107,12 +116,17 @@ def process(nproc, mesh_dir, model_dir, model_tag, nbins=100, truncate_percentag
     ind = (cdf >= truncate_percentage).nonzero()[0][0]
     z_cutoff = z_bins[ind]
 
+    if mpi_rank == 0:
+        print(f"Writing cdf to {cdf_file}")
+        np.savetxt(cdf_file, cdf)
+
     # write out threshold gll files
-    for iproc in range(mpi_rank, nproc, mpi_size):
-        model_gll = read_gll_file(model_dir, model_tag, iproc)
-        mask = np.abs(model_gll) > z_cutoff
-        model_gll[mask] = z_cutoff * np.sign(model_gll[mask]) # truncate amplitude 
-        write_gll_file(model_dir, model_tag, iproc, model_gll)
+    if not cdf_only:
+        for iproc in range(mpi_rank, nproc, mpi_size):
+            model_gll = read_gll_file(model_dir, model_tag, iproc)
+            mask = np.abs(model_gll) > z_cutoff
+            model_gll[mask] = z_cutoff * np.sign(model_gll[mask]) # truncate amplitude 
+            write_gll_file(model_dir, model_tag, iproc, model_gll)
 
 
 def main():
@@ -129,6 +143,8 @@ def main():
             args.model_tag,
             nbins=args.nbins,
             truncate_percentage=args.truncate_percentage,
+            cdf_file=args.cdf_file,
+            cdf_only=args.cdf_only,
         )
     except Exception as e:
         print(f"Error: {e}")

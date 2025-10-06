@@ -95,26 +95,24 @@ def process(nproc, mesh_dir, model_dir, model_tag, nbins=100,
     max_amp = mpi_comm.allreduce(max_amp, op=MPI.MAX)
 
     # cumulative distribution by bins
-    z_bins = np.linspace(0, max_amp, nbins)
-    z_bins[0] = -1
-    z_bins[-1] = max_amp + 1
+    bin_edges = np.linspace(0, max_amp, nbins + 1)
+    bin_edges[0] -= 1 # ensure all values in the first bin are included since (, ] is used
     cdf = np.zeros(nbins)
     for iproc in range(mpi_rank, nproc, mpi_size):
-        cdf_local = np.zeros(nbins)
+        pdf_local = np.zeros(nbins)
         mesh_data = read_mesh_file(mesh_dir, iproc)
         model_gll = read_gll_file(model_dir, model_tag, iproc)
         model_gll = np.abs(model_gll)
         vol_gll = sem_mesh_get_vol_gll(mesh_data)
-        for ibin in range(1, nbins):
-            mask = (model_gll >= z_bins[ibin - 1]) & (model_gll < z_bins[ibin + 1])
-            cdf_local[ibin] = cdf_local[ibin - 1] + np.sum(
-                model_gll[mask] * vol_gll[mask]
-            )
-        cdf += cdf_local
+        for ibin in range(nbins):
+            # sum(m * dV), where m in (bin_edges[ibin], bin_edges[ibin+1]]
+            mask = (model_gll > bin_edges[ibin]) & (model_gll <= bin_edges[ibin + 1])
+            pdf_local[ibin] = np.sum(model_gll[mask] * vol_gll[mask])
+        cdf += np.cumsum(pdf_local)
     mpi_comm.Allreduce(MPI.IN_PLACE, cdf, op=MPI.SUM)
     cdf /= np.sum(cdf)  # normalize
     ind = (cdf >= truncate_percentage).nonzero()[0][0]
-    z_cutoff = z_bins[ind]
+    truncate_value = bin_edges[ind+1]
 
     if mpi_rank == 0:
         print(f"Writing cdf to {cdf_file}")
@@ -124,8 +122,8 @@ def process(nproc, mesh_dir, model_dir, model_tag, nbins=100,
     if not cdf_only:
         for iproc in range(mpi_rank, nproc, mpi_size):
             model_gll = read_gll_file(model_dir, model_tag, iproc)
-            mask = np.abs(model_gll) > z_cutoff
-            model_gll[mask] = z_cutoff * np.sign(model_gll[mask]) # truncate amplitude 
+            mask = np.abs(model_gll) > truncate_value
+            model_gll[mask] = truncate_value * np.sign(model_gll[mask]) # truncate amplitude 
             write_gll_file(model_dir, model_tag, iproc, model_gll)
 
 

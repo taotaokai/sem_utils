@@ -7,9 +7,9 @@ from scipy.io import FortranFile
 from mpi4py import MPI
 
 # MPI initialization
-comm_world = MPI.COMM_WORLD
-size_world = comm_world.Get_size()
-rank_world = comm_world.Get_rank()
+mpi_comm = MPI.COMM_WORLD
+mpi_size = mpi_comm.Get_size()
+mpi_rank = mpi_comm.Get_rank()
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -77,6 +77,8 @@ def process_gll_files(gll_folders, iproc, model_tag, mask_tag=None, ncomp=1):
 def main():
     """Main function to orchestrate the GLL file summation process."""
     args = parse_arguments()
+    if mpi_rank == 0:
+        print(args)
 
     # Create output directory if it doesn't exist
     os.makedirs(args.out_dir, exist_ok=True)
@@ -85,7 +87,7 @@ def main():
     gll_folders = read_list(args.dir_list)
 
     # Distribute work across MPI processes
-    for iproc in range(rank_world, args.nproc, size_world):
+    for iproc in range(mpi_rank, args.nproc, mpi_size):
         try:
             # Process and sum all GLL files for this processor
             model_gll = process_gll_files(gll_folders, iproc, args.model_tag, 

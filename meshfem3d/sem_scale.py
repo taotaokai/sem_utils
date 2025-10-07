@@ -89,6 +89,8 @@ def process(nproc, in_dir, in_tags, out_dir, out_tags, scaled_amplitude=0.1):
 
 def main():
     args = parse_arguments()
+    if mpi_rank == 0:
+        print(args)
 
     assert len(args.in_tags) == len(args.out_tags)
 

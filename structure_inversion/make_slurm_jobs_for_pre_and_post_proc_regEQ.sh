@@ -219,13 +219,15 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
 echo
 
+mkdir -p ${iter_dir}/search_direction
+
 ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_scale.py \\
   ${sem_nproc_total} \\
   ${iter_dir}/kernel_precond \\
   ${iter_dir}/search_direction \\
   --in_tags ${sem_kernel_tags[@]} \\
   --out_tags ${sem_dmodel_tags[@]} \\
-  --scale_amplitude=0.1
+  --scaled_amplitude=0.1
 
 # TODO: get CG direction
 

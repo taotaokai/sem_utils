@@ -52,7 +52,7 @@ echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
 echo
 
 mesh_dir=${iter_dir}/mesh
-model_dir="${iter_dir}/initial_model"
+model_dir=${iter_dir}/model_initial
 
 if [ ! -d "\$model_dir" ]
 then

@@ -41,7 +41,7 @@ then
   echo "[ERROR] ${initial_model_dir} does NOT exist!"
   exit -1
 fi
-ln -sf ${initial_model_dir} $iter_dir/initial_model
+ln -sf ${initial_model_dir} $iter_dir/model_initial
 
 # sem Par_file
 sem_par_file=${sem_config_dir}/DATA/Par_file

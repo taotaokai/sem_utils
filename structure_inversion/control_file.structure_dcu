@@ -13,14 +13,17 @@
 # |   |   |   |   |   slurm/: forward.job, misfit.job, ...
 # |   |   |   |   |   misfit/:   misfit.h5, grid_search.txt, ...
 # |   |   |   |   |   output_forward/
-# |   |   |   |   |   output_kernel/
-# |   |   |   |   |   output_perturb/
+# |   |   |   |   |   output_kernel/:
+# |   |   |   |   |   output_dvp,dvs/: forward simulation with perturbed models (e.g. model_dvp,dvs)
 # |   |   |   |   C202006211907A/
 # |   |   |   |   | ...
-# |   |   |   model/: inital model (e.g. GLL files)
-# |   |   |   gradient/: sum of event kernels
-# |   |   |   model_dvp,dvs,.../: perturbed models
-# |   |   |   model_updated/: updated model
+# |   |   |   model_initial/: proc*_reg1_vpv,vph,...bin
+# |   |   |   kernel/: sum of event kernels (with source/receiver masks), 
+# |   |   |            and reduced to specific model of anisotropy, e.g. TISO
+# |   |   |   kernel_precond/: preconditioned kernel (e.g. smoothing, spatial weighting)
+# |   |   |   search_direction/: based on non-linear CG, and scaled to certain amplitude 
+# |   |   |   model_dvp,dvs,.../: model perturbed by the (subspaces of) search direction
+# |   |   |   model_updated/
 #
 #====== Basic workflow:
 #
@@ -84,12 +87,12 @@ iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
 prev_iter_dir=${stage_dir}/iter${iter_minus_one}
 
 # initial/updated model
-initial_model_dir=${prev_iter_dir}/updated_model
+initial_model_dir=${prev_iter_dir}/model_updated
 if [ "$iter_num" -eq 0 ]
 then
   initial_model_dir=${starting_model_dir}
 fi
-updated_model_dir=${iter_dir}/updated_model
+updated_model_dir=${iter_dir}/model_updated
 
 # misfit par 
 misfit_par_dir=${base_dir}/misfit_par
@@ -177,6 +180,12 @@ sem_kernel_smooth_diffusion_niter=50 # iteration steps for diffusion based smoot
 sem_kernel_smooth_iso_FWHM_km=10 # full width at half maximum (FWHM) of Gaussian kernel in km
 # sem_kernel_smooth_sigmaH_km=30 # horizontal smoothing 1 sigma (km)
 # sem_kernel_smooth_sigmaV_km=15 # vertical smoothing 1 sigma (km)
+
+# model perturbation 
+sem_model_perturb_groups=2
+sem_model_perturb_group1=(dvpv dvph)
+sem_model_perturb_group2=(dvsv dvsh)
+sem_model_perturb_group3=(deta drho)
 
 ## conjugate gradient
 #cg_type=HS

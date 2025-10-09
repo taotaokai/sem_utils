@@ -41,6 +41,10 @@ then
   echo "[ERROR] ${initial_model_dir} does NOT exist!"
   exit -1
 fi
+if [ -d "$iter_dir/model_initial" ]
+then
+  rm -rf $iter_dir/model_initial
+fi
 ln -sf ${initial_model_dir} $iter_dir/model_initial
 
 # sem Par_file

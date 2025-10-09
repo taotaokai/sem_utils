@@ -161,6 +161,10 @@ python_exec=python
 #hess_inverse_nbin=5000
 #hess_inverse_threshold_percentage=0.90
 
+sem_model_tags=(vpv vph vsv vsh eta rho)
+sem_kernel_tags=(dvpv_kernel dvph_kernel dvsv_kernel dvsh_kernel deta_kernel drho_kernel)
+sem_dmodel_tags=(dvpv_dmodel dvph_dmodel dvsv_dmodel dvsh_dmodel deta_dmodel drho_dmodel)
+
 #====== kernel mask around source and receiver points
 # for each event e: 
 #   Ke = dChi_e/dm
@@ -171,7 +175,6 @@ python_exec=python
 # sum(Me*He, e)*dm = -1 * sum(Me*Ke, e)
 # the masked Hessian diagonals are approximated by its application on a random model perturbation dm
 # sum(Me*He, e)*dm = sum(Me*dKe, e), diag(sum(Me*He, e)) ~ |sum(Me*dKe, e)|
-sem_kernel_tags=(dvsv_kernel dvsh_kernel dvph_kernel dvpv_kernel deta_kernel drho_kernel)
 sem_kernel_mask_source_sigma_km=50
 sem_kernel_mask_receiver_sigma_km=10
 
@@ -181,7 +184,9 @@ sem_kernel_smooth_iso_FWHM_km=10 # full width at half maximum (FWHM) of Gaussian
 # sem_kernel_smooth_sigmaH_km=30 # horizontal smoothing 1 sigma (km)
 # sem_kernel_smooth_sigmaV_km=15 # vertical smoothing 1 sigma (km)
 
-# model perturbation 
+# search direction
+
+# model perturbation
 sem_model_perturb_groups=2
 sem_model_perturb_group1=(dvpv dvph)
 sem_model_perturb_group2=(dvsv dvsh)

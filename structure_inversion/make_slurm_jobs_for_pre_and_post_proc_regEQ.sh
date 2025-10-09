@@ -179,9 +179,9 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
 echo
 
-sem_kernel_tags=(${sem_kernel_tags[@]})
+kernel_tags=(${sem_kernel_tags[@]})
 
-kernel_tag=\${sem_kernel_tags[\${SLURM_ARRAY_TASK_ID}]}
+kernel_tag=\${kernel_tags[\${SLURM_ARRAY_TASK_ID}]}
 
 echo "====== smooth kernel"
 
@@ -206,6 +206,112 @@ echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
 echo
 
 EOF
+
+
+#====== search direction
+cat <<EOF > $dmodel_job
+#!/bin/bash
+#SBATCH -J dmodel
+#SBATCH -o ${dmodel_job}.o%j
+#SBATCH ${slurm_args_dmodel}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
+echo
+
+${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_scale.py \\
+  ${sem_nproc_total} \\
+  ${iter_dir}/kernel_precond \\
+  ${iter_dir}/search_direction \\
+  --in_tags "${sem_kernel_tags[@]}" \\
+  --out_tags "${sem_dmodel_tags[@]}" \\
+  --scale_amplitude=0.1
+
+# TODO: get CG direction
+
+echo
+echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
+echo
+
+EOF
+
+
+#====== model_perturb
+cat <<EOF > $model_perturb_job
+#!/bin/bash
+#SBATCH -J model_perturb
+#SBATCH -o ${model_perturb_job}.o%j
+#SBATCH ${slurm_args_model_perturb}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+
+out_dir=$iter_dir/model_perturbed
+mkdir \$out_dir
+
+${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_perturb.py \\
+  ${sem_nproc_total} \\
+  $initial_model_dir \\
+  $iter_dir/search_direction \\
+  \$out_dir \\
+  --model_tags "${sem_model_tags[@]}" \\
+  --dmodel_tags "${sem_dmodel_tags[@]}" \\
+  --perturb_type "exponential"
+
+echo
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+
+EOF
+
+
+#====== mesh_perturb
+cat <<EOF > $mesh_perturb_job
+#!/bin/bash
+#SBATCH -J mesh_perturb
+#SBATCH -o ${mesh_perturb_job}.o%j
+#SBATCH ${slurm_args_mesh_perturb}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+
+mesh_dir=${iter_dir}/mesh_perturbed
+model_dir=${iter_dir}/model_perturbed
+
+if [ ! -d "\$model_dir" ]
+then
+  echo "[ERROR] \$model_dir does not exist!"
+  exit -1
+fi
+
+#rm -rf \$mesh_dir
+mkdir -p \$mesh_dir
+
+cd \$mesh_dir
+mkdir DATA DATABASES_MPI OUTPUT_FILES
+
+cd \$mesh_dir/DATA
+chmod u+w *
+ln -sf $sem_build_dir/DATA/* \$mesh_dir/DATA/
+rm Par_file GLL CMTSOLUTION
+ln -sf \$model_dir GLL
+cp -L $sem_config_dir/DATA/Par_file .
+cp -L $sem_config_dir/DATA/CMTSOLUTION .
+cp -L Par_file \$mesh_dir/OUTPUT_FILES/
+
+sed -i '/^MODEL/s/=[[:space:]]*[^[:space:]_#]*/= GLL/' \$mesh_dir/DATA/Par_file
+
+cd \$mesh_dir
+${slurm_mpiexec} $sem_build_dir/bin/xmeshfem3D
+
+echo
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+
+EOF
+
 
 exit -1
 

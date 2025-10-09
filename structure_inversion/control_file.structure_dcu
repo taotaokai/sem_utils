@@ -21,7 +21,7 @@
 # |   |   |   kernel/: sum of event kernels (with source/receiver masks), 
 # |   |   |            and reduced to specific model of anisotropy, e.g. TISO
 # |   |   |   kernel_precond/: preconditioned kernel (e.g. smoothing, spatial weighting)
-# |   |   |   search_direction/: based on non-linear CG, and scaled to certain amplitude 
+# |   |   |   dmodel/: search direction based on non-linear CG, and scaled to certain amplitude 
 # |   |   |   model_dvp,dvs,.../: model perturbed by the (subspaces of) search direction
 # |   |   |   model_updated/
 #

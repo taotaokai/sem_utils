@@ -6,10 +6,13 @@ import numpy as np
 from scipy.io import FortranFile
 from mpi4py import MPI
 
+from meshfem3d_utils import read_gll_file, write_gll_file
+
 # MPI initialization
 mpi_comm = MPI.COMM_WORLD
 mpi_size = mpi_comm.Get_size()
 mpi_rank = mpi_comm.Get_rank()
+
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -22,57 +25,47 @@ def parse_arguments():
         "dir_list",
         help="list of directories with proc*_reg1_[model_tag|mask_tag].bin",
     )
-    parser.add_argument("model_tag", help="tag for GLL file as proc*_reg1_[model_tag].bin")
     parser.add_argument(
-        "out_dir", help="output dir for proc*_reg1_[model_tag].bin"
+        "model_tag", help="tag for GLL file as proc*_reg1_[model_tag].bin"
+    )
+    parser.add_argument("out_dir", help="output dir for proc*_reg1_[model_tag].bin")
+    parser.add_argument(
+        "--ncomp",
+        type=int,
+        help="number of components in GLL file: array shape [nspec,ngllz,nglly,ngllx,ncomp]",
     )
     parser.add_argument(
-        "--ncomp", type=int, help="number of components in GLL file: array shape [nspec,ngllz,nglly,ngllx,ncomp]"
+        "--mask_tag", default=None, help="tag for GLL file as proc*_reg1_[mask_tag].bin"
     )
-    parser.add_argument("--mask_tag", default=None, help="tag for GLL file as proc*_reg1_[mask_tag].bin")
 
     return parser.parse_args()
 
+
 def read_list(filename):
-    with open(filename, 'r') as f:
+    with open(filename, "r") as f:
         lines = f.read().splitlines()
     return lines
 
-def read_fortran_file(filename, dtype="f4"):
-    """Read a Fortran unformatted file and return the data."""
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"File not found: {filename}")
-
-    with FortranFile(filename, "r") as f:
-        data = f.read_reals(dtype=dtype)
-    return data
-
-def write_fortran_file(filename, data, dtype="f4"):
-    """Write data to a Fortran unformatted file."""
-    with FortranFile(filename, "w") as f:
-        f.write_record(np.array(data, dtype=dtype))
 
 def process_gll_files(gll_folders, iproc, model_tag, mask_tag=None, ncomp=1):
     """Process and sum all GLL files for a given processor."""
     model_gll = None
-    
+
     for gll_folder in gll_folders:
         mask_gll = 1.0
         if mask_tag is not None:
-            gll_file = os.path.join(gll_folder, f"proc{iproc:06d}_reg1_{mask_tag}.bin")
-            mask_gll = read_fortran_file(gll_file)
-            mask_gll = mask_gll[:,None] # add an extra last dimension for broadcasting
+            mask_gll = read_gll_file(gll_folder, mask_tag, iproc)
+            mask_gll = mask_gll[:, None]  # add an extra last dimension for broadcasting
 
-        gll_file = os.path.join(gll_folder, f"proc{iproc:06d}_reg1_{model_tag}.bin")
-        data_gll = read_fortran_file(gll_file)
-        data_gll = data_gll.reshape((-1, ncomp))
+        data_gll = read_gll_file(gll_folder, model_tag, iproc, gll_dims=(-1, ncomp))
 
         if model_gll is None:
             model_gll = mask_gll * data_gll
         else:
             model_gll += mask_gll * data_gll
-            
+
     return model_gll
+
 
 def main():
     """Main function to orchestrate the GLL file summation process."""
@@ -90,13 +83,17 @@ def main():
     for iproc in range(mpi_rank, args.nproc, mpi_size):
         try:
             # Process and sum all GLL files for this processor
-            model_gll = process_gll_files(gll_folders, iproc, args.model_tag, 
-                                          mask_tag=args.mask_tag, ncomp=args.ncomp)
-            
-            # Write the summed result to output directory
-            out_file = os.path.join(args.out_dir, f"proc{iproc:06d}_reg1_{args.model_tag}.bin")
-            write_fortran_file(out_file, model_gll)
-            
+            model_gll = process_gll_files(
+                gll_folders,
+                iproc,
+                args.model_tag,
+                mask_tag=args.mask_tag,
+                ncomp=args.ncomp,
+            )
+
+            # Write the summed result
+            write_gll_file(args.out_dir, args.model_tag, iproc, model_gll)
+
         except Exception as e:
             print(f"Error processing iproc {iproc}: {e}")
             raise SystemExit(1)

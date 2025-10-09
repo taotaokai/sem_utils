@@ -15,6 +15,7 @@ comm_world = MPI.COMM_WORLD
 mpi_size = comm_world.Get_size()
 mpi_rank = comm_world.Get_rank()
 
+
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -31,8 +32,16 @@ def parse_arguments():
     parser.add_argument(
         "out_dir", help="output dir for proc*_reg1_[vpv,vph,vsv,vsh,eta,rho]_kernel.bin"
     )
-    parser.add_argument("--with_mask", action="store_true", help="flag to apply Gaussian mask around given points")
-    parser.add_argument("--mesh_dir", help="directory with proc*_reg1_solver_data.bin", default="DATABASES_MPI")
+    parser.add_argument(
+        "--with_mask",
+        action="store_true",
+        help="flag to apply Gaussian mask around given points",
+    )
+    parser.add_argument(
+        "--mesh_dir",
+        help="directory with proc*_reg1_solver_data.bin",
+        default="DATABASES_MPI",
+    )
     parser.add_argument(
         "--mask_list",
         default="mask_points.txt",
@@ -41,11 +50,13 @@ def parse_arguments():
 
     return parser.parse_args()
 
+
 def read_mesh_file(mesh_dir, iproc):
     mesh_file = os.path.join(mesh_dir, f"proc{iproc:06d}_reg1_solver_data.bin")
     mesh_data = sem_mesh_read(mesh_file)
 
     return mesh_data
+
 
 def read_list(point_list):
     import pandas as pd
@@ -53,8 +64,9 @@ def read_list(point_list):
     df = pd.read_csv(point_list, header=None, delimiter=r"\s+")
     xyz_mask = df.iloc[:, :3].to_numpy(dtype=np.float32)
     sigma_mask = df.iloc[:, 3].to_numpy(dtype=np.float32)
-    sigma_mask /= R_EARTH_KM # non-dimensionalized
+    sigma_mask /= R_EARTH_KM  # non-dimensionalized
     return xyz_mask, sigma_mask
+
 
 @numba.jit(nopython=True, nogil=True)
 def make_gaussian_mask(xyz_glob, xyz_mask, sigma_mask):
@@ -69,12 +81,13 @@ def make_gaussian_mask(xyz_glob, xyz_mask, sigma_mask):
         for imask in range(nmask):
             weight *= 1.0 - np.exp(
                 -0.5
-                * sum((xyz_glob[iglob, :] - xyz_mask[imask, :])**2)
+                * sum((xyz_glob[iglob, :] - xyz_mask[imask, :]) ** 2)
                 / sigma_squared[imask]
             )
         weight_mask[iglob] = weight
 
     return weight_mask
+
 
 def read_fortran_file(filename, dtype="f4"):
     """Read a Fortran unformatted file and return the data."""
@@ -82,14 +95,16 @@ def read_fortran_file(filename, dtype="f4"):
         data = f.read_reals(dtype=dtype)
     return data
 
+
 def write_fortran_file(filename, data, dtype="f4"):
     """Write data to a Fortran unformatted file."""
     with FortranFile(filename, "w") as f:
         f.write_record(np.array(data, dtype=dtype))
 
+
 def read_model_tiso(iproc, model_dir):
     """Read velocity models from a directory.
-       note: velocities in km/s, density in g/cm^3
+    note: velocities in km/s, density in g/cm^3
     """
     vpv = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_vpv.bin"))
     vph = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_vph.bin"))
@@ -98,6 +113,7 @@ def read_model_tiso(iproc, model_dir):
     eta = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_eta.bin"))
     rho = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_rho.bin"))
     return vpv, vph, vsv, vsh, eta, rho
+
 
 def process_kernel(iproc, model_dir, kernel_dir, out_dir, mask=None):
     """Process kernel data for a single processor slice."""
@@ -171,12 +187,25 @@ def process_kernel(iproc, model_dir, kernel_dir, out_dir, mask=None):
         K_drho *= mask
 
     # Write each kernel to a separate file
-    write_fortran_file(os.path.join(out_dir, f"proc{iproc:06d}_reg1_dvph_kernel.bin"), K_dvph)
-    write_fortran_file(os.path.join(out_dir, f"proc{iproc:06d}_reg1_dvpv_kernel.bin"), K_dvpv)
-    write_fortran_file(os.path.join(out_dir, f"proc{iproc:06d}_reg1_dvsh_kernel.bin"), K_dvsh)
-    write_fortran_file(os.path.join(out_dir, f"proc{iproc:06d}_reg1_dvsv_kernel.bin"), K_dvsv)
-    write_fortran_file(os.path.join(out_dir, f"proc{iproc:06d}_reg1_deta_kernel.bin"), K_deta)
-    write_fortran_file(os.path.join(out_dir, f"proc{iproc:06d}_reg1_drho_kernel.bin"), K_drho)
+    write_fortran_file(
+        os.path.join(out_dir, f"proc{iproc:06d}_reg1_dvph_kernel.bin"), K_dvph
+    )
+    write_fortran_file(
+        os.path.join(out_dir, f"proc{iproc:06d}_reg1_dvpv_kernel.bin"), K_dvpv
+    )
+    write_fortran_file(
+        os.path.join(out_dir, f"proc{iproc:06d}_reg1_dvsh_kernel.bin"), K_dvsh
+    )
+    write_fortran_file(
+        os.path.join(out_dir, f"proc{iproc:06d}_reg1_dvsv_kernel.bin"), K_dvsv
+    )
+    write_fortran_file(
+        os.path.join(out_dir, f"proc{iproc:06d}_reg1_deta_kernel.bin"), K_deta
+    )
+    write_fortran_file(
+        os.path.join(out_dir, f"proc{iproc:06d}_reg1_drho_kernel.bin"), K_drho
+    )
+
 
 def main():
     """Main function to orchestrate the kernel conversion process."""
@@ -197,7 +226,7 @@ def main():
 
     # Process each processor slice
     for iproc in range(mpi_rank, args.nproc, mpi_size):
-        
+
         if args.with_mask:
             mesh_data = read_mesh_file(args.mesh_dir, iproc)
             xyz_glob = mesh_data["xyz_glob"]
@@ -206,10 +235,13 @@ def main():
             mask_gll = mask_glob[ibool]
 
         try:
-            process_kernel(iproc, args.model_dir, args.kernel_dir, args.out_dir, mask=mask_gll)
+            process_kernel(
+                iproc, args.model_dir, args.kernel_dir, args.out_dir, mask=mask_gll
+            )
         except Exception as e:
             print(f"Error processing iproc {iproc}: {e}")
             raise SystemExit(1)
+
 
 if __name__ == "__main__":
     main()

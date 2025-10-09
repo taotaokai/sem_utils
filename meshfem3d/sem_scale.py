@@ -6,7 +6,7 @@ import numpy as np
 from scipy.io import FortranFile
 from mpi4py import MPI
 
-from meshfem3d_utils import sem_mesh_read, sem_mesh_get_vol_gll
+from meshfem3d_utils import read_gll_file, write_gll_file
 
 # MPI initialization
 mpi_comm = MPI.COMM_WORLD
@@ -45,26 +45,6 @@ def parse_arguments():
     )
 
     return parser.parse_args()
-
-
-def read_gll_file(model_dir, model_tag, iproc, dtype="f4"):
-    """Read a Fortran unformatted file and return the data."""
-    filename = os.path.join(model_dir, f"proc{iproc:06d}_reg1_{model_tag}.bin")
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"File not found: {filename}")
-
-    with FortranFile(filename, "r") as f:
-        data = f.read_reals(dtype=dtype)
-
-    return data
-
-
-def write_gll_file(model_dir, model_tag, iproc, data, dtype="f4"):
-    """Write data to a Fortran unformatted file."""
-    filename = os.path.join(model_dir, f"proc{iproc:06d}_reg1_{model_tag}.bin")
-
-    with FortranFile(filename, "w") as f:
-        f.write_record(np.array(data, dtype=dtype))
 
 
 def process(nproc, in_dir, in_tags, out_dir, out_tags, scaled_amplitude=0.1):

@@ -48,7 +48,7 @@ cat <<EOF > $mesh_job
 #SBATCH ${slurm_args_mesh}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 mesh_dir=${iter_dir}/mesh
@@ -83,7 +83,7 @@ cd \$mesh_dir
 ${slurm_mpiexec} $sem_build_dir/bin/xmeshfem3D
 
 echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 EOF
@@ -96,7 +96,7 @@ cat <<EOF > $kernel_mask_sum_job
 #SBATCH ${slurm_args_kernel_mask_sum}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 echo "====== create source and receiver masks"
@@ -162,7 +162,7 @@ ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_tiso_kernel_from_ci
 
 
 echo
-echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 EOF
@@ -176,7 +176,7 @@ cat <<EOF > $kernel_precond_job
 #SBATCH ${slurm_args_kernel_precond}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 kernel_tags=(${sem_kernel_tags[@]})
@@ -202,7 +202,7 @@ ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_smooth_diffusion_is
   --max_tolerance=1e-5
 
 echo
-echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 EOF
@@ -216,7 +216,7 @@ cat <<EOF > $dmodel_job
 #SBATCH ${slurm_args_dmodel}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 out_dir=${iter_dir}/dmodel
@@ -233,7 +233,7 @@ ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_scale.py \\
 # TODO: get CG direction
 
 echo
-echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 EOF
@@ -247,7 +247,7 @@ cat <<EOF > $model_perturb_job
 #SBATCH ${slurm_args_model_perturb}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 out_dir=$iter_dir/model_perturbed
@@ -263,7 +263,7 @@ ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_perturb.py \\
   --perturb_type "exponential"
 
 echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 EOF
@@ -277,7 +277,7 @@ cat <<EOF > $mesh_perturb_job
 #SBATCH ${slurm_args_mesh_perturb}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 mesh_dir=${iter_dir}/mesh_perturbed
@@ -310,7 +310,7 @@ cd \$mesh_dir
 ${slurm_mpiexec} $sem_build_dir/bin/xmeshfem3D
 
 echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 EOF

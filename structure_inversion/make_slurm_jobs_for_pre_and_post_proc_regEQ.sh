@@ -223,8 +223,8 @@ ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_scale.py \\
   ${sem_nproc_total} \\
   ${iter_dir}/kernel_precond \\
   ${iter_dir}/search_direction \\
-  --in_tags "${sem_kernel_tags[@]}" \\
-  --out_tags "${sem_dmodel_tags[@]}" \\
+  --in_tags ${sem_kernel_tags[@]} \\
+  --out_tags ${sem_dmodel_tags[@]} \\
   --scale_amplitude=0.1
 
 # TODO: get CG direction
@@ -255,8 +255,8 @@ ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_perturb.py \\
   $initial_model_dir \\
   $iter_dir/search_direction \\
   \$out_dir \\
-  --model_tags "${sem_model_tags[@]}" \\
-  --dmodel_tags "${sem_dmodel_tags[@]}" \\
+  --model_tags ${sem_model_tags[@]} \\
+  --dmodel_tags ${sem_dmodel_tags[@]} \\
   --perturb_type "exponential"
 
 echo

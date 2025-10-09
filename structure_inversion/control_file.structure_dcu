@@ -135,6 +135,9 @@ slurm_args_kernel="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partitio
 
 slurm_args_kernel_mask_sum=${slurm_args_mesh}
 slurm_args_kernel_precond=${slurm_args_mesh}
+slurm_args_dmodel=${slurm_args_mesh}
+slurm_args_model_perturb=${slurm_args_mesh}
+slurm_args_mesh_perturb=${slurm_args_mesh}
 
 # slurm_args_kernel_convert_mask=${slurm_args_mesh}
 # slurm_args_kernel_sum_smooth_precond=${slurm_args_mesh}

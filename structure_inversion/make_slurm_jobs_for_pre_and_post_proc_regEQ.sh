@@ -31,7 +31,7 @@ kernel_precond_job=$slurm_dir/kernel_precond.job
 
 # kernel_sum_job=$slurm_dir/kernel_sum.job
 
-pcg_dmodel_job=$slurm_dir/pcg_dmodel.job
+dmodel_job=$slurm_dir/dmodel.job
 model_perturb_job=$slurm_dir/model_perturb.job
 mesh_perturb_job=$slurm_dir/mesh_perturb.job
 model_update_job=$slurm_dir/model_update.job

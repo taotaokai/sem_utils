@@ -314,78 +314,38 @@ EOF
 
 exit -1
 
-#====== perturb: forward simulation of perturbed model
-cat <<EOF > $perturb_job
-#!/bin/bash
-#SBATCH -J ${event_id}.perturb
-#SBATCH -o $perturb_job.o%j
-#SBATCH -N $slurm_nnode
-#SBATCH -n $slurm_nproc
-#SBATCH -t $slurm_timelimit_perturb
-#SBATCH -p $slurm_partition_dcu
-#SBATCH $slurm_dcu_extra_args
-
-echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
-echo
-
-cd $event_dir/DATA
-sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
-sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
-
-#for dmodel in dvp dvsv dvsh
-for dmodel in perturb
-do
-
-  out_dir=output_\${dmodel}
-
-  rm -rf $event_dir/DATABASES_MPI
-  mkdir $event_dir/DATABASES_MPI
-  ln -s $iter_dir/mesh_\${dmodel}/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
-
-  cd $event_dir
-
-  rm -rf \$out_dir OUTPUT_FILES
-  mkdir \$out_dir
-  ln -sf \$out_dir OUTPUT_FILES
-
-  cp $iter_dir/mesh_\${dmodel}/OUTPUT_FILES/addressing.txt OUTPUT_FILES
-  cp -L DATA/Par_file OUTPUT_FILES
-  cp -L DATA/STATIONS OUTPUT_FILES
-  cp -L DATA/CMTSOLUTION OUTPUT_FILES
-
-  ${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
-
-  mkdir $event_dir/\$out_dir/sac
-  mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
-
-done
-
-echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
-echo
-EOF
 
 #====== search: cc linearized seismograms for chosen step sizes
 cat <<EOF > $search_job
 #!/bin/bash
 #SBATCH -J ${event_id}.search
 #SBATCH -o $search_job.o%j
-#SBATCH -N 1
-#SBATCH -n 1
-#SBATCH -p $slurm_partition
-#SBATCH -t $slurm_timelimit_misfit
-#SBATCH --mail-user=kai.tao@utexas.edu
-#SBATCH --mail-type=begin
-#SBATCH --mail-type=end
+#SBATCH ${slurm_args_search}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
-$utils_dir/waveform_der_dmodel.py $misfit_par $db_file $event_dir/output_perturb/sac model
+echo
+echo "Read synthetic waveforms of perturbed model [\$(date -Is)]"
+echo
 
-$utils_dir/grid_search_dmodel.py $misfit_par $db_file $misfit_dir/grid_search_dmodel.txt
+# for tag in dxs dmt
+for tag in perturbed
+do
+  $python_exec $sem_utils_dir/misfit/read_perturbed_syn.py \\
+    $db_file \\
+    $event_dir/output_\${tag}/sac \\
+    \${tag} \\
+done
+
+echo
+echo "grid search [\$(date)]"
+echo
+
+$python_exec $sem_utils_dir/misfit/grid_search_structure.py \\
+  $db_file \\
+  --nproc=\$SLURM_NPROCS
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

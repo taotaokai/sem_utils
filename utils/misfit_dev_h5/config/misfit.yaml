@@ -118,6 +118,13 @@ source:
   max_dxs_norm: 5000 # meters
   max_dmt_ratio: 0.01 # relative to Mw0
 
+structure:
+  # tag_name: [min, max, n_grids]
+  grid_search: {
+    # 'perturbed': [0, 4, 20], }
+    'dvp': [0, 3, 20],
+    'dvs': [0, 3, 20], }
+
 plot:
   map_type: 'NearsidePerspective'
   map_params: {'central_longitude':10, 'central_latitude':50, 'satellite_height':5000000}

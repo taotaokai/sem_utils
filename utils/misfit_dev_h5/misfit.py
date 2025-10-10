@@ -882,10 +882,10 @@ def _linearized_search_cc_by_stations(args):
         raise ValueError(msg)
     # model_num = len(dm)
 
-    for model_name in dm:
-        if model_name not in ["dt0", "dtau", "dxs", "dmt"]:
-            msg = f"model_name[{model_name}] must be one of [t0, tau, xs, mt]"
-            raise ValueError(msg)
+    # for model_name in dm:
+    #     if model_name not in ["dt0", "dtau", "dxs", "dmt"]:
+    #         msg = f"model_name[{model_name}] must be one of [t0, tau, xs, mt]"
+    #         raise ValueError(msg)
 
     nstep = []
     for model_name in dm:
@@ -1157,6 +1157,19 @@ class Misfit(object):
     |   |   |   |- dmodel[enu, nt]  # structure inversion
     |   |   |   |- dcmt1[enu,nt]   # source inversion
     |
+    |- grid_search/
+    |   |- source/
+    |   |   |- dt0[nstep]
+    |   |   |- dtau[nstep]
+    |   |   |- dxs[nstep]
+    |   |   |- dmt[nstep]
+    |   |   |- wcc_sum[nstep]
+    |   |   |   |- attrs: weight_sum
+    |   |- structure/
+    |   |   |- dvp[nstep] # step length relative to external model perturbation GLL files
+    |   |   |- dvs[nstep]
+    |   |   |- wcc_sum[nstep]
+    |   |   |   |- attrs: weight_sum
 
     Methods:
       setup_event
@@ -4598,10 +4611,10 @@ class Misfit(object):
             raise ValueError(msg)
         # model_num = len(dm)
 
-        for model_name in dm:
-            if model_name not in ["dt0", "dtau", "dxs", "dmt"]:
-                msg = f"model_name[{model_name}] must be one of [t0, tau, xs, mt]"
-                raise ValueError(msg)
+        # for model_name in dm:
+        #     if model_name not in ["dt0", "dtau", "dxs", "dmt"]:
+        #         msg = f"model_name[{model_name}] must be one of [t0, tau, xs, mt]"
+        #         raise ValueError(msg)
 
         nstep = []
         for model_name in dm:
@@ -5212,6 +5225,46 @@ class Misfit(object):
 
         h5f.close()
 
+    def grid_search_structure(self, nproc=5):
+        assert nproc >= 1
+
+        # for storing data, /waveforms/NET_STA/DATA_DISP[nchan,nt]
+        h5_atom = pt.Atom.from_dtype(np.dtype(np.float32))
+        h5_filters = pt.Filters(complevel=3, complib="zlib")
+
+        h5f = pt.open_file(self.h5_path, "r")
+
+        # config
+        config = h5f.root._v_attrs["config"]
+        grid_search = config['structure']['grid_search']
+
+        dm = {}
+        for tag, ranges in grid_search.items():
+            dm[tag] = np.linspace(ranges[0], ranges[1], ranges[2])
+
+        grids = np.meshgrid(*dm.values(), indexing='ij')
+        for i in range(len(grids)):
+            tag = grid_search.keys()[i]
+            dm[tag] = grids[i].flatten()
+
+        # wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
+        wcc_sum, weight_sum = self.linearized_search_cc_multiprocess(
+            dm=dm, nproc=nproc
+        )
+
+        # save wcc_sum, weight_sum
+        if "/grid_search/structure" not in h5f:
+            g_search = h5f.create_group("/grid_search", "structure", createparents=True)
+        else:
+            g_search = h5f.get_node("/grid_search/structure")
+
+        for tag in dm:
+            ca = h5f.create_carray(g_search, tag, h5_atom, dm[tag], filters=h5_filters)
+
+        ca = h5f.create_carray(g_search, 'wcc_sum', h5_atom, wcc_sum, filters=h5_filters)
+        ca.attrs['weight_sum'] = weight_sum
+
+        h5f.close()
 
 #
 #     def output_misfit(self, out_file):

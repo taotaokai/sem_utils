@@ -72,7 +72,7 @@ tau=$(grep "tau" ${cmt_file} | awk -F: '{printf "%f", $2}')
 min_user_t0=$(echo "3 * $tau + 1" | bc -l | awk '{printf "%d", $1}')
 sed -i "/^T0/s/=.*/= $min_user_t0/" ${sem_par_file}
 
-#====== syn: forward simulation
+#====== forward simulation
 cat <<EOF > $forward_job
 #!/bin/bash
 #SBATCH -J ${event_id}.forward
@@ -260,6 +260,55 @@ echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
 echo
 
+EOF
+
+
+#====== perturb: forward simulation of perturbed model
+cat <<EOF > $perturb_job
+#!/bin/bash
+#SBATCH -J ${event_id}.perturb
+#SBATCH -o $perturb_job.o%j
+#SBATCH ${slurm_args_forward}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
+
+cd $event_dir/DATA
+sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
+sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
+
+#for tag in dvp dvs
+for tag in perturbed
+do
+
+  out_dir=output_\${tag}
+
+  rm -rf $event_dir/DATABASES_MPI
+  mkdir $event_dir/DATABASES_MPI
+  ln -s $iter_dir/mesh_\${tag}/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
+
+  cd $event_dir
+
+  rm -rf \$out_dir OUTPUT_FILES
+  mkdir \$out_dir
+  ln -sf \$out_dir OUTPUT_FILES
+
+  cp $iter_dir/mesh_\${tag}/OUTPUT_FILES/addressing.txt OUTPUT_FILES
+  cp -L DATA/Par_file OUTPUT_FILES
+  cp -L DATA/STATIONS OUTPUT_FILES
+  cp -L DATA/CMTSOLUTION OUTPUT_FILES
+
+  ${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
+
+  mkdir $event_dir/\$out_dir/sac
+  mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
+
+done
+
+echo
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo
 EOF
 
 

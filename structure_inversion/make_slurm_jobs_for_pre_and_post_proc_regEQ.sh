@@ -129,7 +129,7 @@ done
 
 echo "====== sum up all event kernels with mask"
 
-kernel_dir=${iter_dir}/kernel
+kernel_dir=${iter_dir}/kernel_sum
 mkdir -p \$kernel_dir
 
 awk 'NF&&\$1!~/#/{printf "%s/events/%s/output_kernel/kernel\\n", a,\$1}' \\
@@ -152,7 +152,7 @@ ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_sum.py \\
 
 echo "====== convert cijkl,rho_kernel to tiso kernel"
 
-kernel_dir=${iter_dir}/kernel
+kernel_dir=${iter_dir}/kernel_sum
 
 ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_tiso_kernel_from_cijkl_rho.py \\
   ${sem_nproc_total} \\
@@ -186,7 +186,7 @@ kernel_tag=\${kernel_tags[\${SLURM_ARRAY_TASK_ID}]}
 echo "====== smooth kernel"
 
 mesh_dir=${iter_dir}/mesh
-kernel_dir=${iter_dir}/kernel
+kernel_dir=${iter_dir}/kernel_sum
 
 out_dir=${iter_dir}/kernel_precond
 mkdir -p \$out_dir

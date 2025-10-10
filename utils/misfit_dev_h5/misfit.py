@@ -5243,8 +5243,7 @@ class Misfit(object):
             dm[tag] = np.linspace(ranges[0], ranges[1], ranges[2])
 
         grids = np.meshgrid(*dm.values(), indexing='ij')
-        for i in range(len(grids)):
-            tag = grid_search.keys()[i]
+        for i, tag in enumerate(dm):
             dm[tag] = grids[i].flatten()
 
         # wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)

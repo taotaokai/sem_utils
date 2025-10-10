@@ -20,8 +20,4 @@ misfit = Misfit(args.misfit_h5file)
 if args.par_file is not None:
     misfit.read_config_file(args.par_file)
 
-print(f"======= [{datetime.now()}] grid_search_source")
-
 misfit.grid_search_structure(nproc=args.nproc)
-
-print(f"======= [{datetime.now()}] END")

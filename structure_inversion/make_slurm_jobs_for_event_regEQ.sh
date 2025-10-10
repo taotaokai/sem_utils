@@ -333,7 +333,7 @@ do
   $python_exec $sem_utils_dir/misfit/read_perturbed_syn.py \\
     $db_file \\
     $event_dir/output_\${tag}/sac \\
-    \${tag} \\
+    \${tag}
 done
 
 echo

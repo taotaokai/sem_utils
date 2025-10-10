@@ -5266,6 +5266,7 @@ class Misfit(object):
             if 'wcc_sum' in g_search:
                 h5f.remove_node(g_search, 'wcc_sum')
             ca = h5f.create_carray(g_search, 'wcc_sum', h5_atom, (npts,), filters=h5_filters)
+            ca[:] = np.array(wcc_sum, dtype=np.float64)
             ca.attrs['weight_sum'] = weight_sum
 
 #

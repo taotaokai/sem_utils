@@ -5232,7 +5232,7 @@ class Misfit(object):
         h5_atom = pt.Atom.from_dtype(np.dtype(np.float32))
         h5_filters = pt.Filters(complevel=3, complib="zlib")
 
-        h5f = pt.open_file(self.h5_path, "r")
+        h5f = pt.open_file(self.h5_path, "r+")
 
         # config
         config = h5f.root._v_attrs["config"]

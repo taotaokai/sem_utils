@@ -312,9 +312,6 @@ echo
 EOF
 
 
-exit -1
-
-
 #====== search: cc linearized seismograms for chosen step sizes
 cat <<EOF > $search_job
 #!/bin/bash
@@ -353,6 +350,7 @@ echo
 
 EOF
 
+exit -1
 
 #///////////////////////// Hessian simulation
 

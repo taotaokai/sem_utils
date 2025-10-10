@@ -5232,11 +5232,9 @@ class Misfit(object):
         h5_atom = pt.Atom.from_dtype(np.dtype(np.float32))
         h5_filters = pt.Filters(complevel=3, complib="zlib")
 
-        h5f = pt.open_file(self.h5_path, "r+")
-
-        # config
-        config = h5f.root._v_attrs["config"]
-        grid_search = config['structure']['grid_search']
+        with pt.open_file(self.h5_path, "r") as h5f:
+            config = h5f.root._v_attrs["config"]
+            grid_search = config['structure']['grid_search']
 
         dm = {}
         for tag, ranges in grid_search.items():
@@ -5252,18 +5250,17 @@ class Misfit(object):
         )
 
         # save wcc_sum, weight_sum
-        if "/grid_search/structure" not in h5f:
-            g_search = h5f.create_group("/grid_search", "structure", createparents=True)
-        else:
-            g_search = h5f.get_node("/grid_search/structure")
+        with pt.open_file(self.h5_path, "r+") as h5f:
+            if "/grid_search/structure" not in h5f:
+                g_search = h5f.create_group("/grid_search", "structure", createparents=True)
+            else:
+                g_search = h5f.get_node("/grid_search/structure")
 
-        for tag in dm:
-            ca = h5f.create_carray(g_search, tag, h5_atom, dm[tag], filters=h5_filters)
+            for tag in dm:
+                ca = h5f.create_carray(g_search, tag, h5_atom, dm[tag], filters=h5_filters)
 
-        ca = h5f.create_carray(g_search, 'wcc_sum', h5_atom, wcc_sum, filters=h5_filters)
-        ca.attrs['weight_sum'] = weight_sum
-
-        h5f.close()
+            ca = h5f.create_carray(g_search, 'wcc_sum', h5_atom, wcc_sum, filters=h5_filters)
+            ca.attrs['weight_sum'] = weight_sum
 
 #
 #     def output_misfit(self, out_file):

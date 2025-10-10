@@ -5229,7 +5229,7 @@ class Misfit(object):
         assert nproc >= 1
 
         # for storing data, /waveforms/NET_STA/DATA_DISP[nchan,nt]
-        h5_atom = pt.Atom.from_dtype(np.dtype(np.float32))
+        h5_atom = pt.Atom.from_dtype(np.dtype(np.float64))
         h5_filters = pt.Filters(complevel=3, complib="zlib")
 
         with pt.open_file(self.h5_path, "r") as h5f:
@@ -5241,6 +5241,7 @@ class Misfit(object):
             dm[tag] = np.linspace(ranges[0], ranges[1], ranges[2])
 
         grids = np.meshgrid(*dm.values(), indexing='ij')
+        npts = grids[0].size
         for i, tag in enumerate(dm):
             dm[tag] = grids[i].flatten()
 
@@ -5257,7 +5258,10 @@ class Misfit(object):
                 g_search = h5f.get_node("/grid_search/structure")
 
             for tag in dm:
-                ca = h5f.create_carray(g_search, tag, h5_atom, dm[tag], filters=h5_filters)
+                if tag in g_search:
+                    h5f.remove_node(g_search, tag)
+                ca = h5f.create_carray(g_search, tag, h5_atom, (npts,), filters=h5_filters)
+                ca[:] = np.array(dm[tag], dtype=np.float64)
 
             ca = h5f.create_carray(g_search, 'wcc_sum', h5_atom, wcc_sum, filters=h5_filters)
             ca.attrs['weight_sum'] = weight_sum

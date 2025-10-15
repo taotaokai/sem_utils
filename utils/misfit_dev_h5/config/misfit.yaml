@@ -114,16 +114,33 @@ misfit:
     "CCmax": [0.7, 0.9]
     # "dist": None,
 
+# line search for source inversion
 source:
-  max_dxs_norm: 5000 # meters
+  # perturbation limit of source parameters  
+  max_dxs_norm: 2500 # meters, max change in traveltime < 10% of the minimum period inverted
   max_dmt_ratio: 0.01 # relative to Mw0
 
+# line search for structure inversion 
 structure:
-  # tag_name: [min, max, n_grids]
-  grid_search: {
-    # 'perturbed': [0, 4, 20], }
-    'dvp': [0, 3, 20],
-    'dvs': [0, 3, 20], }
+  # perturbation limit of source parameters  
+  # max_amplitude: 0.1
+  # sampling points along dm[tag] as np.linspace(min, max, npts)
+  grid_search: {'perturbed': [0, 4, 20],  # min, max, npts
+               # 'dvp': [0, 3, 20],
+               # 'dvs': [0, 3, 20], 
+               }
+
+# line_search:
+#   source:
+#     max_dxs_norm: 5000 # meters
+#     max_dmt_ratio: 0.01 # relative to Mw0
+#   structure:
+#     max_amplitude: 0.1
+#     # dmodel tag: [min, max, n_grids]
+#     dm: {'perturbed': [0, 4, 20],
+#         # 'dvp': [0, 3, 20],
+#         # 'dvs': [0, 3, 20], 
+#         }
 
 plot:
   map_type: 'NearsidePerspective'

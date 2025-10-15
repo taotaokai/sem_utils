@@ -316,6 +316,41 @@ echo
 EOF
 
 
+#====== model_update
+cat <<EOF > $model_update_job
+#!/bin/bash
+#SBATCH -J model_update
+#SBATCH -o ${model_update_job}.o%j
+#SBATCH ${slurm_args_model_update}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
+
+# collect grid search results from all events
+
+out_dir=${iter_dir}/line_search
+mkdir -p \${out_dir}
+
+awk 'NF&&\$1!~/#/{printf "%s/events/%s/misfit/misfit.h5\\n", a,\$1}' \\
+  a="$iter_dir" $event_list > \\
+  \${out_dir}/misfit_h5file.list
+
+${slurm_mpiexec} ${python_exec} $sem_utils_dir/structure_inversion/grid_search.py \\
+  \${out_dir}/misfit_h5file.list
+  --out_nc \${out_dir}/grid_search.nc \\
+  --out_figure \${out_dir}/grid_search.pdf
+
+# apply model update
+
+echo
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
+
+EOF
+
+
+
 exit -1
 
 # #====== kernel_convert_mask

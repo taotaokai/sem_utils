@@ -1127,6 +1127,8 @@ class Misfit(object):
     hdf5 data structure:
     /
     |- attrs: iteration_no., stage_type, inversion_type
+    |         config: dictionary of parameters in misfit_par.yaml
+    |         solver: dictionary of parameters in SEM/DATA/Par_file
     |
     |- source/  # point-source CMT representation,
     |   |- attrs: header, id,
@@ -1136,7 +1138,7 @@ class Misfit(object):
     |   |         adj_strain[3,3,nt] # adjoint wavefield at source location
     |
     |- structure/
-    |   |- attrs: perturb_step
+    |   |- attrs: perturbation_tags[:] (e.g. ['dvp', 'dvs'] )
     |
     |- solver/
     |   |- attrs: name, starttime, dt, nt
@@ -4331,10 +4333,10 @@ class Misfit(object):
             raise ValueError(msg)
         # model_num = len(dm)
 
-        for model_name in dm:
-            if model_name not in ["dt0", "dtau", "dxs", "dmt"]:
-                msg = f"model_name[{model_name}] must be one of [t0, tau, xs, mt]"
-                raise ValueError(msg)
+        # for model_name in dm:
+        #     if model_name not in ["dt0", "dtau", "dxs", "dmt"]:
+        #         msg = f"model_name[{model_name}] must be one of [t0, tau, xs, mt]"
+        #         raise ValueError(msg)
 
         nstep = []
         for model_name in dm:
@@ -5236,21 +5238,21 @@ class Misfit(object):
             config = h5f.root._v_attrs["config"]
             grid_search = config['structure']['grid_search']
 
-        dm = {}
-        for tag, ranges in grid_search.items():
-            dm[tag] = np.linspace(ranges[0], ranges[1], ranges[2])
+        # sampling points along each search direction
+        dm = {tag: np.linspace(*vals) for tag, vals in grid_search.items()}
 
+        # create grid of search points expanded by all dm's
         grids = np.meshgrid(*dm.values(), indexing='ij')
-        npts = grids[0].size
-        for i, tag in enumerate(dm):
-            dm[tag] = grids[i].flatten()
+        grid_shape = grids[0].shape
+        dm_grid = {tag: grids[i].flatten() for i, tag in enumerate(dm)}
 
         # wcc_sum, weight_sum = self.linearized_search_cc(dm=dm)
         wcc_sum, weight_sum = self.linearized_search_cc_multiprocess(
-            dm=dm, nproc=nproc
+            dm=dm_grid, nproc=nproc
         )
+        wcc_sum = wcc_sum.reshape(grid_shape)
 
-        # save wcc_sum, weight_sum
+        # save dm, wcc_sum, weight_sum
         with pt.open_file(self.h5_path, "r+") as h5f:
             if "/grid_search/structure" not in h5f:
                 g_search = h5f.create_group("/grid_search", "structure", createparents=True)
@@ -5260,14 +5262,16 @@ class Misfit(object):
             for tag in dm:
                 if tag in g_search:
                     h5f.remove_node(g_search, tag)
-                ca = h5f.create_carray(g_search, tag, h5_atom, (npts,), filters=h5_filters)
+                shape = (len(dm[tag]),)
+                ca = h5f.create_carray(g_search, tag, h5_atom, shape, filters=h5_filters)
                 ca[:] = np.array(dm[tag], dtype=np.float64)
 
             if 'wcc_sum' in g_search:
                 h5f.remove_node(g_search, 'wcc_sum')
-            ca = h5f.create_carray(g_search, 'wcc_sum', h5_atom, (npts,), filters=h5_filters)
+            ca = h5f.create_carray(g_search, 'wcc_sum', h5_atom, grid_shape, filters=h5_filters)
             ca[:] = np.array(wcc_sum, dtype=np.float64)
             ca.attrs['weight_sum'] = weight_sum
+            ca.attrs['dims'] = list(dm.keys()) # corresponding dm name of each dimension of wcc_sum
 
 #
 #     def output_misfit(self, out_file):

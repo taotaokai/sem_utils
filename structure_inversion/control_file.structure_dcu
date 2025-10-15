@@ -138,6 +138,7 @@ slurm_args_kernel_precond=${slurm_args_mesh}
 slurm_args_dmodel=${slurm_args_mesh}
 slurm_args_model_perturb=${slurm_args_mesh}
 slurm_args_mesh_perturb=${slurm_args_mesh}
+slurm_args_model_update="-n 1 -p ${slurm_partition_cpu} -t 00:30:00"
 
 # slurm_args_kernel_convert_mask=${slurm_args_mesh}
 # slurm_args_kernel_sum_smooth_precond=${slurm_args_mesh}

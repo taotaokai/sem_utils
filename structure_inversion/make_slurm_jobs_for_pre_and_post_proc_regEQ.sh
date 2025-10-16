@@ -250,17 +250,31 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-out_dir=$iter_dir/model_perturbed
-mkdir \$out_dir
+sem_perturb_group_names=(${sem_perturb_group_names[@]})
+sem_perturb_model_tag_groups=(${sem_perturb_model_tag_groups[@]})
+sem_perturb_dmodel_tag_groups=(${sem_perturb_dmodel_tag_groups[@]})
 
-${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_perturb.py \\
-  ${sem_nproc_total} \\
-  $initial_model_dir \\
-  $iter_dir/search_direction \\
-  \$out_dir \\
-  --model_tags ${sem_model_tags[@]} \\
-  --dmodel_tags ${sem_dmodel_tags[@]} \\
-  --perturb_type "exponential"
+ngroup=\${#sem_perturb_group_names[@]}
+
+for ((i=0; i<\$ngroup; i++))
+do
+
+  dm_tag=\${sem_perturb_group_names[\$i]} 
+  out_dir=$iter_dir/model_\${dm_tag}
+  [ -e \$out_dir ] && rm -rf \$out_dir
+  mkdir -p \$out_dir
+
+  ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_perturb.py \\
+    ${sem_nproc_total} \\
+    $initial_model_dir \\
+    $iter_dir/dmodel \\
+    \$out_dir \\
+    --model_tags \${sem_perturb_model_tag_groups[\$i]/,/ } \\
+    --dmodel_tags \${sem_perturb_dmodel_tag_groups[\$i]/,/ } \\
+    --scale 1.0 \\
+    --method "exponential"
+
+done
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
@@ -280,34 +294,51 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-mesh_dir=${iter_dir}/mesh_perturbed
-model_dir=${iter_dir}/model_perturbed
+sem_perturb_group_names=(${sem_perturb_group_names[@]})
+sem_perturb_model_tag_groups=(${sem_perturb_model_tag_groups[@]})
+sem_perturb_dmodel_tag_groups=(${sem_perturb_dmodel_tag_groups[@]})
 
-if [ ! -d "\$model_dir" ]
-then
-  echo "[ERROR] \$model_dir does not exist!"
-  exit -1
-fi
+ngroup=\${#sem_perturb_group_names[@]}
 
-#rm -rf \$mesh_dir
-mkdir -p \$mesh_dir
+for ((i=0; i<\$ngroup; i++))
+do
 
-cd \$mesh_dir
-mkdir DATA DATABASES_MPI OUTPUT_FILES
+  dm_tag=\${sem_perturb_group_names[\$i]} 
 
-cd \$mesh_dir/DATA
-chmod u+w *
-ln -sf $sem_build_dir/DATA/* \$mesh_dir/DATA/
-rm Par_file GLL CMTSOLUTION
-ln -sf \$model_dir GLL
-cp -L $sem_config_dir/DATA/Par_file .
-cp -L $sem_config_dir/DATA/CMTSOLUTION .
-cp -L Par_file \$mesh_dir/OUTPUT_FILES/
+  model_dir=${iter_dir}/model_\${dm_tag}
+  if [ ! -d "\$model_dir" ]
+  then
+    echo "[ERROR] \$model_dir does not exist!"
+    exit -1
+  fi
 
-sed -i '/^MODEL/s/=[[:space:]]*[^[:space:]_#]*/= GLL/' \$mesh_dir/DATA/Par_file
+  mesh_dir=${iter_dir}/mesh_\${dm_tag}
+  [ -e \$mesh_dir ] && rm -rf \$mesh_dir
+  mkdir -p \$mesh_dir
 
-cd \$mesh_dir
-${slurm_mpiexec} $sem_build_dir/bin/xmeshfem3D
+  cd \$mesh_dir
+  mkdir DATA DATABASES_MPI OUTPUT_FILES
+
+  cd \$mesh_dir/DATA
+  chmod u+w *
+  ln -sf $sem_build_dir/DATA/* \$mesh_dir/DATA/
+  rm Par_file GLL CMTSOLUTION
+
+  mkdir GLL
+  ln -s -t GLL ${iter_dir}/model_initial/*.bin # first link initial model files
+  ln -sf -t GLL \$model_dir/*.bin  # -f force override with links to new model files 
+  # ln -sf \$model_dir GLL
+
+  cp -L $sem_config_dir/DATA/Par_file .
+  cp -L $sem_config_dir/DATA/CMTSOLUTION .
+  cp -L Par_file \$mesh_dir/OUTPUT_FILES/
+
+  sed -i '/^MODEL/s/=[[:space:]]*[^[:space:]_#]*/= GLL/' \$mesh_dir/DATA/Par_file
+
+  cd \$mesh_dir
+  ${slurm_mpiexec} $sem_build_dir/bin/xmeshfem3D
+
+done
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
@@ -337,11 +368,38 @@ awk 'NF&&\$1!~/#/{printf "%s/events/%s/misfit/misfit.h5\\n", a,\$1}' \\
   \${out_dir}/misfit_h5file.list
 
 ${slurm_mpiexec} ${python_exec} $sem_utils_dir/structure_inversion/grid_search.py \\
-  \${out_dir}/misfit_h5file.list
+  \${out_dir}/misfit_h5file.list \\
   --out_nc \${out_dir}/grid_search.nc \\
-  --out_figure \${out_dir}/grid_search.pdf
+  --out_figure \${out_dir}/grid_search.pdf \\
+  --out_txt \${out_dir}/grid_search.txt
 
 # apply model update
+
+sem_perturb_group_names=(${sem_perturb_group_names[@]})
+sem_perturb_model_tag_groups=(${sem_perturb_model_tag_groups[@]})
+sem_perturb_dmodel_tag_groups=(${sem_perturb_dmodel_tag_groups[@]})
+
+ngroup=\${#sem_perturb_group_names[@]}
+
+for ((i=0; i<\$ngroup; i++))
+do
+
+  dm_tag=\${sem_perturb_group_names[\$i]} 
+
+  opt_dm_scale=\$(grep \$dm_tag \${out_dir}/grid_search.txt | awk '{print \$NF}')
+
+  ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_perturb.py \\
+    ${sem_nproc_total} \\
+    $initial_model_dir \\
+    $iter_dir/dmodel \\
+    $updated_model_dir \\
+    --model_tags \${sem_perturb_model_tag_groups[\$i]/,/ } \\
+    --dmodel_tags \${sem_perturb_dmodel_tag_groups[\$i]/,/ } \\
+    --scale \$opt_dm_scale \\
+    --method "exponential"
+
+done
+
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"

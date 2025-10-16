@@ -191,10 +191,12 @@ sem_kernel_smooth_iso_FWHM_km=10 # full width at half maximum (FWHM) of Gaussian
 # search direction
 
 # model perturbation
-sem_model_perturb_groups=2
-sem_model_perturb_group1=(dvpv dvph)
-sem_model_perturb_group2=(dvsv dvsh)
-sem_model_perturb_group3=(deta drho)
+sem_perturb_group_names=("dm")
+sem_perturb_model_tag_groups=("vpv,vph,vsv,vsh,eta,rho")
+sem_perturb_dmodel_tag_groups=("dvpv_dmodel,dvph_dmodel,dvsv_dmodel,dvsh_dmodel,deta_dmodel,drho_dmodel")
+# sem_perturb_group_names=("dvpv_vph" "dvsv_vsh" "deta_rho")
+# sem_perturb_model_tag_groups=("vpv,vph" "vsv,vsh" "eta,rho")
+# sem_perturb_dmodel_tag_groups=("dvpv_dmodel,dvph_dmodel" "dvsv_dmodel,dvsh_dmodel" "deta_dmodel,drho_dmodel")
 
 ## conjugate gradient
 #cg_type=HS

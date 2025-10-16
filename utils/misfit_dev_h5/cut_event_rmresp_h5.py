@@ -1,16 +1,12 @@
 import sys
 import os
-import glob
 import datetime
 import numpy as np
 import tables as tb
 import scipy
-import matplotlib.pyplot as plt
 import yaml
 
-from obspy.signal.invsim import cosine_sac_taper
-from obspy import read, read_inventory, Inventory, read_events, geodetics
-# from obspy.clients.filesystem.tsindex import Client
+from obspy import read_inventory, Inventory, read_events, geodetics
 from obspy.clients.filesystem.sds import Client
 from obspy.taup import TauPyModel
 

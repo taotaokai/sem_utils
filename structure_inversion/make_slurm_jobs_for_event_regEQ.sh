@@ -279,14 +279,14 @@ sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
 
 #for tag in dvp dvs
-for tag in perturbed
+for dm_tag in ${sem_perturb_group_names[@]}
 do
 
-  out_dir=output_\${tag}
+  out_dir=output_\${dm_tag}
 
   rm -rf $event_dir/DATABASES_MPI
   mkdir $event_dir/DATABASES_MPI
-  ln -s $iter_dir/mesh_\${tag}/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
+  ln -s $iter_dir/mesh_\${dm_tag}/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
 
   cd $event_dir
 
@@ -294,7 +294,7 @@ do
   mkdir \$out_dir
   ln -sf \$out_dir OUTPUT_FILES
 
-  cp $iter_dir/mesh_\${tag}/OUTPUT_FILES/addressing.txt OUTPUT_FILES
+  cp $iter_dir/mesh_\${dm_tag}/OUTPUT_FILES/addressing.txt OUTPUT_FILES
   cp -L DATA/Par_file OUTPUT_FILES
   cp -L DATA/STATIONS OUTPUT_FILES
   cp -L DATA/CMTSOLUTION OUTPUT_FILES
@@ -328,12 +328,12 @@ echo "Read synthetic waveforms of perturbed model [\$(date -Is)]"
 echo
 
 # for tag in dxs dmt
-for tag in perturbed
+for dm_tag in ${sem_perturb_group_names[@]}
 do
   $python_exec $sem_utils_dir/misfit/read_perturbed_syn.py \\
     $db_file \\
-    $event_dir/output_\${tag}/sac \\
-    \${tag}
+    $event_dir/output_\${dm_tag}/sac \\
+    \${dm_tag}
 done
 
 echo

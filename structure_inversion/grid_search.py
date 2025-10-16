@@ -16,6 +16,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("misfit_h5_list" )  # list of misfit.h5 of each events
 parser.add_argument("--out_nc", default="grid_search_structure.nc")
 parser.add_argument("--out_figure", default="grid_search_structure.pdf")
+parser.add_argument("--out_txt", default="grid_search_structure.txt", description="values of optimal parameters")
 # parser.add_argument("--step_size", default=0.1, type=float, help="interpolation step size of the grid search results")
 
 args = parser.parse_args()
@@ -73,7 +74,7 @@ for misfit_h5file in misfit_h5_list:
 
 # find the optimal step lengths along each dm
 opt_ind = np.unravel_index(np.argmax(wcc_sum, axis=None), wcc_sum.shape)
-opt_dm = {tag: dm[tag][opt_ind[i]] for i, tag in enumerate(dm)} 
+opt_dm = [dm[tag][opt_ind[i]] for i, tag in enumerate(dm)] 
 
 # save results 
 da = xr.DataArray(wcc_sum, dims=list(dm.keys()), coords=dm, name="wcc_sum")
@@ -82,10 +83,15 @@ da.attrs['opt_ind'] = opt_ind
 da.attrs['opt_dm'] = opt_dm
 da.to_netcdf(args.out_nc)
 
+# output values of optimal dm
+with open(args.out_txt, "w") as f:
+    for i, tag in enumerate(dm):
+        f.write(f"{tag}  {opt_dm[i]}\n")
+
 
 # plot profiles of wcc along each dm
 n_dm = len(dm)
-fig, axs = plt.subplots(n_dm, 1, figsize=(n_dm, 2))
+fig, axs = plt.subplots(n_dm, 1, figsize=(10, 4*n_dm+1))
 for i, tag in enumerate(dm):
     # indices along i-th dimension of wcc_sum through optimal index opt_ind
     ind = list(opt_ind)

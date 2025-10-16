@@ -269,8 +269,8 @@ do
     $initial_model_dir \\
     $iter_dir/dmodel \\
     \$out_dir \\
-    --model_tags \${sem_perturb_model_tag_groups[\$i]/,/ } \\
-    --dmodel_tags \${sem_perturb_dmodel_tag_groups[\$i]/,/ } \\
+    --model_tags \${sem_perturb_model_tag_groups[\$i]//,/ } \\
+    --dmodel_tags \${sem_perturb_dmodel_tag_groups[\$i]//,/ } \\
     --scale 1.0 \\
     --method "exponential"
 
@@ -393,8 +393,8 @@ do
     $initial_model_dir \\
     $iter_dir/dmodel \\
     $updated_model_dir \\
-    --model_tags \${sem_perturb_model_tag_groups[\$i]/,/ } \\
-    --dmodel_tags \${sem_perturb_dmodel_tag_groups[\$i]/,/ } \\
+    --model_tags \${sem_perturb_model_tag_groups[\$i]//,/ } \\
+    --dmodel_tags \${sem_perturb_dmodel_tag_groups[\$i]//,/ } \\
     --scale \$opt_dm_scale \\
     --method "exponential"
 

@@ -118,17 +118,17 @@ misfit:
 source:
   # perturbation limit of source parameters  
   max_dxs_norm: 2500 # meters, max change in traveltime < 10% of the minimum period inverted
-  max_dmt_ratio: 0.01 # relative to Mw0
+  max_dmt_ratio: 0.05 # relative to Mw0
 
-# line search for structure inversion 
-structure:
-  # perturbation limit of source parameters  
-  # max_amplitude: 0.1
-  # sampling points along dm[tag] as np.linspace(min, max, npts)
-  grid_search: {'perturbed': [0, 4, 20],  # min, max, npts
-               # 'dvp': [0, 3, 20],
-               # 'dvs': [0, 3, 20], 
-               }
+# # line search for structure inversion 
+# structure:
+#   # perturbation limit of source parameters  
+#   # max_amplitude: 0.1
+#   # sampling points along dm[tag] as np.linspace(min, max, npts)
+#   grid_search: {'dm': [0, 4, 20],  # min, max, npts
+#                # 'dvp': [0, 3, 20],
+#                # 'dvs': [0, 3, 20], 
+#                }
 
 # line_search:
 #   source:

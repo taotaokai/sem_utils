@@ -5227,19 +5227,25 @@ class Misfit(object):
 
         h5f.close()
 
-    def grid_search_structure(self, nproc=5):
+    def grid_search_structure(self, dm={'dm':np.linspace(0,2,20)}, nproc=5):
+        """
+        dm = {'tag1': np.linspace(b1,e1,n1), 
+              'tag2': np.linspace(b2,e2,n2),
+              ...
+              }
+        """
         assert nproc >= 1
 
         # for storing data, /waveforms/NET_STA/DATA_DISP[nchan,nt]
         h5_atom = pt.Atom.from_dtype(np.dtype(np.float64))
         h5_filters = pt.Filters(complevel=3, complib="zlib")
 
-        with pt.open_file(self.h5_path, "r") as h5f:
-            config = h5f.root._v_attrs["config"]
-            grid_search = config['structure']['grid_search']
+        # with pt.open_file(self.h5_path, "r") as h5f:
+        #     config = h5f.root._v_attrs["config"]
+        #     grid_search = config['structure']['grid_search']
 
         # sampling points along each search direction
-        dm = {tag: np.linspace(*vals) for tag, vals in grid_search.items()}
+        # dm = {tag: np.linspace(*vals) for tag, vals in grid_search.items()}
 
         # create grid of search points expanded by all dm's
         grids = np.meshgrid(*dm.values(), indexing='ij')

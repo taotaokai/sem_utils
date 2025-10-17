@@ -334,6 +334,7 @@ do
   cp -L Par_file \$mesh_dir/OUTPUT_FILES/
 
   sed -i '/^MODEL/s/=[[:space:]]*[^[:space:]_#]*/= GLL/' \$mesh_dir/DATA/Par_file
+  sed -i '/^SAVE_MESH_FILES/s/=.*/= .false./' \$mesh_dir/DATA/Par_file
 
   cd \$mesh_dir
   ${slurm_mpiexec} $sem_build_dir/bin/xmeshfem3D

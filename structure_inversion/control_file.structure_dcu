@@ -169,7 +169,9 @@ sem_model_tags=(vpv vph vsv vsh eta rho)
 sem_kernel_tags=(dvpv_kernel dvph_kernel dvsv_kernel dvsh_kernel deta_kernel drho_kernel)
 sem_dmodel_tags=(dvpv_dmodel dvph_dmodel dvsv_dmodel dvsh_dmodel deta_dmodel drho_dmodel)
 
-#====== kernel mask around source and receiver points
+#====== kernel preconditioning
+
+# mask around source and receiver points
 # for each event e: 
 #   Ke = dChi_e/dm
 #   Me: masks around source and receiver points
@@ -182,27 +184,45 @@ sem_dmodel_tags=(dvpv_dmodel dvph_dmodel dvsv_dmodel dvsh_dmodel deta_dmodel drh
 sem_kernel_mask_source_sigma_km=50
 sem_kernel_mask_receiver_sigma_km=10
 
-# kernel smoothing
+# smoothing
 sem_kernel_smooth_diffusion_niter=50 # iteration steps for diffusion based smoothing 
 sem_kernel_smooth_iso_FWHM_km=10 # full width at half maximum (FWHM) of Gaussian kernel in km
 # sem_kernel_smooth_sigmaH_km=30 # horizontal smoothing 1 sigma (km)
 # sem_kernel_smooth_sigmaV_km=15 # vertical smoothing 1 sigma (km)
 
-# search direction
-
-# model perturbation
-sem_perturb_group_names=("dm")
-sem_perturb_model_tag_groups=("vpv,vph,vsv,vsh,eta,rho")
-sem_perturb_dmodel_tag_groups=("dvpv_dmodel,dvph_dmodel,dvsv_dmodel,dvsh_dmodel,deta_dmodel,drho_dmodel")
-# sem_perturb_group_names=("dvpv_vph" "dvsv_vsh" "deta_rho")
-# sem_perturb_model_tag_groups=("vpv,vph" "vsv,vsh" "eta,rho")
-# sem_perturb_dmodel_tag_groups=("dvpv_dmodel,dvph_dmodel" "dvsv_dmodel,dvsh_dmodel" "deta_dmodel,drho_dmodel")
-
+#====== model update direction (dm)
 ## conjugate gradient
 #cg_type=HS
 ## dmodel scale factor
 #dmodel_max_dlnvs=0.01
-#
+
+#====== line search
+
+# To account for imbalanced sensitvity between different parameter classes,
+# we can seperate the update direction(dm) into two parts(dm1, dm2) corresponding to vp, vs for example:
+#   1) dm = a1 * dm1 + a2 * dm2
+# From forward modelling of perturbed models by dm1 and dm2, we can write:
+#   2) du1 = u(m+dm1) - u(m) ~ dm1 * grad(u)
+#   3) du2 = u(m+dm2) - u(m) ~ dm2 * grad(u)
+# Synthetics from any linear combination of dm1 and dm2 can be approximated by:
+#   4) u(m+dm) ~ u(m) + dm * grad(u) = u(m) + a1*dm1 * grad(u) + a2*dm2 * grad(u) ~ u(m) + a1*du1 + a2*du2
+# To maximize the objective function(Chi) we grid search through a1 and a2: 
+#   5) argmax(Chi[u(m)+ a1*du1 + a2*du2]) for a1,a2 in some seach ranges
+# The optimal a1, a2 would give the updated model as m + a1*dm1 + a2*dm2
+
+# perturbations along different parameter groups
+sem_perturb_group_names=("dm")  # only one group
+sem_perturb_model_tag_groups=("vpv,vph,vsv,vsh,eta,rho")
+sem_perturb_dmodel_tag_groups=("dvpv_dmodel,dvph_dmodel,dvsv_dmodel,dvsh_dmodel,deta_dmodel,drho_dmodel")
+# steps along each perturbation group (min,max,ngrids) as in numpy.linspace(min,max,ngrids)
+sem_search_step_sizes=("0,4,20")
+
+# sem_perturb_group_names=("dvpv_vph" "dvsv_vsh" "deta_rho") # three groups
+# sem_perturb_model_tag_groups=("vpv,vph" "vsv,vsh" "eta,rho")
+# sem_perturb_dmodel_tag_groups=("dvpv_dmodel,dvph_dmodel" "dvsv_dmodel,dvsh_dmodel" "deta_dmodel,drho_dmodel")
+# sem_search_group_steps=("0,4,20" "0,4,20" "0,4,20")
+
+
 ##----- update model
 ##model_scale_phi_to_xi=1.5
 ##model_scale_eta_to_xi=2.5

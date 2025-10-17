@@ -342,6 +342,8 @@ echo
 
 $python_exec $sem_utils_dir/misfit/grid_search_structure.py \\
   $db_file \\
+  --dm_tags ${sem_perturb_group_names[@]} \\
+  --dm_steps ${sem_search_step_sizes[@]} \\
   --nproc=\$SLURM_NPROCS
 
 echo

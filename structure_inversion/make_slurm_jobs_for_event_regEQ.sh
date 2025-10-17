@@ -282,11 +282,12 @@ sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
 for dm_tag in ${sem_perturb_group_names[@]}
 do
 
-  out_dir=output_\${dm_tag}
+  mesh_perturb_dir=$iter_dir/mesh_perturb_\${dm_tag}
+  out_dir=output_perturb_\${dm_tag}
 
   rm -rf $event_dir/DATABASES_MPI
   mkdir $event_dir/DATABASES_MPI
-  ln -s $iter_dir/mesh_\${dm_tag}/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
+  ln -s \$mesh_perturb_dir/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
 
   cd $event_dir
 
@@ -294,7 +295,7 @@ do
   mkdir \$out_dir
   ln -sf \$out_dir OUTPUT_FILES
 
-  cp $iter_dir/mesh_\${dm_tag}/OUTPUT_FILES/addressing.txt OUTPUT_FILES
+  cp \$mesh_perturb_dir/OUTPUT_FILES/addressing.txt OUTPUT_FILES
   cp -L DATA/Par_file OUTPUT_FILES
   cp -L DATA/STATIONS OUTPUT_FILES
   cp -L DATA/CMTSOLUTION OUTPUT_FILES
@@ -332,7 +333,7 @@ for dm_tag in ${sem_perturb_group_names[@]}
 do
   $python_exec $sem_utils_dir/misfit/read_perturbed_syn.py \\
     $db_file \\
-    $event_dir/output_\${dm_tag}/sac \\
+    $event_dir/output_perturb_\${dm_tag}/sac \\
     \${dm_tag}
 done
 

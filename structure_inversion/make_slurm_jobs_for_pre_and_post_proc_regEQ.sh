@@ -260,7 +260,7 @@ for ((i=0; i<\$ngroup; i++))
 do
 
   dm_tag=\${sem_perturb_group_names[\$i]} 
-  out_dir=$iter_dir/model_\${dm_tag}
+  out_dir=$iter_dir/model_perturb_\${dm_tag}
   [ -e \$out_dir ] && rm -rf \$out_dir
   mkdir -p \$out_dir
 
@@ -305,14 +305,14 @@ do
 
   dm_tag=\${sem_perturb_group_names[\$i]} 
 
-  model_dir=${iter_dir}/model_\${dm_tag}
+  model_dir=${iter_dir}/model_perturb_\${dm_tag}
   if [ ! -d "\$model_dir" ]
   then
     echo "[ERROR] \$model_dir does not exist!"
     exit -1
   fi
 
-  mesh_dir=${iter_dir}/mesh_\${dm_tag}
+  mesh_dir=${iter_dir}/mesh_perturb_\${dm_tag}
   [ -e \$mesh_dir ] && rm -rf \$mesh_dir
   mkdir -p \$mesh_dir
 

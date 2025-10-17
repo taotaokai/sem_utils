@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("misfit_h5_list" )  # list of misfit.h5 of each events
 parser.add_argument("--out_nc", default="grid_search_structure.nc")
 parser.add_argument("--out_figure", default="grid_search_structure.pdf")
-parser.add_argument("--out_txt", default="grid_search_structure.txt", description="values of optimal parameters")
+parser.add_argument("--out_txt", default="grid_search_structure.txt")
 # parser.add_argument("--step_size", default=0.1, type=float, help="interpolation step size of the grid search results")
 
 args = parser.parse_args()

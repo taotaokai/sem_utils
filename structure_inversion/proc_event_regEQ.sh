@@ -86,7 +86,7 @@ do
     echo "[ERROR] $cmt_file not found"
     exit -1
   fi
-  chmod u+w $event_dir/DATA/CMTSOLUTION
+  [ -e $event_dir/DATA/CMTSOLUTION ] && chmod u+w $event_dir/DATA/CMTSOLUTION
   cp $cmt_file $event_dir/DATA/CMTSOLUTION
 
   # copy STATIONS

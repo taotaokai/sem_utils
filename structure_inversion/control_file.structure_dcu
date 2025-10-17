@@ -164,6 +164,8 @@ python_exec=python
 #hess_inverse_nbin=5000
 #hess_inverse_threshold_percentage=0.90
 
+#====== model parameterization
+
 sem_model_tags=(vpv vph vsv vsh eta rho)
 sem_kernel_tags=(dvpv_kernel dvph_kernel dvsv_kernel dvsh_kernel deta_kernel drho_kernel)
 sem_dmodel_tags=(dvpv_dmodel dvph_dmodel dvsv_dmodel dvsh_dmodel deta_dmodel drho_dmodel)
@@ -189,11 +191,12 @@ sem_kernel_smooth_iso_FWHM_km=10 # full width at half maximum (FWHM) of Gaussian
 # sem_kernel_smooth_sigmaH_km=30 # horizontal smoothing 1 sigma (km)
 # sem_kernel_smooth_sigmaV_km=15 # vertical smoothing 1 sigma (km)
 
-#====== model update direction (dm)
-## conjugate gradient
-#cg_type=HS
-## dmodel scale factor
-#dmodel_max_dlnvs=0.01
+#====== model search direction (dm)
+# conjugate gradient
+#sem_cg_type=HS
+
+# dmodel scale factor
+#sem_dmodel_scale=0.1
 
 #====== line search
 

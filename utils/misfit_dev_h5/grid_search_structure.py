@@ -21,9 +21,9 @@ assert(len(args.dm_tags) == len(args.dm_steps))
 
 dm = {}
 for tag, val in zip(args.dm_tags, args.dm_steps):
-    vals = [float(x) for x in val.split(',')]
+    vals = val.split(',')
     assert(len(vals) == 3)
-    steps = np.linspace(vals[0], vals[1], vals[2])
+    steps = np.linspace(float(vals[0]), float(vals[1]), int(vals[2]))
     dm[tag] = steps
 
 misfit = Misfit(args.misfit_h5file)

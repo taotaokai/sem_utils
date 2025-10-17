@@ -32,11 +32,27 @@ weight_sum = 0.0
 for misfit_h5file in misfit_h5_list:
 
     with pt.open_file(misfit_h5file, "r") as h5f:
-        config = h5f.root._v_attrs["config"]
-        config_grid_search = config['structure']['grid_search']
+
+        if "/grid_search/structure/wcc_sum" not in h5f:
+            msg = f"No /grid_search/structure/wcc_sum not in {misfit_h5file}"
+            raise Exception(msg)
+        data = h5f.get_node("/grid_search/structure/wcc_sum")
+
+        dm_tags = data.attrs['dims']
+        weight = data.attrs['weight_sum']
+        weight_sum += weight
+
+        wcc = data[:]
+        if wcc_sum is None:
+            wcc_sum = wcc
+        else:
+            if wcc_sum.shape != wcc.shape:
+                msg = f"{wcc.shape=} in {misfit_h5file} should be equal to {wcc_sum.shape=}"
+                raise Exception(msg)
+            wcc_sum += wcc
 
         dm1 = {}
-        for tag in config_grid_search:
+        for tag in dm_tags:
             if f"/grid_search/structure/{tag}" not in h5f:
                 msg = f"No /grid_search/structure/{tag} not in {misfit_h5file}"
                 raise Exception(msg)
@@ -50,22 +66,6 @@ for misfit_h5file in misfit_h5_list:
                 msg = f"{dm1=} in {misfit_h5file=} should be equal to {dm=}"
                 raise Exception(msg)
 
-        if "/grid_search/structure/wcc_sum" not in h5f:
-            msg = f"No /grid_search/structure/wcc_sum not in {misfit_h5file}"
-            raise Exception(msg)
-        data = h5f.get_node("/grid_search/structure/wcc_sum")
-
-        weight = data.attrs['weight_sum']
-        weight_sum += weight
-
-        wcc = data[:]
-        if wcc_sum is None:
-            wcc_sum = wcc
-        else:
-            if wcc_sum.shape != wcc.shape:
-                msg = f"{wcc.shape=} in {misfit_h5file} should be equal to {wcc_sum.shape=}"
-                raise Exception(msg)
-            wcc_sum += wcc
 
 # # interpolate grid search results onto finer grid
 # interp = RegularGridInterpolator(tuple(dm.values()), wcc_sum, method='cubic')
@@ -101,7 +101,10 @@ for i, tag in enumerate(dm):
     io = opt_ind[i] # get optimal index on this profile
     xo, yo = x[io], y[io]
 
-    ax = axs[i]
+    if n_dm == 1:
+        ax = axs
+    else:
+        ax = axs[i]
     ax.plot(x, y, 'ko-')
     ax.plot(xo, yo, 'rs')
     ax.text(xo, yo, f"{tag} = {xo:.2f}")

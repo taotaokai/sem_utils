@@ -359,7 +359,7 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-# collect grid search results from all events
+echo #====== collect grid search results from all events
 
 out_dir=${iter_dir}/line_search
 mkdir -p \${out_dir}
@@ -374,7 +374,7 @@ ${slurm_mpiexec} ${python_exec} $sem_utils_dir/structure_inversion/grid_search.p
   --out_figure \${out_dir}/grid_search.pdf \\
   --out_txt \${out_dir}/grid_search.txt
 
-# apply model update
+echo #====== apply model update
 
 sem_perturb_group_names=(${sem_perturb_group_names[@]})
 sem_perturb_model_tag_groups=(${sem_perturb_model_tag_groups[@]})
@@ -388,6 +388,8 @@ do
   dm_tag=\${sem_perturb_group_names[\$i]} 
 
   opt_dm_scale=\$(grep \$dm_tag \${out_dir}/grid_search.txt | awk '{print \$NF}')
+
+  echo "# apply model update for [\${dm_tag}] with step length [\${opt_dm_scale}]"
 
   ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_perturb.py \\
     ${sem_nproc_total} \\

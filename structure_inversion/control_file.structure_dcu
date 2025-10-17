@@ -34,19 +34,18 @@
 #     [misfit_job]  measure misfit, get adjoint source
 #     [kernel_job]  kernel simulation, get model gradients (e.g. cijkl_kernel)
 #
-#   [sum_kernel_job] sum model gradients for all events to get averaged model gradients, also with preconditioning
-#   [perturb_model_job] perturb model parameters along some chosen search directions (e.g. dVp, dVs) based on averaged gradients and also nonliear-cg
-#
+#   [kernel_mask_sum_job] sum event kernels with source/receiver masks
+#   [kernel_precond_job] preconditioning with smoothing, spatial weighting, etc.
+#   [dmodel_job] get search direction based on non-linear CG, and scaled to certain amplitude 
+#   [model_perturb_job] perturb model parameters along some chosen search directions in dmodel (e.g. dVp, dVs)
+#   [mesh_perturb_job] create meshes for perturbed models
+#  
 #   for each event:
-#     [forward_perturb_job] forward simulation for perturbed models
+#     [perturb_job] forward simulation for perturbed models
+#     [search_job] grid search through a range of step lengths
 #
-#   [search_job]
-#   for each event:
-#       get waveform differences for each search direction in model space
-#   while changes in the optimal step lengths greater than a threshold:
-#     for each event:
-#       calculate misfit for a range of step lengths, assuming linear relationship between waveform differences and step length
-#     sum misfit results for all event, get optimal step lengths
+#   [model_update_job] sum up grid search results from each event to get step length, and update model parameters
+#
 
 # project root directory
 base_dir=$(readlink -f .)

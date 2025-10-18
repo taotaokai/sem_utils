@@ -222,15 +222,35 @@ echo
 out_dir=${iter_dir}/dmodel
 mkdir -p \${out_dir}
 
-${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_scale.py \\
-  ${sem_nproc_total} \\
-  ${iter_dir}/kernel_precond \\
-  \${out_dir} \\
-  --in_tags ${sem_kernel_tags[@]} \\
-  --out_tags ${sem_dmodel_tags[@]} \\
-  --scaled_amplitude=0.1
+# get search direction
 
-# TODO: get CG direction
+if [ "$iter_num" -eq 0 ]
+then
+
+  # first iteration use gradient as search direction
+  ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_scale.py \\
+    ${sem_nproc_total} \\
+    ${iter_dir}/kernel_precond \\
+    \${out_dir} \\
+    --in_tags ${sem_kernel_tags[@]} \\
+    --out_tags ${sem_dmodel_tags[@]} \\
+    --scaled_amplitude=${sem_dmodel_scale}
+
+else
+
+  # search direction by CG method: Hestenes and Stiefel (1952)
+  ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_cg_maximize.py \\
+    ${sem_nproc_total} \\
+    ${iter_dir}/mesh \\
+    ${prev_iter_dir}/dmodel \\
+    ${prev_iter_dir}/kernel_precond \\
+    ${iter_dir}/kernel_precond \\
+    \${out_dir} \\
+    --kernel_tags ${sem_kernel_tags[@]} \\
+    --dmodel_tags ${sem_dmodel_tags[@]} \\
+    --scaled_amplitude=${sem_dmodel_scale}
+
+fi
 
 echo
 echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"

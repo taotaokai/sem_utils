@@ -148,21 +148,8 @@ slurm_args_plot=${slurm_args_misfit}
 
 
 #====== other
-
 python_exec=python
 
-
-##------ hess and kernel
-## model names to evaluate Hess*dmodel product
-##hess_model_names="random_alpha random_beta"
-##hess_model_names="random"
-#hess_model_names="perturb_alpha_0.01_grid_5.0deg_200km perturb_beta_0.01_grid_5.0deg_200km"
-## smooth the hessian*random 
-#hess_smooth_1sigma_h=80 # horizontal smoothing 1 sigma (km)
-#hess_smooth_1sigma_v=80 # vertical smoothing 1 sigma (km)
-## waterlevel for inverse hessian diagonals 
-#hess_inverse_nbin=5000
-#hess_inverse_threshold_percentage=0.90
 
 #====== model parameterization
 
@@ -195,17 +182,18 @@ sem_kernel_smooth_iso_FWHM_km=10 # full width at half maximum (FWHM) of Gaussian
 # conjugate gradient
 #sem_cg_type=HS
 
-# dmodel scale factor
-#sem_dmodel_scale=0.1
+# maximum amplitude of dmodel
+sem_dmodel_scale=0.1
 
 #====== line search
 
 # To account for imbalanced sensitvity between different parameter classes,
-# we can seperate the update direction(dm) into two parts(dm1, dm2) corresponding to vp, vs for example:
+# we can seperate the search direction(dm) into two parts(dm1, dm2), for example dvp and dvs:
+# and we define the new search direction is linear combination of dm1 and dm2:
 #   1) dm = a1 * dm1 + a2 * dm2
-# From forward modelling of perturbed models by dm1 and dm2, we can write:
-#   2) du1 = u(m+dm1) - u(m) ~ dm1 * grad(u)
-#   3) du2 = u(m+dm2) - u(m) ~ dm2 * grad(u)
+# From forward modelling of models perturbed by dm1 and dm2, we can write:
+#   2) du1 := u(m+dm1) - u(m) ~ dm1 * grad(u)
+#   3) du2 := u(m+dm2) - u(m) ~ dm2 * grad(u)
 # Synthetics from any linear combination of dm1 and dm2 can be approximated by:
 #   4) u(m+dm) ~ u(m) + dm * grad(u) = u(m) + a1*dm1 * grad(u) + a2*dm2 * grad(u) ~ u(m) + a1*du1 + a2*du2
 # To maximize the objective function(Chi) we grid search through a1 and a2: 
@@ -266,6 +254,20 @@ sem_search_step_sizes=("0,4,20")
 #force_max_dlnv_allowed=1
 ##fix density model
 #fix_rho=1
+
+
+##------ hess and kernel
+## model names to evaluate Hess*dmodel product
+##hess_model_names="random_alpha random_beta"
+##hess_model_names="random"
+#hess_model_names="perturb_alpha_0.01_grid_5.0deg_200km perturb_beta_0.01_grid_5.0deg_200km"
+## smooth the hessian*random 
+#hess_smooth_1sigma_h=80 # horizontal smoothing 1 sigma (km)
+#hess_smooth_1sigma_v=80 # vertical smoothing 1 sigma (km)
+## waterlevel for inverse hessian diagonals 
+#hess_inverse_nbin=5000
+#hess_inverse_threshold_percentage=0.90
+
 
 #-----------------------------------------------------------------------#
 # Do not edit below                                                     #

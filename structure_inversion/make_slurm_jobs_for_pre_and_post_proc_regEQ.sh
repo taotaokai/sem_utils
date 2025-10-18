@@ -241,7 +241,7 @@ else
   # search direction by CG method: Hestenes and Stiefel (1952)
   ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_cg_maximize.py \\
     ${sem_nproc_total} \\
-    ${iter_dir}/mesh \\
+    ${iter_dir}/mesh/DATABASES_MPI \\
     ${prev_iter_dir}/dmodel \\
     ${prev_iter_dir}/kernel_precond \\
     ${iter_dir}/kernel_precond \\

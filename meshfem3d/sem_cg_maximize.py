@@ -105,6 +105,9 @@ def process(
 
     gy = mpi_comm.allreduce(gy_l, op=MPI.SUM)
     dy = mpi_comm.allreduce(dy_l, op=MPI.SUM)
+    if mpi_comm == 0:
+        # for maximization problem this value should be negative since Hessian is negative definite
+        print(f"INFO: sum(d_k * (g_k+1 - g_k) ) = {dy}") 
     cg_beta = gy / dy  # beta = sum(g_k+1 * y_k) / sum(d_k * y_k)
 
     # get maximum amplitude of curr_dmodel

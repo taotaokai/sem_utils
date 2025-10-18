@@ -205,7 +205,7 @@ sem_perturb_group_names=("dm")  # only one group
 sem_perturb_model_tag_groups=("vpv,vph,vsv,vsh,eta,rho")
 sem_perturb_dmodel_tag_groups=("dvpv_dmodel,dvph_dmodel,dvsv_dmodel,dvsh_dmodel,deta_dmodel,drho_dmodel")
 # steps along each perturbation group (min,max,ngrids) as in numpy.linspace(min,max,ngrids)
-sem_search_step_sizes=("0,4,20")
+sem_search_step_sizes=("0,3,31")
 
 # sem_perturb_group_names=("dvpv_vph" "dvsv_vsh" "deta_rho") # three groups
 # sem_perturb_model_tag_groups=("vpv,vph" "vsv,vsh" "eta,rho")

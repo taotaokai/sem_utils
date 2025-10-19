@@ -14,15 +14,16 @@
 # |   |   |   |   |   misfit/:   misfit.h5, grid_search.txt, ...
 # |   |   |   |   |   output_forward/
 # |   |   |   |   |   output_kernel/:
-# |   |   |   |   |   output_dvp,dvs/: forward simulation with perturbed models (e.g. model_dvp,dvs)
+# |   |   |   |   |   output_perturb_dvp,dvs/: forward simulation with perturbed models (e.g. model_dvp,dvs)
 # |   |   |   |   C202006211907A/
 # |   |   |   |   | ...
 # |   |   |   model_initial/: proc*_reg1_vpv,vph,...bin
-# |   |   |   kernel/: sum of event kernels (with source/receiver masks), 
-# |   |   |            and reduced to specific model of anisotropy, e.g. TISO
+# |   |   |   kernel_sum/: sum of event kernels (with source/receiver masks), 
+# |   |   |                and reduced to specific model of anisotropy, e.g. TISO
 # |   |   |   kernel_precond/: preconditioned kernel (e.g. smoothing, spatial weighting)
 # |   |   |   dmodel/: search direction based on non-linear CG, and scaled to certain amplitude 
-# |   |   |   model_dvp,dvs,.../: model perturbed by the (subspaces of) search direction
+# |   |   |   model_perturb_dvp,dvs,.../: model perturbed by the (subspaces of) search direction
+# |   |   |   line_search/
 # |   |   |   model_updated/
 #
 #====== Basic workflow:

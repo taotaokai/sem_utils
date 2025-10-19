@@ -76,6 +76,9 @@ def plot_seismogram_3comp(event_h5grp,
     event = event_h5grp._v_attrs['event']
     event_name = event.event_descriptions[0].text
 
+    evmag = event.magnitudes[0].mag
+    evmag_type = event.magnitudes[0].magnitude_type
+
     for origin in event.origins:
         if origin.resource_id == event.preferred_origin_id:
             event_origin = origin
@@ -244,7 +247,7 @@ def plot_seismogram_3comp(event_h5grp,
         #---- create figure
         # fig = plt.figure(figsize=(8.5, 11)) # US letter
         fig = plt.figure(figsize=(8.27, 11.69)) # A4
-        str_title = f'{event_name} (az=[{azmin:05.1f}, {azmax:05.1f}], freq={freq_limit}, SNR>{min_SNR})'
+        str_title = f'{event_name} {evmag_type}{evmag} (az=[{azmin:05.1f}, {azmax:05.1f}], freq={freq_limit}, SNR>{min_SNR})'
         fig.text(0.5, 0.98, str_title, size='x-large', horizontalalignment='center')
         #---- plot station/event map
         ax_height = 0.25
@@ -315,14 +318,14 @@ def plot_seismogram_3comp(event_h5grp,
             data_starttime = UTCDateTime(h5data._v_attrs['starttime'])
             data_sampling_rate = h5data._v_attrs['sampling_rate']
             data_npts = h5data._v_attrs['npts']
-            data_orientation = h5data._v_attrs['component']
+            data_orientation = h5data._v_attrs['channels']
             data_endtime = data_starttime + (data_npts-1) / data_sampling_rate
 
             ind_zcomp = []
             ind_hcomp = []
             for i in range(len(data_orientation)):
                 comp = data_orientation[i]
-                if comp['code'] == b'Z':
+                if comp['name'].decode()[-1] == 'Z':
                     ind_zcomp.append(i)
                 else:
                     ind_hcomp.append(i)
@@ -467,19 +470,20 @@ if __name__ == '__main__':
       print(f'[Error] not hdf5 file {data_file_h5}\n')
       sys.exit()
 
-    for evt_g in h5f.root:
-        event = evt_g._v_attrs['event']
-        event_name = event.event_descriptions[0].text
-        out_dir = os.path.join(figure_dir, event_name)
-        os.makedirs(out_dir, exist_ok=True)
-        print(f'plotting {event_name}')
-        plot_seismogram_3comp(evt_g, savefig=True, out_dir=out_dir,
-                              data_tag='DATA_DISP',
-                              max_bin_az=10, max_bin_sta=20,
-                              reduce_rayp=10,
-                              time_limit=[-100, 250],
-                              min_SNR=10, noise_twin=[-450,-100],
-                              # min_SNR=-10, noise_twin=[-10,0],
-                              freq_limit=[0.02, 0.1],
-                              dist_limit=[0, 40],
-                              )
+    event = h5f.root._v_attrs['event']
+    event_name = event.event_descriptions[0].text
+
+    # out_dir = os.path.join(figure_dir, event_name)
+    # os.makedirs(out_dir, exist_ok=True)
+
+    print(f'plotting {event_name}')
+    plot_seismogram_3comp(h5f.root, savefig=True, out_dir=figure_dir,
+                          data_tag='DATA_VEL',
+                          max_bin_az=10, max_bin_sta=20,
+                          reduce_rayp=12,
+                          time_limit=[-50, 550],
+                          min_SNR=5, noise_twin=[-280,-50],
+                          # min_SNR=-10, noise_twin=[-10,0],
+                          freq_limit=[0.02, 0.1],
+                          dist_limit=[0, 40],
+                          )

@@ -23,8 +23,6 @@ source $control_file
 
 # create directories
 mkdir -p $SEM_iter_dir
-mkdir -p $SEM_iter_dir/model_initial
-mkdir -p $SEM_iter_dir/model_updated
 
 # check starting model exists
 if [ ! -d "${SEM_starting_model_dir}" ]
@@ -33,13 +31,18 @@ then
   exit -1
 fi
 
-# link initial model files
+# link initial model dir
 initial_model_dir=${SEM_prev_iter_dir}/model_updated
 if [ "$SEM_iter_num" -eq 0 ]
 then
   initial_model_dir=${SEM_starting_model_dir}
 fi
-ln -sf -t $SEM_iter_dir/model_initial ${initial_model_dir}/*.bin 
+if [ -e $SEM_iter_dir/model_initial ] 
+then
+  rm -rf $SEM_iter_dir/model_initial
+fi
+ln -s $initial_model_dir $SEM_iter_dir/model_initial
+# ln -sf -t $SEM_iter_dir/model_initial ${initial_model_dir}/*.bin 
 
 # check Par_file exists
 if [ ! -f "${SEM_config_dir}/DATA/Par_file" ]

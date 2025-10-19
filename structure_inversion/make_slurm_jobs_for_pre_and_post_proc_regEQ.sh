@@ -391,6 +391,12 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/structure_inversion/grid_sear
 
 echo #====== apply model update
 
+if [ -d "$SEM_iter_dir/model_updated" ]
+then
+  rm -rf $SEM_iter_dir/model_updated
+fi
+mkdir -p $SEM_iter_dir/model_updated
+
 perturb_group_names=(${SEM_perturb_group_names[@]})
 perturb_model_tag_groups=(${SEM_perturb_model_tag_groups[@]})
 perturb_dmodel_tag_groups=(${SEM_perturb_dmodel_tag_groups[@]})

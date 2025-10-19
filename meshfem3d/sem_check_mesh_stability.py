@@ -5,6 +5,7 @@ import sys
 
 import numpy as np
 from scipy.io import FortranFile
+import numba
 
 from meshfem3d_utils import sem_mesh_read, R_EARTH_KM
 
@@ -14,6 +15,23 @@ mesh_dir = str(sys.argv[2])  # <mesh_dir>/proc******_external_mesh.bin
 model_dir = str(sys.argv[3])
 model_name = str(sys.argv[4])
 dt = float(sys.argv[5])
+
+
+@numba.jit(nopython=True)
+def _calc_CFL(ibool, xyz_glob, vel, nspec, dt):
+    CFL = np.zeros(nspec)
+    for ispec in range(nspec):
+        iglob = ibool[ispec, :, :, :].reshape(-1)
+        xyz_gll = xyz_glob[iglob, :]
+        dist2 = (
+            np.sum((xyz_gll[:, None, :] - xyz_gll[None, :, :]) ** 2, axis=0) ** 0.5
+            * R_EARTH_KM
+        )
+        np.fill_diagonal(dist2, np.nan)
+        min_dist_gll = np.nanmin(dist2)
+        CFL[ispec] = dt * np.max(vel[ispec, :, :, :]) / min_dist_gll
+    return CFL
+
 
 for iproc in range(nproc):
 
@@ -28,18 +46,20 @@ for iproc in range(nproc):
     with FortranFile(model_file, "r") as f:
         vel = np.reshape(f.read_reals(dtype="f4"), gll_dims)
 
-    # --- determine element size (approximately)
-    CFL = np.zeros(nspec)
-    for ispec in range(nspec):
-        iglob = ibool[ispec, :, :, :].reshape(-1)
-        xyz_gll = xyz_glob[iglob, :]
-        dist2 = (
-            np.sum((xyz_gll[:, None, :] - xyz_gll[None, :, :]) ** 2, axis=0) ** 0.5
-            * R_EARTH_KM
-        )
-        np.fill_diagonal(dist2, np.nan)
-        min_dist_gll = np.nanmin(dist2)
-        CFL[ispec] = dt * np.max(vel[ispec, :, :, :]) / min_dist_gll
+    CFL = _calc_CFL(ibool, xyz_glob, vel, nspec, dt)
+
+    # # --- determine element size (approximately)
+    # CFL = np.zeros(nspec)
+    # for ispec in range(nspec):
+    #     iglob = ibool[ispec, :, :, :].reshape(-1)
+    #     xyz_gll = xyz_glob[iglob, :]
+    #     dist2 = (
+    #         np.sum((xyz_gll[:, None, :] - xyz_gll[None, :, :]) ** 2, axis=0) ** 0.5
+    #         * R_EARTH_KM
+    #     )
+    #     np.fill_diagonal(dist2, np.nan)
+    #     min_dist_gll = np.nanmin(dist2)
+    #     CFL[ispec] = dt * np.max(vel[ispec, :, :, :]) / min_dist_gll
 
     print(
         "[proc%03d] min/max vel= %f %f, min/max CFL= %f %f"

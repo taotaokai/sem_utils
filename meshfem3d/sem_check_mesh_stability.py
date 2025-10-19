@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """create horizontal slice of SEM model at a given depth"""
 import sys
+import time
 
 import numpy as np
 from scipy.io import FortranFile
@@ -21,14 +22,25 @@ dt = float(sys.argv[5])
 def _calc_CFL(ibool, xyz_glob, vel, nspec, dt):
     CFL = np.zeros(nspec)
     for ispec in range(nspec):
-        iglob = ibool[ispec, :, :, :].reshape(-1)
+        iglob = ibool[ispec, :, :, :].flatten()
         xyz_gll = xyz_glob[iglob, :]
+
+        # min_dist_gll = np.inf
+        # n = iglob.size
+        # for i in range(n):
+        #     for j in range(i + 1, n):
+        #         dist = np.sum((xyz_gll[i, :] - xyz_gll[j, :])**2)
+        #         if dist < min_dist_gll:
+        #             min_dist_gll = dist
+        # min_dist_gll = min_dist_gll**0.5 * R_EARTH_KM
+
         dist2 = (
-            np.sum((xyz_gll[:, None, :] - xyz_gll[None, :, :]) ** 2, axis=0) ** 0.5
+            np.sum((xyz_gll[:, None, :] - xyz_gll[None, :, :]) ** 2, axis=2) ** 0.5
             * R_EARTH_KM
         )
-        np.fill_diagonal(dist2, np.nan)
-        min_dist_gll = np.nanmin(dist2)
+        np.fill_diagonal(dist2, np.inf)
+        min_dist_gll = np.min(dist2)
+        
         CFL[ispec] = dt * np.max(vel[ispec, :, :, :]) / min_dist_gll
     return CFL
 
@@ -46,20 +58,10 @@ for iproc in range(nproc):
     with FortranFile(model_file, "r") as f:
         vel = np.reshape(f.read_reals(dtype="f4"), gll_dims)
 
+    # tic = time.time()
     CFL = _calc_CFL(ibool, xyz_glob, vel, nspec, dt)
-
-    # # --- determine element size (approximately)
-    # CFL = np.zeros(nspec)
-    # for ispec in range(nspec):
-    #     iglob = ibool[ispec, :, :, :].reshape(-1)
-    #     xyz_gll = xyz_glob[iglob, :]
-    #     dist2 = (
-    #         np.sum((xyz_gll[:, None, :] - xyz_gll[None, :, :]) ** 2, axis=0) ** 0.5
-    #         * R_EARTH_KM
-    #     )
-    #     np.fill_diagonal(dist2, np.nan)
-    #     min_dist_gll = np.nanmin(dist2)
-    #     CFL[ispec] = dt * np.max(vel[ispec, :, :, :]) / min_dist_gll
+    # toc = time.time()
+    # print("iproc=%d, time=%f" % (iproc, toc-tic))
 
     print(
         "[proc%03d] min/max vel= %f %f, min/max CFL= %f %f"

@@ -26,7 +26,7 @@ for iproc in range(nproc):
 
     model_file = "%s/proc%06d_reg1_%s.bin" % (model_dir, iproc, model_name)
     with FortranFile(model_file, "r") as f:
-        vel = np.reshape(f.read_ints(dtype="f4"), gll_dims, order="F")
+        vel = np.reshape(f.read_reals(dtype="f4"), gll_dims)
 
     # --- determine element size (approximately)
     CFL = np.zeros(nspec)
@@ -41,4 +41,7 @@ for iproc in range(nproc):
         min_dist_gll = np.nanmin(dist2)
         CFL[ispec] = dt * np.max(vel[ispec, :, :, :]) / min_dist_gll
 
-    print(f"[{iproc:03d}] {min(vel)=} {max(vel)=} {min(CFL)=} {max(CFL)=}")
+    print(
+        "[proc%03d] min/max vel= %f %f, min/max CFL= %f %f"
+        % (iproc, np.min(vel), np.max(vel), np.min(CFL), np.max(CFL))
+    )

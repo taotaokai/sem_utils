@@ -10,32 +10,27 @@ source $control_file
 event_list=$(readlink -f $event_list)
 
 #====== define directories
-mesh_dir=$iter_dir/mesh # DATABASES_MPI/proc*_reg1_solver_data.bin
+#mesh_dir=$SEM_iter_dir/mesh # DATABASES_MPI/proc*_reg1_solver_data.bin
 #hess_dir=$iter_dir/hess_sum
 #mesh_perturb_dir=$iter_dir/mesh_perturb # DATABASES_MPI/proc*_reg1_solver_data.bin
 #model_dir=$iter_dir/model # proc*_reg1_vph,vpv,vsv,vsh,eta,rho,dlnvs,kappa,eta,gamma.bin
 #model_random_dir=$iter_dir/model_random # for model with small random perturbations
 #kernel_dir=$iter_dir/kernel # DATABASES_MPI/proc*_reg1_solver_data.bin
-slurm_dir=$iter_dir/slurm
+slurm_dir=$SEM_iter_dir/slurm
 mkdir -p $slurm_dir
 #utils_dir=$sem_utils_dir/utils/misfit_v0 # sem_utils/utils/misfit_v0
 
-#====== define variables
+#====== define job names
 mesh_job=$slurm_dir/mesh.job
 
 kernel_mask_sum_job=$slurm_dir/kernel_mask_sum.job
 kernel_precond_job=$slurm_dir/kernel_precond.job
 
-# kernel_convert_mask_job=$slurm_dir/kernel_convert_mask.job
-# kernel_sum_smooth_precond_job=$slurm_dir/kernel_sum_smooth_precond.job
-
-# kernel_sum_job=$slurm_dir/kernel_sum.job
-
 dmodel_job=$slurm_dir/dmodel.job
 model_perturb_job=$slurm_dir/model_perturb.job
 mesh_perturb_job=$slurm_dir/mesh_perturb.job
 model_update_job=$slurm_dir/model_update.job
-#
+
 #model_random_job=$slurm_dir/model_random.job
 #mesh_hess_job=$slurm_dir/mesh_hess.job
 #hess_sum_job=$slurm_dir/hess_sum.job
@@ -45,14 +40,14 @@ cat <<EOF > $mesh_job
 #!/bin/bash
 #SBATCH -J mesh
 #SBATCH -o ${mesh_job}.o%j
-#SBATCH ${slurm_args_mesh}
+#SBATCH ${SLURM_args_mesh}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-mesh_dir=${iter_dir}/mesh
-model_dir=${iter_dir}/model_initial
+mesh_dir=${SEM_iter_dir}/mesh
+model_dir=${SEM_iter_dir}/model_initial
 
 if [ ! -d "\$model_dir" ]
 then
@@ -68,19 +63,20 @@ mkdir DATA DATABASES_MPI OUTPUT_FILES
 
 cd \$mesh_dir/DATA
 chmod u+w *
-ln -sf $sem_build_dir/DATA/* \$mesh_dir/DATA/
+ln -sf $SEM_build_dir/DATA/* \$mesh_dir/DATA/
 rm Par_file GLL CMTSOLUTION
 ln -sf \$model_dir GLL
-cp -L $sem_config_dir/DATA/Par_file .
-cp -L $sem_config_dir/DATA/CMTSOLUTION .
+cp -L $SEM_config_dir/DATA/Par_file .
+cp -L $SEM_config_dir/DATA/CMTSOLUTION .
 cp -L Par_file \$mesh_dir/OUTPUT_FILES/
 
 sed -i '/^MODEL/s/=[[:space:]]*[^[:space:]_#]*/= GLL/' \$mesh_dir/DATA/Par_file
+sed -i '/^SAVE_MESH_FILES/s/=.*/= .false./' \$mesh_dir/DATA/Par_file
 #sed -i "/^USE_ECEF_CMTSOLUTION/s/=.*/= .false./" \$mesh_dir/DATA/Par_file
 #sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" \$mesh_dir/DATA/Par_file
 
 cd \$mesh_dir
-${slurm_mpiexec} $sem_build_dir/bin/xmeshfem3D
+${SLURM_mpiexec} $SEM_build_dir/bin/xmeshfem3D
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
@@ -93,7 +89,7 @@ cat <<EOF > $kernel_mask_sum_job
 #!/bin/bash
 #SBATCH -J kernel_mask_sum
 #SBATCH -o ${kernel_mask_sum_job}.o%j
-#SBATCH ${slurm_args_kernel_mask_sum}
+#SBATCH ${SLURM_args_kernel_mask_sum}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
@@ -101,27 +97,27 @@ echo
 
 echo "====== create source and receiver masks"
 
-mesh_dir=${iter_dir}/mesh
+mesh_dir=${SEM_iter_dir}/mesh
 
 for event_id in \$(awk 'NF&&\$1!~/#/{print \$1}' $event_list)
 do
   echo "------ \$event_id"
   
-  event_dir=${iter_dir}/events/\$event_id
+  event_dir=${SEM_iter_dir}/events/\$event_id
 
   out_dir=\${event_dir}/output_kernel/kernel
   mkdir -p \$out_dir
 
-  awk 'NR==6{print \$0, a}' a="$sem_kernel_mask_source_sigma_km" \\
+  awk 'NR==6{print \$0, a}' a="$SEM_kernel_mask_source_sigma_km" \\
     \${event_dir}/output_kernel/source.vtk \\
     > \${out_dir}/mask.lst
 
-  awk 'NR>=6&&NF==3{print \$0, a}' a=$sem_kernel_mask_receiver_sigma_km \\
+  awk 'NR>=6&&NF==3{print \$0, a}' a=$SEM_kernel_mask_receiver_sigma_km \\
     \${event_dir}/output_kernel/receiver.vtk \\
     >> \${out_dir}/mask.lst
 
-  ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_make_gaussian_mask.py \\
-    ${sem_nproc_total} \\
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_make_gaussian_mask.py \\
+    ${SEM_nproc_total} \\
     \${mesh_dir}/DATABASES_MPI \\
     \${out_dir}/mask.lst \\
     \${out_dir}
@@ -129,22 +125,22 @@ done
 
 echo "====== sum up all event kernels with mask"
 
-kernel_dir=${iter_dir}/kernel_sum
+kernel_dir=${SEM_iter_dir}/kernel_sum
 mkdir -p \$kernel_dir
 
 awk 'NF&&\$1!~/#/{printf "%s/events/%s/output_kernel/kernel\\n", a,\$1}' \\
-  a="$iter_dir" $event_list > \\
+  a="$SEM_iter_dir" $event_list > \\
   \${kernel_dir}/event_kernel_dir.list
 
-${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_sum.py \\
-  ${sem_nproc_total} \\
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_sum.py \\
+  ${SEM_nproc_total} \\
   \${kernel_dir}/event_kernel_dir.list \\
   cijkl_kernel \\
   \${kernel_dir} \\
   --mask_tag=mask --ncomp=21
 
-${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_sum.py \\
-  ${sem_nproc_total} \\
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_sum.py \\
+  ${SEM_nproc_total} \\
   \${kernel_dir}/event_kernel_dir.list \\
   rho_kernel \\
   \${kernel_dir} \\
@@ -152,11 +148,11 @@ ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_sum.py \\
 
 echo "====== convert cijkl,rho_kernel to tiso kernel"
 
-kernel_dir=${iter_dir}/kernel_sum
+kernel_dir=${SEM_iter_dir}/kernel_sum
 
-${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_tiso_kernel_from_cijkl_rho.py \\
-  ${sem_nproc_total} \\
-  ${initial_model_dir} \\
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_tiso_kernel_from_cijkl_rho.py \\
+  ${SEM_nproc_total} \\
+  ${SEM_iter_dir}/model_initial \\
   \${kernel_dir} \\
   \${kernel_dir}
 
@@ -172,32 +168,32 @@ cat <<EOF > $kernel_precond_job
 #!/bin/bash
 #SBATCH -J kernel_precond
 #SBATCH -o ${kernel_precond_job}.o%A_%a
-#SBATCH --array 0-$(( ${#sem_kernel_tags[@]} - 1 ))
-#SBATCH ${slurm_args_kernel_precond}
+#SBATCH --array 0-$(( ${#SEM_kernel_tags[@]} - 1 ))
+#SBATCH ${SLURM_args_kernel_precond}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-kernel_tags=(${sem_kernel_tags[@]})
+kernel_tags=(${SEM_kernel_tags[@]})
 
 kernel_tag=\${kernel_tags[\${SLURM_ARRAY_TASK_ID}]}
 
 echo "====== smooth kernel"
 
-mesh_dir=${iter_dir}/mesh
-kernel_dir=${iter_dir}/kernel_sum
+mesh_dir=${SEM_iter_dir}/mesh
+kernel_dir=${SEM_iter_dir}/kernel_sum
 
-out_dir=${iter_dir}/kernel_precond
+out_dir=${SEM_iter_dir}/kernel_precond
 mkdir -p \$out_dir
 
-${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_smooth_diffusion_iso.py \\
-  ${sem_nproc_total} \\
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_iso.py \\
+  ${SEM_nproc_total} \\
   \${mesh_dir}/DATABASES_MPI \\
   \${kernel_dir} \\
   \${kernel_tag} \\
-  ${sem_kernel_smooth_iso_FWHM_km} \\
-  ${sem_kernel_smooth_diffusion_niter} \\
+  ${SEM_kernel_smooth_iso_FWHM_km} \\
+  ${SEM_kernel_smooth_diffusion_niter} \\
   \${out_dir} \\
   --max_tolerance=1e-5
 
@@ -213,42 +209,42 @@ cat <<EOF > $dmodel_job
 #!/bin/bash
 #SBATCH -J dmodel
 #SBATCH -o ${dmodel_job}.o%j
-#SBATCH ${slurm_args_dmodel}
+#SBATCH ${SLURM_args_dmodel}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-out_dir=${iter_dir}/dmodel
+out_dir=${SEM_iter_dir}/dmodel
 mkdir -p \${out_dir}
 
 # get search direction
 
-if [ "$iter_num" -eq 0 ]
+if [ "$SEM_iter_num" -eq 0 ]
 then
 
   # first iteration use gradient as search direction
-  ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_scale.py \\
-    ${sem_nproc_total} \\
-    ${iter_dir}/kernel_precond \\
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_scale.py \\
+    ${SEM_nproc_total} \\
+    ${SEM_iter_dir}/kernel_precond \\
     \${out_dir} \\
-    --in_tags ${sem_kernel_tags[@]} \\
-    --out_tags ${sem_dmodel_tags[@]} \\
-    --scaled_amplitude=${sem_dmodel_scale}
+    --in_tags ${SEM_kernel_tags[@]} \\
+    --out_tags ${SEM_dmodel_tags[@]} \\
+    --scaled_amplitude=${SEM_dmodel_scale}
 
 else
 
   # search direction by CG method: Hestenes and Stiefel (1952)
-  ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_cg_maximize.py \\
-    ${sem_nproc_total} \\
-    ${iter_dir}/mesh/DATABASES_MPI \\
-    ${prev_iter_dir}/dmodel \\
-    ${prev_iter_dir}/kernel_precond \\
-    ${iter_dir}/kernel_precond \\
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_cg_maximize.py \\
+    ${SEM_nproc_total} \\
+    ${SEM_iter_dir}/mesh/DATABASES_MPI \\
+    ${SEM_prev_iter_dir}/dmodel \\
+    ${SEM_prev_iter_dir}/kernel_precond \\
+    ${SEM_iter_dir}/kernel_precond \\
     \${out_dir} \\
-    --kernel_tags ${sem_kernel_tags[@]} \\
-    --dmodel_tags ${sem_dmodel_tags[@]} \\
-    --scaled_amplitude=${sem_dmodel_scale}
+    --kernel_tags ${SEM_kernel_tags[@]} \\
+    --dmodel_tags ${SEM_dmodel_tags[@]} \\
+    --scaled_amplitude=${SEM_dmodel_scale}
 
 fi
 
@@ -264,33 +260,33 @@ cat <<EOF > $model_perturb_job
 #!/bin/bash
 #SBATCH -J model_perturb
 #SBATCH -o ${model_perturb_job}.o%j
-#SBATCH ${slurm_args_model_perturb}
+#SBATCH ${SLURM_args_model_perturb}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-sem_perturb_group_names=(${sem_perturb_group_names[@]})
-sem_perturb_model_tag_groups=(${sem_perturb_model_tag_groups[@]})
-sem_perturb_dmodel_tag_groups=(${sem_perturb_dmodel_tag_groups[@]})
+perturb_group_names=(${SEM_perturb_group_names[@]})
+perturb_model_tag_groups=(${SEM_perturb_model_tag_groups[@]})
+perturb_dmodel_tag_groups=(${SEM_perturb_dmodel_tag_groups[@]})
 
-ngroup=\${#sem_perturb_group_names[@]}
+ngroup=\${#perturb_group_names[@]}
 
 for ((i=0; i<\$ngroup; i++))
 do
 
-  dm_tag=\${sem_perturb_group_names[\$i]} 
-  out_dir=$iter_dir/model_perturb_\${dm_tag}
+  dm_tag=\${perturb_group_names[\$i]} 
+  out_dir=$SEM_iter_dir/model_perturb_\${dm_tag}
   [ -e \$out_dir ] && rm -rf \$out_dir
   mkdir -p \$out_dir
 
-  ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_perturb.py \\
-    ${sem_nproc_total} \\
-    $initial_model_dir \\
-    $iter_dir/dmodel \\
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb.py \\
+    ${SEM_nproc_total} \\
+    $SEM_iter_dir/model_initial \\
+    $SEM_iter_dir/dmodel \\
     \$out_dir \\
-    --model_tags \${sem_perturb_model_tag_groups[\$i]//,/ } \\
-    --dmodel_tags \${sem_perturb_dmodel_tag_groups[\$i]//,/ } \\
+    --model_tags \${perturb_model_tag_groups[\$i]//,/ } \\
+    --dmodel_tags \${perturb_dmodel_tag_groups[\$i]//,/ } \\
     --scale 1.0 \\
     --method "exponential"
 
@@ -308,31 +304,31 @@ cat <<EOF > $mesh_perturb_job
 #!/bin/bash
 #SBATCH -J mesh_perturb
 #SBATCH -o ${mesh_perturb_job}.o%j
-#SBATCH ${slurm_args_mesh_perturb}
+#SBATCH ${SLURM_args_mesh_perturb}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-sem_perturb_group_names=(${sem_perturb_group_names[@]})
-sem_perturb_model_tag_groups=(${sem_perturb_model_tag_groups[@]})
-sem_perturb_dmodel_tag_groups=(${sem_perturb_dmodel_tag_groups[@]})
+perturb_group_names=(${SEM_perturb_group_names[@]})
+perturb_model_tag_groups=(${SEM_perturb_model_tag_groups[@]})
+perturb_dmodel_tag_groups=(${SEM_perturb_dmodel_tag_groups[@]})
 
-ngroup=\${#sem_perturb_group_names[@]}
+ngroup=\${#perturb_group_names[@]}
 
 for ((i=0; i<\$ngroup; i++))
 do
 
-  dm_tag=\${sem_perturb_group_names[\$i]} 
+  dm_tag=\${perturb_group_names[\$i]} 
 
-  model_dir=${iter_dir}/model_perturb_\${dm_tag}
+  model_dir=${SEM_iter_dir}/model_perturb_\${dm_tag}
   if [ ! -d "\$model_dir" ]
   then
     echo "[ERROR] \$model_dir does not exist!"
     exit -1
   fi
 
-  mesh_dir=${iter_dir}/mesh_perturb_\${dm_tag}
+  mesh_dir=${SEM_iter_dir}/mesh_perturb_\${dm_tag}
   [ -e \$mesh_dir ] && rm -rf \$mesh_dir
   mkdir -p \$mesh_dir
 
@@ -341,23 +337,22 @@ do
 
   cd \$mesh_dir/DATA
   chmod u+w *
-  ln -sf $sem_build_dir/DATA/* \$mesh_dir/DATA/
+  ln -sf $SEM_build_dir/DATA/* \$mesh_dir/DATA/
   rm Par_file GLL CMTSOLUTION
 
   mkdir GLL
-  ln -s -t GLL ${iter_dir}/model_initial/*.bin # first link initial model files
+  ln -s -t GLL ${SEM_iter_dir}/model_initial/*.bin # first link initial model files
   ln -sf -t GLL \$model_dir/*.bin  # -f force override with links to new model files 
-  # ln -sf \$model_dir GLL
 
-  cp -L $sem_config_dir/DATA/Par_file .
-  cp -L $sem_config_dir/DATA/CMTSOLUTION .
+  cp -L $SEM_config_dir/DATA/Par_file .
+  cp -L $SEM_config_dir/DATA/CMTSOLUTION .
   cp -L Par_file \$mesh_dir/OUTPUT_FILES/
 
   sed -i '/^MODEL/s/=[[:space:]]*[^[:space:]_#]*/= GLL/' \$mesh_dir/DATA/Par_file
   sed -i '/^SAVE_MESH_FILES/s/=.*/= .false./' \$mesh_dir/DATA/Par_file
 
   cd \$mesh_dir
-  ${slurm_mpiexec} $sem_build_dir/bin/xmeshfem3D
+  ${SLURM_mpiexec} $SEM_build_dir/bin/xmeshfem3D
 
 done
 
@@ -373,7 +368,7 @@ cat <<EOF > $model_update_job
 #!/bin/bash
 #SBATCH -J model_update
 #SBATCH -o ${model_update_job}.o%j
-#SBATCH ${slurm_args_model_update}
+#SBATCH ${SLURM_args_model_update}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
@@ -381,14 +376,14 @@ echo
 
 echo #====== collect grid search results from all events
 
-out_dir=${iter_dir}/line_search
+out_dir=${SEM_iter_dir}/line_search
 mkdir -p \${out_dir}
 
 awk 'NF&&\$1!~/#/{printf "%s/events/%s/misfit/misfit.h5\\n", a,\$1}' \\
-  a="$iter_dir" $event_list > \\
+  a="$SEM_iter_dir" $event_list > \\
   \${out_dir}/misfit_h5file.list
 
-${slurm_mpiexec} ${python_exec} $sem_utils_dir/structure_inversion/grid_search.py \\
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/structure_inversion/grid_search.py \\
   \${out_dir}/misfit_h5file.list \\
   --out_nc \${out_dir}/grid_search.nc \\
   --out_figure \${out_dir}/grid_search.pdf \\
@@ -396,28 +391,28 @@ ${slurm_mpiexec} ${python_exec} $sem_utils_dir/structure_inversion/grid_search.p
 
 echo #====== apply model update
 
-sem_perturb_group_names=(${sem_perturb_group_names[@]})
-sem_perturb_model_tag_groups=(${sem_perturb_model_tag_groups[@]})
-sem_perturb_dmodel_tag_groups=(${sem_perturb_dmodel_tag_groups[@]})
+perturb_group_names=(${SEM_perturb_group_names[@]})
+perturb_model_tag_groups=(${SEM_perturb_model_tag_groups[@]})
+perturb_dmodel_tag_groups=(${SEM_perturb_dmodel_tag_groups[@]})
 
-ngroup=\${#sem_perturb_group_names[@]}
+ngroup=\${#perturb_group_names[@]}
 
 for ((i=0; i<\$ngroup; i++))
 do
 
-  dm_tag=\${sem_perturb_group_names[\$i]} 
+  dm_tag=\${perturb_group_names[\$i]} 
 
   opt_dm_scale=\$(grep \$dm_tag \${out_dir}/grid_search.txt | awk '{print \$NF}')
 
   echo "# apply model update for [\${dm_tag}] with step length [\${opt_dm_scale}]"
 
-  ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_perturb.py \\
-    ${sem_nproc_total} \\
-    $initial_model_dir \\
-    $iter_dir/dmodel \\
-    $updated_model_dir \\
-    --model_tags \${sem_perturb_model_tag_groups[\$i]//,/ } \\
-    --dmodel_tags \${sem_perturb_dmodel_tag_groups[\$i]//,/ } \\
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb.py \\
+    ${SEM_nproc_total} \\
+    $SEM_iter_dir/model_initial \\
+    $SEM_iter_dir/dmodel \\
+    $SEM_iter_dir/model_updated \\
+    --model_tags \${perturb_model_tag_groups[\$i]//,/ } \\
+    --dmodel_tags \${perturb_dmodel_tag_groups[\$i]//,/ } \\
     --scale \$opt_dm_scale \\
     --method "exponential"
 

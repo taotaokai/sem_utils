@@ -10,9 +10,10 @@ event_id=${2:?[arg]need event_id}
 source $control_file
 
 #====== define variables
+
 # directories
-event_dir=$iter_dir/events/$event_id
-mesh_dir=$iter_dir/mesh
+event_dir=$SEM_iter_dir/events/$event_id
+mesh_dir=$SEM_iter_dir/mesh
 misfit_dir=$event_dir/misfit
 figure_dir=$misfit_dir/figure
 slurm_dir=$event_dir/slurm
@@ -38,13 +39,6 @@ search_job=$slurm_dir/search.job
 #mkdir -p $misfit_dir
 db_file=$misfit_dir/misfit.h5
 
-# SEM Par_file
-sem_par_file=${event_dir}/DATA/Par_file
-if [ ! -f "$sem_par_file" ]
-then
-  echo "[ERROR] $sem_par_file does NOT exist!"
-  exit -1
-fi
 # station file
 station_file=$event_dir/DATA/STATIONS
 if [ ! -f "$station_file" ]
@@ -52,6 +46,7 @@ then
   echo "[ERROR] $station_file does NOT exist!"
   exit -1
 fi
+
 # cmt file
 cmt_file=$event_dir/DATA/CMTSOLUTION
 if [ ! -f "$cmt_file" ]
@@ -59,15 +54,23 @@ then
   echo "[ERROR] $cmt_file does NOT exist!"
   exit -1
 fi
+
 # misfit par file
-misfit_par=$event_dir/DATA/misfit.yaml
-if [ ! -f "$misfit_par" ]
+misfit_par_file=$event_dir/DATA/misfit.yaml
+if [ ! -f "$misfit_par_file" ]
 then
-  echo "[ERROR] $misfit_par does NOT exist!"
+  echo "[ERROR] $misfit_par_file does NOT exist!"
   exit -1
 fi
 
-# set USTER_T0 in Par_file to at least 3 * tau
+# SEM Par_file
+sem_par_file=${event_dir}/DATA/Par_file
+if [ ! -f "$sem_par_file" ]
+then
+  echo "[ERROR] $sem_par_file does NOT exist!"
+  exit -1
+fi
+# set USER_T0 in Par_file to at least 3 * tau
 tau=$(grep "tau" ${cmt_file} | awk -F: '{printf "%f", $2}')
 min_user_t0=$(echo "3 * $tau + 1" | bc -l | awk '{printf "%d", $1}')
 sed -i "/^T0/s/=.*/= $min_user_t0/" ${sem_par_file}
@@ -77,10 +80,10 @@ cat <<EOF > $forward_job
 #!/bin/bash
 #SBATCH -J ${event_id}.forward
 #SBATCH -o $forward_job.o%j
-#SBATCH ${slurm_args_forward}
+#SBATCH ${SLURM_args_forward}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 out_dir=output_forward
@@ -109,7 +112,7 @@ cp -L DATA/Par_file OUTPUT_FILES
 cp -L DATA/STATIONS OUTPUT_FILES
 cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
-${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
+${SLURM_mpiexec} $SEM_build_dir/bin/xspecfem3D
 
 mkdir $event_dir/\$out_dir/sac
 mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
@@ -120,7 +123,7 @@ mv $event_dir/DATABASES_MPI $event_dir/forward_saved_frames
 chmod a-w -R $event_dir/forward_saved_frames
 
 echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 EOF
@@ -130,10 +133,10 @@ cat <<EOF > $misfit_job
 #!/bin/bash
 #SBATCH -J ${event_id}.misfit
 #SBATCH -o ${misfit_job}.o%j
-#SBATCH ${slurm_args_misfit}
+#SBATCH ${SLURM_args_misfit}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 cd $event_dir
@@ -146,13 +149,13 @@ chmod u+w -R $event_dir/SEM
 rm -rf $event_dir/SEM
 mkdir -p $event_dir/SEM
 
-$python_exec $sem_utils_dir/misfit/measure_adj.py \\
+$SEM_python_exec $SEM_utils_dir/misfit/measure_adj.py \\
   $db_file \\
-  $misfit_par \\
-  $event_dir/DATA/Par_file \\
+  $misfit_par_file \\
+  $sem_par_file \\
   $cmt_file \\
-  $data_dir/$event_id/channel.txt \\
-  $data_dir/$event_id/data.h5 \\
+  $SEM_data_dir/$event_id/channel.txt \\
+  $SEM_data_dir/$event_id/data.h5 \\
   $event_dir/output_forward/sac \\
   $event_dir/SEM \\
   --nproc=\${SLURM_NTASKS} \\
@@ -172,7 +175,7 @@ grep -f $event_dir/SEM/grep_pattern $event_dir/DATA/STATIONS \
   > $event_dir/SEM/STATIONS_ADJOINT
 
 echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 EOF
@@ -182,10 +185,10 @@ cat <<EOF > $kernel_job
 #!/bin/bash
 #SBATCH -J ${event_id}.kernel
 #SBATCH -o $kernel_job.o%j
-#SBATCH ${slurm_args_kernel}
+#SBATCH ${SLURM_args_kernel}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Im)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 out_dir=output_kernel
@@ -218,17 +221,18 @@ cp -L DATA/STATIONS_ADJOINT OUTPUT_FILES
 cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
 cd $event_dir
-${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
+${SLURM_mpiexec} $SEM_build_dir/bin/xspecfem3D
 
 mkdir $event_dir/\$out_dir/sac
 mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 
 mkdir $event_dir/\$out_dir/kernel
-mv $event_dir/DATABASES_MPI/*reg1_cijkl_kernel.bin $event_dir/\$out_dir/kernel/
-mv $event_dir/DATABASES_MPI/*reg1_rho_kernel.bin $event_dir/\$out_dir/kernel/
+mv $event_dir/DATABASES_MPI/*_kernel.bin $event_dir/\$out_dir/kernel/
+# mv $event_dir/DATABASES_MPI/*reg1_cijkl_kernel.bin $event_dir/\$out_dir/kernel/
+# mv $event_dir/DATABASES_MPI/*reg1_rho_kernel.bin $event_dir/\$out_dir/kernel/
 
 echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 EOF
 
@@ -238,10 +242,10 @@ cat <<EOF > $plot_job
 #!/bin/bash
 #SBATCH -J ${event_id}.plot
 #SBATCH -o $plot_job.o%j
-#SBATCH ${slurm_args_plot}
+#SBATCH ${SLURM_args_plot}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 cd $event_dir
@@ -253,11 +257,11 @@ then
 fi
 mkdir -p $figure_dir
 
-$python_exec $sem_utils_dir/misfit/plot.py \\
+$SEM_python_exec $SEM_utils_dir/misfit/plot.py \\
   $db_file $figure_dir --nproc=\${SLURM_NTASKS}
 
 echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -I)]"
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 EOF
@@ -268,10 +272,10 @@ cat <<EOF > $perturb_job
 #!/bin/bash
 #SBATCH -J ${event_id}.perturb
 #SBATCH -o $perturb_job.o%j
-#SBATCH ${slurm_args_forward}
+#SBATCH ${SLURM_args_forward}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 cd $event_dir/DATA
@@ -279,10 +283,10 @@ sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
 
 #for tag in dvp dvs
-for dm_tag in ${sem_perturb_group_names[@]}
+for dm_tag in ${SEM_perturb_group_names[@]}
 do
 
-  mesh_perturb_dir=$iter_dir/mesh_perturb_\${dm_tag}
+  mesh_perturb_dir=$SEM_iter_dir/mesh_perturb_\${dm_tag}
   out_dir=output_perturb_\${dm_tag}
 
   rm -rf $event_dir/DATABASES_MPI
@@ -300,7 +304,7 @@ do
   cp -L DATA/STATIONS OUTPUT_FILES
   cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
-  ${slurm_mpiexec} $sem_build_dir/bin/xspecfem3D
+  ${SLURM_mpiexec} $SEM_build_dir/bin/xspecfem3D
 
   mkdir $event_dir/\$out_dir/sac
   mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
@@ -308,7 +312,7 @@ do
 done
 
 echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 EOF
 
@@ -318,10 +322,10 @@ cat <<EOF > $search_job
 #!/bin/bash
 #SBATCH -J ${event_id}.search
 #SBATCH -o $search_job.o%j
-#SBATCH ${slurm_args_search}
+#SBATCH ${SLURM_args_search}
 
 echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 echo
@@ -329,26 +333,26 @@ echo "Read synthetic waveforms of perturbed model [\$(date -Is)]"
 echo
 
 # for tag in dxs dmt
-for dm_tag in ${sem_perturb_group_names[@]}
+for dm_tag in ${SEM_perturb_group_names[@]}
 do
-  $python_exec $sem_utils_dir/misfit/read_perturbed_syn.py \\
+  $SEM_python_exec $SEM_utils_dir/misfit/read_perturbed_syn.py \\
     $db_file \\
     $event_dir/output_perturb_\${dm_tag}/sac \\
     \${dm_tag}
 done
 
 echo
-echo "grid search [\$(date)]"
+echo "grid search [\$(date -Is)]"
 echo
 
-$python_exec $sem_utils_dir/misfit/grid_search_structure.py \\
+$SEM_python_exec $SEM_utils_dir/misfit/grid_search_structure.py \\
   $db_file \\
-  --dm_tags ${sem_perturb_group_names[@]} \\
-  --dm_steps ${sem_search_step_sizes[@]} \\
+  --dm_tags ${SEM_perturb_group_names[@]} \\
+  --dm_steps ${SEM_search_step_sizes[@]} \\
   --nproc=\$SLURM_NPROCS
 
 echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 EOF
@@ -441,7 +445,7 @@ do
   mkdir -p $event_dir/adj_kernel_\${tag}
 
   $utils_dir/output_adj_for_perturbed_waveform.py \
-    $misfit_par \
+    $misfit_par_file \
     $db_file \
     $event_dir/output_syn_\${tag}/sac \
     $event_dir/adj_kernel_\${tag}

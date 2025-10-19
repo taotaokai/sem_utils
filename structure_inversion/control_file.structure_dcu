@@ -47,54 +47,60 @@
 #   [model_update_job] sum up grid search results from each event to get step length, and update model parameters
 #
 
+#====== 
+
 # project root directory
-base_dir=$(readlink -f .)
+SEM_base_dir=$(readlink -f .)
 
 # current stage and iteration number
-stage_dir=${base_dir}/stage00.structure_dcu
+SEM_stage_tag=structure_dcu
+SEM_stage_num=0
+SEM_iter_num=0
 
 # source dir
-# use source_dir/iter??/events/<gcmtID>/misfit/CMTSOLUTION.updated
-source_dir=${base_dir}/stage00.source_dcu  
+# use SEM_source_dir/iter??/events/<gcmtID>/misfit/CMTSOLUTION.updated
+SEM_source_dir=${SEM_base_dir}/stage00.source_dcu  
 
 # model dir at iter00
-starting_model_dir=${base_dir}/mesh_dcu/EU60_interp/GLL_smooth_10km
-
-iter_num=0
+SEM_starting_model_dir=${SEM_base_dir}/mesh_dcu/EU60_interp/GLL_smooth_10km
 
 #====== Data directories
 
 # specfem3d par files
-sem_config_dir=${base_dir}/sem_config_dcu  # sem_config/: DATA/Par_file, setup/constants.h.in
+SEM_config_dir=${SEM_base_dir}/sem_config_dcu  # sem_config/: DATA/Par_file, setup/constants.h.in
 
-# specfem3d binaries
-sem_build_dir=${base_dir}/build_dcu # build/bin/xmeshfem3D,xspecfem3D
+# specfem3d executables
+SEM_build_dir=${SEM_base_dir}/build_dcu # build/bin/xmeshfem3D,xspecfem3D
 
 # shell scripts
-sem_utils_dir=${base_dir}/sem_utils  # sem_utils/: misfit/, structure_inversion/
+SEM_utils_dir=${SEM_base_dir}/sem_utils  # sem_utils/: misfit/, structure_inversion/
 
 # event data dir
-data_dir=${base_dir}/events # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTION, data.h5
+SEM_data_dir=${SEM_base_dir}/events # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTION, data.h5
 
-# current iteration directory, e.g. iter01/
-# iter_num=$(printf "%02d" "$iter_num")  #NOTE 08 is taken as octal number
-iter_num=$(echo "$iter_num" | awk '{printf "%02d", $1}')
-iter_dir=${stage_dir}/iter${iter_num}
+# stage directory 
+SEM_stage_num=$(echo "$SEM_stage_num" | awk '{printf "%02d", $1}')
+SEM_stage_dir=${SEM_base_dir}/stage${SEM_stage_num}.${SEM_stage_tag}
 
-# previous iteration directory, e.g. iter00/
-iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
-prev_iter_dir=${stage_dir}/iter${iter_minus_one}
+# iteration directory
+SEM_iter_num=$(echo "$SEM_iter_num" | awk '{printf "%02d", $1}')
+SEM_iter_dir=${SEM_stage_dir}/iter${SEM_iter_num}
+
+# previous iteration directory
+SEM_prev_iter_mum=$(echo "$SEM_iter_num" | awk '{printf "%02d", $1-1}')
+SEM_prev_iter_dir=${SEM_stage_dir}/iter${SEM_prev_iter_mum}
 
 # initial/updated model
-initial_model_dir=${prev_iter_dir}/model_updated
-if [ "$iter_num" -eq 0 ]
-then
-  initial_model_dir=${starting_model_dir}
-fi
-updated_model_dir=${iter_dir}/model_updated
+# SEM_initial_model_dir=${SEM_prev_iter_dir}/model_updated
+# if [ "$SEM_iter_num" -eq 0 ]
+# then
+#   SEM_initial_model_dir=${SEM_starting_model_dir}
+# fi
+# SEM_initial_model_dir=${SEM_iter_dir}/model_initial
+# SEM_updated_model_dir=${SEM_iter_dir}/model_updated
 
 # misfit par 
-misfit_par_dir=${base_dir}/misfit_par
+SEM_misfit_par_dir=${SEM_base_dir}/misfit_par
 
 # mesh_REF dir
 #mesh_REF_dir=$base_dir/mesh_REF.stage09.iter16.polyfit_um.linfit_mtz.vp_vs_voigt
@@ -104,58 +110,56 @@ misfit_par_dir=${base_dir}/misfit_par
 
 #====== slurm jobs
 
+SEM_python_exec=python
+
 # mpi executable
-slurm_mpiexec="srun --mpi=pmix" # SCNET
+SLURM_mpiexec="srun --mpi=pmix" # SCNET
 # slurm_mpiexec="mpirun -np \${SLURM_NTASKS}"
 
 # partition config
-slurm_partition_cpu="xahcnormal" # SCNET CPU
-slurm_ncpu_per_node=64
-slurm_partition_dcu="xahdnormal" # SCNET GPU
-slurm_ndcu_per_node=4
+SLURM_partition_cpu="xahcnormal" # SCNET CPU
+SLURM_ncpu_per_node=64
+SLURM_partition_dcu="xahdnormal" # SCNET GPU
+SLURM_ndcu_per_node=4
 
 # number of mpi processes for sem
-sem_par_file=${sem_config_dir}/DATA/Par_file
-if [ ! -f "$sem_par_file" ]
+SEM_par_file=${SEM_config_dir}/DATA/Par_file
+if [ ! -f "$SEM_par_file" ]
 then
     echo "[ERROR] $sem_par_file does NOT exist!"
     exit 1
 fi
-sem_nproc_xi=$(grep NPROC_XI $sem_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
-sem_nproc_eta=$(grep NPROC_ETA $sem_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
-sem_nproc_total=$(echo $sem_nproc_xi $sem_nproc_eta | awk '{print $1*$2}')
-sem_num_nodes=$(echo "$sem_nproc_total $slurm_ndcu_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
+SEM_nproc_xi=$(grep NPROC_XI $SEM_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
+SEM_nproc_eta=$(grep NPROC_ETA $SEM_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
+SEM_nproc_total=$(echo $SEM_nproc_xi $SEM_nproc_eta | awk '{print $1*$2}')
+SEM_num_nodes=$(echo "$SEM_nproc_total $SLURM_ndcu_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
 
-slurm_args_mesh="-n ${sem_nproc_total} -p ${slurm_partition_cpu} -t 01:00:00" #--exclusive"
+SLURM_args_mesh="-n ${SEM_nproc_total} -p ${SLURM_partition_cpu} -t 01:00:00" #--exclusive"
 
-slurm_args_forward="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partition_dcu} -t 00:30:00 --exclusive --mem=0 --gres=dcu:4" 
-slurm_args_misfit="-N 1 -n 20 -p ${slurm_partition_cpu} -t 00:30:00"
-slurm_args_kernel="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partition_dcu} -t 01:00:00 --exclusive --mem=0 --gres=dcu:4"
+SLURM_args_forward="-N ${SEM_num_nodes} -n ${SEM_nproc_total} -p ${SLURM_partition_dcu} -t 00:30:00 --exclusive --mem=0 --gres=dcu:4" 
+SLURM_args_misfit="-N 1 -n 20 -p ${SLURM_partition_cpu} -t 00:30:00"
+SLURM_args_kernel="-N ${SEM_num_nodes} -n ${SEM_nproc_total} -p ${SLURM_partition_dcu} -t 01:00:00 --exclusive --mem=0 --gres=dcu:4"
 
-slurm_args_kernel_mask_sum=${slurm_args_mesh}
-slurm_args_kernel_precond=${slurm_args_mesh}
-slurm_args_dmodel=${slurm_args_mesh}
-slurm_args_model_perturb=${slurm_args_mesh}
-slurm_args_mesh_perturb=${slurm_args_mesh}
-slurm_args_model_update="-n 1 -p ${slurm_partition_cpu} -t 00:30:00"
+SLURM_args_kernel_mask_sum=${SLURM_args_mesh}
+SLURM_args_kernel_precond=${SLURM_args_mesh}
+SLURM_args_dmodel=${SLURM_args_mesh}
+SLURM_args_model_perturb=${SLURM_args_mesh}
+SLURM_args_mesh_perturb=${SLURM_args_mesh}
+SLURM_args_model_update="-n 1 -p ${SLURM_partition_cpu} -t 00:30:00"
 
 # slurm_args_kernel_convert_mask=${slurm_args_mesh}
 # slurm_args_kernel_sum_smooth_precond=${slurm_args_mesh}
 
-slurm_args_dsyn="-N ${sem_num_nodes} -n ${sem_nproc_total} -p ${slurm_partition_dcu} -t 01:00:00 --exclusive --mem=0 --gres=dcu:4"
-slurm_args_search=${slurm_args_misfit}
-slurm_args_plot=${slurm_args_misfit}
-
-
-#====== other
-python_exec=python
+SLURM_args_dsyn="-N ${SEM_num_nodes} -n ${SEM_nproc_total} -p ${SLURM_partition_dcu} -t 01:00:00 --exclusive --mem=0 --gres=dcu:4"
+SLURM_args_search=${SLURM_args_misfit}
+SLURM_args_plot=${SLURM_args_misfit}
 
 
 #====== model parameterization
 
-sem_model_tags=(vpv vph vsv vsh eta rho)
-sem_kernel_tags=(dvpv_kernel dvph_kernel dvsv_kernel dvsh_kernel deta_kernel drho_kernel)
-sem_dmodel_tags=(dvpv_dmodel dvph_dmodel dvsv_dmodel dvsh_dmodel deta_dmodel drho_dmodel)
+SEM_model_tags=(vpv vph vsv vsh eta rho)
+SEM_kernel_tags=(dvpv_kernel dvph_kernel dvsv_kernel dvsh_kernel deta_kernel drho_kernel)
+SEM_dmodel_tags=(dvpv_dmodel dvph_dmodel dvsv_dmodel dvsh_dmodel deta_dmodel drho_dmodel)
 
 #====== kernel preconditioning
 
@@ -169,21 +173,23 @@ sem_dmodel_tags=(dvpv_dmodel dvph_dmodel dvsv_dmodel dvsh_dmodel deta_dmodel drh
 # sum(Me*He, e)*dm = -1 * sum(Me*Ke, e)
 # the masked Hessian diagonals are approximated by its application on a random model perturbation dm
 # sum(Me*He, e)*dm = sum(Me*dKe, e), diag(sum(Me*He, e)) ~ |sum(Me*dKe, e)|
-sem_kernel_mask_source_sigma_km=50
-sem_kernel_mask_receiver_sigma_km=10
+SEM_kernel_mask_source_sigma_km=50
+SEM_kernel_mask_receiver_sigma_km=10
 
 # smoothing
-sem_kernel_smooth_diffusion_niter=50 # iteration steps for diffusion based smoothing 
-sem_kernel_smooth_iso_FWHM_km=10 # full width at half maximum (FWHM) of Gaussian kernel in km
+SEM_kernel_smooth_diffusion_niter=50 # iteration steps for diffusion based smoothing 
+SEM_kernel_smooth_iso_FWHM_km=10 # full width at half maximum (FWHM) of Gaussian kernel in km
 # sem_kernel_smooth_sigmaH_km=30 # horizontal smoothing 1 sigma (km)
 # sem_kernel_smooth_sigmaV_km=15 # vertical smoothing 1 sigma (km)
+
+#TODO: different somothing length for different parameter classes (e.g. larger for vp, smaller for vs?)
 
 #====== model search direction (dm)
 # conjugate gradient
 #sem_cg_type=HS
 
 # maximum amplitude of dmodel
-sem_dmodel_scale=0.1
+SEM_dmodel_scale=0.1
 
 #====== line search
 
@@ -201,11 +207,11 @@ sem_dmodel_scale=0.1
 # The optimal a1, a2 would give the updated model as m + a1*dm1 + a2*dm2
 
 # perturbations along different parameter groups
-sem_perturb_group_names=("dm")  # only one group
-sem_perturb_model_tag_groups=("vpv,vph,vsv,vsh,eta,rho")
-sem_perturb_dmodel_tag_groups=("dvpv_dmodel,dvph_dmodel,dvsv_dmodel,dvsh_dmodel,deta_dmodel,drho_dmodel")
+SEM_perturb_group_names=("dm")  # only one group
+SEM_perturb_model_tag_groups=("vpv,vph,vsv,vsh,eta,rho")
+SEM_perturb_dmodel_tag_groups=("dvpv_dmodel,dvph_dmodel,dvsv_dmodel,dvsh_dmodel,deta_dmodel,drho_dmodel")
 # steps along each perturbation group (min,max,ngrids) as in numpy.linspace(min,max,ngrids)
-sem_search_step_sizes=("0,3,31")
+SEM_search_step_sizes=("0,3,31")
 
 # sem_perturb_group_names=("dvpv_vph" "dvsv_vsh" "deta_rho") # three groups
 # sem_perturb_model_tag_groups=("vpv,vph" "vsv,vsh" "eta,rho")

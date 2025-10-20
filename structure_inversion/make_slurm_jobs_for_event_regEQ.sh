@@ -258,7 +258,9 @@ fi
 mkdir -p $figure_dir
 
 $SEM_python_exec $SEM_utils_dir/misfit/plot.py \\
-  $db_file $figure_dir --nproc=\${SLURM_NTASKS}
+  $db_file $figure_dir \\
+  --nproc=\${SLURM_NTASKS} \\
+  --title="${SEM_stage_tag}_s${SEM_stage_num}i${SEM_iter_num}"
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"

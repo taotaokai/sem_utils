@@ -11,13 +11,14 @@ source $control_file
 
 #====== define variables
 # directories
-event_dir=$iter_dir/events/$event_id
-#mesh_dir=$iter_dir/mesh
+event_dir=$SEM_iter_dir/events/$event_id
+
 misfit_dir=$event_dir/misfit
 figure_dir=$misfit_dir/figure
 slurm_dir=$event_dir/slurm
+mkdir -p $misfit_dir $slurm_dir
+
 # job scripts for slurm
-mkdir -p $slurm_dir
 green_job=$slurm_dir/green.job
 misfit_job=$slurm_dir/misfit.job
 srcfrechet_job=$slurm_dir/srcfrechet.job
@@ -43,18 +44,18 @@ then
   echo "[ERROR] $station_file does NOT exist!"
   exit -1
 fi
-# cmt file
-cmt_file=$event_dir/DATA/CMTSOLUTION.init
-if [ ! -f "$cmt_file" ]
+# initial cmt file
+initial_cmt_file=$SEM_iter_dir/CMTSOLUTION_initial/${event_id}.cmt
+if [ ! -f "$initial_cmt_file" ]
 then
-  echo "[WARN] $cmt_file does NOT exist!"
+  echo "[WARN] $initial_cmt_file does NOT exist!"
   exit -1
 fi
 # misfit par file
-misfit_par=$event_dir/DATA/misfit.yaml
-if [ ! -f "$misfit_par" ]
+misfit_par_file=$event_dir/DATA/misfit.yaml
+if [ ! -f "$misfit_par_file" ]
 then
-  echo "[ERROR] $misfit_par does NOT exist!"
+  echo "[ERROR] $misfit_par_file does NOT exist!"
   exit -1
 fi
 
@@ -68,7 +69,7 @@ cat <<EOF > $green_job
 #!/bin/bash
 #SBATCH -J ${event_id}.green
 #SBATCH -o ${green_job}.o%j
-#SBATCH ${slurm_args_green}
+#SBATCH ${SLURM_args_green}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -76,28 +77,19 @@ echo
 
 out_dir=output_green
 
-chmod u+w -R $event_dir/DATA
-mkdir -p $event_dir/DATA
 cd $event_dir/DATA
 
 rm -f CMTSOLUTION
-cp $cmt_file CMTSOLUTION
+cp $initial_cmt_file CMTSOLUTION
 sed -i "/^tau(s)/s/.*/tau(s):            +0.0E+00/" CMTSOLUTION
 
-# cp $data_dir/$event_id/STATIONS .
-
-# cp $mesh_dir/DATA/Par_file .
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
 sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
 sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" Par_file
 
-chmod u+w -R $event_dir/DATABASES_MPI
-rm -rf $event_dir/DATABASES_MPI
-mkdir $event_dir/DATABASES_MPI
-ln -s $mesh_dir/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
-
 cd $event_dir
+
 chmod u+w -R \$out_dir
 rm -rf \$out_dir OUTPUT_FILES
 mkdir \$out_dir
@@ -108,12 +100,22 @@ cp -L DATA/Par_file OUTPUT_FILES
 cp -L DATA/STATIONS OUTPUT_FILES
 cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
-$slurm_mpiexec $sem_build_dir/bin/xspecfem3D
+if [ -d "$event_dir/DATABASES_MPI" ]
+then
+  chmod u+w -R $event_dir/DATABASES_MPI
+  rm -rf $event_dir/DATABASES_MPI
+fi
+mkdir -p $event_dir/DATABASES_MPI
+ln -s $SEM_mesh_dir/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
+
+$SLURM_mpiexec $SEM_build_dir/bin/xspecfem3D
 
 mkdir $event_dir/\$out_dir/sac
 mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 
-# modify CMTSOLUTION.init with the source location actually used in the simulation
+# modify initial CMTSOLUTION with the source location actually used in the simulation
+# e.g. the initial source might locate slightly above the ground from the line search in the previouhowever, s inversion,
+#      in this case, SPECFEM will move the source back onto the ground 
 tmpfile=\$(mktemp)
 grep -A4 "position of the source that will be used:" $event_dir/\$out_dir/output_solver.txt > \$tmpfile
 if [ \$? -ne 0 ]
@@ -121,13 +123,12 @@ then
   echo "[ERROR] check if green.job finished OK!"
   exit -1
 else
-  cp $cmt_file ${cmt_file}.orig
   x=\$(grep "x(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
   y=\$(grep "y(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
   z=\$(grep "z(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
-  sed -i "s/x(m).*/x(m):              \$x/"  $cmt_file
-  sed -i "s/y(m).*/y(m):              \$y/"  $cmt_file
-  sed -i "s/z(m).*/z(m):              \$z/"  $cmt_file
+  sed -i "s/x(m).*/x(m):              \$x/"  $initial_cmt_file
+  sed -i "s/y(m).*/y(m):              \$y/"  $initial_cmt_file
+  sed -i "s/z(m).*/z(m):              \$z/"  $initial_cmt_file
 fi
 rm \$tmpfile
 
@@ -142,7 +143,7 @@ cat <<EOF > $misfit_job
 #!/bin/bash
 #SBATCH -J ${event_id}.misfit
 #SBATCH -o $misfit_job.o%j
-#SBATCH ${slurm_args_misfit}
+#SBATCH ${SLURM_args_misfit}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -158,13 +159,13 @@ chmod u+w -R $event_dir/SEM
 rm -rf $event_dir/SEM
 mkdir -p $event_dir/SEM
 
-$python_exec $sem_utils_dir/misfit/measure_adj.py \\
+$SEM_python_exec $SEM_utils_dir/misfit/measure_adj.py \\
   $db_file \\
-  $misfit_par \\
+  $misfit_par_file \\
   $event_dir/DATA/Par_file \\
-  $cmt_file \\
-  $data_dir/$event_id/channel.txt \\
-  $data_dir/$event_id/data.h5 \\
+  $initial_cmt_file \\
+  $SEM_data_dir/$event_id/channel.txt \\
+  $SEM_data_dir/$event_id/data.h5 \\
   $event_dir/output_green/sac \\
   $event_dir/SEM \\
   --nproc=\$SLURM_NPROCS \\
@@ -195,7 +196,7 @@ cat <<EOF > $srcfrechet_job
 #!/bin/bash
 #SBATCH -J ${event_id}.srcfrechet
 #SBATCH -o $srcfrechet_job.o%j
-#SBATCH ${slurm_args_srcfrechet}
+#SBATCH ${SLURM_args_srcfrechet}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -205,12 +206,14 @@ out_dir=output_srcfrechet
 
 cd $event_dir/DATA
 
+# copy initial CMTSOLUTION with actual tau value
 rm -f CMTSOLUTION
-cp $cmt_file CMTSOLUTION
+cp $initial_cmt_file CMTSOLUTION
+
 sed -i "/^SIMULATION_TYPE/s/=.*/= 2/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
-sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
-sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" Par_file
+# sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
+# sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" Par_file
 
 cd $event_dir
 
@@ -227,7 +230,7 @@ cp -L DATA/STATIONS_ADJOINT OUTPUT_FILES
 cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
 cd $event_dir
-$slurm_mpiexec $sem_build_dir/bin/xspecfem3D
+$SLURM_mpiexec $SEM_build_dir/bin/xspecfem3D
 
 grep "End of the simulation" OUTPUT_FILES/output_solver.txt
 if [ \$? -ne 0 ]
@@ -251,14 +254,14 @@ cat <<EOF > $dgreen_job
 #!/bin/bash
 #SBATCH -J ${event_id}.dgreen
 #SBATCH -o $dgreen_job.o%j
-#SBATCH ${slurm_args_dgreen}
+#SBATCH ${SLURM_args_dgreen}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
 # make perturbed CMTSOLUTION
-$python_exec $sem_utils_dir/misfit/make_perturbed_cmtsolution.py \\
+$SEM_python_exec $SEM_utils_dir/misfit/make_perturbed_cmtsolution.py \\
   $db_file \\
   $misfit_dir/srcfrechet \\
   $misfit_dir/diff_CMTSOLUTION \\
@@ -284,8 +287,8 @@ do
 
   sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
   sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
-  sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
-  sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" Par_file
+  # sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
+  # sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" Par_file
 
   cd $event_dir
   rm -rf \$out_dir OUTPUT_FILES
@@ -298,7 +301,7 @@ do
   cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
   cd $event_dir
-  $slurm_mpiexec $sem_build_dir/bin/xspecfem3D
+  $SLURM_mpiexec $SEM_build_dir/bin/xspecfem3D
 
   grep "End of the simulation" OUTPUT_FILES/output_solver.txt
   if [ \$? -ne 0 ]
@@ -310,7 +313,7 @@ do
   mkdir $event_dir/\$out_dir/sac
   mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 
-  # modify diff_CMTSOLUTION with the perturbation in source location actually used
+  # modify diff_CMTSOLUTION and CMTSOLUTION_dxs with the perturbation in source location actually used
   if [ x"\$tag" == x"dxs" ]
   then
     tmpfile=\$(mktemp)
@@ -321,24 +324,27 @@ do
       exit -1
     fi
 
+    # get source location actually used
     x1=\$(grep "x(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
     y1=\$(grep "y(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
     z1=\$(grep "z(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
 
+    # change source location in CMTSOLUTION_dxs file to values actually used
     sed -i "s/x(m).*/x(m):              \$x1/"  \$dcmt_file
     sed -i "s/y(m).*/y(m):              \$y1/"  \$dcmt_file
     sed -i "s/z(m).*/z(m):              \$z1/"  \$dcmt_file
 
-    # modify dcmt file
-    x0=\$(grep "x(m)" $cmt_file | awk '{printf "%+15.8E", \$2}')
-    y0=\$(grep "y(m)" $cmt_file | awk '{printf "%+15.8E", \$2}')
-    z0=\$(grep "z(m)" $cmt_file | awk '{printf "%+15.8E", \$2}')
+    # get initial source location
+    x0=\$(grep "x(m)" $initial_cmt_file | awk '{printf "%+15.8E", \$2}')
+    y0=\$(grep "y(m)" $initial_cmt_file | awk '{printf "%+15.8E", \$2}')
+    z0=\$(grep "z(m)" $initial_cmt_file | awk '{printf "%+15.8E", \$2}')
 
+    # get dxs actually used
     dx=\$(echo \$x1 \$x0 | awk '{printf "%+15.8E", \$1-\$2}')
     dy=\$(echo \$y1 \$y0 | awk '{printf "%+15.8E", \$1-\$2}')
     dz=\$(echo \$z1 \$z0 | awk '{printf "%+15.8E", \$1-\$2}')
 
-    # original dxs
+    # get originally required dxs
     dx0=\$(grep "dx(m)" $misfit_dir/diff_CMTSOLUTION | awk '{printf "%+15.8E", \$2}')
     dy0=\$(grep "dy(m)" $misfit_dir/diff_CMTSOLUTION | awk '{printf "%+15.8E", \$2}')
     dz0=\$(grep "dz(m)" $misfit_dir/diff_CMTSOLUTION | awk '{printf "%+15.8E", \$2}')
@@ -346,12 +352,12 @@ do
     echo "dxs required: \$dx0 \$dy0 \$dz0"
     echo "dxs actually used: \$dx \$dy \$dz"
 
-    # update to dxs actually used
+    # update dxs in diff_CMTSOLUTION and misfit.h5 to values actually used
     sed -i "s/dx(m).*/dx(m):              \$dx/"  $misfit_dir/diff_CMTSOLUTION
     sed -i "s/dy(m).*/dy(m):              \$dy/"  $misfit_dir/diff_CMTSOLUTION
     sed -i "s/dz(m).*/dz(m):              \$dz/"  $misfit_dir/diff_CMTSOLUTION
 
-    ${python_exec} ${sem_utils_dir}/misfit/update_source_dxs.py \\
+    ${SEM_python_exec} ${SEM_utils_dir}/misfit/update_source_dxs.py \\
       "${db_file}" \\
       -- "\$dx" "\$dy" "\$dz"
     # -- means everything behind is positional,  so values like "-1.e-4" will be parsed correctly
@@ -371,7 +377,7 @@ cat <<EOF > $search_job
 #!/bin/bash
 #SBATCH -J ${event_id}.search
 #SBATCH -o $search_job.o%j
-#SBATCH ${slurm_args_search}
+#SBATCH ${SLURM_args_search}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -386,7 +392,7 @@ echo
 # read derivatives of green's fuction
 for tag in dxs dmt
 do
-  $python_exec $sem_utils_dir/misfit/read_perturbed_syn.py \\
+  $SEM_python_exec $SEM_utils_dir/misfit/read_perturbed_syn.py \\
     $db_file \\
     $event_dir/output_\${tag}/sac \\
     \${tag} \\
@@ -398,7 +404,7 @@ echo "GRID SEARCH OF SOURCE MODEL [\$(date)]"
 echo
 
 # grid search of source model
-$python_exec $sem_utils_dir/misfit/grid_search_source.py \\
+$SEM_python_exec $SEM_utils_dir/misfit/grid_search_source.py \\
   $db_file \\
   $misfit_dir/grid_search_source.txt \\
   $misfit_dir/grid_search_source.pdf \\
@@ -416,12 +422,12 @@ echo dmt_opt = \$dmt_opt
 echo dt0_opt = \$dt0_opt
 echo dtau_opt = \$dtau_opt
 
-$python_exec $sem_utils_dir/misfit/make_updated_cmtsolution.py \\
+$SEM_python_exec $SEM_utils_dir/misfit/make_updated_cmtsolution.py \\
   $db_file \\
-  $misfit_dir/CMTSOLUTION.updated \\
+  $misfit_dir/CMTSOLUTION_updated \\
   \$dt0_opt \$dtau_opt \$dxs_opt \$dmt_opt
 
-cp $misfit_dir/CMTSOLUTION.updated $updated_cmt_dir/${event_id}.cmt
+cp $misfit_dir/CMTSOLUTION_updated $SEM_iter_dir/CMTSOLUTION_updated/${event_id}.cmt
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -434,7 +440,7 @@ cat <<EOF > $plot_job
 #!/bin/bash
 #SBATCH -J ${event_id}.plot
 #SBATCH -o $plot_job.o%j
-#SBATCH ${slurm_args_plot}
+#SBATCH ${SLURM_args_plot}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
@@ -449,7 +455,7 @@ then
 fi
 mkdir -p $figure_dir
 
-$python_exec $sem_utils_dir/misfit/plot.py \\
+$SEM_python_exec $SEM_utils_dir/misfit/plot.py \\
   $db_file $figure_dir --nproc=\$SLURM_NPROCS
 
 echo

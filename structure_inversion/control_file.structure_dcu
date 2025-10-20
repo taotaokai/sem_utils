@@ -65,6 +65,9 @@ SEM_source_dir=${SEM_base_dir}/stage00.source_dcu
 # model dir at iter00
 SEM_starting_model_dir=${SEM_base_dir}/mesh_dcu/EU60_interp/GLL_smooth_10km
 
+# misfit par 
+SEM_misfit_par_dir=${SEM_base_dir}/misfit_par
+
 #====== Data directories
 
 # specfem3d par files
@@ -99,9 +102,6 @@ SEM_prev_iter_dir=${SEM_stage_dir}/iter${SEM_prev_iter_mum}
 # fi
 # SEM_initial_model_dir=${SEM_iter_dir}/model_initial
 # SEM_updated_model_dir=${SEM_iter_dir}/model_updated
-
-# misfit par 
-SEM_misfit_par_dir=${SEM_base_dir}/misfit_par
 
 # mesh_REF dir
 #mesh_REF_dir=$base_dir/mesh_REF.stage09.iter16.polyfit_um.linfit_mtz.vp_vs_voigt

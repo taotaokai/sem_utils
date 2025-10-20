@@ -17,9 +17,13 @@ event_list=${2:?[arg]need event_list}
 # load parameters in control_file
 source $control_file
 
-if [ ! -d "$updated_cmt_dir" ]
+if [ ! -d "$SEM_iter_dir/CMTSOLUTION_initial" ]
 then
-  mkdir -p $updated_cmt_dir
+  mkdir -p $SEM_iter_dir/CMTSOLUTION_initial
+fi
+if [ ! -d "$SEM_iter_dir/CMTSOLUTION_updated" ]
+then
+  mkdir -p $SEM_iter_dir/CMTSOLUTION_updated
 fi
 
 #------ process each event
@@ -28,62 +32,62 @@ do
   echo "====== $event_id"
 
   # create event dir
-  event_dir=$iter_dir/events/$event_id
-  sem_data_dir=$event_dir/DATA
-  if [ -d "$sem_data_dir" ]
-  then
-    chmod u+w -R $event_dir/DATA
-  fi
+  event_dir=$SEM_iter_dir/events/$event_id
   mkdir -p $event_dir/DATA
 
   # copy Par_file
-  par_file=${sem_config_dir}/DATA/Par_file
+  # par_file=${SEM_config_dir}/DATA/Par_file
+  par_file=${SEM_mesh_dir}/DATA/Par_file
   if [ ! -f "$par_file" ]
   then
-    echo "[ERROR] $par_file does NOT exist!"
+    echo "[ERROR] $par_file NOT found!"
     exit -1
   fi
   cp $par_file $event_dir/DATA/Par_file
 
   # copy initial CMTSOLUTION file
-  if [ x${iter_num} == x ]
+  if [ x${SEM_iter_num} == x ]
   then
-    echo "[ERROR] iter_num not set!"
+    echo "[ERROR] iter_num NOT set!"
     exit -1
   fi
-  if [ "$iter_num" -eq 0 ]
+  if [ "$SEM_iter_num" -eq 0 ]
   then
-    cmt_file=$data_dir/${event_id}/CMTSOLUTION.ecef
+    cmt_file=$SEM_data_dir/${event_id}/CMTSOLUTION.ecef
   else
-    cmt_file=$initial_cmt_dir/${event_id}.cmt
+    cmt_file=$SEM_prev_iter_dir/CMTSOLUTION_updated/${event_id}.cmt
   fi
-  echo ------ use: $(readlink -f $cmt_file)
   if [ ! -f "$cmt_file" ]
   then
-    echo "[ERROR] $cmt_file does NOT exist!"
+    echo "[ERROR] $cmt_file NOT found!"
     exit -1
   fi
+  # init_cmt_file=$event_dir/DATA/CMTSOLUTION.init
+  # if [ -f "$init_cmt_file" ]
+  # then
+  #   rm -f $init_cmt_file
+  # fi
+  cp -L $cmt_file $SEM_iter_dir/CMTSOLUTION_initial/${event_id}.cmt
 
-  init_cmt_file=$event_dir/DATA/CMTSOLUTION.init
-  if [ -f "$init_cmt_file" ]
-  then
-    rm -f $init_cmt_file
-  fi
-  cp -L $cmt_file $init_cmt_file
+  echo ------ use: $(readlink -f $cmt_file)
 
   # copy STATIONS
-  station_file=$data_dir/$event_id/STATIONS
+  station_file=$SEM_data_dir/$event_id/STATIONS
   if [ ! -f "$station_file" ]; then
-    echo "[ERROR] $station_file not found"
+    echo "[ERROR] $station_file NOT found!"
     exit -1
   fi
   cp $station_file $event_dir/DATA/STATIONS
 
   # copy misfit_par file
   # cp $misfit_par_dir/${event_id}_misfit.yaml $event_dir/DATA/misfit.yaml
-  cp $misfit_par_dir/misfit.yaml $event_dir/DATA/misfit.yaml
+  if [ ! -f "$SEM_misfit_par_dir/misfit.yaml" ]; then
+    echo "[ERROR] $SEM_misfit_par_dir/misfit.yaml NOT found!"
+    exit -1
+  fi
+  cp $SEM_misfit_par_dir/misfit.yaml $event_dir/DATA/misfit.yaml
 
   # create batch scripts
-  $sem_utils_dir/source_inversion_regEQ/make_slurm_jobs_for_event_regEQ.sh $control_file $event_id
+  $SEM_utils_dir/source_inversion_regEQ/make_slurm_jobs_for_event_regEQ.sh $control_file $event_id
 
 done

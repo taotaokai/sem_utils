@@ -10,13 +10,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument("misfit_h5file" )  # "misfit.h5"
 parser.add_argument("out_fig_dir")     # "fig"
 parser.add_argument("-n", "--nproc", default=2, type=int)
+parser.add_argument("--title", default=None)
 
 args = parser.parse_args()
 
 def plot(arg):
     print(arg)
     misfit = Misfit(args.misfit_h5file)
-    misfit.plot_seismogram_1comp(arg[0], out_fig=arg[1])
+    misfit.plot_seismogram_1comp(arg[0], out_fig=arg[1], title_prefix=args.title)
 
 if __name__ == '__main__':
     print(f"======= [{datetime.now()}] plot_seismogram_1comp")
@@ -29,6 +30,6 @@ if __name__ == '__main__':
     pool.map(plot, inputs)
 
     print(f"======= [{datetime.now()}] plot_histogram")
-    misfit.plot_histogram(out_fig=os.path.join(args.out_fig_dir, "misfit_hist.pdf"))
+    misfit.plot_histogram(out_fig=os.path.join(args.out_fig_dir, "misfit_hist.pdf"), title_prefix=args.title)
 
     print(f"======= [{datetime.now()}] END")

@@ -1391,9 +1391,9 @@ class Misfit(object):
                 fp.write("%-18s %s\n" % ("event name:", event_id))
                 fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
                 fp.write("%-18s %+15.8E\n" % ("tau(s):", tau))
-                fp.write("%-18s %+15.8E\n" % ("x(m):", xs[0]))
-                fp.write("%-18s %+15.8E\n" % ("y(m):", xs[1]))
-                fp.write("%-18s %+15.8E\n" % ("z(m):", xs[2]))
+                fp.write("%-18s %+.3f\n" % ("x(m):", xs[0]))
+                fp.write("%-18s %+.3f\n" % ("y(m):", xs[1]))
+                fp.write("%-18s %+.3f\n" % ("z(m):", xs[2]))
                 fp.write("%-18s %+15.8E\n" % ("Mxx(N*m):", mt[0, 0]))
                 fp.write("%-18s %+15.8E\n" % ("Myy(N*m):", mt[1, 1]))
                 fp.write("%-18s %+15.8E\n" % ("Mzz(N*m):", mt[2, 2]))
@@ -3320,6 +3320,7 @@ class Misfit(object):
         # plot_adj=False,  # whether plot adjoint source
         align_time=False,  # whether align the phase according to cc time shift
         out_fig="seis.pdf",
+        title_prefix=None,
     ):
         """
         Plot record section in azimuthal bins
@@ -3559,6 +3560,8 @@ class Misfit(object):
                 str_title = "{:s} ({:s} az:{:04.1f}~{:04.1f} dep:{:.1f})".format(
                     evnm, plot_window_id, bin_azmin, bin_azmax, evdp
                 )
+                if title_prefix:
+                    str_title = "{:s} {:s}".format(title_prefix, str_title)
                 fig.suptitle(str_title)
                 # fig.text(
                 #    0.5, 0.965, str_title, size="x-large", horizontalalignment="center"
@@ -4250,9 +4253,9 @@ class Misfit(object):
             fp.write("%-18s %s\n" % ("event name:", evnm))
             fp.write("%-18s %+15.8E\n" % ("dt0(s):", 0.0))
             fp.write("%-18s %+15.8E\n" % ("dtau(s):", 0.0))
-            fp.write("%-18s %+15.8E\n" % ("dx(m):", dxs_scaled[0]))
-            fp.write("%-18s %+15.8E\n" % ("dy(m):", dxs_scaled[1]))
-            fp.write("%-18s %+15.8E\n" % ("dz(m):", dxs_scaled[2]))
+            fp.write("%-18s %+.3f\n" % ("dx(m):", dxs_scaled[0]))
+            fp.write("%-18s %+.3f\n" % ("dy(m):", dxs_scaled[1]))
+            fp.write("%-18s %+.3f\n" % ("dz(m):", dxs_scaled[2]))
             fp.write("%-18s %+15.8E\n" % ("dMxx(N*m):", dmt_scaled[0, 0]))
             fp.write("%-18s %+15.8E\n" % ("dMyy(N*m):", dmt_scaled[1, 1]))
             fp.write("%-18s %+15.8E\n" % ("dMzz(N*m):", dmt_scaled[2, 2]))
@@ -4271,9 +4274,9 @@ class Misfit(object):
             fp.write("%-18s %s_dxs\n" % ("event name:", evnm))
             fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
             fp.write("%-18s %+15.8E\n" % ("tau(s):", tau))
-            fp.write("%-18s %+15.8E\n" % ("x(m):", xs_perturb[0]))
-            fp.write("%-18s %+15.8E\n" % ("y(m):", xs_perturb[1]))
-            fp.write("%-18s %+15.8E\n" % ("z(m):", xs_perturb[2]))
+            fp.write("%-18s %+.3f\n" % ("x(m):", xs_perturb[0]))
+            fp.write("%-18s %+.3f\n" % ("y(m):", xs_perturb[1]))
+            fp.write("%-18s %+.3f\n" % ("z(m):", xs_perturb[2]))
             fp.write("%-18s %+15.8E\n" % ("Mxx(N*m):", mt[0, 0]))
             fp.write("%-18s %+15.8E\n" % ("Myy(N*m):", mt[1, 1]))
             fp.write("%-18s %+15.8E\n" % ("Mzz(N*m):", mt[2, 2]))
@@ -4286,9 +4289,9 @@ class Misfit(object):
             fp.write("%-18s %s_dmt\n" % ("event name:", evnm))
             fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
             fp.write("%-18s %+15.8E\n" % ("tau(s):", tau))
-            fp.write("%-18s %+15.8E\n" % ("x(m):", xs[0]))
-            fp.write("%-18s %+15.8E\n" % ("y(m):", xs[1]))
-            fp.write("%-18s %+15.8E\n" % ("z(m):", xs[2]))
+            fp.write("%-18s %+.3f\n" % ("x(m):", xs[0]))
+            fp.write("%-18s %+.3f\n" % ("y(m):", xs[1]))
+            fp.write("%-18s %+.3f\n" % ("z(m):", xs[2]))
             fp.write("%-18s %+15.8E\n" % ("Mxx(N*m):", mt_perturb[0, 0]))
             fp.write("%-18s %+15.8E\n" % ("Myy(N*m):", mt_perturb[1, 1]))
             fp.write("%-18s %+15.8E\n" % ("Mzz(N*m):", mt_perturb[2, 2]))
@@ -4902,9 +4905,9 @@ class Misfit(object):
             fp.write("%-18s %s\n" % ("event name:", evnm))
             fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
             fp.write("%-18s %+15.8E\n" % ("tau(s):", tau + dtau))
-            fp.write("%-18s %+15.8E\n" % ("x(m):", xs1[0]))
-            fp.write("%-18s %+15.8E\n" % ("y(m):", xs1[1]))
-            fp.write("%-18s %+15.8E\n" % ("z(m):", xs1[2]))
+            fp.write("%-18s %+.3f\n" % ("x(m):", xs1[0]))
+            fp.write("%-18s %+.3f\n" % ("y(m):", xs1[1]))
+            fp.write("%-18s %+.3f\n" % ("z(m):", xs1[2]))
             fp.write("%-18s %+15.8E\n" % ("Mxx(N*m):", mt1[0, 0]))
             fp.write("%-18s %+15.8E\n" % ("Myy(N*m):", mt1[1, 1]))
             fp.write("%-18s %+15.8E\n" % ("Mzz(N*m):", mt1[2, 2]))
@@ -4920,7 +4923,7 @@ class Misfit(object):
             win_ids = sorted([w.decode() for w in set(win_tbl.read(field="id"))])
         return win_ids
 
-    def plot_misfit(self, out_fig):
+    def plot_misfit(self, out_fig, title_prefix=None):
         """Plot misfit for a certain event and window_id"""
 
         h5f = pt.open_file(self.h5_path, "r")
@@ -5019,6 +5022,8 @@ class Misfit(object):
                 # fig = plt.figure(figsize=(8.5, 11))
                 fig = plt.figure(figsize=(8.27, 11.69))  # A4
                 str_title = "{:s} ({:s} dep:{:.1f})".format(evnm, window_id, evdp)
+                if title_prefix:
+                    str_title = "{:s} {:s}".format(title_prefix, str_title)
                 fig.suptitle(str_title)
                 # fig.text(
                 #     0.5, 0.965, str_title, size="x-large", horizontalalignment="center"
@@ -5119,7 +5124,7 @@ class Misfit(object):
 
         h5f.close()
 
-    def plot_histogram(self, out_fig):
+    def plot_histogram(self, out_fig, title_prefix=None):
         h5f = pt.open_file(self.h5_path, "r")
 
         # config
@@ -5176,6 +5181,8 @@ class Misfit(object):
             str_title = "{:s} (dep:{:.1f}): all (sum(weight*cc0)={:.1f})".format(
                 evnm, evdp, wcc_sum
             )
+            if title_prefix:
+                str_title = "{:s} {:s}".format(title_prefix, str_title)
             fig.suptitle(str_title)
             ax = fig.add_subplot(121)
             dt_used = ccdt_list[abs(ccdt_list) <= max_dt]
@@ -5207,6 +5214,8 @@ class Misfit(object):
                 str_title = "{:s} (dep:{:.1f}): {:s} (sum(weight*cc0)={:.1f})".format(
                     evnm, evdp, window_id, wcc_sum
                 )
+                if title_prefix:
+                    str_title = "{:s} {:s}".format(title_prefix, str_title)
                 fig.suptitle(str_title)
                 ax = fig.add_subplot(121)
                 dt_used = ccdt_list[abs(ccdt_list) <= max_dt]

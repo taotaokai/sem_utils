@@ -123,9 +123,9 @@ then
   echo "[ERROR] check if green.job finished OK!"
   exit -1
 else
-  x=\$(grep "x(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
-  y=\$(grep "y(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
-  z=\$(grep "z(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
+  x=\$(grep "x(m)" \$tmpfile | awk '{printf "%+.3f", \$2}')  # mm precision is enough
+  y=\$(grep "y(m)" \$tmpfile | awk '{printf "%+.3f", \$2}')
+  z=\$(grep "z(m)" \$tmpfile | awk '{printf "%+.3f", \$2}')
   sed -i "s/x(m).*/x(m):              \$x/"  $initial_cmt_file
   sed -i "s/y(m).*/y(m):              \$y/"  $initial_cmt_file
   sed -i "s/z(m).*/z(m):              \$z/"  $initial_cmt_file
@@ -325,37 +325,37 @@ do
     fi
 
     # get source location actually used
-    x1=\$(grep "x(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
-    y1=\$(grep "y(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
-    z1=\$(grep "z(m)" \$tmpfile | awk '{printf "%+15.8E", \$2}')
+    x1=\$(grep "x(m)" \$tmpfile | awk '{printf "%+.3f", \$2}')
+    y1=\$(grep "y(m)" \$tmpfile | awk '{printf "%+.3f", \$2}')
+    z1=\$(grep "z(m)" \$tmpfile | awk '{printf "%+.3f", \$2}')
 
     # change source location in CMTSOLUTION_dxs file to values actually used
-    sed -i "s/x(m).*/x(m):              \$x1/"  \$dcmt_file
-    sed -i "s/y(m).*/y(m):              \$y1/"  \$dcmt_file
-    sed -i "s/z(m).*/z(m):              \$z1/"  \$dcmt_file
+    sed -i "s/x(m).*/x(m):             \$x1/"  \$dcmt_file
+    sed -i "s/y(m).*/y(m):             \$y1/"  \$dcmt_file
+    sed -i "s/z(m).*/z(m):             \$z1/"  \$dcmt_file
 
     # get initial source location
-    x0=\$(grep "x(m)" $initial_cmt_file | awk '{printf "%+15.8E", \$2}')
-    y0=\$(grep "y(m)" $initial_cmt_file | awk '{printf "%+15.8E", \$2}')
-    z0=\$(grep "z(m)" $initial_cmt_file | awk '{printf "%+15.8E", \$2}')
+    x0=\$(grep "x(m)" $initial_cmt_file | awk '{printf "%+.3f", \$2}')
+    y0=\$(grep "y(m)" $initial_cmt_file | awk '{printf "%+.3f", \$2}')
+    z0=\$(grep "z(m)" $initial_cmt_file | awk '{printf "%+.3f", \$2}')
 
     # get dxs actually used
-    dx=\$(echo \$x1 \$x0 | awk '{printf "%+15.8E", \$1-\$2}')
-    dy=\$(echo \$y1 \$y0 | awk '{printf "%+15.8E", \$1-\$2}')
-    dz=\$(echo \$z1 \$z0 | awk '{printf "%+15.8E", \$1-\$2}')
+    dx=\$(echo \$x1 \$x0 | awk '{printf "%+.3f", \$1-\$2}')
+    dy=\$(echo \$y1 \$y0 | awk '{printf "%+.3f", \$1-\$2}')
+    dz=\$(echo \$z1 \$z0 | awk '{printf "%+.3f", \$1-\$2}')
 
     # get originally required dxs
-    dx0=\$(grep "dx(m)" $misfit_dir/diff_CMTSOLUTION | awk '{printf "%+15.8E", \$2}')
-    dy0=\$(grep "dy(m)" $misfit_dir/diff_CMTSOLUTION | awk '{printf "%+15.8E", \$2}')
-    dz0=\$(grep "dz(m)" $misfit_dir/diff_CMTSOLUTION | awk '{printf "%+15.8E", \$2}')
+    dx0=\$(grep "dx(m)" $misfit_dir/diff_CMTSOLUTION | awk '{printf "%+.3f", \$2}')
+    dy0=\$(grep "dy(m)" $misfit_dir/diff_CMTSOLUTION | awk '{printf "%+.3f", \$2}')
+    dz0=\$(grep "dz(m)" $misfit_dir/diff_CMTSOLUTION | awk '{printf "%+.3f", \$2}')
 
     echo "dxs required: \$dx0 \$dy0 \$dz0"
     echo "dxs actually used: \$dx \$dy \$dz"
 
     # update dxs in diff_CMTSOLUTION and misfit.h5 to values actually used
-    sed -i "s/dx(m).*/dx(m):              \$dx/"  $misfit_dir/diff_CMTSOLUTION
-    sed -i "s/dy(m).*/dy(m):              \$dy/"  $misfit_dir/diff_CMTSOLUTION
-    sed -i "s/dz(m).*/dz(m):              \$dz/"  $misfit_dir/diff_CMTSOLUTION
+    sed -i "s/dx(m).*/dx(m):             \$dx/"  $misfit_dir/diff_CMTSOLUTION
+    sed -i "s/dy(m).*/dy(m):             \$dy/"  $misfit_dir/diff_CMTSOLUTION
+    sed -i "s/dz(m).*/dz(m):             \$dz/"  $misfit_dir/diff_CMTSOLUTION
 
     ${SEM_python_exec} ${SEM_utils_dir}/misfit/update_source_dxs.py \\
       "${db_file}" \\
@@ -456,7 +456,7 @@ fi
 mkdir -p $figure_dir
 
 $SEM_python_exec $SEM_utils_dir/misfit/plot.py \\
-  $db_file $figure_dir --nproc=\$SLURM_NPROCS
+  $db_file $figure_dir --nproc=\$SLURM_NPROCS --title="${SEM_stage_tag}_s${SEM_stage_num}i${SEM_iter_num}"
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"

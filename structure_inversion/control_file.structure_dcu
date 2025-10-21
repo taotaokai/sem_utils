@@ -30,10 +30,12 @@
 #
 #   Note: [***_job] is a slurm job
 #
+#   [mesh_job] create mesh with initial model
+#
 #   for each event:
 #     [forward_job] forward simulation
 #     [misfit_job]  measure misfit, get adjoint source
-#     [kernel_job]  kernel simulation, get model gradients (e.g. cijkl_kernel)
+#     [kernel_job]  kernel simulation, get model gradients (e.g. rho_, cijkl_kernel)
 #
 #   [kernel_mask_sum_job] sum event kernels with source/receiver masks
 #   [kernel_precond_job] preconditioning with smoothing, spatial weighting, etc.

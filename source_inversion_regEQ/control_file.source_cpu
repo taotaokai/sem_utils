@@ -4,18 +4,22 @@
 
 #====== Structure of work directories 
 #
-# Project/
+# EuropeFWI/
 # |   stage00.source/
 # |   |   iter00/
 # |   |   |   events/
 # |   |   |   |   C202411201443A/
 # |   |   |   |   |   DATA/, DATABASES_MPI/, SEM/
 # |   |   |   |   |   slurm/: green.job, misfit.job, ...
-# |   |   |   |   |   misfit/:   misfit.h5, grid_search_source.txt, CMTSOLUTION.updated, ...
-# |   |   |   |   |   output_green,srcfrechet,dxs,dmt/
+# |   |   |   |   |   misfit/: misfit.h5, grid_search_source.txt, 
+# |   |   |   |   |            CMTSOLUTION_initial,green,dxs,dmt
+# |   |   |   |   |   output_green/
+# |   |   |   |   |   output_srcfrechet/
+# |   |   |   |   |   output_dxs,dmt/
 # |   |   |   |   C202006211907A/ 
 # |   |   |   |   | ... 
-# |   |   |   CMTSOLUTION_updated
+# |   |   |   CMTSOLUTION_initial/: initial CMT files, e.g. C202411201443A.cmt
+# |   |   |   CMTSOLUTION_updated/: updated CMT files, e.g. C202411201443A.cmt
 #
 #
 #====== Basic workflow:
@@ -27,78 +31,86 @@
 # 5. calculate the finite difference between original and perturbed green's functions and iteratively update hdur and location&moment tensor based on the linear approximation dU = dG * source 
 
 # project root directory
-base_dir=$(readlink -f .)
+SEM_base_dir=$(readlink -f .)
 
 # current stage and iteration number
-stage_dir=${base_dir}/stage00.source
-iter_num=08
+SEM_stage_tag=source_dcu
+SEM_stage_num=0
+SEM_iter_num=8
+
+# mesh directory
+SEM_mesh_dir=${SEM_base_dir}/mesh_dcu
+
+# misfit par 
+SEM_misfit_par_dir=${SEM_base_dir}/misfit_par
 
 #====== Data directories
 
 # specfem3d par files
-sem_config_dir=${base_dir}/sem_config  # sem_config/: DATA/Par_file, setup/constants.h.in, initial_model/
+SEM_config_dir=${SEM_base_dir}/sem_config_dcu  # sem_config/: DATA/Par_file, setup/constants.h.in, initial_model/
 
 # specfem3d binaries
-sem_build_dir=${base_dir}/build # build/: bin/xmeshfem3D,xspecfem3D
+SEM_build_dir=${SEM_base_dir}/build_dcu # build/: bin/xmeshfem3D,xspecfem3D
 
 # shell scripts
-sem_utils_dir=${base_dir}/sem_utils  # sem_utils/: misfit/, source_inversion_regEQ/
+SEM_utils_dir=${SEM_base_dir}/sem_utils  # sem_utils/: misfit/, source_inversion_regEQ/
 
 # event data dir
-data_dir=${base_dir}/events # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTION, data.h5
+SEM_data_dir=${SEM_base_dir}/events # data_dir/<gcmtID>/STATIONS, channel.txt. CMTSOLUTION, data.h5
 
-# current iteration directory, e.g. iter01/
-# iter_num=$(printf "%02d" "$iter_num")  #NOTE 08 is taken as octal number
-iter_num=$(echo "$iter_num" | awk '{printf "%02d", $1}')
-iter_dir=${stage_dir}/iter${iter_num}
+# stage directory, e.g. stage00.source/
+SEM_stage_num=$(echo "$SEM_stage_num" | awk '{printf "%02d", $1}')
+SEM_stage_dir=${SEM_base_dir}/stage${SEM_stage_num}.${SEM_stage_tag}
+
+# iteration directory, e.g. iter01/
+SEM_iter_num=$(echo "$SEM_iter_num" | awk '{printf "%02d", $1}')
+SEM_iter_dir=${SEM_stage_dir}/iter${SEM_iter_num}
 
 # previous iteration directory, e.g. iter00/
-iter_minus_one=$(echo "$iter_num" | awk '{printf "%02d", $1-1}')
-prev_iter_dir=${stage_dir}/iter${iter_minus_one}
+SEM_prev_iter_mum=$(echo "$SEM_iter_num" | awk '{printf "%02d", $1-1}')
+SEM_prev_iter_dir=${SEM_stage_dir}/iter${SEM_prev_iter_mum}
 
-# CMTSOLUTION dir
-initial_cmt_dir=${prev_iter_dir}/CMTSOLUTION_updated
-updated_cmt_dir=${iter_dir}/CMTSOLUTION_updated
-
-# mesh/DATABASES_MPI/*solver_data.bin,..
-mesh_dir=${base_dir}/mesh
-
-#model_dir=${iter_dir}/model
-
-# misfit par 
-misfit_par_dir=${base_dir}/misfit_par
+# CMTSOLUTION directory
+# SEM_initial_cmt_dir=${SEM_iter_dir}/CMTSOLUTION_initial
+# SEM_updated_cmt_dir=${SEM_iter_dir}/CMTSOLUTION_updated
 
 #====== slurm jobs
 
+# python executable
+SEM_python_exec=python
+
 # mpi executable
-slurm_mpiexec="srun --mpi=pmix" # SCNET
+SLURM_mpiexec="srun --mpi=pmix" # SCNET
 # slurm_mpiexec="mpirun -np \${SLURM_NTASKS}"
 
 # slurm partition
-slurm_partition_cpu="xahcnormal" # SCNET CPU
-slurm_ncpu_per_node=64
-slurm_partition_dcu="xahdnormal" # SCNET GPU
-slurm_ndcu_per_node=4
+SLURM_partition_cpu="xahcnormal" # SCNET CPU
+SLURM_ncpu_per_node=64
+SLURM_partition_gpu="xahdnormal" # SCNET GPU
+SLURM_ngpu_per_node=4
 
 # number of mpi processes for sem
-sem_par_file=${sem_config_dir}/DATA/Par_file
-if [ ! -f "$sem_par_file" ]
+SEM_par_file=${SEM_config_dir}/DATA/Par_file
+if [ ! -f "$SEM_par_file" ]
 then
-    echo "[ERROR] $sem_par_file does NOT exist!"
+    echo "[ERROR] $SEM_par_file does NOT exist!"
     exit 1
 fi
-sem_nproc_xi=$(grep NPROC_XI $sem_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
-sem_nproc_eta=$(grep NPROC_ETA $sem_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
-sem_nproc_total=$(echo $sem_nproc_xi $sem_nproc_eta | awk '{print $1*$2}')
-sem_num_nodes=$(echo "$sem_nproc_total $slurm_ncpu_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
+SEM_nproc_xi=$(grep NPROC_XI $SEM_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
+SEM_nproc_eta=$(grep NPROC_ETA $SEM_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
+SEM_nproc_total=$(echo $SEM_nproc_xi $SEM_nproc_eta | awk '{print $1*$2}')
 
-slurm_args_green="-n ${sem_nproc_total} -p ${slurm_partition_cpu} -t 01:00:00" #--exclusive"
-slurm_args_misfit="-N 1 -n 20 -p ${slurm_partition_cpu} -t 01:00:00"
-slurm_args_srcfrechet=${slurm_args_green}
-slurm_args_dgreen="-n ${sem_nproc_total} -p ${slurm_partition_cpu} -t 02:00:00" #--exclusive"
-slurm_args_search=${slurm_args_misfit}
-slurm_args_plot=${slurm_args_misfit}
+SLURM_num_cpu_nodes=$(echo "$SEM_nproc_total $SLURM_ncpu_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
+SLURM_num_gpu_nodes=$(echo "$SEM_nproc_total $SLURM_ngpu_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
 
-#====== other
+# # jobs on GPU nodes
+# SLURM_args_green="-N ${SLURM_num_gpu_nodes} -n ${SEM_nproc_total} -p ${SLURM_partition_gpu} -t 00:10:00 --exclusive --mem=0 --gres=dcu:4"
+# SLURM_args_dgreen="-N ${SLURM_num_gpu_nodes} -n ${SEM_nproc_total} -p ${SLURM_partition_gpu} -t 00:20:00 --exclusive --mem=0 --gres=dcu:4"
 
-python_exec=python
+# jobs on CPU nodes
+SLURM_args_green="-n ${SEM_nproc_total} -p ${slurm_partition_cpu} -t 01:00:00" # -N ${SLURM_num_nodes} --exclusive"
+SLURM_args_dgreen="-n ${SEM_nproc_total} -p ${slurm_partition_cpu} -t 02:00:00" # -N ${SLURM_num_nodes} --exclusive"
+SLURM_args_misfit="-N 1 -n 20 -p ${SLURM_partition_cpu} -t 00:30:00"
+SLURM_args_srcfrechet=${SLURM_args_green}
+SLURM_args_search=${SLURM_args_misfit}
+SLURM_args_plot=${SLURM_args_misfit}

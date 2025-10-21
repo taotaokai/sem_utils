@@ -86,8 +86,8 @@ SLURM_mpiexec="srun --mpi=pmix" # SCNET
 # slurm partition
 SLURM_partition_cpu="xahcnormal" # SCNET CPU
 SLURM_ncpu_per_node=64
-SLURM_partition_dcu="xahdnormal" # SCNET GPU
-SLURM_ndcu_per_node=4
+SLURM_partition_gpu="xahdnormal" # SCNET GPU
+SLURM_ngpu_per_node=4
 
 # number of mpi processes for sem
 SEM_par_file=${SEM_config_dir}/DATA/Par_file
@@ -99,11 +99,18 @@ fi
 SEM_nproc_xi=$(grep NPROC_XI $SEM_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
 SEM_nproc_eta=$(grep NPROC_ETA $SEM_par_file | sed 's/[^=]*=[ ]*\([0-9]*\).*/\1/')
 SEM_nproc_total=$(echo $SEM_nproc_xi $SEM_nproc_eta | awk '{print $1*$2}')
-SEM_num_nodes=$(echo "$SEM_nproc_total $SLURM_ndcu_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
 
-SLURM_args_green="-N ${SEM_num_nodes} -n ${SEM_nproc_total} -p ${SLURM_partition_dcu} -t 00:10:00 --exclusive --mem=0 --gres=dcu:4"
-SLURM_args_misfit="-N 1 -n 20 -p ${SLURM_partition_cpu} -t 00:30:00"
+SLURM_num_cpu_nodes=$(echo "$SEM_nproc_total $SLURM_ncpu_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
+SLURM_num_gpu_nodes=$(echo "$SEM_nproc_total $SLURM_ngpu_per_node" | awk '{a=$1/$2}END{print (a==int(a))?a:int(a)+1}')
+
+# jobs on CPU or GPU nodes
+SLURM_args_green="-p ${SLURM_partition_gpu} -N ${SLURM_num_gpu_nodes} -n ${SEM_nproc_total} -t 00:10:00 --exclusive --mem=0 --gres=dcu:4"
+SLURM_args_dgreen="-p ${SLURM_partition_gpu} -N ${SLURM_num_gpu_nodes} -n ${SEM_nproc_total} -t 00:20:00 --exclusive --mem=0 --gres=dcu:4"
+# SLURM_args_green="-p ${slurm_partition_cpu} -n ${SEM_nproc_total} -t 01:00:00" # -N ${SLURM_num_nodes} --exclusive"
+# SLURM_args_dgreen="-p ${slurm_partition_cpu} -n ${SEM_nproc_total} -t 02:00:00" # -N ${SLURM_num_nodes} --exclusive"
 SLURM_args_srcfrechet=${SLURM_args_green}
-SLURM_args_dgreen="-N ${SEM_num_nodes} -n ${SEM_nproc_total} -p ${SLURM_partition_dcu} -t 00:20:00 --exclusive --mem=0 --gres=dcu:4"
+
+# jobs on CPU nodes
+SLURM_args_misfit="-N 1 -n 20 -p ${SLURM_partition_cpu} -t 00:30:00"
 SLURM_args_search=${SLURM_args_misfit}
 SLURM_args_plot=${SLURM_args_misfit}

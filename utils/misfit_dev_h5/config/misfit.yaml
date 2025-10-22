@@ -38,8 +38,8 @@ window: [
 
   # S window: from first S arrival to the beginning of surface waves [tb, te]
   # tb =  min_tts + min(twin), 
-  # te = max(min_tts + max(twin), gcarc * slowness)
-  {'id':'Swin_30-100sec','type':'Swin','phase':'S','cmp':'Z','twin':[-50,-50],'slowness':15,'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  # te = max(min_tts + max(twin), gcarc * minslw)
+  {'id':'Swin_Z_30-100sec','type':'Swin','phase':'S','cmp':'Z','twin':[-50,-50],'minslw':15,'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
 
   #------ Body waves
   # time window: twin = [b, e], 

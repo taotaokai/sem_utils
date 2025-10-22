@@ -7,7 +7,8 @@ import numpy as np
 from scipy.io import FortranFile
 from scipy.interpolate import interp1d, interpn, RegularGridInterpolator
 
-from netCDF4 import Dataset
+# from netCDF4 import Dataset
+import xarray as xr
 import pyproj
 
 from meshfem3d_constants import R_EARTH
@@ -54,11 +55,13 @@ ecef2gps = pyproj.Transformer.from_crs("EPSG:4978", "EPSG:4326")  # ECEF to GPS
 # geoid.close()
 
 # ====== read in model file
-model = Dataset(args.emc_file, "r")
-model_depths = np.array(model.variables["depth"])
-model_lats = np.array(model.variables["latitude"])
-model_lons = np.array(model.variables["longitude"])
-model_values = np.array(model.variables[model_name])
+# model = Dataset(args.emc_file, "r")
+ds = xr.open_dataset(args.emc_file)
+
+model_depths = np.array(ds["depth"])
+model_lats = np.array(ds["latitude"])
+model_lons = np.array(ds["longitude"])
+model_values = np.array(ds[model_name])
 nlat, nlon = model_lats.size, model_lons.size
 # model_values = model_values.reshape((-1, nlon, nlat))
 model_interp = RegularGridInterpolator(
@@ -67,7 +70,7 @@ model_interp = RegularGridInterpolator(
     bounds_error=False,
     fill_value=np.nan,
 )
-model.close()
+ds.close()
 
 # ====== interpolate
 for iproc_target in range(nproc_target):

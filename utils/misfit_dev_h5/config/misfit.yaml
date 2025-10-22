@@ -31,10 +31,10 @@ adj:
 
 window: [
   #------ 
-  # P window: from first P arrival to first S arrival
-  # time window begin/end = min_ttp + twin[0], min_tts + twin[1]
-  # the window is expanded to at least of length twin[2]
-  # {'id':'Pwin_Z_30-100sec','type':'Pwin','phase':'P','cmp':'Z','twin':[-50,-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  # P window: from first P arrival to first S arrival [tb, te]
+  # tb = min_ttp + dtp
+  # te = max(min_tts + dts, tb + minlen)
+  {'id':'Pwin_Z_30-100sec','type':'Pwin','phase':'P','cmp':'Z','dtp':-50,'dts':-50,'minlen':100,'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
 
   # S window: from first S arrival to the beginning of surface waves
   # time window begin/end =  min_tts + twin[0], gcarc * surf_slowness (s/deg) + twin[1]

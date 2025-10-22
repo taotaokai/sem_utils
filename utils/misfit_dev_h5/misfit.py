@@ -2235,14 +2235,9 @@ class Misfit(object):
                     te = max(ttime) + twin[1]
                     # minlen = max(twin) - min(twin)
                 elif win_type == "Pwin":
-                    twin = win["twin"]
-                    minlen = twin[2]
-                    tb = min_ttp + twin[0]
-                    te = min_tts + twin[1]
-                    if (te - tb) < minlen:
-                        tpad = 0.5 * (minlen - (te - tb))
-                        tb -= tpad
-                        te += tpad
+                    dtp, dts, minlen = win["dtp"], win["dts"], win["minlen"]
+                    tb = min_ttp + dtp
+                    te = max(tb + minlen, min_tts + dts)
                 elif win_type == "surf":
                     swin = win["swin"]
                     smin, smax, minlen = swin

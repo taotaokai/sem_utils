@@ -2231,13 +2231,13 @@ class Misfit(object):
                         warnings.warn(msg)
                         continue
                     ttime = np.array([arr.time for arr in arrivals])
-                    tb = min(ttime) + twin[0]
-                    te = max(ttime) + twin[1]
+                    tb = min(ttime) + min(twin)
+                    te = max(ttime) + max(twin)
                     # minlen = max(twin) - min(twin)
                 elif win_type == "Pwin":
-                    dtp, dts, minlen = win["dtp"], win["dts"], win["minlen"]
-                    tb = min_ttp + dtp
-                    te = max(tb + minlen, min_tts + dts)
+                    twin, dts = win["twin"], win["dts"]
+                    tb = min_ttp + min(twin)
+                    te = max(min_ttp + max(twin), min_tts + dts)
                 elif win_type == "surf":
                     swin = win["swin"]
                     smin, smax, minlen = swin

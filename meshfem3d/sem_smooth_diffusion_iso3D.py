@@ -32,8 +32,9 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument("nproc", type=int)  # number of slices
 parser.add_argument("mesh_dir")  # <mesh_dir>/*_solver_data[_mpi].bin
-parser.add_argument("model_dir")  # 
+parser.add_argument("model_dir")  # directory of model files to smooth
 parser.add_argument("model_name")  # <model_dir>/proc***_<model_name>.bin
+parser.add_argument("ref_model_dir")  # directory of reference velocity model name 
 parser.add_argument("ref_model_name")  # reference velocity model name 
 parser.add_argument("min_period", type=float)  # minimum resolved period
 parser.add_argument("nstep", type=int)  # nt
@@ -55,6 +56,7 @@ nproc = args.nproc
 mesh_dir = args.mesh_dir  # <mesh_dir>/proc******_solver_data[_mpi].bin
 model_dir = args.model_dir  # <model_dir>/proc******_<model_name>.bin
 model_name = args.model_name  # e.g. vpv,vsv,rho,qmu,qkappa
+ref_model_dir = args.ref_model_dir  # 
 ref_model_name = args.ref_model_name  # e.g. vpv,vsv,rho,qmu,qkappa
 min_period = args.min_period
 nt = args.nstep
@@ -92,7 +94,7 @@ model_file = "%s/proc%06d_reg1_%s.bin" % (model_dir, mpi_rank, model_name)
 with FortranFile(model_file, "r") as f:
     model_gll = np.reshape(f.read_ints(dtype="f4"), gll_dims)
 
-ref_model_file = "%s/proc%06d_reg1_%s.bin" % (model_dir, mpi_rank, ref_model_name)
+ref_model_file = "%s/proc%06d_reg1_%s.bin" % (ref_model_dir, mpi_rank, ref_model_name)
 with FortranFile(ref_model_file, "r") as f:
     ref_model_gll = np.reshape(f.read_ints(dtype="f4"), gll_dims)
 smooth_length = abs(ref_model_gll * min_period)  / R_EARTH_KM

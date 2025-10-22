@@ -2165,6 +2165,18 @@ class Misfit(object):
                 distance_in_degree=gcarc,
                 phase_list=phase_list,
             )
+            p_arrivals = taup_model.get_travel_times(
+                source_depth_in_km=evdp_km,
+                distance_in_degree=gcarc,
+                phase_list=["p","P"],
+            )
+            min_ttp = min([arr.time for arr in p_arrivals])
+            s_arrivals = taup_model.get_travel_times(
+                source_depth_in_km=evdp_km,
+                distance_in_degree=gcarc,
+                phase_list=["s","S"],
+            )
+            min_tts = min([arr.time for arr in s_arrivals])
 
             obs_channels = obs.attrs["channels"]
             obs_Zchan = [cha for cha in obs_channels if cha["name"].decode()[-1] == "Z"]
@@ -2219,9 +2231,18 @@ class Misfit(object):
                         warnings.warn(msg)
                         continue
                     ttime = np.array([arr.time for arr in arrivals])
-                    tb = min(ttime) + min(twin)
-                    te = max(ttime) + max(twin)
-                    minlen = max(twin) - min(twin)
+                    tb = min(ttime) + twin[0]
+                    te = max(ttime) + twin[1]
+                    # minlen = max(twin) - min(twin)
+                elif win_type == "Pwin":
+                    twin = win["twin"]
+                    minlen = twin[2]
+                    tb = min_ttp + twin[0]
+                    te = min_tts + twin[1]
+                    if (te - tb) < minlen:
+                        tpad = 0.5 * (minlen - (te - tb))
+                        tb -= tpad
+                        te += tpad
                 elif win_type == "surf":
                     swin = win["swin"]
                     smin, smax, minlen = swin
@@ -2235,15 +2256,16 @@ class Misfit(object):
                     msg = f"unknown window type: {win_type}, skip"
                     warnings.warn(msg)
                     continue
-
+                
                 win_tb = max(valid_tb, event_t0 + tb)
                 win_te = min(
                     valid_te - bp_long_period, event_t0 + te
                 )  # to avoid filter edge effect in the later bandpass process
                 # print(solver_te, obs_te, solver_valid_te, win_te)
 
-                if (win_te - win_tb) < 0.5 * minlen:
-                    msg = f"window ({win})'s valid length ({win_tb}-{win_te} less than half of the minimum length ({minlen})"
+                required_winlen = tb - te
+                if (win_te - win_tb) < 0.5 * required_winlen:
+                    msg = f"window ({win})'s valid length ({win_tb}-{win_te} is less than half of the required length ({required_winlen})"
                     warnings.warn(msg)
                     continue
 
@@ -4221,7 +4243,9 @@ class Misfit(object):
         grad_xs = event["grad_xs"]
         grad_xs /= np.max(np.abs(grad_xs))  # normalize in case of loss of precision
         grad_mt = event["grad_mt"]
-        grad_mt /= np.max(np.abs(grad_mt))  # normalize in case of loss of precision, e.g. for very small x, x*x would be 0
+        grad_mt /= np.max(
+            np.abs(grad_mt)
+        )  # normalize in case of loss of precision, e.g. for very small x, x*x would be 0
 
         # correlation between mt and dchi_dmt
         # cc = np.sum(dchi_dmt * mt) / np.sum(mt**2) ** 0.5 / np.sum(dchi_dmt**2) ** 0.5
@@ -5236,9 +5260,9 @@ class Misfit(object):
 
         h5f.close()
 
-    def grid_search_structure(self, dm={'dm':np.linspace(0,2,20)}, nproc=5):
+    def grid_search_structure(self, dm={"dm": np.linspace(0, 2, 20)}, nproc=5):
         """
-        dm = {'tag1': np.linspace(b1,e1,n1), 
+        dm = {'tag1': np.linspace(b1,e1,n1),
               'tag2': np.linspace(b2,e2,n2),
               ...
               }
@@ -5257,7 +5281,7 @@ class Misfit(object):
         # dm = {tag: np.linspace(*vals) for tag, vals in grid_search.items()}
 
         # create grid of search points expanded by all dm's
-        grids = np.meshgrid(*dm.values(), indexing='ij')
+        grids = np.meshgrid(*dm.values(), indexing="ij")
         grid_shape = grids[0].shape
         dm_grid = {tag: grids[i].flatten() for i, tag in enumerate(dm)}
 
@@ -5270,7 +5294,9 @@ class Misfit(object):
         # save dm, wcc_sum, weight_sum
         with pt.open_file(self.h5_path, "r+") as h5f:
             if "/grid_search/structure" not in h5f:
-                g_search = h5f.create_group("/grid_search", "structure", createparents=True)
+                g_search = h5f.create_group(
+                    "/grid_search", "structure", createparents=True
+                )
             else:
                 g_search = h5f.get_node("/grid_search/structure")
 
@@ -5278,15 +5304,22 @@ class Misfit(object):
                 if tag in g_search:
                     h5f.remove_node(g_search, tag)
                 shape = (len(dm[tag]),)
-                ca = h5f.create_carray(g_search, tag, h5_atom, shape, filters=h5_filters)
+                ca = h5f.create_carray(
+                    g_search, tag, h5_atom, shape, filters=h5_filters
+                )
                 ca[:] = np.array(dm[tag], dtype=np.float64)
 
-            if 'wcc_sum' in g_search:
-                h5f.remove_node(g_search, 'wcc_sum')
-            ca = h5f.create_carray(g_search, 'wcc_sum', h5_atom, grid_shape, filters=h5_filters)
+            if "wcc_sum" in g_search:
+                h5f.remove_node(g_search, "wcc_sum")
+            ca = h5f.create_carray(
+                g_search, "wcc_sum", h5_atom, grid_shape, filters=h5_filters
+            )
             ca[:] = np.array(wcc_sum, dtype=np.float64)
-            ca.attrs['weight_sum'] = weight_sum
-            ca.attrs['dims'] = list(dm.keys()) # corresponding dm name of each dimension of wcc_sum
+            ca.attrs["weight_sum"] = weight_sum
+            ca.attrs["dims"] = list(
+                dm.keys()
+            )  # corresponding dm name of each dimension of wcc_sum
+
 
 #
 #     def output_misfit(self, out_file):

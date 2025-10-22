@@ -30,7 +30,17 @@ adj:
   suffix: '.adj' # net.sta.band_code[ENZ].adj
 
 window: [
-  # Body waves
+  #------ 
+  # P window: from first P arrival to first S arrival
+  # time window begin/end = min_ttp + twin[0], min_tts + twin[1]
+  # the window is expanded to at least of length twin[2]
+  # {'id':'Pwin_Z_30-100sec','type':'Pwin','phase':'P','cmp':'Z','twin':[-50,-50,100],'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+
+  # S window: from first S arrival to the beginning of surface waves
+  # time window begin/end =  min_tts + twin[0], gcarc * surf_slowness (s/deg) + twin[1]
+  # {'id':'Swin_30-100sec','type':'Swin','phase':'S','cmp':'Z','twin':[-50,-50], surf_slowness:15, 'bp':[4,0.01,0.03],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+
+  #------ Body waves
   # time window: twin = [b, e], 
   #              window start = min(arrival times) + b, 
   #              window end = max(arrival times) + e

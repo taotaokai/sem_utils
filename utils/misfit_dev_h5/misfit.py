@@ -3482,8 +3482,10 @@ class Misfit(object):
         # ------ calculate traveltime curves (only for body wave)
         phases = set([w["phase"].decode() for w, _ in windows if w["type"] == b"body"])
         phase_list = [a for p in phases for a in p.split(",")]
-        if windows[0]['type'] == b'Pwin':
+        if windows[0][0]['type'] == b'Pwin':
             phase_list.extend(['p', 'P'])
+        if windows[0][0]['type'] == b'Swin':
+            phase_list.extend(['s', 'S'])
         if phase_list:
             min_dist = max(0, min(dist_all) - 10.0)
             max_dist = min(180, max(dist_all) + 10.0)

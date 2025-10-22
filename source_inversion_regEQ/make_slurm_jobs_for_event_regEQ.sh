@@ -152,6 +152,9 @@ echo
 
 cd $event_dir
 
+chmod u+w -R $misfit_dir
+rm -rf $db_file
+
 chmod u+w -R $event_dir/SEM
 rm -rf $event_dir/SEM
 mkdir -p $event_dir/SEM

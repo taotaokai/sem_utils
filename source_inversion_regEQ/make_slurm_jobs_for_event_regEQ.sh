@@ -114,8 +114,9 @@ mkdir $event_dir/\$out_dir/sac
 mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 
 # modify initial CMTSOLUTION with the source location actually used in the simulation
-# e.g. the initial source might locate slightly above the ground from the line search in the previouhowever, s inversion,
-#      in this case, SPECFEM will move the source back onto the ground 
+# e.g. the initial source might locate slightly above the ground from the line search in the previou inversion,
+#      in this case, SPECFEM will pull the source back onto the ground 
+cp $initial_cmt_file $misfit_dir/CMTSOLUTION_initial
 tmpfile=\$(mktemp)
 grep -A4 "position of the source that will be used:" $event_dir/\$out_dir/output_solver.txt > \$tmpfile
 if [ \$? -ne 0 ]
@@ -126,9 +127,9 @@ else
   x=\$(grep "x(m)" \$tmpfile | awk '{printf "%+.3f", \$2}')  # mm precision is enough
   y=\$(grep "y(m)" \$tmpfile | awk '{printf "%+.3f", \$2}')
   z=\$(grep "z(m)" \$tmpfile | awk '{printf "%+.3f", \$2}')
-  sed -i "s/x(m).*/x(m):              \$x/"  $initial_cmt_file
-  sed -i "s/y(m).*/y(m):              \$y/"  $initial_cmt_file
-  sed -i "s/z(m).*/z(m):              \$z/"  $initial_cmt_file
+  sed -i "s/x(m).*/x(m):              \$x/"  $misfit_dir/CMTSOLUTION_initial
+  sed -i "s/y(m).*/y(m):              \$y/"  $misfit_dir/CMTSOLUTION_initial
+  sed -i "s/z(m).*/z(m):              \$z/"  $misfit_dir/CMTSOLUTION_initial
 fi
 rm \$tmpfile
 
@@ -163,7 +164,7 @@ $SEM_python_exec $SEM_utils_dir/misfit/measure_adj.py \\
   $db_file \\
   $misfit_par_file \\
   $event_dir/DATA/Par_file \\
-  $initial_cmt_file \\
+  $misfit_dir/CMTSOLUTION_initial \\
   $SEM_data_dir/$event_id/channel.txt \\
   $SEM_data_dir/$event_id/data.h5 \\
   $event_dir/output_green/sac \\
@@ -208,7 +209,7 @@ cd $event_dir/DATA
 
 # copy initial CMTSOLUTION with actual tau value
 rm -f CMTSOLUTION
-cp $initial_cmt_file CMTSOLUTION
+cp $misfit/CMTSOLUTION_initial CMTSOLUTION
 
 sed -i "/^SIMULATION_TYPE/s/=.*/= 2/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
@@ -335,9 +336,9 @@ do
     sed -i "s/z(m).*/z(m):             \$z1/"  \$dcmt_file
 
     # get initial source location
-    x0=\$(grep "x(m)" $initial_cmt_file | awk '{printf "%+.3f", \$2}')
-    y0=\$(grep "y(m)" $initial_cmt_file | awk '{printf "%+.3f", \$2}')
-    z0=\$(grep "z(m)" $initial_cmt_file | awk '{printf "%+.3f", \$2}')
+    x0=\$(grep "x(m)" $misfit/CMTSOLUTION_initial | awk '{printf "%+.3f", \$2}')
+    y0=\$(grep "y(m)" $misfit/CMTSOLUTION_initial | awk '{printf "%+.3f", \$2}')
+    z0=\$(grep "z(m)" $misfit/CMTSOLUTION_initial | awk '{printf "%+.3f", \$2}')
 
     # get dxs actually used
     dx=\$(echo \$x1 \$x0 | awk '{printf "%+.3f", \$1-\$2}')

@@ -12,7 +12,7 @@
 # |   |   |   |   |   DATA/, DATABASES_MPI/, SEM/
 # |   |   |   |   |   slurm/: green.job, misfit.job, ...
 # |   |   |   |   |   misfit/: misfit.h5, grid_search_source.txt, 
-# |   |   |   |   |            CMTSOLUTION_initial,green,dxs,dmt
+# |   |   |   |   |            CMTSOLUTION_[initial,updated,dxs,dmt]
 # |   |   |   |   |   output_green/
 # |   |   |   |   |   output_srcfrechet/
 # |   |   |   |   |   output_dxs,dmt/

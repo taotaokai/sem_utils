@@ -73,7 +73,8 @@ do
 
   # copy latest updated CMTSOLUTION file
   # cmt_file=$(find -L $source_dir -path "*/iter??/events/${event_id}/misfit/CMTSOLUTION.updated" | sort | tail -n1)
-  cmt_file=$(ls ${SEM_source_dir}/iter??/events/${event_id}/misfit/CMTSOLUTION.updated | sort | tail -n1)
+  # cmt_file=$(ls ${SEM_source_dir}/iter??/events/${event_id}/misfit/CMTSOLUTION.updated | sort | tail -n1)
+  cmt_file=$(ls ${SEM_source_dir}/iter??/CMTSOLUTION_updated/${event_id}.cmt | sort | tail -n1)
   echo ------ source: $(readlink -f $cmt_file)
   if [ ! -f "$cmt_file" ]
   then

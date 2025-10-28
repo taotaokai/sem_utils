@@ -185,14 +185,21 @@ def interp_model_gll(
 # ==================================================#
 
 
-def read_gll_file(gll_dir, gll_tag, iproc, region_code="reg1", dtype="f4", gll_dims=None):
+def read_gll_file(
+    gll_dir: str,
+    gll_tag: str,
+    iproc: int,
+    region_code="reg1",
+    dtype="f4",
+    gll_dims=None,
+) -> np.ndarray:
     """Read a Fortran unformatted file and return the data."""
     filename = os.path.join(gll_dir, f"proc{iproc:06d}_{region_code}_{gll_tag}.bin")
     if not os.path.exists(filename):
         raise FileNotFoundError(f"File not found: {filename}")
 
     with FortranFile(filename, "r") as f:
-        data = f.read_reals(dtype=dtype)
+        data = np.array(f.read_reals(dtype=dtype))
 
     if gll_dims is not None:
         data = data.reshape(gll_dims)
@@ -860,7 +867,9 @@ def sem_mesh_interp_model(
         source_model_gll = np.zeros((nmodel,) + gll_dims)
         for imodel in range(nmodel):
             model_tag = model_tags[imodel]
-            source_model_gll[imodel] = read_gll_file(model_dir_source, model_tag, iproc_source, gll_dims=gll_dims)
+            source_model_gll[imodel] = read_gll_file(
+                model_dir_source, model_tag, iproc_source, gll_dims=gll_dims
+            )
 
         # locate target points
         status_all, ispec_all, uvw_all, misloc_all, misratio_all = (
@@ -977,9 +986,15 @@ def sem_mesh_interp_model(
 
         # save misloc, status
         if mpi_rank == 0:
-            write_gll_file(model_dir_target, "status", iproc_target, status_glob[ibool_target])
-            write_gll_file(model_dir_target, "misloc", iproc_target, misloc_glob[ibool_target])
-            write_gll_file(model_dir_target, "misratio", iproc_target, misratio_glob[ibool_target])
+            write_gll_file(
+                model_dir_target, "status", iproc_target, status_glob[ibool_target]
+            )
+            write_gll_file(
+                model_dir_target, "misloc", iproc_target, misloc_glob[ibool_target]
+            )
+            write_gll_file(
+                model_dir_target, "misratio", iproc_target, misratio_glob[ibool_target]
+            )
 
 
 def sem_boundary_mesh_read(mesh_file):

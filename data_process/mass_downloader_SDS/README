@@ -1,0 +1,5 @@
+This is modified from obspy (https://github.com/obspy/obspy.git): obspy/clients/fdsn/mass_downloader 
+
+Changes:
+
+1) sds.py: add insert_mseed_file() to allow adding possible overlapping mseed files into SDS archieve

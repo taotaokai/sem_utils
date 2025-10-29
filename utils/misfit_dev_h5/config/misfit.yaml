@@ -154,7 +154,9 @@ source:
 #         }
 
 plot:
+  # cartopy projection parameters
   map_type: 'NearsidePerspective'
   map_params: {'central_longitude':10, 'central_latitude':50, 'satellite_height':5000000}
+  #
   min_weight: 0.1 # transparent plot of waveforms in windows of weight < min_weight
   nbins: 50 # histogram

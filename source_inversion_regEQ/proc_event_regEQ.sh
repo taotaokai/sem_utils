@@ -33,11 +33,12 @@ do
 
   # create event dir
   event_dir=$SEM_iter_dir/events/$event_id
-  if [ -d "$event_dir" ]
+  if [ -d "$event_dir/DATA" ]
   then
-    chmod u+w -R $event_dir
+    chmod u+w -R $event_dir/DATA # make DATA/ writable
+  else
+    mkdir -p $event_dir/DATA
   fi
-  mkdir -p $event_dir/DATA
 
   # copy Par_file
   # par_file=${SEM_config_dir}/DATA/Par_file

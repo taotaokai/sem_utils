@@ -31,9 +31,12 @@ remove_response:
   ref_freq: 1 # Hz, reference frequency
   # response amplitude within [resp_lc, resp_hc] >= ref_amp * 10**(-1 * thred_dB/20)
   ref_threshold: 3.01 # dB, relative to the amplitude at ref_freq, -3.01 dB is about half power
+  # instrument passband must cover [max_resp_lc, min_resp_hc]
   max_resp_lc: 0.05  # Hz, ensure enough low freq. content
   min_resp_hc: 1     # Hz, ensure enough high freq. content
-  filter: # butterworth, stablizing dividing response near small frequencies
+  # pre-filter applied to stablizing division of instrument response at frequencies close to zero
+  filter: # butterworth
     type: 'highpass'
-    N: 2  # filter order, most broadband seismometers have 2 zero zeros, i.e. |H| ~ f^2 for f near 0
+    N: 2  # filter order, most broadband seismometers have 2 zero zeros in velocity response,
+          # i.e. |H| ~ f^2 for f near 0
     min_cutoff_freq: 0.01  # Hz, minimum cutoff frequency, Wn = max(min_cutoff_freq, resp_lc)

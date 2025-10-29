@@ -11,10 +11,10 @@ import argparse
 #====== user input
 parser = argparse.ArgumentParser()
 
-parser.add_argument("nproc", help="number of slices", type=int)
-parser.add_argument("model_dir", help="input model dir")
-parser.add_argument("model_tags", nargs="+", help="model tags, e.g. rho vph")
-parser.add_argument("math_expr", help="math expression, e.g. rho*vph**2")
+parser.add_argument("--nproc", help="number of slices", type=int)
+parser.add_argument("--model_dir", help="input model dir")
+parser.add_argument("--model_tags", help="comma seperated model tags, e.g. rho,vph")
+parser.add_argument("--math_expr", help="math expression, e.g. rho*vph**2")
 
 args = parser.parse_args()
 print(args)
@@ -26,6 +26,7 @@ math_expr = args.math_expr
 
 #====== read in gll file
 model_tags = args.model_tags
+model_tags = model_tags.split(",")
 ntags = len(model_tags)
 
 # assert(len(model_dirs) == len(model_tags))

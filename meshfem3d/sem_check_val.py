@@ -6,17 +6,27 @@ import numpy as np
 # import numexpr as ne
 from scipy.io import FortranFile
 
+import argparse
+
 #====== user input
-nproc = int(sys.argv[1])
-model_dir = str(sys.argv[2])
-model_tags = str(sys.argv[3])
-math_expr = str(sys.argv[4]) # e.g. "rho * vsv**2"
+parser = argparse.ArgumentParser()
+
+parser.add_argument("nproc", help="number of slices", type=int)
+parser.add_argument("model_dir", help="input model dir")
+parser.add_argument("model_tags", nargs="+", help="model tags, e.g. rho vph")
+parser.add_argument("math_expr", help="math expression, e.g. rho*vph**2")
+
+args = parser.parse_args()
+print(args)
+
+nproc = args.nproc
+model_dir = args.model_dir
+model_tags = args.model_tags
+math_expr = args.math_expr
 
 #====== read in gll file
-# model_dirs = model_dirs.split(",")
-model_tags = model_tags.split(",")
+model_tags = args.model_tags
 ntags = len(model_tags)
-# print(model_tags)
 
 # assert(len(model_dirs) == len(model_tags))
 

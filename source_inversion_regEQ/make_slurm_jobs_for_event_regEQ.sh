@@ -208,7 +208,7 @@ cd $event_dir/DATA
 
 # copy initial CMTSOLUTION with actual tau value
 rm -f CMTSOLUTION
-cp $misfit/CMTSOLUTION_initial CMTSOLUTION
+cp $misfit_dir/CMTSOLUTION_initial CMTSOLUTION
 
 sed -i "/^SIMULATION_TYPE/s/=.*/= 2/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
@@ -335,9 +335,9 @@ do
     sed -i "s/z(m).*/z(m):             \$z1/"  \$dcmt_file
 
     # get initial source location
-    x0=\$(grep "x(m)" $misfit/CMTSOLUTION_initial | awk '{printf "%+.3f", \$2}')
-    y0=\$(grep "y(m)" $misfit/CMTSOLUTION_initial | awk '{printf "%+.3f", \$2}')
-    z0=\$(grep "z(m)" $misfit/CMTSOLUTION_initial | awk '{printf "%+.3f", \$2}')
+    x0=\$(grep "x(m)" $misfit_dir/CMTSOLUTION_initial | awk '{printf "%+.3f", \$2}')
+    y0=\$(grep "y(m)" $misfit_dir/CMTSOLUTION_initial | awk '{printf "%+.3f", \$2}')
+    z0=\$(grep "z(m)" $misfit_dir/CMTSOLUTION_initial | awk '{printf "%+.3f", \$2}')
 
     # get dxs actually used
     dx=\$(echo \$x1 \$x0 | awk '{printf "%+.3f", \$1-\$2}')

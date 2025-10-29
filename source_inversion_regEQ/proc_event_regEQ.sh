@@ -33,6 +33,10 @@ do
 
   # create event dir
   event_dir=$SEM_iter_dir/events/$event_id
+  if [ -d "$event_dir" ]
+  then
+    chmod u+w -R $event_dir
+  fi
   mkdir -p $event_dir/DATA
 
   # copy Par_file
@@ -43,7 +47,7 @@ do
     echo "[ERROR] $par_file NOT found!"
     exit -1
   fi
-  cp $par_file $event_dir/DATA/Par_file
+  cp -L $par_file $event_dir/DATA/Par_file
 
   # copy initial CMTSOLUTION file
   if [ x${SEM_iter_num} == x ]
@@ -77,7 +81,11 @@ do
     echo "[ERROR] $station_file NOT found!"
     exit -1
   fi
-  cp $station_file $event_dir/DATA/STATIONS
+  # if [ -f "$event_dir/DATA/STATIONS" ]
+  # then
+  #   chmod 644 $event_dir/DATA/STATIONS
+  # fi
+  cp -L $station_file $event_dir/DATA/STATIONS
 
   # copy misfit_par file
   # cp $misfit_par_dir/${event_id}_misfit.yaml $event_dir/DATA/misfit.yaml
@@ -85,7 +93,7 @@ do
     echo "[ERROR] $SEM_misfit_par_dir/misfit.yaml NOT found!"
     exit -1
   fi
-  cp $SEM_misfit_par_dir/misfit.yaml $event_dir/DATA/misfit.yaml
+  cp -L $SEM_misfit_par_dir/misfit.yaml $event_dir/DATA/misfit.yaml
 
   # create batch scripts
   $SEM_utils_dir/source_inversion_regEQ/make_slurm_jobs_for_event_regEQ.sh $control_file $event_id

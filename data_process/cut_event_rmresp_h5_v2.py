@@ -391,7 +391,7 @@ for network, station, location, channel in nslc_filtered:
             ref_freq=config_ref_freq,
             threshold_dB=config_ref_threshold,
         )
-        tr.stats.resposne_corner_frequency = [flc, fhc]
+        tr.stats.response_corner_frequency = [flc, fhc]
         # number of zeros
         paz = resp.get_paz()
         nz = sum([1 if z == 0 else 0 for z in paz.zeros])
@@ -406,16 +406,16 @@ for network, station, location, channel in nslc_filtered:
     # Determine common response frequency band for all components
     resp_lc = max(
         [
-            tr.stats.resposne_corner_frequency[0]
+            tr.stats.response_corner_frequency[0]
             for tr in st
-            if "resposne_corner_frequency" in tr.stats
+            if "response_corner_frequency" in tr.stats
         ]
     )
     resp_hc = min(
         [
-            tr.stats.resposne_corner_frequency[1]
+            tr.stats.response_corner_frequency[1]
             for tr in st
-            if "resposne_corner_frequency" in tr.stats
+            if "response_corner_frequency" in tr.stats
         ]
     )
     logger.info(

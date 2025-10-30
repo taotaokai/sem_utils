@@ -51,6 +51,7 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+print(args)
 
 nproc = args.nproc
 mesh_dir = args.mesh_dir  # <mesh_dir>/proc******_solver_data[_mpi].bin

@@ -3,6 +3,7 @@
 """create horizontal slice of SEM model at a given depth"""
 import sys
 import time
+import argparse
 
 import numpy as np
 from scipy.io import FortranFile
@@ -11,11 +12,28 @@ import numba
 from meshfem3d_utils import sem_mesh_read, R_EARTH_KM
 
 # ======
-nproc = int(sys.argv[1])
-mesh_dir = str(sys.argv[2])  # <mesh_dir>/proc******_external_mesh.bin
-model_dir = str(sys.argv[3])
-model_name = str(sys.argv[4])
-dt = float(sys.argv[5])
+parser = argparse.ArgumentParser()
+
+parser.add_argument("--nproc", help="number of slices", type=int)
+parser.add_argument("--mesh_dir", help="input mesh dir, proc*_solver_data.bin")
+parser.add_argument("--model_dir", help="input model dir, proc*_reg1_[model_tag].bin")
+parser.add_argument("--model_name", help="tag for velocity model, e.g. vsv")
+parser.add_argument("--dt", help="time step in second, e.g. 0.1", type=float)
+
+args = parser.parse_args()
+print(args)
+
+nproc = args.nproc  
+mesh_dir = args.mesh_dir
+model_dir = args.model_dir
+model_name = args.model_name
+dt = args.dt
+
+# nproc = int(sys.argv[1])
+# mesh_dir = str(sys.argv[2])  # <mesh_dir>/proc******_external_mesh.bin
+# model_dir = str(sys.argv[3])
+# model_name = str(sys.argv[4])
+# dt = float(sys.argv[5])
 
 
 @numba.jit(nopython=True)

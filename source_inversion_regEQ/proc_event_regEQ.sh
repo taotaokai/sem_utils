@@ -41,8 +41,8 @@ do
   fi
 
   # copy Par_file
-  # par_file=${SEM_config_dir}/DATA/Par_file
-  par_file=${SEM_mesh_dir}/DATA/Par_file
+  par_file=${SEM_config_dir}/DATA/Par_file
+  # par_file=${SEM_mesh_dir}/DATA/Par_file
   if [ ! -f "$par_file" ]
   then
     echo "[ERROR] $par_file NOT found!"

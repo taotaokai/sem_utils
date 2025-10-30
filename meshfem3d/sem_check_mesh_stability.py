@@ -15,8 +15,8 @@ from meshfem3d_utils import sem_mesh_read, R_EARTH_KM
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--nproc", help="number of slices", type=int)
-parser.add_argument("--mesh_dir", help="input mesh dir, proc*_solver_data.bin")
-parser.add_argument("--model_dir", help="input model dir, proc*_reg1_[model_tag].bin")
+parser.add_argument("--mesh_dir", help="input mesh directory of proc*_solver_data.bin")
+parser.add_argument("--model_dir", help="input model directory of proc*_reg1_[model_tag].bin")
 parser.add_argument("--model_name", help="tag for velocity model, e.g. vsv")
 parser.add_argument("--dt", help="time step in second, e.g. 0.1", type=float)
 

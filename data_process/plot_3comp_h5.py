@@ -330,10 +330,10 @@ def plot_seismogram_3comp(event_h5grp,
                 else:
                     ind_hcomp.append(i)
             if len(ind_zcomp) != 1:
-                print(f'[WARN] not exactly one vertical component: {orientation}, skip {sta}')
+                print(f'[WARN] not exactly one vertical component in {data_orientation}, skip {sta}')
                 continue
             if len(ind_hcomp) != 0 and len(ind_hcomp) != 2:
-                print(f'[WARN] not exactly zero or two horizontal components: {orientation}, skip {sta}')
+                print(f'[WARN] not exactly zero or two horizontal components in {data_orientation}, skip {sta}')
                 continue
 
             assert(data_orientation[ind_zcomp[0]]['dip'] == -90.0)

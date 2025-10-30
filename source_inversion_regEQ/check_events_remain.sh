@@ -3,7 +3,7 @@
 cd ../../
 echo "$PWD"
 list_file="event_within_mesh.lst"
-folder="./stage00.source/iter08/CMTSOLUTION_updated/"
+folder="./stage00.source/iter09/CMTSOLUTION_updated/"
 output_file="event_within_mesh_remain.lst"
 
 [ -f "$output_file" ] && rm "$output_file"

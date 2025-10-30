@@ -15,7 +15,7 @@ job_dep=${4:--1} # dependent job ID's
 source $control_file
 
 # for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
-for event_id in $(awk 'NF&&$1!~/#/' $event_list)
+for event_id in $(awk 'NF&&$1!~/#/{print $1}' $event_list)
 do
 
   echo "====== $event_id"

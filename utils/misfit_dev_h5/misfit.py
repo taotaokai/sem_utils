@@ -2157,7 +2157,8 @@ class Misfit(object):
             obs_fs = obs.attrs["sampling_rate"]
             obs_te = obs_tb + obs_nt / obs_fs
 
-            valid_tb = max(solver_tb, obs_tb)
+            # valid_tb = max(solver_tb, obs_tb)
+            valid_tb = obs_tb # since synthetic is zero at any time before origin time 
             # valid_te = min(solver_te, obs_te)
             valid_te = min(solver_valid_te, obs_te)
 
@@ -2264,10 +2265,10 @@ class Misfit(object):
                     warnings.warn(msg)
                     continue
                 
-                win_tb = max(valid_tb, event_t0 + tb)
+                win_tb = max(valid_tb + bp_long_period, event_t0 + tb)
                 win_te = min(
                     valid_te - bp_long_period, event_t0 + te
-                )  # to avoid filter edge effect in the later bandpass process
+                )  # +-bp_long_period: to avoid filter edge effect in the later bandpass process
                 # print(solver_te, obs_te, solver_valid_te, win_te)
 
                 required_winlen = tb - te

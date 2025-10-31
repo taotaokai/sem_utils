@@ -19,7 +19,17 @@ control_file=${1:?[arg]need control_file}
 event_list=${2:?[arg]need event_list}
 
 # load parameters in control_file
+if [ ! -f "$control_file" ]
+then
+  echo "[ERROR] $control_file NOT found!"
+  exit -1
+fi
 source $control_file
+if [ $? -ne 0 ]
+then
+  echo "[ERROR] source $control_file failed!"
+  exit -1
+fi
 
 # create directories
 mkdir -p $SEM_iter_dir

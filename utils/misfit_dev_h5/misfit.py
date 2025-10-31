@@ -1700,8 +1700,8 @@ class Misfit(object):
                 first_arrtime = event_t0 + min([arr.time for arr in ttp])
 
                 # check if data has enough length
-                t0 = first_arrtime - time_before_first_arrival
-                t1 = event_t0 + time_after_origin
+                t0 = first_arrtime - min(time_before_first_arrival)
+                t1 = event_t0 + max(time_after_origin)
                 if data_starttime > t0 or data_endtime < t1:
                     msg = f"{g_sta_obs._v_name}: timespan [{data_starttime}, {data_endtime}] does not cover required [{t0}, {t1}], skip"
                     warnings.warn(msg)
@@ -1729,6 +1729,10 @@ class Misfit(object):
                 # h5f.create_external_link(g_sta, obs_tag, data)
 
                 # cut data /waveforms/NET_STA/DATA_DISP
+                t0 = first_arrtime - max(time_before_first_arrival)
+                t0 = max(t0, data_starttime)
+                t1 = event_t0 + max(time_after_origin)
+                t1 = min(t1, data_endtime)
                 idx0 = int((t0 - data_starttime) * data_fs)
                 idx0 = max(idx0, 0)
                 idx1 = int((t1 - data_starttime) * data_fs)

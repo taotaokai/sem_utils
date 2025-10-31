@@ -12,9 +12,11 @@ zcomp_pattern: "[BH]HZ" # for matching files of Z component
 # location_code_priority: ['', '00', '01', '*']
 
 time_window:
-  before_first_arrival_seconds: 500 # sec 
+  # specify the at least and at most time before first arrival
+  before_first_arrival: [250, 500] # sec, 
   # after_first_arrival_seconds: 1500 # sec
-  after_origin_time_seconds: 1500 # sec
+  # specify the at least & at most time after origin time
+  after_origin_time: [1000, 1500] # sec
 
 resample:
   sampling_rate: 2 # Hz, resample data

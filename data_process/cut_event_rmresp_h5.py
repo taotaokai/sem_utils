@@ -2,7 +2,7 @@ import sys
 import os
 import datetime
 import numpy as np
-import tables as tb
+import tables
 import scipy
 import yaml
 
@@ -107,7 +107,7 @@ if os.path.dirname(out_channel_file):
     os.makedirs(os.path.dirname(out_channel_file), exist_ok=True)
 
 # h5 file handle
-h5f = tb.open_file(out_h5_file, mode="w")
+h5f = tables.open_file(out_h5_file, mode="w")
 
 # event
 event_data = read_events(CMT_file)[0]
@@ -173,8 +173,8 @@ taup_model = TauPyModel(model="ak135")
 # SDS client
 client = Client(SDS_root)
 
-t0 = event_origin.time - time_before_first_arrival
-t1 = event_origin.time + time_after_origin
+t0 = event_origin.time - max(time_before_first_arrival)
+t1 = event_origin.time + max(time_after_origin)
 
 # query all Z components
 st = client.get_waveforms("*", "*", "*", config_zcomp_pattern, t0, t1)
@@ -284,16 +284,18 @@ for network, station, location, channel in nslc_filtered:
     )
     first_arrival_time = event_origin.time + min([arr.time for arr in arrivals])
 
-    # data time window
-    time_window_starttime = first_arrival_time - time_before_first_arrival
-    time_window_endtime = event_origin.time + time_after_origin
-    # round time to integer seconds
-    if time_window_starttime.microsecond != 0:
-        time_window_starttime = time_window_starttime.replace(microsecond=0)
-    if time_window_endtime.microsecond != 0:
-        time_window_endtime = (time_window_endtime + 1).replace(microsecond=0)
+    # # data time window
+    # time_window_starttime = first_arrival_time - max(time_before_first_arrival)
+    # time_window_endtime = event_origin.time + max(time_after_origin)
+    # # round time to integer seconds
+    # if time_window_starttime.microsecond != 0:
+    #     time_window_starttime = time_window_starttime.replace(microsecond=0)
+    # if time_window_endtime.microsecond != 0:
+    #     time_window_endtime = (time_window_endtime + 1).replace(microsecond=0)
 
     # get waveforms
+    t0 = first_arrival_time - max(time_before_first_arrival)
+    t1 = time_window_endtime = event_origin.time + max(time_after_origin)
     try:
         pad_time = 5  # seconds
         st = client.get_waveforms(
@@ -301,8 +303,7 @@ for network, station, location, channel in nslc_filtered:
             station,
             location,
             channel[0:2] + "?",
-            time_window_starttime - pad_time,
-            time_window_endtime + pad_time,
+            t0, t1,
             merge=-1,
         )
     except Exception as err:
@@ -333,16 +334,18 @@ for network, station, location, channel in nslc_filtered:
 
     # check time coverage
     traces_to_remove = []
+    t0 = first_arrival_time - min(time_before_first_arrival)
+    t1 = event_origin.time + min(time_after_origin)
     for tr in st:
         dt = tr.stats.delta
-        if tr.stats.starttime > time_window_starttime:
+        if tr.stats.starttime > t0:
             print(
-                f"{tr}\n[WARN] trace starttime {tr.stats.starttime} is later than required {time_window_starttime}, {tr.id} ignored. ({station_id})\n"
+                f"{tr}\n[WARN] trace starttime {tr.stats.starttime} is later than required {t0}, {tr.id} ignored. ({station_id})\n"
             )
             traces_to_remove.append(tr)
-        elif tr.stats.endtime < time_window_endtime:
+        elif tr.stats.endtime < t1:
             print(
-                f"{tr}\n[WARN] trace endtime {tr.stats.endtime} is earlier than required {time_window_endtime}, {tr.id} ignored. ({station_id})\n"
+                f"{tr}\n[WARN] trace endtime {tr.stats.endtime} is earlier than required {t1}, {tr.id} ignored. ({station_id})\n"
             )
             traces_to_remove.append(tr)
     for tr in traces_to_remove:
@@ -475,10 +478,10 @@ for network, station, location, channel in nslc_filtered:
 
     # remove instrument response and resample
     traces_to_remove = []
-    resample_starttime = time_window_starttime
-    resample_npts = int(
-        (time_window_endtime - time_window_starttime) * config_sampling_rate
-    )
+    t0 = max([tr.stats.starttime for tr in st])
+    t1 = min([tr.stats.endtime for tr in st])
+    resample_starttime = t0
+    resample_npts = int((t1 - t0) * config_sampling_rate)
     for tr in st:
         fs = tr.stats.sampling_rate
         npts = tr.stats.npts
@@ -628,8 +631,8 @@ for network, station, location, channel in nslc_filtered:
     assert all([tr.stats.sampling_rate == config_sampling_rate for tr in st])
 
     # store waveforms in array, e.g. /NET_STA/DATA_DISP[0:nchan, 0:npts]
-    atom = tb.Atom.from_dtype(np.dtype(np.float32))
-    filters = tb.Filters(complevel=3, complib="zlib")
+    atom = tables.Atom.from_dtype(np.dtype(np.float32))
+    filters = tables.Filters(complevel=3, complib="zlib")
     array_name = f"DATA_{config_output_type}"
     nchan = len(st)
     shape = (nchan, resample_npts)

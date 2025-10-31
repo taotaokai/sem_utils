@@ -6,10 +6,11 @@ gps_ellps: 'WGS84'
 data:
   type: 'VEL'
   tag: 'DATA_VEL'
-  time_before_first_arrival: 450
-  time_after_origin: 1500
+  # at least & at most time before first arrival or after origin time
+  time_before_first_arrival: [250, 500] # sec
+  time_after_origin: [1000, 1500] # sec
   # taper_width: 100  # on each side
-  time_before_first_arrival_as_noise: 50  # SNR
+  time_before_first_arrival_as_noise: 50  # for SNR 
 
 syn:
   type: 'DISP'

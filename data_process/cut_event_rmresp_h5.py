@@ -338,6 +338,7 @@ for network, station, location, channel in nslc_filtered:
 
     # check time coverage
     traces_to_remove = []
+    # [t0, t1]: minimum time range required
     t0 = first_arrival_time - min(time_before_first_arrival)
     t1 = event_origin.time + min(time_after_origin)
     for tr in st:

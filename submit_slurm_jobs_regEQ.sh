@@ -12,7 +12,17 @@ job_names=${3:?[arg]need job names, comma seperated (e.g. green,misfit,srcfreche
 job_dep=${4:--1} # dependent job ID's
 
 # load parameters in control_file
+if [ ! -f "$control_file" ]
+then
+  echo "[ERROR] $control_file NOT found!"
+  exit -1
+fi
 source $control_file
+if [ $? -ne 0 ]
+then
+  echo "[ERROR] source $control_file failed!"
+  exit -1
+fi
 
 # for event_id in $(awk -F"|" 'NF&&$1!~/#/{print $9}' $event_list)
 for event_id in $(awk 'NF&&$1!~/#/{print $1}' $event_list)

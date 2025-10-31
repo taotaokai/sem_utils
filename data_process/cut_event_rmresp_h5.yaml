@@ -13,7 +13,7 @@ zcomp_pattern: "[BH]HZ" # for matching files of Z component
 
 time_window:
   # specify the at least and at most time before first arrival
-  before_first_arrival: [250, 500] # sec, 
+  before_first_arrival: [250, 500] # sec
   # after_first_arrival_seconds: 1500 # sec
   # specify the at least & at most time after origin time
   after_origin_time: [1000, 1500] # sec

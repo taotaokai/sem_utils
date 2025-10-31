@@ -142,9 +142,13 @@ config_highpass_min_cutoff_freq = config["remove_response"]["filter"]["min_cutof
 # config_filter_gpass = config['remove_response']['filter']['gpass']
 # config_filter_gstop = config['remove_response']['filter']['gstop']
 
-time_before_first_arrival = config["time_window"]["before_first_arrival_seconds"]
+time_before_first_arrival = config["time_window"]["before_first_arrival"]
+if not isinstance(time_before_first_arrival, list):
+    time_before_first_arrival = [time_before_first_arrival,]
 # time_after_first_arrival = config['data']['time_window']['after_first_arrival_seconds']
-time_after_origin = config["time_window"]["after_origin_time_seconds"]
+time_after_origin = config["time_window"]["after_origin_time"]
+if not isinstance(time_after_origin, list):
+    time_after_origin = [time_after_origin,]
 
 # for merging traces
 # misalignment_threshold = config['misalignment_threshold']

@@ -1532,8 +1532,12 @@ class Misfit(object):
 
         config = h5f.root._v_attrs["config"]
         time_before_first_arrival = config["data"]["time_before_first_arrival"]
+        if not isinstance(time_before_first_arrival, list):
+            time_before_first_arrival = [time_before_first_arrival, ]
         # taper_width = config['data']['taper_width']
         time_after_origin = config["data"]["time_after_origin"]
+        if not isinstance(time_after_origin, list):
+            time_after_origin = [time_after_origin, ]
         obs_tag = config["data"]["tag"]
 
         if "/source" not in h5f:
@@ -1699,9 +1703,9 @@ class Misfit(object):
                 )
                 first_arrtime = event_t0 + min([arr.time for arr in ttp])
 
-                # check if data has enough length
+                # check if data time range includes the specified minimum time window 
                 t0 = first_arrtime - min(time_before_first_arrival)
-                t1 = event_t0 + max(time_after_origin)
+                t1 = event_t0 + min(time_after_origin)
                 if data_starttime > t0 or data_endtime < t1:
                     msg = f"{g_sta_obs._v_name}: timespan [{data_starttime}, {data_endtime}] does not cover required [{t0}, {t1}], skip"
                     warnings.warn(msg)
@@ -1730,9 +1734,9 @@ class Misfit(object):
 
                 # cut data /waveforms/NET_STA/DATA_DISP
                 t0 = first_arrtime - max(time_before_first_arrival)
-                t0 = max(t0, data_starttime)
                 t1 = event_t0 + max(time_after_origin)
-                t1 = min(t1, data_endtime)
+                t0 = max(t0, data_starttime) # cut window begins no earlier than t0
+                t1 = min(t1, data_endtime) # cut window ends no later than t1
                 idx0 = int((t0 - data_starttime) * data_fs)
                 idx0 = max(idx0, 0)
                 idx1 = int((t1 - data_starttime) * data_fs)

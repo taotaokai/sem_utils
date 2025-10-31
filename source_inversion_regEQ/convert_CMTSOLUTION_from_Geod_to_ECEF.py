@@ -1,31 +1,46 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """Convert CMTSOLUTION to have ECEF coordinates and tau"""
-import sys
+import os
+import argparse
 import numpy as np
 
 # from scipy.interpolate import interpn
+from scipy.interpolate import RegularGridInterpolator
 
-# from netCDF4 import Dataset
+from netCDF4 import Dataset
 from obspy import UTCDateTime
 
 from pyproj import Transformer
 
-# ====== user input
-cmt_file = str(sys.argv[1])
-out_file = str(sys.argv[2])
-# topoGRDfile = str(sys.argv[3]) # 'ETOPO1_Ice_g_smooth_b15km_I4m.grd'
+# --- user input
+parser = argparse.ArgumentParser()
 
-transformer = Transformer.from_crs("EPSG:4326", "EPSG:4978")  # GPS to ECEF
-# GPS_ELLPS = 'WGS84'
-# ecef = pyproj.Proj(proj='geocent', ellps=GPS_ELLPS)
-# lla = pyproj.Proj(proj='latlong', ellps=GPS_ELLPS)
+parser.add_argument("cmt_file", help="input CMTSOLUTION file")
+parser.add_argument("out_file", help="output CMTSOLUTION file in ECEF")
+parser.add_argument(
+    "--topo_ncfile",
+    default=None,
+    help="topo netcdf file, veritcal reference to WGS84 ellipsoid. require lat,lon,z[lat,lon] variables",
+)
 
-# #--- read in topo file
-# fh = Dataset(topoGRDfile,'r')
-# grd_lat = np.array(fh.variables['lat'][:])
-# grd_lon = np.array(fh.variables['lon'][:])
-# grd_topo = np.transpose(np.array(fh.variables['z'][:])) # (lon,lat)
+args = parser.parse_args()
+print(args)
+
+cmt_file = args.cmt_file
+out_file = args.out_file
+topo_ncfile = args.topo_ncfile
+
+transformer = Transformer.from_crs("EPSG:4326", "EPSG:4978")  # WGS84 to ECEF
+
+# --- read in topo file
+if topo_ncfile:
+    topo_ds = Dataset(topo_ncfile, "r")
+    topo_heights = np.array(topo_ds.variables["z"])
+    topo_lons = np.array(topo_ds.variables["lon"])
+    topo_lats = np.array(topo_ds.variables["lat"])
+    topo_interp = RegularGridInterpolator((topo_lats, topo_lons), topo_heights)
+    topo_ds.close()
 
 # --- read in Harvard gCMT
 with open(cmt_file, "r") as f:
@@ -48,12 +63,16 @@ lat = float(lines[4][1])
 lon = float(lines[5][1])
 dep = float(lines[6][1]) * 1000.0  # meter
 
+# get WGS84 height
+topo = 0.0
+if topo_ncfile:
+    topo = topo_interp((lat, lon))  # get local topography
+height = topo - dep  # WGS84 ellipsoidal height of the earthquake
+print(f"{cmt_file=},{lon=},{lat=},{topo=},{height=}")
+
 # convert from lla to ECEF(meters)
-# topo_local = interpn((grd_lon,grd_lat), grd_topo, [lon,lat])[0]
-# height = topo_local - dep # ellipsoidal height, ellipsoid approx. MSL
-# print("lon,lat,topo,height = ",lon,lat,topo_local,height)
-# x, y, z = transformer.transform(lat, lon, height)
-x, y, z = transformer.transform(lat, lon, -dep)
+x, y, z = transformer.transform(lat, lon, height)
+# x, y, z = transformer.transform(lat, lon, -dep)
 
 # centroid time: t0
 isotime = "{:s}-{:s}-{:s}T{:s}:{:s}:{:s}Z".format(

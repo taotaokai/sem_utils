@@ -25,3 +25,5 @@ include/*.h
 # numba cache files
 *.nbc
 *.nbi
+# fortran modules
+*.mod

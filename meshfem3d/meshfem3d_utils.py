@@ -281,8 +281,12 @@ def rotmat_enu_to_ecef(lon, lat):
 
     xyz_ecef = xyz0_ecef + rotmat * enu
     enu = transpose(rotmat) * (xyz_ecef - xyz0_ecef)
-
     , where xyz0_ecef is the reference point at (lon,lat,alt).
+
+    rotmat[i,j] = ecef_vi .dot. enu_vj
+    , where ecef_vi: i-th unit vector in ECEF coordinate
+            enu_vj: j-th unit vector in ENU coordinate
+
     """
     coslat = np.cos(np.deg2rad(lat))
     sinlat = np.sin(np.deg2rad(lat))
@@ -1414,6 +1418,162 @@ def laplacian_iso3D(
                         jacobianl
                         * kappal
                         * (dgam_dxl * dsl_dxl + dgam_dyl * dsl_dyl + dgam_dzl * dsl_dzl)
+                    )
+
+        for k in range(ngllz):
+            for j in range(nglly):
+                for i in range(ngllx):
+                    # Compute derivatives at elemental level
+                    lapla_x = 0.0
+                    lapla_y = 0.0
+                    lapla_z = 0.0
+                    for l in range(ngllx):
+                        lapla_x = (
+                            lapla_x + grad_xsil[k, j, l] * dlag_gll[i, l] * wgll[l]
+                        )
+                        lapla_y = (
+                            lapla_y + grad_etal[k, l, i] * dlag_gll[j, l] * wgll[l]
+                        )
+                        lapla_z = (
+                            lapla_z + grad_gaml[l, j, i] * dlag_gll[k, l] * wgll[l]
+                        )
+
+                    # Stiffness
+                    stif[k, j, i] = (
+                        wgll[j] * wgll[k] * lapla_x
+                        + wgll[i] * wgll[k] * lapla_y
+                        + wgll[i] * wgll[j] * lapla_z
+                    )
+
+        # Go back to dof
+        for k in range(ngllz):
+            for j in range(nglly):
+                for i in range(ngllx):
+                    idof = ibool[e, k, j, i]
+                    out_glob[idof] += stif[k, j, i]
+
+    return -1 * out_glob
+
+
+@numba.jit(nogil=True)  # , cache=True)
+def laplacian_ani3D(
+    u_glob,
+    Kxx_gll,
+    Kyy_gll,
+    Kzz_gll,
+    Kxy_gll,
+    Kxz_gll,
+    Kyz_gll,
+    wgll,
+    dlag_gll,
+    ibool,
+    dxsi_dx,
+    dxsi_dy,
+    dxsi_dz,
+    deta_dx,
+    deta_dy,
+    deta_dz,
+    dgam_dx,
+    dgam_dy,
+    dgam_dz,
+    jacobian,
+):
+    """
+    int(grad(phi_gll) * K * grad(u), dV)
+    u_glob -> u_{npsec,ngllz,nglly,ngllx} is the trial function
+    phi_gll_{npsec,ngllz,nglly,ngllx} is the test function
+
+    NOTE: need to assemble the results if run in parralel (assemble_MPI_scalar)
+    """
+    nspec, ngllz, nglly, ngllx = ibool.shape
+    # assert u_glob.shape == out_glob.shape
+
+    dtype = u_glob.dtype
+    sl = np.zeros((ngllz, nglly, ngllx), dtype=dtype)
+    grad_xsil = np.zeros((ngllz, nglly, ngllx), dtype=dtype)
+    grad_etal = np.zeros((ngllz, nglly, ngllx), dtype=dtype)
+    grad_gaml = np.zeros((ngllz, nglly, ngllx), dtype=dtype)
+    stif = np.zeros((ngllz, nglly, ngllx), dtype=dtype)
+    out_glob = np.zeros(u_glob.shape, dtype=dtype)
+
+    for e in range(nspec):
+
+        # sl = u_glob[ibool[e, :, :, :]]
+        for k in range(ngllz):
+            for j in range(nglly):
+                for i in range(ngllx):
+                    idof = ibool[e, k, j, i]
+                    sl[k, j, i] = u_glob[idof]
+
+        for k in range(ngllz):
+            for j in range(nglly):
+                for i in range(ngllx):
+                    # Compute derivatives at elemental level
+                    dsl_dxsi = 0
+                    dsl_deta = 0
+                    dsl_dgam = 0
+
+                    # du/dxsi
+                    for l in range(ngllx):
+                        dsl_dxsi = dsl_dxsi + sl[k, j, l] * dlag_gll[l, i]
+                        dsl_deta = dsl_deta + sl[k, l, i] * dlag_gll[l, j]
+                        dsl_dgam = dsl_dgam + sl[l, j, i] * dlag_gll[l, k]
+
+                    # Get derivatives informations
+                    dxsi_dxl = dxsi_dx[e, k, j, i]
+                    dxsi_dyl = dxsi_dy[e, k, j, i]
+                    dxsi_dzl = dxsi_dz[e, k, j, i]
+                    deta_dxl = deta_dx[e, k, j, i]
+                    deta_dyl = deta_dy[e, k, j, i]
+                    deta_dzl = deta_dz[e, k, j, i]
+                    dgam_dxl = dgam_dx[e, k, j, i]
+                    dgam_dyl = dgam_dy[e, k, j, i]
+                    dgam_dzl = dgam_dz[e, k, j, i]
+                    jacobianl = jacobian[e, k, j, i]
+
+                    # Get physical derivatives
+                    # du/dx = du/dxsi * dxsi_dx + du/deta * deta_dx + du/dgamma * dgamma_dx
+                    dsl_dxl = (
+                        dsl_dxsi * dxsi_dxl + dsl_deta * deta_dxl + dsl_dgam * dgam_dxl
+                    )
+                    dsl_dyl = (
+                        dsl_dxsi * dxsi_dyl + dsl_deta * deta_dyl + dsl_dgam * dgam_dyl
+                    )
+                    dsl_dzl = (
+                        dsl_dxsi * dxsi_dzl + dsl_deta * deta_dzl + dsl_dgam * dgam_dzl
+                    )
+
+                    # Start product: Kij * du_dxi * dxsi_dxj
+                    kxx = Kxx_gll[e, k, j, i]
+                    kyy = Kyy_gll[e, k, j, i]
+                    kzz = Kzz_gll[e, k, j, i]
+                    kxy = Kxy_gll[e, k, j, i]
+                    kxz = Kxz_gll[e, k, j, i]
+                    kyz = Kyz_gll[e, k, j, i]
+
+                    grad_xsil[k, j, i] = jacobianl * (
+                        kxx * dsl_dxl * dxsi_dxl
+                        + kyy * dsl_dyl * dxsi_dyl
+                        + kzz * dsl_dzl * dxsi_dzl
+                        + kxy * (dsl_dxl * dxsi_dyl + dsl_dyl * dxsi_dxl)
+                        + kxz * (dsl_dxl * dxsi_dzl + dsl_dzl * dxsi_dxl)
+                        + kyz * (dsl_dyl * dxsi_dzl + dsl_dzl * dxsi_dyl)
+                    )
+                    grad_etal[k, j, i] = jacobianl * (
+                        kxx * dsl_dxl * deta_dxl
+                        + kyy * dsl_dyl * deta_dyl
+                        + kzz * dsl_dzl * deta_dzl
+                        + kxy * (dsl_dxl * deta_dyl + dsl_dyl * deta_dxl)
+                        + kxz * (dsl_dxl * deta_dzl + dsl_dzl * deta_dxl)
+                        + kyz * (dsl_dyl * deta_dzl + dsl_dzl * deta_dyl)
+                    )
+                    grad_gaml[k, j, i] = jacobianl * (
+                        kxx * dsl_dxl * dgam_dxl
+                        + kyy * dsl_dyl * dgam_dyl
+                        + kzz * dsl_dzl * dgam_dzl 
+                        + kxy * (dsl_dxl * dgam_dyl + dsl_dyl * dgam_dxl)
+                        + kxz * (dsl_dxl * dgam_dzl + dsl_dzl * dgam_dxl)
+                        + kyz * (dsl_dyl * dgam_dzl + dsl_dzl * dgam_dyl)
                     )
 
         for k in range(ngllz):

@@ -297,7 +297,7 @@ $\phi$ is the test function.
   - $$\frac{{\partial {L_\alpha }}}{{\partial {\xi _i}}}\left( {{\bf{\xi }}_\beta ^{GLL}} \right) = \dot \ell _{{\alpha _i}}^{GLL}\left( {\xi _{{\beta _i}}^{GLL}} \right)\prod\limits_{j \ne i} {\ell _{{\alpha _j}}^{GLL}\left( {\xi _{{\beta _j}}^{GLL}} \right)}  = \dot \ell _{{\alpha _i}}^{GLL}\left( {\xi _{{\beta _i}}^{GLL}} \right)\prod\limits_{j \ne i} {{\delta _{{\alpha _j}{\beta _j}}}} $$
 - local to global mapping:
   - $g = G(e,\alpha)$  
-  - nodes shared by two elements (e.g. on element faces/corners) are assigned to unique indices
+  - nodes shared by more than one elements (e.g. on element faces/corners) are assigned to unique indices
 - test/trial basis function $\{\psi_g\}$: 
   - $\psi_g = \sum_{G(e,\alpha)=g} \psi_{\alpha}^{e}$
   - any test or trial function is continuous across elements
@@ -381,7 +381,7 @@ $$
 
 & \int_V {\left( {\sum\limits_{g'} {{u_{g'}}\nabla {\psi _{g'}}} } \right) \cdot {\bf{K}} \cdot \nabla {\psi _g}dV}  \nonumber \cr 
 
-& = \sum\limits_{G(e,\alpha ) = g} {\int_{{{\left[ { - 1,1} \right]}^3}} {\sum\limits_{i,j} {{K_{ij}}\left( {\sum\limits_n {\sum\limits_{\alpha '} {u_{\alpha '}^e} \frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\frac{{\partial \xi _n^e}}{{\partial {x_i}}}} } \right)\left( {\sum\limits_m {\frac{{\partial {L_\alpha }}}{{\partial {\xi _m}}}\frac{{\partial \xi _m^e}}{{\partial {x_\beta }}}} } \right)} \det {{\bf{J}}^e}{d^3}\xi } }   \cr 
+& = \sum\limits_{G(e,\alpha ) = g} {\int_{{{\left[ { - 1,1} \right]}^3}} {\sum\limits_{i,j} {{K_{ij}}\left( {\sum\limits_n {\sum\limits_{\alpha '} {u_{\alpha '}^e} \frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\frac{{\partial \xi _n^e}}{{\partial {x_i}}}} } \right)\left( {\sum\limits_m {\frac{{\partial {L_\alpha }}}{{\partial {\xi _m}}}\frac{{\partial \xi _m^e}}{{\partial {x_j }}}} } \right)} \det {{\bf{J}}^e}{d^3}\xi } }   \cr 
   
  \label{stiff2}
  &  \approx \sum\limits_{G(e,\alpha ) = g} {\sum\limits_\beta  {{w_\beta }\sum\limits_{i,j} {\left[ {{K_{ij}}\left( {\sum\limits_n {\sum\limits_{\alpha '} {u_{\alpha '}^e} \frac{{\partial {L_{\alpha '}}}}{{\partial {\xi _n}}}\frac{{\partial \xi _n^e}}{{\partial {x_i}}}} } \right)\left( {\sum\limits_m {\frac{{\partial {L_\alpha }}}{{\partial {\xi _m}}}\frac{{\partial \xi _m^e}}{{\partial {x_j }}}} } \right)\det {{\bf{J}}^e}} \right]\left( {{\bf{\xi }}_\beta ^{GLL}} \right)} } }  

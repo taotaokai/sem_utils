@@ -132,7 +132,7 @@ lat_gll, lon_gll, alt_gll = ecef2gps.transform(xyz_gll[:,0], xyz_gll[:,1], xyz_g
 
 nspec, ngllz, nglly, ngllx = ibool.shape 
 @numba.jit(nogil=True)
-def rotate_K(): 
+def rotate_K(Kxx_gll, Kyy_gll, Kzz_gll, Kxy_gll, Kxz_gll, Kyz_gll): 
     rotmat = np.zeros((3, 3))
     kl = np.zeros((3,3))
     for e in range(nspec):
@@ -164,7 +164,7 @@ def rotate_K():
                                 Kxz_gll[e,k,j,i] += rotmat[0,m] * kl[m,n] * rotmat[2,n]
                                 Kyz_gll[e,k,j,i] += rotmat[1,m] * kl[m,n] * rotmat[2,n]
 
-rotate_K()       
+rotate_K(Kxx_gll, Kyy_gll, Kzz_gll, Kxy_gll, Kxz_gll, Kyz_gll)
 
 comm.Barrier()
 

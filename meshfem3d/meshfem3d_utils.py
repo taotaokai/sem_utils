@@ -614,15 +614,15 @@ def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
         # update
         located_uvw[:] = located_uvw[:] + np.dot(dudx, target_xyz - xyz)
 
-        is_inside = True
-        mask = located_uvw < -1
-        if np.any(mask):
-            is_inside = False
-        located_uvw[mask] = -1
-        mask = located_uvw > 1
-        if np.any(mask):
-            is_inside = False
-        located_uvw[mask] = 1
+        # is_inside = True
+        # mask = located_uvw < -1
+        # if np.any(mask):
+        #     is_inside = False
+        # located_uvw[mask] = -1
+        # mask = located_uvw > 1
+        # if np.any(mask):
+        #     is_inside = False
+        # located_uvw[mask] = 1
 
         # # limit inside the reference cube
         # is_inside = True
@@ -638,6 +638,9 @@ def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
     # xyz, dudx = sem_jacobian_hex27(anchors_xyz, located_uvw)
     misloc = (sum(target_xyz - xyz) ** 2) ** 0.5
     # print(f"{iter=}, {located_uvw=}, {xyz=}")
+
+    if np.any(np.abs(located_uvw) > 1.0):
+        is_inside = False
 
     return misloc, is_inside
 

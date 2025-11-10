@@ -643,7 +643,7 @@ def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
 
 
 def sem_mesh_locate_points(
-    mesh_data, xyz, idoubling=-1, kdtree_num_element=2.0, max_dist_ratio=2.0
+    mesh_data, xyz, idoubling=-1, kdtree_num_element=3.0, max_dist_ratio=3.0
 ):
     """locate points in the SEM mesh.
     mesh_data: return value from sem_mesh_read()

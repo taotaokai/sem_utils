@@ -614,15 +614,15 @@ def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
         # update
         located_uvw[:] = located_uvw[:] + np.dot(dudx, target_xyz - xyz)
 
-        # is_inside = True
-        # mask = located_uvw < -1
-        # if np.any(mask):
-        #     is_inside = False
-        # located_uvw[mask] = -1
-        # mask = located_uvw > 1
-        # if np.any(mask):
-        #     is_inside = False
-        # located_uvw[mask] = 1
+        is_inside = True
+        mask = located_uvw < -1
+        if np.any(mask):
+            is_inside = False
+        located_uvw[mask] = -1
+        mask = located_uvw > 1
+        if np.any(mask):
+            is_inside = False
+        located_uvw[mask] = 1
 
         # # limit inside the reference cube
         # is_inside = True
@@ -638,9 +638,6 @@ def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
     # xyz, dudx = sem_jacobian_hex27(anchors_xyz, located_uvw)
     misloc = (sum(target_xyz - xyz) ** 2) ** 0.5
     # print(f"{iter=}, {located_uvw=}, {xyz=}")
-
-    if np.any(np.abs(located_uvw) > 1.0):
-        is_inside = False
 
     return misloc, is_inside
 
@@ -774,7 +771,7 @@ def sem_mesh_locate_points(
                 uvw_all[ipoint, :] = uvw
                 misloc_all[ipoint] = misloc
                 misratio_all[ipoint] = misloc / element_half_size[ispec]
-            # skip the rest elements since points already located inside an element
+            # skip the rest elements since the point is already located inside an element
             # this means if multiple elements overlap (should not occur) we only take the first found element where the point locates inside
             if is_inside:
                 status_all[ipoint] = 1
@@ -852,7 +849,9 @@ def sem_mesh_interp_model(
     misloc_part = np.zeros(npts_part)
     misloc_part[:] = np.inf
     misratio_part = np.zeros(npts_part)
-    model_part = np.zeros((npts_part, nmodel))
+    misratio_part[:] = np.inf
+    model_part = np.empty((npts_part, nmodel), dtype=float)
+    model_part[:] = np.nan
 
     # --- loop over each slice of source SEM mesh
     for iproc_source in range(nproc_source):
@@ -897,13 +896,15 @@ def sem_mesh_interp_model(
         # (located for the current mesh slice) and
         # ( smaller misloc or located inside an element in this mesh slice )
 
-        # ii = (
-        #     (status_part != 1)
-        #     & (status_all != -1)
-        #     & ((misloc_all < misloc_part) | (status_all == 1))
-        # )
-
-        ii = misloc_all < misloc_part
+        # index of location results to use from the current mesh slice
+        ii = np.zeros(status_part.shape, dtype=bool)
+        # not located inside an element yet and located inside an element in this mesh slice
+        mask = (status_part != 1) & (status_all == 1) 
+        ii[mask] = True
+        # not located inside an element yet and located close to an element in this mesh slice
+        # and have smaller misloc than previous value
+        mask = (status_part != 1) & (status_all == 0) & (misloc_all < misloc_part)
+        ii[mask] = True
 
         status_part[ii] = status_all[ii]
         misloc_part[ii] = misloc_all[ii]

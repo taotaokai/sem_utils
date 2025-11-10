@@ -893,11 +893,14 @@ def sem_mesh_interp_model(
         # (not located inside an element yet) and
         # (located for the current mesh slice) and
         # ( smaller misloc or located inside an element in this mesh slice )
-        ii = (
-            (status_part != 1)
-            & (status_all != -1)
-            & ((misloc_all < misloc_part) | (status_all == 1))
-        )
+
+        # ii = (
+        #     (status_part != 1)
+        #     & (status_all != -1)
+        #     & ((misloc_all < misloc_part) | (status_all == 1))
+        # )
+
+        ii = misloc_all < misloc_part
 
         status_part[ii] = status_all[ii]
         misloc_part[ii] = misloc_all[ii]

@@ -567,7 +567,7 @@ def sem_jacobian_hex27(anchors_xyz, uvw, xyz, dudx):
 # @numba.jit()
 # @numba.njit("Tuple((float64, boolean))(float64[:,::1], float64[::1], float64[::1], int64)")
 @numba.jit(nogil=True)  # , cache=True)
-def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
+def sem_map2cube_hex27(anchors_xyz, target_xyz, zgll, max_niter=5):
     """
     !-map a given point in physical space (xyz) to the
     ! reference cube (uvw) for a 27-node hexahedron element (8 vertex, 12 egde
@@ -585,21 +585,24 @@ def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
     ! (real) misloc: location misfit abs(xyz - XYZ(uvw))
     ! (logical) flag_inside: flag whether the target point locates inside the element
     """
+    
+    located_uvw = np.zeros(3)
+
     # find nearest anchor nodes as initial uvw
-    # min_dist_sq = 1.0e5
-    # best_a = 0
-    # for a in range(27):
-    #     dist_sq = sum((anchors_xyz[a, :] - target_xyz[:]) ** 2)
-    #     if dist_sq < min_dist_sq:
-    #         min_dist_sq = dist_sq
-    #         best_a = a
-    # i, j, k = ANCHOR_GLL_INDEX[best_a, :]
-    # located_uvw[0] = GLL_NODES[i]
-    # located_uvw[1] = GLL_NODES[j]
-    # located_uvw[2] = GLL_NODES[k]
+    min_dist_sq = 1.0e5
+    best_a = 0
+    for a in range(27):
+        dist_sq = sum((anchors_xyz[a, :] - target_xyz[:]) ** 2)
+        if dist_sq < min_dist_sq:
+            min_dist_sq = dist_sq
+            best_a = a
+    i, j, k = ANCHOR_GLL_INDEX[best_a, :]
+    located_uvw[0] = zgll[i]
+    located_uvw[1] = zgll[j]
+    located_uvw[2] = zgll[k]
 
     # TODO the above found initial value actually increases final mis-location???
-    located_uvw[:] = 0.0
+    # located_uvw[:] = 0.0
 
     # iteratively update local coordinate uvw to approach the target xyz
     xyz = np.zeros(3)
@@ -639,7 +642,7 @@ def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
     misloc = (sum(target_xyz - xyz) ** 2) ** 0.5
     # print(f"{iter=}, {located_uvw=}, {xyz=}")
 
-    return misloc, is_inside
+    return misloc, is_inside, located_uvw
 
 
 def sem_mesh_locate_points(
@@ -711,6 +714,7 @@ def sem_mesh_locate_points(
     iay = ANCHOR_GLL_INDEX[:, 1]
     iaz = ANCHOR_GLL_INDEX[:, 2]
 
+    zgll, wgll, dlag_dzgll = get_gll_weights()
     # xigll, wx = zwgljd(NGLLX,GAUSSALPHA,GAUSSBETA)
     # yigll, wy = zwgljd(NGLLY,GAUSSALPHA,GAUSSBETA)
     # zigll, wz = zwgljd(NGLLZ,GAUSSALPHA,GAUSSBETA)
@@ -755,7 +759,7 @@ def sem_mesh_locate_points(
             #  continue
             iglob = ibool[ispec, iaz, iay, iax]
             xyz_anchor = xyz_glob[iglob, :]
-            misloc, is_inside = sem_map2cube_hex27(xyz_anchor, xyz[ipoint, :], uvw)
+            misloc, is_inside, uvw = sem_map2cube_hex27(xyz_anchor, xyz[ipoint, :], zgll)
             ##DEBUG
             # if is_inside and status_all[ipoint]==1:
             #  warnings.warn("point is located inside more than one element",

@@ -855,6 +855,8 @@ def sem_mesh_interp_model(
     # debug
     uvw_part = np.zeros((npts_part, 3))
     uvw_part[:] = np.nan
+    ispec_part = np.zeros(npts_part, dtype=int)
+    ispec_part[:] = -1
 
     # --- loop over each slice of source SEM mesh
     for iproc_source in range(nproc_source):
@@ -914,6 +916,7 @@ def sem_mesh_interp_model(
         misratio_part[ii] = misratio_all[ii]
         # debug
         uvw_part[ii, :] = uvw_all[ii, :]
+        ispec_part[ii] = ispec_all[ii]
 
         # NOTE avoid too many for loops reduces computation time
         ##for ipoint in range(npoints):
@@ -964,8 +967,10 @@ def sem_mesh_interp_model(
     # debug
     if mpi_rank == 0:
         uvw_glob = np.zeros((npts_glob, 3))
+        ispec_glob = np.zeros(npts_glob, dtype=int)
     else:
         uvw_glob = None
+        ispec_glob = None
 
     # gather model_part into model_glob
     recv_counts, recv_displs = None, None
@@ -985,7 +990,7 @@ def sem_mesh_interp_model(
             write_gll_file(model_dir_target, model_tag, iproc_target, model_gll)
 
 
-    # debug
+    #===== debug
     if mpi_rank == 0:
         recv_counts = np.array(npts_counts, dtype=int) * 3
         recv_displs = np.array(begin_indices, dtype=int) * 3
@@ -999,6 +1004,17 @@ def sem_mesh_interp_model(
             uvw_tag = uvw_tags[i]
             uvw_gll = uvw_glob[ibool_target, i]
             write_gll_file(model_dir_target, uvw_tag, iproc_target, uvw_gll)
+    #===== debug
+    if mpi_rank == 0:
+        recv_counts = np.array(npts_counts, dtype=int)
+        recv_displs = np.array(begin_indices, dtype=int)
+    mpi_datatype = dtlib.from_numpy_dtype(ispec_part.dtype)
+    mpi_comm.Gatherv(
+        ispec_part, [ispec_glob, recv_counts, recv_displs, mpi_datatype], root=0
+    )
+    if mpi_rank == 0:
+        write_gll_file(model_dir_target, 'ispec', iproc_target, ispec_glob[ibool_target])
+
 
     if output_misloc:
         if mpi_rank == 0:

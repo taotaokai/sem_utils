@@ -567,7 +567,7 @@ def sem_jacobian_hex27(anchors_xyz, uvw, xyz, dudx):
 # @numba.jit()
 # @numba.njit("Tuple((float64, boolean))(float64[:,::1], float64[::1], float64[::1], int64)")
 @numba.jit(nogil=True)  # , cache=True)
-def sem_map2cube_hex27(anchors_xyz, target_xyz, zgll, max_niter=5):
+def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
     """
     !-map a given point in physical space (xyz) to the
     ! reference cube (uvw) for a 27-node hexahedron element (8 vertex, 12 egde
@@ -585,24 +585,24 @@ def sem_map2cube_hex27(anchors_xyz, target_xyz, zgll, max_niter=5):
     ! (real) misloc: location misfit abs(xyz - XYZ(uvw))
     ! (logical) flag_inside: flag whether the target point locates inside the element
     """
-    
-    located_uvw = np.zeros(3)
 
-    # find nearest anchor nodes as initial uvw
-    min_dist_sq = 1.0e5
-    best_a = 0
-    for a in range(27):
-        dist_sq = sum((anchors_xyz[a, :] - target_xyz[:]) ** 2)
-        if dist_sq < min_dist_sq:
-            min_dist_sq = dist_sq
-            best_a = a
-    i, j, k = ANCHOR_GLL_INDEX[best_a, :]
-    located_uvw[0] = zgll[i]
-    located_uvw[1] = zgll[j]
-    located_uvw[2] = zgll[k]
+    # located_uvw = np.zeros(3)
+
+    # # find nearest anchor nodes as initial uvw
+    # min_dist_sq = 1.0e5
+    # best_a = 0
+    # for a in range(27):
+    #     dist_sq = sum((anchors_xyz[a, :] - target_xyz[:]) ** 2)
+    #     if dist_sq < min_dist_sq:
+    #         min_dist_sq = dist_sq
+    #         best_a = a
+    # i, j, k = ANCHOR_GLL_INDEX[best_a, :]
+    # located_uvw[0] = zgll[i]
+    # located_uvw[1] = zgll[j]
+    # located_uvw[2] = zgll[k]
 
     # TODO the above found initial value actually increases final mis-location???
-    # located_uvw[:] = 0.0
+    located_uvw[:] = 0.0
 
     # iteratively update local coordinate uvw to approach the target xyz
     xyz = np.zeros(3)
@@ -639,14 +639,14 @@ def sem_map2cube_hex27(anchors_xyz, target_xyz, zgll, max_niter=5):
 
     sem_jacobian_hex27(anchors_xyz, located_uvw, xyz, dudx)
     # xyz, dudx = sem_jacobian_hex27(anchors_xyz, located_uvw)
-    misloc = (sum(target_xyz - xyz) ** 2) ** 0.5
+    misloc = sum((target_xyz - xyz) ** 2) ** 0.5
     # print(f"{iter=}, {located_uvw=}, {xyz=}")
 
     return misloc, is_inside, located_uvw
 
 
 def sem_mesh_locate_points(
-    mesh_data, xyz, idoubling=-1, kdtree_num_element=3.0, max_dist_ratio=3.0
+    mesh_data, xyz, idoubling=-1, kdtree_num_element=2.0, max_dist_ratio=2.0
 ):
     """locate points in the SEM mesh.
     mesh_data: return value from sem_mesh_read()
@@ -714,7 +714,7 @@ def sem_mesh_locate_points(
     iay = ANCHOR_GLL_INDEX[:, 1]
     iaz = ANCHOR_GLL_INDEX[:, 2]
 
-    zgll, wgll, dlag_dzgll = get_gll_weights()
+    # zgll, wgll, dlag_dzgll = get_gll_weights()
     # xigll, wx = zwgljd(NGLLX,GAUSSALPHA,GAUSSBETA)
     # yigll, wy = zwgljd(NGLLY,GAUSSALPHA,GAUSSBETA)
     # zigll, wz = zwgljd(NGLLZ,GAUSSALPHA,GAUSSBETA)
@@ -754,12 +754,16 @@ def sem_mesh_locate_points(
         dist_ratio = dist_ratio[idx]
         # loop each element, start from the closest element
         for ispec in ispec_list[np.argsort(dist_ratio)]:
+            # DEBUG
+            # print(f"{ispec=}")
             # if (idoubling[ipoint] != -1 and
             #    idoubling[ipoint] != source_idoubling[ispec]):
             #  continue
             iglob = ibool[ispec, iaz, iay, iax]
             xyz_anchor = xyz_glob[iglob, :]
-            misloc, is_inside, uvw = sem_map2cube_hex27(xyz_anchor, xyz[ipoint, :], zgll)
+            misloc, is_inside, uvw = sem_map2cube_hex27(xyz_anchor, xyz[ipoint, :], uvw)
+            # DEBUG
+            # print(f"{misloc=}, {is_inside=}, {uvw=}")
             ##DEBUG
             # if is_inside and status_all[ipoint]==1:
             #  warnings.warn("point is located inside more than one element",
@@ -856,11 +860,11 @@ def sem_mesh_interp_model(
     misratio_part[:] = np.inf
     model_part = np.empty((npts_part, nmodel), dtype=float)
     model_part[:] = np.nan
-    # debug
-    uvw_part = np.zeros((npts_part, 3))
-    uvw_part[:] = np.nan
-    ispec_part = np.zeros(npts_part, dtype=int)
-    ispec_part[:] = -1
+    # # DEBUG
+    # uvw_part = np.zeros((npts_part, 3))
+    # uvw_part[:] = np.nan
+    # ispec_part = np.zeros(npts_part, dtype=int)
+    # ispec_part[:] = -1
 
     # --- loop over each slice of source SEM mesh
     for iproc_source in range(nproc_source):
@@ -908,7 +912,7 @@ def sem_mesh_interp_model(
         # index of location results to use from the current mesh slice
         ii = np.zeros(status_part.shape, dtype=bool)
         # not located inside an element yet and located inside an element in this mesh slice
-        mask = (status_part != 1) & (status_all == 1) 
+        mask = (status_part != 1) & (status_all == 1)
         ii[mask] = True
         # not located inside an element yet and located close to an element in this mesh slice
         # and have smaller misloc than previous value
@@ -918,9 +922,9 @@ def sem_mesh_interp_model(
         status_part[ii] = status_all[ii]
         misloc_part[ii] = misloc_all[ii]
         misratio_part[ii] = misratio_all[ii]
-        # debug
-        uvw_part[ii, :] = uvw_all[ii, :]
-        ispec_part[ii] = ispec_all[ii]
+        # # DEBUG
+        # uvw_part[ii, :] = uvw_all[ii, :]
+        # ispec_part[ii] = ispec_all[ii]
 
         # NOTE avoid too many for loops reduces computation time
         ##for ipoint in range(npoints):
@@ -968,13 +972,13 @@ def sem_mesh_interp_model(
             misloc_glob = None
             misratio_glob = None
 
-    # debug
-    if mpi_rank == 0:
-        uvw_glob = np.zeros((npts_glob, 3))
-        ispec_glob = np.zeros(npts_glob, dtype=int)
-    else:
-        uvw_glob = None
-        ispec_glob = None
+    # # DEBUG
+    # if mpi_rank == 0:
+    #     uvw_glob = np.zeros((npts_glob, 3))
+    #     ispec_glob = np.zeros(npts_glob, dtype=int)
+    # else:
+    #     uvw_glob = None
+    #     ispec_glob = None
 
     # gather model_part into model_glob
     recv_counts, recv_displs = None, None
@@ -993,32 +997,30 @@ def sem_mesh_interp_model(
             model_gll = model_glob[ibool_target, imodel]
             write_gll_file(model_dir_target, model_tag, iproc_target, model_gll)
 
-
-    #===== debug
-    if mpi_rank == 0:
-        recv_counts = np.array(npts_counts, dtype=int) * 3
-        recv_displs = np.array(begin_indices, dtype=int) * 3
-    mpi_datatype = dtlib.from_numpy_dtype(uvw_part.dtype)
-    mpi_comm.Gatherv(
-        uvw_part, [uvw_glob, recv_counts, recv_displs, mpi_datatype], root=0
-    )
-    uvw_tags = ["u", "v", "w"]
-    if mpi_rank == 0:
-        for i in range(3):
-            uvw_tag = uvw_tags[i]
-            uvw_gll = uvw_glob[ibool_target, i]
-            write_gll_file(model_dir_target, uvw_tag, iproc_target, uvw_gll)
-    #===== debug
-    if mpi_rank == 0:
-        recv_counts = np.array(npts_counts, dtype=int)
-        recv_displs = np.array(begin_indices, dtype=int)
-    mpi_datatype = dtlib.from_numpy_dtype(ispec_part.dtype)
-    mpi_comm.Gatherv(
-        ispec_part, [ispec_glob, recv_counts, recv_displs, mpi_datatype], root=0
-    )
-    if mpi_rank == 0:
-        write_gll_file(model_dir_target, 'ispec', iproc_target, ispec_glob[ibool_target])
-
+    # #===== DEBUG
+    # if mpi_rank == 0:
+    #     recv_counts = np.array(npts_counts, dtype=int) * 3
+    #     recv_displs = np.array(begin_indices, dtype=int) * 3
+    # mpi_datatype = dtlib.from_numpy_dtype(uvw_part.dtype)
+    # mpi_comm.Gatherv(
+    #     uvw_part, [uvw_glob, recv_counts, recv_displs, mpi_datatype], root=0
+    # )
+    # uvw_tags = ["u", "v", "w"]
+    # if mpi_rank == 0:
+    #     for i in range(3):
+    #         uvw_tag = uvw_tags[i]
+    #         uvw_gll = uvw_glob[ibool_target, i]
+    #         write_gll_file(model_dir_target, uvw_tag, iproc_target, uvw_gll)
+    #
+    # if mpi_rank == 0:
+    #     recv_counts = np.array(npts_counts, dtype=int)
+    #     recv_displs = np.array(begin_indices, dtype=int)
+    # mpi_datatype = dtlib.from_numpy_dtype(ispec_part.dtype)
+    # mpi_comm.Gatherv(
+    #     ispec_part, [ispec_glob, recv_counts, recv_displs, mpi_datatype], root=0
+    # )
+    # if mpi_rank == 0:
+    #     write_gll_file(model_dir_target, 'ispec', iproc_target, ispec_glob[ibool_target])
 
     if output_misloc:
         if mpi_rank == 0:
@@ -1624,7 +1626,7 @@ def laplacian_ani3D(
                     grad_gaml[k, j, i] = jacobianl * (
                         kxx * dsl_dxl * dgam_dxl
                         + kyy * dsl_dyl * dgam_dyl
-                        + kzz * dsl_dzl * dgam_dzl 
+                        + kzz * dsl_dzl * dgam_dzl
                         + kxy * (dsl_dxl * dgam_dyl + dsl_dyl * dgam_dxl)
                         + kxz * (dsl_dxl * dgam_dzl + dsl_dzl * dgam_dxl)
                         + kyz * (dsl_dyl * dgam_dzl + dsl_dzl * dgam_dyl)

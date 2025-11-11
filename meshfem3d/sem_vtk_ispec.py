@@ -67,7 +67,7 @@ for iproc in range(args.procnum_begin, args.procnum_end + 1):
             if new_iglob[iglob]: # register unseen iglob into point_data
               new_iglob[iglob] = False
               num_iglob[iglob] = point_num + point_num_total
-              point_xyz[point_num, :] = xyz_glob[:,iglob]
+              point_xyz[point_num, :] = xyz_glob[iglob, :]
               point_num = point_num + 1
             cell_topo[cell_num, ipoint_cell] = num_iglob[iglob]
             ipoint_cell = ipoint_cell + 1

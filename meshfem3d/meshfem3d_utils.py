@@ -996,7 +996,7 @@ def sem_mesh_interp_model(
     uvw_tags = ["u", "v", "w"]
     if mpi_rank == 0:
         for i in range(3):
-            uvw_tag = uvw_tags[imodel]
+            uvw_tag = uvw_tags[i]
             uvw_gll = uvw_glob[ibool_target, i]
             write_gll_file(model_dir_target, uvw_tag, iproc_target, uvw_gll)
 

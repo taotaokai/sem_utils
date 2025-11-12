@@ -425,7 +425,7 @@ def main():
         all_points,
         all_theta_grids,
         radial_grid,
-        args.nc_file,
+        os.path.join(args.out_dir, args.nc_file),
     )
 
     print("Processing complete")

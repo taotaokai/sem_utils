@@ -18,15 +18,18 @@ rank_world = comm_world.Get_rank()
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Create Gaussian mask around source/receiver locations"
+        description="Create Gaussian mask around source/receiver locations, " \
+        "prod(1 - exp(-0.5 * (x - x_i)**2 / sigma_i**2), i=0,n_mask)"
     )
 
     parser.add_argument("nproc", type=int, help="number of mesh slices")
     parser.add_argument("mesh_dir", help="directory with proc*_reg1_solver_data.bin")
     parser.add_argument(
         "point_list",
-        help="list of x,y,z,sigma_km, where x,y,z are non-dimensionalized by R_EARTH (e.g. 6371 km)",
+        help="list of x,y,z[,sigma_km], where x,y,z are non-dimensionalized by R_EARTH (e.g. 6371 km), sigma_km is optional",
     )
+    parser.add_argument("--sigma_km", type=float, default=10.0, help="one sigma of Gaussian mask in km")
+    parser.add_argument("--reverse", action="store_true", help="reverse mask to 1.0 - mask")
     parser.add_argument(
         "out_dir", help="output dir for proc*_reg1_mask.bin"
     )
@@ -41,12 +44,26 @@ def read_mesh_file(mesh_dir, iproc):
     return mesh_data
 
 
-def read_list(point_list):
+def read_list(point_list, sigma_km):
     import pandas as pd
 
-    df = pd.read_csv(point_list, header=None, delimiter=r"\s+")
-    xyz_mask = df.iloc[:, :3].to_numpy(dtype=np.float32)
-    sigma_mask = df.iloc[:, 3].to_numpy(dtype=np.float32)
+    # df = pd.read_csv(point_list, header=None, delimiter=r"\s+")
+    df = pd.read_csv(point_list)
+    npts = df.shape[0]
+    xyz_mask = np.zeros((npts, 3), dtype=np.float32)
+    sigma_mask = np.zeros(npts, dtype=np.float32)
+
+    assert 'x' in df.columns
+    assert 'y' in df.columns
+    assert 'z' in df.columns
+    xyz_mask[:, 0] = df['x'].to_numpy(dtype=np.float32)
+    xyz_mask[:, 1] = df['y'].to_numpy(dtype=np.float32)
+    xyz_mask[:, 2] = df['z'].to_numpy(dtype=np.float32)
+
+    if 'sigma_km' in df.columns:
+        sigma_mask = df['sigma_km'].to_numpy(dtype=np.float32)
+    else:
+        sigma_mask[:] = sigma_km
     sigma_mask /= R_EARTH_KM
 
     return xyz_mask, sigma_mask
@@ -98,7 +115,7 @@ def main():
     if size_world != args.nproc:
         raise ValueError(f"{size_world=} != {args.nproc=}")
 
-    xyz_mask, sigma_mask = read_list(args.point_list)
+    xyz_mask, sigma_mask = read_list(args.point_list, args.sigma_km)
 
     for iproc in range(rank_world, args.nproc, size_world):
         mesh_data = read_mesh_file(args.mesh_dir, iproc)
@@ -106,6 +123,9 @@ def main():
         weight_mask = make_gaussian_mask(mesh_data["xyz_glob"], xyz_mask, sigma_mask)
         toc = time.time() - tic
         print("iproc=%d, time=%f" % (iproc, toc))
+
+        if args.reverse:
+            weight_mask = 1.0 - weight_mask
 
         ibool = mesh_data["ibool"]
         out_file = "%s/proc%06d_reg1_mask.bin" % (args.out_dir, iproc)

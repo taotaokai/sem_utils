@@ -4,75 +4,77 @@ import numpy as np
 import pyvista as pv
 import argparse
 
-from meshfem3d_utils import xyz2latlon_deg, geodetic_lat2geocentric_lat
+from meshfem3d_utils import R_EARTH_KM, xyz2latlon_deg, geodetic_lat2geocentric_lat
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("par_file", help="SEM Par_file")
+parser.add_argument("center_lat", help="mesh center's latitude in degrees", type=float)
+parser.add_argument("center_lon", help="mesh center's longitude in degrees", type=float)
 parser.add_argument(
-    "-n",
-    "--ngrid",
-    nargs=3,
-    metavar=("xi", "eta", "r"),
-    help="number of grids along %(metavar)s",
-    default=[11, 11, 11],
-    type=int,
-)
-parser.add_argument(
-    "-r",
-    "--r_range",
-    nargs=2,
-    metavar=("min_r", "max_r"),
-    default=[0.8, 1.0],
+    "width_xi",
+    help="width of xi in degrees, easting if rotation angle is zero",
     type=float,
 )
-parser.add_argument("--vtk", default="pointspread_points.vtk", help="output VTK file")
-
-parser.add_argument("-o", "--out_dir", default="output", help="output directory")
-
 parser.add_argument(
-    "--vertical_list", default="vertical_slices.csv", help="filename of vertical slices list"
+    "width_eta",
+    help="width of eta in degrees, northing if rotation angle is zero",
+    type=float,
+)
+parser.add_argument(
+    "rotation_angle", help="rotation angle in degrees (anti-clockwise)", type=float
 )
 
+# parser.add_argument("--xi_range", nargs=2, default=[-1, 1], help="range of xi in degrees, easting if rotation angle is zero", type=float)
+# parser.add_argument("--n_xi", help="number of grids along xi", type=int)
+# parser.add_argument("--eta_range", nargs=2, default=[-1, 1], help="range of eta in degrees, easting if rotation angle is zero", type=float)
+# parser.add_argument("--n_eta", help="number of grids along eta", type=int)
+# parser.add_argument("--depth_range", nargs=2, default=[10, 20], help="range of depth in km", type=float)
+# parser.add_argument("--n_depth", help="number of grids along xi", type=int)
+
 parser.add_argument(
-    "--horizontal_list", default="horizontal_slices.csv", help="filename of vertical slices list"
+    "--xi",
+    nargs="+",
+    default=[-1, 1],
+    help="grids of xi in degrees, easting if rotation angle is zero",
+    type=float,
+)
+parser.add_argument(
+    "--eta",
+    nargs="+",
+    default=[-1, 1],
+    help="grids of eta in degrees, northing if rotation angle is zero",
+    type=float,
+)
+parser.add_argument(
+    "--depth", nargs="+", default=[30, 100], help="grids of depth in km", type=float
+)
+
+parser.add_argument("--out_dir", default="./", help="output directory")
+parser.add_argument("--vtk", default="pointspread_points.vtk", help="output VTK file")
+parser.add_argument(
+    "--point_list",
+    default="pointspread_points.csv",
+    help="filename of point-spread point list",
+)
+parser.add_argument(
+    "--vertical_list",
+    default="vertical_slices.csv",
+    help="filename of vertical slices list",
+)
+parser.add_argument(
+    "--horizontal_list",
+    default="horizontal_slices.csv",
+    help="filename of vertical slices list",
 )
 
 args = parser.parse_args()
 print(args)
 
-sem_parfile = args.par_file
-vtk_file = f"{args.out_dir}/{args.vtk}"
-# slice_file = args.slice
-
-sem_params = pd.read_csv(
-    sem_parfile,
-    delimiter=r"\s*=\s*",
-    header=None,
-    comment="#",
-    names=["key", "value"],
-    dtype=dict(key=object, value=object),
-    index_col=["key"],
-    engine="python",
-).to_dict()["value"]
-
-mesh_central_lat = sem_params["CENTER_LATITUDE_IN_DEGREES"]
-mesh_central_lon = sem_params["CENTER_LONGITUDE_IN_DEGREES"]
-mesh_width_xi = sem_params["ANGULAR_WIDTH_XI_IN_DEGREES"]
-mesh_width_eta = sem_params["ANGULAR_WIDTH_ETA_IN_DEGREES"]
-mesh_gamma_rot = sem_params["GAMMA_ROTATION_AZIMUTH"]
-
-lat_center = float(mesh_central_lat.lower().replace("d", "e"))
-lon_center = float(mesh_central_lon.lower().replace("d", "e"))
-xi_width = float(mesh_width_xi.lower().replace("d", "e"))
-eta_width = float(mesh_width_eta.lower().replace("d", "e"))
-gamma_rot = float(mesh_gamma_rot.lower().replace("d", "e"))
-
-lat0 = np.deg2rad(lat_center)
-lon0 = np.deg2rad(lon_center)
+# mesh center
+lat0 = np.deg2rad(args.center_lat)
+lon0 = np.deg2rad(args.center_lon)
 
 theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0)
-# print(lat0, theta)
 phi = lon0
 
 v0_r = np.array(
@@ -84,51 +86,65 @@ v0_n = np.array(
 )
 
 # rotate (v_east, v_north) thourgh v_radial by gamma_rot to (v_xi, v_eta)
-gamma = np.deg2rad(gamma_rot)
+gamma = np.deg2rad(args.rotation_angle)
 v0_xi = np.cos(gamma) * v0_e + np.sin(gamma) * v0_n
 v0_eta = -np.sin(gamma) * v0_e + np.cos(gamma) * v0_n
 
-# points
-n_xi, n_eta, n_r = args.ngrid
-npts = n_xi * n_eta * n_r
-points = np.zeros((n_xi, n_eta, n_r, 3))
+# grid locations for point-spread function
+grid_xi = np.deg2rad(args.xi)
+grid_eta = np.deg2rad(args.eta)
+grid_depth = np.array(args.depth)
+grid_radius = 1.0 - grid_depth / R_EARTH_KM
 
-rmin, rmax = args.r_range
-r_grid = np.linspace(rmin, rmax, n_r)
+n_xi, n_eta, n_depth = len(grid_xi), len(grid_eta), len(grid_depth)
+npts = n_xi * n_eta * n_depth
+points = np.zeros((n_xi, n_eta, n_depth, 3))
 
-angle_xi = np.deg2rad(xi_width)
-angle_eta = np.deg2rad(eta_width)
+# grid_xi = np.deg2rad(np.linspace(args.xi_range[0], args.xi_range[1], n_xi))
+# grid_eta = np.deg2rad(np.linspace(args.eta_range[0], args.eta_range[1], n_eta))
+# grid_depth = np.linspace(args.depth_range[0], args.depth_range[1], n_depth)
+# grid_radius = 1.0 - grid_depth / R_EARTH_KM
 
-half_angle_xi = 0.5 * angle_xi
-half_angle_eta = 0.5 * angle_eta
-
-dxi = angle_xi / (n_xi - 1)
-deta = angle_eta / (n_eta - 1)
-
-for ixi in np.arange(n_xi):
-    xi = -half_angle_xi + dxi * ixi
-    for ieta in np.arange(n_eta):
-        eta = -half_angle_eta + deta * ieta
-
+data = []
+for i, xi in enumerate(grid_xi):
+    for j, eta in enumerate(grid_eta):
         l_xi = np.tan(xi)
         l_eta = np.tan(eta)
-
         v = v0_xi * l_xi + v0_eta * l_eta + v0_r
         v = v / sum(v**2) ** 0.5
+        for k, depth in enumerate(grid_depth):
+            points[i, j, k, :] = grid_radius[k] * v
+            data.append(
+                {
+                    "xi": args.xi[i],
+                    "eta": args.eta[j],
+                    "depth": args.depth[k],
+                    "x": points[i, j, k, 0],
+                    "y": points[i, j, k, 1],
+                    "z": points[i, j, k, 2],
+                }
+            )
+        # points[i, j, :, :] = grid_radius[:, None] * v[None, :]
 
-        points[ixi, ieta, :, :] = r_grid[:, None] * v[None, :]
+# write to csv
+df = pd.DataFrame(data)
+df.to_csv(
+    os.path.join(args.out_dir, args.point_list), float_format="%15.5e", index=False
+)
 
-
+# save to vtk
 mesh = pv.PolyData(points.reshape((-1, 3)))
-mesh.save(vtk_file)
+mesh.save(os.path.join(args.out_dir, args.vtk))
 
 # make cross-sections
 slice_params = []
 
+half_angle_xi = np.deg2rad(args.width_xi / 2)
+half_angle_eta = np.deg2rad(args.width_eta / 2)
+
 # vertical xsections (great circle plane) parallel to v0_xi
-for ieta in np.arange(n_eta):
+for eta in grid_eta:
     xi = 0
-    eta = -half_angle_eta + deta * ieta
 
     r = v0_eta * np.sin(eta) + v0_r * np.cos(eta)
     r = r / sum(r**2) ** 0.5
@@ -157,8 +173,7 @@ for ieta in np.arange(n_eta):
     slice_params.append(params)
 
 # vertical xsections (great circle plane) parallel to v0_eta
-for ixi in np.arange(n_xi):
-    xi = -half_angle_xi + dxi * ixi
+for xi in grid_xi:
     eta = 0
 
     r = v0_xi * np.sin(xi) + v0_r * np.cos(xi)
@@ -189,14 +204,35 @@ for ixi in np.arange(n_xi):
 
 column_names = ["xi", "eta", "lat", "lon", "azimuth", "min_theta", "max_theta"]
 df = pd.DataFrame(slice_params, columns=column_names)
-df.to_csv(os.path.join(args.out_dir, args.vertical_list), float_format="%15.5e", index=False)
+df.to_csv(
+    os.path.join(args.out_dir, args.vertical_list), float_format="%15.5e", index=False
+)
 
 
 # make horizontal cross-sections (spherical cap)
-column_names = ["radius", "central_lat", "central_lon", "width_xi", "width_eta", "rotation_angle"]
-slice_params = [ (r, lat_center, lon_center, xi_width, eta_width, gamma_rot) for r in r_grid]
+column_names = [
+    "depth_km",
+    "central_lat",
+    "central_lon",
+    "width_xi",
+    "width_eta",
+    "rotation_angle",
+]
+slice_params = [
+    (
+        depth,
+        args.center_lat,
+        args.center_lon,
+        args.width_xi,
+        args.width_eta,
+        args.rotation_angle,
+    )
+    for depth in grid_depth
+]
 df = pd.DataFrame(slice_params, columns=column_names)
-df.to_csv(os.path.join(args.out_dir, args.horizontal_list), float_format="%15.5e", index=False)
+df.to_csv(
+    os.path.join(args.out_dir, args.horizontal_list), float_format="%15.5e", index=False
+)
 
 # with open(slice_file, "w") as fp:
 #     fp.write("xi  eta  lat  lon  azimuth  min_theta max_theta\n")

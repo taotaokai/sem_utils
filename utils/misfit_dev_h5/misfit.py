@@ -3528,6 +3528,14 @@ class Misfit(object):
         CRS = getattr(ccrs, config["plot"]["map_type"])
         map_params = config["plot"]["map_params"]
         projection = CRS(**map_params)
+        if 'map_extent' not in config["plot"]:
+            min_lat = min(evla, min(stla_all)) - 2
+            max_lat = max(evla, max(stla_all)) + 2
+            min_lon = min(evlo, min(stlo_all)) - 2
+            max_lon = max(evlo, max(stlo_all)) + 2
+            map_extent = [min_lon, min_lat, max_lon, max_lat]
+        else:
+            map_extent = config["plot"]["map_extent"]
 
         min_weight = config["plot"]["min_weight"]
         min_SNR = min(config["misfit"]["window_weight"]["SNR"])
@@ -3615,6 +3623,7 @@ class Misfit(object):
                 ax_size = [0.35, 0.4]
                 ax_origin = [0.02, 0.55]
                 ax = fig.add_axes(ax_origin + ax_size, projection=projection)
+                ax.set_extent(map_extent, crs=ccrs.PlateCarree())
                 ax.gridlines()
                 ax.coastlines(linewidth=0.2)
                 ax.stock_img()

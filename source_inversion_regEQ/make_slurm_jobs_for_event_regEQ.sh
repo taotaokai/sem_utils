@@ -59,7 +59,7 @@ then
   exit -1
 fi
 
-# set USTER_T0 in Par_file to at least 3 * tau
+# set USER_T0 in Par_file to at least 3 * tau
 tau=$(grep "tau" ${initial_cmt_file} | awk -F: '{printf "%f", $2}')
 min_user_t0=$(echo "3 * $tau + 1" | bc -l | awk '{printf "%d", $1}')
 sed -i "/^T0/s/=.*/= $min_user_t0/" ${sem_par_file}

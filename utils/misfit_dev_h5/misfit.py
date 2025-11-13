@@ -3690,6 +3690,7 @@ class Misfit(object):
                 ax_size = [0.35, 0.4]
                 ax_origin = [0.02, 0.05]
                 ax = fig.add_axes(ax_origin + ax_size, projection=projection)
+                ax.set_extent(map_extent, crs=ccrs.PlateCarree())
                 ax.gridlines()
                 ax.coastlines(linewidth=0.2)
                 ax.stock_img()

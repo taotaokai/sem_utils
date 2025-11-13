@@ -3647,7 +3647,7 @@ class Misfit(object):
                     # alpha=0.3,
                     transform=ccrs.Geodetic(),
                 )
-                max_size = 6
+                # max_size = 6
                 # sizes = max_size * weight_bin**0.5
                 # sizes[weight_bin < min_weight] = max_size * min_weight**0.5
                 # sizes = 3 * weight_bin
@@ -3662,7 +3662,7 @@ class Misfit(object):
                     marker="o",
                     cmap="seismic",
                     edgecolors="green",
-                    linewidth=0.5,
+                    linewidth=0.8,
                     vmin=-10,
                     vmax=10,
                     transform=ccrs.Geodetic(),
@@ -3696,13 +3696,14 @@ class Misfit(object):
                 ax.gridlines()
                 ax.coastlines(linewidth=0.2)
                 ax.stock_img()
-                max_size = 4
-                sizes = max_size * weight_all**0.5
-                sizes[weight_all < min_weight] = max_size * min_weight**0.5
+                max_size = 6
+                # sizes = max_size * weight_all**0.5
+                # sizes[weight_all < min_weight] = max_size * min_weight**0.5
                 im = ax.scatter(
                     stlo_all,
                     stla_all,
-                    s=sizes,
+                    # s=sizes,
+                    s=max_size,
                     # s=2,
                     c=cc0_all,
                     marker="o",
@@ -3715,19 +3716,20 @@ class Misfit(object):
                     # alpha=0.3,
                     transform=ccrs.Geodetic(),
                 )
-                max_size = 6
+                # max_size = 6
                 sizes = max_size * weight_bin**0.5
                 sizes[weight_bin < min_weight] = max_size * min_weight**0.5
                 im = ax.scatter(
                     stlo_bin,
                     stla_bin,
-                    s=sizes,
+                    # s=sizes,
+                    s=max_size,
                     # s=5,
                     c=cc0_bin,
                     marker="o",
                     cmap="seismic",
-                    edgecolors="yellow",
-                    linewidth=0.4,
+                    edgecolors="green",
+                    linewidth=0.8,
                     vmin=0,
                     vmax=1,
                     transform=ccrs.Geodetic(),

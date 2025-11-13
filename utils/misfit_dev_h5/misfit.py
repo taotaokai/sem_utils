@@ -3627,7 +3627,7 @@ class Misfit(object):
                 ax.gridlines()
                 ax.coastlines(linewidth=0.2)
                 ax.stock_img()
-                max_size = 4
+                max_size = 6
                 # sizes = max_size * weight_all**0.5
                 # sizes[weight_all < min_weight] = max_size * min_weight**0.5
                 im = ax.scatter(
@@ -3662,7 +3662,7 @@ class Misfit(object):
                     marker="o",
                     cmap="seismic",
                     edgecolors="green",
-                    linewidth=1.0,
+                    linewidth=0.5,
                     vmin=-10,
                     vmax=10,
                     transform=ccrs.Geodetic(),

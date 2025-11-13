@@ -11,6 +11,7 @@ parser.add_argument("misfit_h5file" )  # "misfit.h5"
 parser.add_argument("out_fig_dir")     # "fig"
 parser.add_argument("-n", "--nproc", default=2, type=int)
 parser.add_argument("--title", default=None)
+parser.add_argument("--parfile", default=None, help="re-read ymal file")
 
 args = parser.parse_args()
 
@@ -23,6 +24,9 @@ if __name__ == '__main__':
     print(f"======= [{datetime.now()}] plot_seismogram_1comp")
 
     misfit = Misfit(args.misfit_h5file)
+    
+    if args.parfile is not None:
+        misfit.read_config_file(args.parfile)
 
     pool = multiprocessing.Pool(processes=args.nproc)
     window_ids = misfit.get_window_ids()

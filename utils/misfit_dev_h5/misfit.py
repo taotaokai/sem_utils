@@ -3533,7 +3533,7 @@ class Misfit(object):
             max_lat = max(evla, max(stla_all)) + 2
             min_lon = min(evlo, min(stlo_all)) - 2
             max_lon = max(evlo, max(stlo_all)) + 2
-            map_extent = [min_lon, min_lat, max_lon, max_lat]
+            map_extent = [min_lon, max_lon, min_lat, max_lat]
         else:
             map_extent = config["plot"]["map_extent"]
 

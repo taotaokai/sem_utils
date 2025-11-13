@@ -3628,12 +3628,13 @@ class Misfit(object):
                 ax.coastlines(linewidth=0.2)
                 ax.stock_img()
                 max_size = 4
-                sizes = max_size * weight_all**0.5
-                sizes[weight_all < min_weight] = max_size * min_weight**0.5
+                # sizes = max_size * weight_all**0.5
+                # sizes[weight_all < min_weight] = max_size * min_weight**0.5
                 im = ax.scatter(
                     stlo_all,
                     stla_all,
-                    s=sizes,
+                    # s=sizes,
+                    s=max_size,
                     # s=2,
                     c=ccdt_all,
                     marker="o",
@@ -3647,20 +3648,21 @@ class Misfit(object):
                     transform=ccrs.Geodetic(),
                 )
                 max_size = 6
-                sizes = max_size * weight_bin**0.5
-                sizes[weight_bin < min_weight] = max_size * min_weight**0.5
+                # sizes = max_size * weight_bin**0.5
+                # sizes[weight_bin < min_weight] = max_size * min_weight**0.5
                 # sizes = 3 * weight_bin
                 # sizes[sizes < 1] = 1
                 im = ax.scatter(
                     stlo_bin,
                     stla_bin,
-                    s=sizes,
+                    # s=sizes,
+                    s=max_size,
                     # s=5,
                     c=ccdt_bin,
                     marker="o",
                     cmap="seismic",
-                    edgecolors="yellow",
-                    linewidth=0.4,
+                    edgecolors="green",
+                    linewidth=1.0,
                     vmin=-10,
                     vmax=10,
                     transform=ccrs.Geodetic(),

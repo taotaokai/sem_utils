@@ -323,11 +323,23 @@ class Source(pt.IsDescription):
     xs = pt.Float64Col(shape=(3), pos=8)  # xs in ECEF coordinate
     mt = pt.Float64Col(shape=(3, 3), pos=9)  # in ECEF coordinate
     # force_vector =
+    # gradient
     grad_xs = pt.Float64Col(shape=(3), pos=11)  # dchi_dxs
     grad_mt = pt.Float64Col(shape=(3, 3), pos=12)  # dchi_dmt
-    dxs = pt.Float64Col(shape=(3), pos=13)  # dxs
-    dmt = pt.Float64Col(shape=(3, 3), pos=14)  # dmt
-
+    # search direction for xs, mt
+    dxs = pt.Float64Col(shape=(3), pos=13)
+    dmt = pt.Float64Col(shape=(3, 3), pos=14)
+    # dt0 = dtau = 1
+    # optimal step length
+    step_xs = pt.Float64Col(pos=15)
+    step_mt = pt.Float64Col(pos=16)
+    step_t0 = pt.Float64Col(pos=17)
+    step_tau = pt.Float64Col(pos=18)
+    #NOTE the update source parameters:
+    #   xs <- xs + step_xs * dxs
+    #   mt <- mt + step_mt * dmt
+    #   t0 <- t0 + step_t0
+    #   tau <- tau + step_tau
 
 def _get_obs_ENZ(g_sta, obs_tag):
     """get observed seismogram in array(ENZ,nt)"""
@@ -4296,6 +4308,9 @@ class Misfit(object):
         event["dxs"] = dxs_scaled
         event["dmt"] = dmt_scaled
         tbl_src[0] = [event]
+        tbl_src.flush()
+
+        h5f.close()
 
         # ====== write out differential CMTSOLUTION file
         with open(out_dcmt_file, "w") as fp:
@@ -4349,7 +4364,6 @@ class Misfit(object):
             fp.write("%-18s %+15.8E\n" % ("Mxz(N*m):", mt_perturb[0, 2]))
             fp.write("%-18s %+15.8E\n" % ("Myz(N*m):", mt_perturb[1, 2]))
 
-        h5f.close()
 
     def update_source_dxs(self, dx, dy, dz):
         h5f = pt.open_file(self.h5_path, "r+")
@@ -4896,6 +4910,7 @@ class Misfit(object):
                 pdf.savefig()
                 plt.close()
 
+
                 # shrink search range
                 dtau_range = range_shrink_ratio * dtau_range
                 dt0_range = range_shrink_ratio * dt0_range
@@ -4907,7 +4922,23 @@ class Misfit(object):
         # ====== close file
         f.close()
 
-        # h5f.close()
+        # save final step lengths
+        with pt.open_file(self.h5_path, "r+") as h5f:
+            if "/source" not in h5f:
+                msg = '"/source" not existing, run read_cmtsolution first!'
+                raise KeyError(msg)
+            tbl_src = h5f.get_node("/source")
+            if tbl_src.nrows == 0:
+                msg = "no source information"
+                raise Exception(msg)
+            event = tbl_src[0]
+            event["step_t0"] = dt0_opt
+            event["step_tau"] = dtau_opt
+            event["step_xs"] = dxs_opt
+            event["step_mt"] = dmt_opt
+            tbl_src[0] = [event]
+            tbl_src.flush()
+
 
     def make_updated_cmtsolution(
         self, cmtfile="CMTSOLUTION.updated", dt0=0.0, dtau=0.0, dxs=0.0, dmt=0.0

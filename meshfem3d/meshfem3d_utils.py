@@ -308,10 +308,8 @@ def sem_mesh_read(mesh_file):
     mesh_data = {}
 
     with FortranFile(mesh_file, "r") as f:
-        for field in MESH_ARRAY_LIST:
-            field_name = field[0]
-            data_type = field[1]
-            mesh_data[field_name] = f.read_ints(dtype=data_type)
+        for field_name, data_type in MESH_ARRAY_LIST:
+            mesh_data[field_name] = f.read_record(data_type)
 
     mesh_data["nspec"] = mesh_data["nspec"][0]
     mesh_data["nglob"] = mesh_data["nglob"][0]

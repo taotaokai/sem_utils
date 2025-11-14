@@ -335,11 +335,12 @@ class Source(pt.IsDescription):
     step_mt = pt.Float64Col(pos=16)
     step_t0 = pt.Float64Col(pos=17)
     step_tau = pt.Float64Col(pos=18)
-    #NOTE the update source parameters:
+    # NOTE the update source parameters:
     #   xs <- xs + step_xs * dxs
     #   mt <- mt + step_mt * dmt
     #   t0 <- t0 + step_t0
     #   tau <- tau + step_tau
+
 
 def _get_obs_ENZ(g_sta, obs_tag):
     """get observed seismogram in array(ENZ,nt)"""
@@ -1545,11 +1546,15 @@ class Misfit(object):
         config = h5f.root._v_attrs["config"]
         time_before_first_arrival = config["data"]["time_before_first_arrival"]
         if not isinstance(time_before_first_arrival, list):
-            time_before_first_arrival = [time_before_first_arrival, ]
+            time_before_first_arrival = [
+                time_before_first_arrival,
+            ]
         # taper_width = config['data']['taper_width']
         time_after_origin = config["data"]["time_after_origin"]
         if not isinstance(time_after_origin, list):
-            time_after_origin = [time_after_origin, ]
+            time_after_origin = [
+                time_after_origin,
+            ]
         obs_tag = config["data"]["tag"]
 
         if "/source" not in h5f:
@@ -1715,7 +1720,7 @@ class Misfit(object):
                 )
                 first_arrtime = event_t0 + min([arr.time for arr in ttp])
 
-                # check if data time range includes the specified minimum time window 
+                # check if data time range includes the specified minimum time window
                 t0 = first_arrtime - min(time_before_first_arrival)
                 t1 = event_t0 + min(time_after_origin)
                 if data_starttime > t0 or data_endtime < t1:
@@ -1747,8 +1752,8 @@ class Misfit(object):
                 # cut data /waveforms/NET_STA/DATA_DISP
                 t0 = first_arrtime - max(time_before_first_arrival)
                 t1 = event_t0 + max(time_after_origin)
-                t0 = max(t0, data_starttime) # cut window begins no earlier than t0
-                t1 = min(t1, data_endtime) # cut window ends no later than t1
+                t0 = max(t0, data_starttime)  # cut window begins no earlier than t0
+                t1 = min(t1, data_endtime)  # cut window ends no later than t1
                 idx0 = int((t0 - data_starttime) * data_fs)
                 idx0 = max(idx0, 0)
                 idx1 = int((t1 - data_starttime) * data_fs)
@@ -2170,7 +2175,7 @@ class Misfit(object):
             obs_te = obs_tb + obs_nt / obs_fs
 
             # valid_tb = max(solver_tb, obs_tb)
-            valid_tb = obs_tb # since synthetic is zero at any time before origin time 
+            valid_tb = obs_tb  # since synthetic is zero at any time before origin time
             # valid_te = min(solver_te, obs_te)
             valid_te = min(solver_valid_te, obs_te)
 
@@ -2189,13 +2194,13 @@ class Misfit(object):
             p_arrivals = taup_model.get_travel_times(
                 source_depth_in_km=evdp_km,
                 distance_in_degree=gcarc,
-                phase_list=["p","P"],
+                phase_list=["p", "P"],
             )
             min_ttp = min([arr.time for arr in p_arrivals])
             s_arrivals = taup_model.get_travel_times(
                 source_depth_in_km=evdp_km,
                 distance_in_degree=gcarc,
-                phase_list=["s","S"],
+                phase_list=["s", "S"],
             )
             min_tts = min([arr.time for arr in s_arrivals])
 
@@ -2276,7 +2281,7 @@ class Misfit(object):
                     msg = f"unknown window type: {win_type}, skip"
                     warnings.warn(msg)
                     continue
-                
+
                 win_tb = max(valid_tb + bp_long_period, event_t0 + tb)
                 win_te = min(
                     valid_te - bp_long_period, event_t0 + te
@@ -3101,7 +3106,6 @@ class Misfit(object):
             #  plt.plot(syn_times, dchi_dg[i,:], 'r')
             # plt.show()
 
-        # endfor station_id in station_dict:
         h5f.close()
 
     class FileAccess(multiprocessing.Process):
@@ -3204,6 +3208,7 @@ class Misfit(object):
             ca[:] = adj_src
             for k in adj_attrs:
                 ca.attrs[k] = adj_attrs[k]
+
             tbl_win[inds] = wins
             tbl_win.flush()
 
@@ -3503,10 +3508,10 @@ class Misfit(object):
         # ------ calculate traveltime curves (only for body wave)
         phases = set([w["phase"].decode() for w, _ in windows if w["type"] == b"body"])
         phase_list = [a for p in phases for a in p.split(",")]
-        if windows[0][0]['type'] == b'Pwin':
-            phase_list.extend(['p', 'P'])
-        if windows[0][0]['type'] == b'Swin':
-            phase_list.extend(['s', 'S'])
+        if windows[0][0]["type"] == b"Pwin":
+            phase_list.extend(["p", "P"])
+        if windows[0][0]["type"] == b"Swin":
+            phase_list.extend(["s", "S"])
         if phase_list:
             min_dist = max(0, min(dist_all) - 10.0)
             max_dist = min(180, max(dist_all) + 10.0)
@@ -3540,7 +3545,7 @@ class Misfit(object):
         CRS = getattr(ccrs, config["plot"]["map_type"])
         map_params = config["plot"]["map_params"]
         projection = CRS(**map_params)
-        if 'map_extent' not in config["plot"]:
+        if "map_extent" not in config["plot"]:
             min_lat = min(evla, min(stla_all)) - 2
             max_lat = max(evla, max(stla_all)) + 2
             min_lon = min(evlo, min(stlo_all)) - 2
@@ -3639,6 +3644,7 @@ class Misfit(object):
                 ax.gridlines()
                 ax.coastlines(linewidth=0.2)
                 ax.stock_img()
+                ax.set_title(f"lat:{evla:.3f} lon:{evlo:.3f} dep:{evdp:.1f}")
                 max_size = 6
                 # sizes = max_size * weight_all**0.5
                 # sizes[weight_all < min_weight] = max_size * min_weight**0.5
@@ -4364,7 +4370,6 @@ class Misfit(object):
             fp.write("%-18s %+15.8E\n" % ("Mxz(N*m):", mt_perturb[0, 2]))
             fp.write("%-18s %+15.8E\n" % ("Myz(N*m):", mt_perturb[1, 2]))
 
-
     def update_source_dxs(self, dx, dy, dz):
         h5f = pt.open_file(self.h5_path, "r+")
 
@@ -4910,7 +4915,6 @@ class Misfit(object):
                 pdf.savefig()
                 plt.close()
 
-
                 # shrink search range
                 dtau_range = range_shrink_ratio * dtau_range
                 dt0_range = range_shrink_ratio * dt0_range
@@ -4938,7 +4942,6 @@ class Misfit(object):
             event["step_mt"] = dmt_opt
             tbl_src[0] = [event]
             tbl_src.flush()
-
 
     def make_updated_cmtsolution(
         self, cmtfile="CMTSOLUTION.updated", dt0=0.0, dtau=0.0, dxs=0.0, dmt=0.0
@@ -4970,14 +4973,14 @@ class Misfit(object):
         header[3] = "{:02d}".format(t1.day)
         header[4] = "{:02d}".format(t1.hour)
         header[5] = "{:02d}".format(t1.minute)
-        minisecond = round(t1.microsecond * 1e-3) # precise to minisecond
+        minisecond = round(t1.microsecond * 1e-3)  # precise to minisecond
         header[6] = "{:02d}.{:03d}".format(t1.second, minisecond)
         header_line = " ".join(header)
         # update source duration tau
         tau1 = tau + dtau
         # update source location
         xs1 = xs + dxs * dxs_vec
-        # update moment tensor 
+        # update moment tensor
         mt1 = mt + dmt * dmt_vec
 
         # force updated mt to have the same scalar moment as mt since absolute amplitude is ignored

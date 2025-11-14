@@ -4931,7 +4931,7 @@ class Misfit(object):
         dxs_vec = event["dxs"]
         dmt_vec = event["dmt"]
 
-        # modify origin time in header line to have centroid time
+        # update origin time in header line
         t1 = t0 + dt0
         header = evhd.split()
         header[1] = "{:04d}".format(t1.year)
@@ -4939,22 +4939,26 @@ class Misfit(object):
         header[3] = "{:02d}".format(t1.day)
         header[4] = "{:02d}".format(t1.hour)
         header[5] = "{:02d}".format(t1.minute)
-        minisecond = round(t1.microsecond * 1e-3)
+        minisecond = round(t1.microsecond * 1e-3) # precise to minisecond
         header[6] = "{:02d}.{:03d}".format(t1.second, minisecond)
         header_line = " ".join(header)
-
+        # update source duration tau
+        tau1 = tau + dtau
+        # update source location
         xs1 = xs + dxs * dxs_vec
+        # update moment tensor 
+        mt1 = mt + dmt * dmt_vec
 
-        mt1 = mt + dmt_vec
-        # force mt_perturb to have the same scalar moment as mt
+        # force updated mt to have the same scalar moment as mt since absolute amplitude is ignored
         m0 = (0.5 * np.sum(mt**2)) ** 0.5
         mt1 = m0 * mt1 / (0.5 * np.sum(mt1**2)) ** 0.5
 
+        # write updated cmt file
         with open(cmtfile, "w") as fp:
             fp.write("%s\n" % (header_line))
             fp.write("%-18s %s\n" % ("event name:", evnm))
             fp.write("%-18s %+15.8E\n" % ("t0(s):", 0.0))
-            fp.write("%-18s %+15.8E\n" % ("tau(s):", tau + dtau))
+            fp.write("%-18s %+15.8E\n" % ("tau(s):", tau1))
             fp.write("%-18s %+.3f\n" % ("x(m):", xs1[0]))
             fp.write("%-18s %+.3f\n" % ("y(m):", xs1[1]))
             fp.write("%-18s %+.3f\n" % ("z(m):", xs1[2]))

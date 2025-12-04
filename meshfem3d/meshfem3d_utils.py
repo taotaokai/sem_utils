@@ -10,6 +10,8 @@ from meshfem3d_constants import *
 
 import numba
 
+from mpi4py import MPI
+
 # ///////////////////////////////////////////////
 # constants.h
 # NGLLX = 5
@@ -644,27 +646,26 @@ def sem_map2cube_hex27(anchors_xyz, target_xyz, located_uvw, max_niter=5):
 
 
 def sem_mesh_locate_points(
-    mesh_data, xyz, idoubling=-1, kdtree_num_element=2.0, max_dist_ratio=2.0
+    mesh_data, xyz, idoubling=None, kdtree_num_element=2.0, max_dist_ratio=2.0
 ):
     """locate points in the SEM mesh.
     mesh_data: return value from sem_mesh_read()
     xyz(n,3): xyz of n points
-    idoubling: integer or integer array of size n. idoubling for the n points which denotes mesh regions (surface-Moho,Moho-410,410-660,etc)
-      -1 means no specific region and interpolation will be done to all the elements in the mesh, otherwise interpolation is only done for those elements with the same idoubling value.
+    idoubling: interpolation is only done for those elements with the same idoubling value for each point.
+        integer: idoubling value for all points
+        integer(n): idoubling value of each point
+        None: no specific region and interpolation will be done over all the elements in the mesh, 
     kdtree_num_element: radius factor as number of multiples of the maximum element half size used in kdtree search of neighboring elements to target point.
     max_dist_ratio: maximum ratio between the distance from target point to the element center and the element half size. Used to ignore element which is too far away from the target point. Sometimes if this value is too close to one, the target point slightly outside the mesh will be marked as NOT located, even if the SEM could allow a point outside the element be located.
 
     output:
-      status(n): -1=not located,0=close to but outside the element,1=inside element
+      status(n): -1=not located, 0=close to but outside the element, 1=inside element
       ispec(n): element num that located
       uvw(n,3): local coordinates of n points
       misloc(n): location residual
       misratio(n): misloc/element_half_size
     """
     from scipy import spatial
-
-    # from gll_library import zwgljd, lagrange_poly
-    # from jacobian_hex27 import xyz2cube_bounded_hex27, anchor_index_hex27
 
     if max_dist_ratio < 1:
         warnings.warn(
@@ -673,13 +674,17 @@ def sem_mesh_locate_points(
         max_dist_ratio = 2.0
 
     npoints = xyz.shape[0]
-    idoubling = np.array(idoubling, dtype="int")
-    if idoubling.size == 1:
-        idoubling = np.ones(npoints, dtype="int") * int(idoubling)
-    elif idoubling.size != npoints:
-        raise Exception(
-            "idoubling must either be an integer or an integer array of npoints "
-        )
+
+    honor_idoubling = False
+    if idoubling is not None:
+        idoubling = np.asarray(idoubling, dtype="int")
+        if idoubling.size == 1:
+            idoubling = np.ones(npoints, dtype="int") * idoubling[0]
+        elif idoubling.shape != (npoints,):
+            raise ValueError(
+                f"idoubling should be an integer or an 1-D integer array of size {npoints}"
+            )
+        honor_idoubling = True
 
     nspec = mesh_data["nspec"]
     ibool = mesh_data["ibool"]
@@ -744,7 +749,7 @@ def sem_mesh_locate_points(
         # remove elements too far away from target point
         idx = dist_ratio < max_dist_ratio
         # skip elements that does NOT have the same idoubling as xyz
-        if idoubling[ipoint] != -1:
+        if honor_idoubling:
             idx = idx & (source_idoubling[ispec_list] == idoubling[ipoint])
         if not np.any(idx):
             continue
@@ -791,8 +796,89 @@ def sem_mesh_locate_points(
     return status_all, ispec_all, uvw_all, misloc_all, misratio_all
 
 
-def sem_mesh_interp_model(
-    mpi_comm,
+def sem_mesh_interp_points(
+    mesh_nproc,
+    mesh_dir,
+    model_dir,
+    model_tags,
+    interp_points, # [npoints, 3]
+    idoubling=None,
+    method="linear",
+):
+    """
+    interpolate model of source mesh to one target mesh slice
+    the targe mesh slice is devided into several sub-chunks for parallel processing
+    This is to reduce the memory usage when the targe mesh slice is big
+    """
+    nmodel = len(model_tags)
+    npts = interp_points.shape[0]
+
+    zgll, wgll, dlag_dzgll = get_gll_weights()
+
+    # array of final results for each part
+    final_status = np.zeros(npts, dtype="int")
+    final_status[:] = -1
+    final_misloc = np.zeros(npts)
+    final_misloc[:] = np.inf
+    final_misratio = np.zeros(npts)
+    final_misratio[:] = np.inf
+
+    interp_model = np.empty((npts, nmodel), dtype=float)
+    interp_model[:] = np.nan
+
+    # --- loop over each slice of SEM mesh
+    for iproc in range(mesh_nproc):
+        # read in source SEM mesh
+        mesh_file = "%s/proc%06d_reg1_solver_data.bin" % (mesh_dir, iproc)
+        mesh_data = sem_mesh_read(mesh_file)
+
+        # read in source model
+        gll_dims = mesh_data["gll_dims"]
+        model_gll = np.zeros((nmodel,) + gll_dims)
+        for imodel in range(nmodel):
+            model_tag = model_tags[imodel]
+            model_gll[imodel] = read_gll_file(
+                model_dir, model_tag, iproc, gll_dims=gll_dims
+            )
+
+        # locate points in the mesh slice
+        status, ispec, uvw, misloc, misratio = (
+            sem_mesh_locate_points(
+                mesh_data,
+                interp_points,
+                idoubling=idoubling,
+                kdtree_num_element=2.0,
+                max_dist_ratio=2.0,
+            )
+        )
+
+        # select which points to update using the current mesh slice
+        # (not located inside an element yet) and
+        # (located inside or close to the current mesh slice) and
+        # (smaller misloc)
+        mask = (final_status != 1) & (status != -1) & (misloc < final_misloc)
+        # sel[mask] = True
+
+        final_status[mask] = status[mask]
+        final_misloc[mask] = misloc[mask]
+        final_misratio[mask] = misratio[mask]
+
+        ipoint_select = np.nonzero(mask)[0]
+        interp_model_gll(
+            ipoint_select,
+            zgll,
+            ispec,
+            uvw,
+            model_gll,
+            interp_model,
+            method=method,
+        )
+
+    return interp_model, final_status, final_misloc, final_misratio
+
+
+def sem_mesh_interp_mesh(
+    mpi_comm : MPI.Comm,
     iproc_target,
     mesh_dir_target,
     model_dir_target,
@@ -800,20 +886,17 @@ def sem_mesh_interp_model(
     mesh_dir_source,
     model_dir_source,
     model_tags,
-    idoubling_merge=[],
     method="linear",
     output_misloc=False,
+    # idoubling_merge=[],
+    honor_idoubling=False,
 ):
     """
     interpolate model of source mesh to one target mesh slice
     the targe mesh slice is devided into several sub-chunks for parallel processing
     This is to reduce the memory usage when the targe mesh slice is big
     """
-    # import time
-    import numpy as np
-    from scipy.io import FortranFile
-
-    # from mpi4py import MPI
+    
     from mpi4py.util import dtlib
 
     mpi_size = mpi_comm.Get_size()
@@ -821,238 +904,130 @@ def sem_mesh_interp_model(
 
     nmodel = len(model_tags)
 
-    zgll, wgll, dlag_dzgll = get_gll_weights()
-
     # read in target SEM mesh
     mesh_file = "%s/proc%06d_reg1_solver_data.bin" % (mesh_dir_target, iproc_target)
     mesh_data_target = sem_mesh_read(mesh_file)
-    nspec_target = mesh_data_target["nspec"]
+    # nspec_target = mesh_data_target["nspec"]
     ibool_target = mesh_data_target["ibool"]
     idoubling_target = mesh_data_target["idoubling"]
     xyz_glob_target = mesh_data_target["xyz_glob"]
 
-    # merge regions if required
-    idx_merge = np.zeros(nspec_target, dtype="bool")
-    for ii in idoubling_merge:
-        idx_merge = idx_merge | (idoubling_target == ii)
-    idoubling_target[idx_merge] = IFLAG_DUMMY
+    # # merge regions if required
+    # idx_merge = np.zeros(nspec_target, dtype="bool")
+    # for ii in idoubling_merge:
+    #     idx_merge = idx_merge | (idoubling_target == ii)
+    # idoubling_target[idx_merge] = IFLAG_DUMMY
 
-    # split target points into nparts
-    npts_glob = xyz_glob_target.shape[0]
-    npts_per_rank = (npts_glob + mpi_size - 1) // mpi_size
-    part_ind0 = mpi_rank * npts_per_rank
-    part_ind1 = part_ind0 + npts_per_rank
-    if part_ind1 > npts_glob:
-        part_ind1 = npts_glob
-    # xyz_split = xyz_glob_target[split_index::nsplit, :]
-    npts_part = part_ind1 - part_ind0
-    xyz_part = xyz_glob_target[part_ind0:part_ind1, :]
-    idoubling_part = -1
+    if mpi_rank == 0:
+        model_gll = np.zeros(ibool_target.shape + (nmodel,))
+        status_gll = np.zeros(ibool_target.shape, dtype=int)
+        misloc_gll = np.zeros(ibool_target.shape, dtype=float)
+        misratio_gll = np.zeros(ibool_target.shape, dtype=float)
 
-    # array of final results for each part
-    status_part = np.zeros(npts_part, dtype="int")
-    status_part[:] = -1
-    misloc_part = np.zeros(npts_part)
-    misloc_part[:] = np.inf
-    misratio_part = np.zeros(npts_part)
-    misratio_part[:] = np.inf
-    model_part = np.empty((npts_part, nmodel), dtype=float)
-    model_part[:] = np.nan
-    # # DEBUG
-    # uvw_part = np.zeros((npts_part, 3))
-    # uvw_part[:] = np.nan
-    # ispec_part = np.zeros(npts_part, dtype=int)
-    # ispec_part[:] = -1
+    if not honor_idoubling:
+        idoubling_target[:] = 0
 
-    # --- loop over each slice of source SEM mesh
-    for iproc_source in range(nproc_source):
-        # tic = time.time()
+    idoubling_values = np.unique(idoubling_target)
+    for reg_idoubling in idoubling_values:
+        reg_element_mask = idoubling_target == reg_idoubling
+        reg_iglob_gll = ibool_target[reg_element_mask, :]
+        reg_iglob_unique, reg_indices = np.unique(reg_iglob_gll, return_inverse=True)
+        reg_indices = np.reshape(reg_indices, reg_iglob_gll.shape)
 
-        # read in source SEM mesh
-        mesh_file = "%s/proc%06d_reg1_solver_data.bin" % (mesh_dir_source, iproc_source)
-        mesh_data_source = sem_mesh_read(mesh_file)
+        xyz_glob_reg = xyz_glob_target[reg_iglob_unique, :]
+        # model_gll[reg_element_mask, :] = model_reg[reg_indices, :]
 
-        # merge regions if required
-        idoubling_source = mesh_data_source["idoubling"]
-        idx_merge = np.zeros(mesh_data_source["nspec"], dtype="bool")
-        for ii in idoubling_merge:
-            idx_merge = idx_merge | (idoubling_source == ii)
-        idoubling_source[idx_merge] = IFLAG_DUMMY
+        # split points into nparts
+        npts_glob = xyz_glob_reg.shape[0]
+        npts_per_rank = (npts_glob + mpi_size - 1) // mpi_size
+        part_ind0 = mpi_rank * npts_per_rank
+        part_ind1 = part_ind0 + npts_per_rank
+        if part_ind1 > npts_glob:
+            part_ind1 = npts_glob
+        npts_part = part_ind1 - part_ind0
+        xyz_part = xyz_glob_reg[part_ind0:part_ind1, :]
 
-        # read in source model
-        gll_dims = mesh_data_source["gll_dims"]
-        source_model_gll = np.zeros((nmodel,) + gll_dims)
-        for imodel in range(nmodel):
-            model_tag = model_tags[imodel]
-            source_model_gll[imodel] = read_gll_file(
-                model_dir_source, model_tag, iproc_source, gll_dims=gll_dims
-            )
-
-        # locate target points
-        status_all, ispec_all, uvw_all, misloc_all, misratio_all = (
-            sem_mesh_locate_points(
-                mesh_data_source,
-                xyz_part,
-                idoubling_part,
-                kdtree_num_element=2.0,
-                max_dist_ratio=2.0,
-            )
-        )
-
-        # merge interpolation results of mesh slice (iproc_souce) into
-        # the final results based on misloc and status
-
-        # index selection for merge:
-        # (not located inside an element yet) and
-        # (located for the current mesh slice) and
-        # ( smaller misloc or located inside an element in this mesh slice )
-
-        # index of location results to use from the current mesh slice
-        ii = np.zeros(status_part.shape, dtype=bool)
-        # not located inside an element yet and located inside an element in this mesh slice
-        mask = (status_part != 1) & (status_all == 1)
-        ii[mask] = True
-        # not located inside an element yet and located close to an element in this mesh slice
-        # and have smaller misloc than previous value
-        mask = (status_part != 1) & (status_all == 0) & (misloc_all < misloc_part)
-        ii[mask] = True
-
-        status_part[ii] = status_all[ii]
-        misloc_part[ii] = misloc_all[ii]
-        misratio_part[ii] = misratio_all[ii]
-        # # DEBUG
-        # uvw_part[ii, :] = uvw_all[ii, :]
-        # ispec_part[ii] = ispec_all[ii]
-
-        # NOTE avoid too many for loops reduces computation time
-        ##for ipoint in range(npoints):
-        # slower than index slicing but use less memory
-
-        ipoint_select = np.nonzero(ii)[0]
-        interp_model_gll(
-            ipoint_select,
-            zgll,
-            ispec_all,
-            uvw_all,
-            source_model_gll,
-            model_part,
+        idoubling = reg_idoubling if honor_idoubling else None
+        model_part, status_part, misloc_part, misratio_part = sem_mesh_interp_points(
+            nproc_source,
+            mesh_dir_source,
+            model_dir_source,
+            model_tags,
+            xyz_part,
+            idoubling=idoubling,
             method=method,
         )
 
-        # elapsed_time = time.time() - tic
-        # print(f"{iproc_target=:03d}, {iproc_source=:03d}, {elapsed_time=:8.3f} seconds")
-        # sys.stdout.flush()
-
-    # --- gather results
-    if mpi_rank == 0:
-        begin_indices = mpi_comm.gather(part_ind0, root=0)
-        # print(f"{begin_indices=}")
-    else:
-        mpi_comm.gather(part_ind0, root=0)
-    if mpi_rank == 0:
-        npts_counts = mpi_comm.gather(npts_part, root=0)
-        # print(f"{npts_counts=}")
-    else:
-        mpi_comm.gather(npts_part, root=0)
-
-    # model_glob
-    if mpi_rank == 0:
-        model_glob = np.zeros((npts_glob, nmodel))
-    else:
-        model_glob = None
-    if output_misloc:
+        # --- gather results
         if mpi_rank == 0:
-            status_glob = np.zeros(npts_glob, dtype=int)
-            misloc_glob = np.zeros(npts_glob)
-            misratio_glob = np.zeros(npts_glob)
+            begin_indices = mpi_comm.gather(part_ind0, root=0)
         else:
-            status_glob = None
-            misloc_glob = None
-            misratio_glob = None
+            mpi_comm.gather(part_ind0, root=0)
+        if mpi_rank == 0:
+            npts_counts = mpi_comm.gather(npts_part, root=0)
+        else:
+            mpi_comm.gather(npts_part, root=0)
 
-    # # DEBUG
-    # if mpi_rank == 0:
-    #     uvw_glob = np.zeros((npts_glob, 3))
-    #     ispec_glob = np.zeros(npts_glob, dtype=int)
-    # else:
-    #     uvw_glob = None
-    #     ispec_glob = None
+        # model_glob
+        if mpi_rank == 0:
+            model_glob = np.zeros((npts_glob, nmodel))
+        else:
+            model_glob = None
+        if output_misloc:
+            if mpi_rank == 0:
+                status_glob = np.zeros(npts_glob, dtype=int)
+                misloc_glob = np.zeros(npts_glob)
+                misratio_glob = np.zeros(npts_glob)
+            else:
+                status_glob = None
+                misloc_glob = None
+                misratio_glob = None
 
-    # gather model_part into model_glob
-    recv_counts, recv_displs = None, None
+        # gather model_part into model_glob
+        recv_counts, recv_displs = None, None
+        if mpi_rank == 0:
+            recv_counts = np.array(npts_counts, dtype=int) * nmodel
+            recv_displs = np.array(begin_indices, dtype=int) * nmodel
+        mpi_datatype = dtlib.from_numpy_dtype(model_part.dtype)
+        mpi_comm.Gatherv(
+            model_part, [model_glob, recv_counts, recv_displs, mpi_datatype], root=0
+        )
+        if mpi_rank == 0:
+            model_gll[reg_element_mask, :] = model_glob[reg_indices, :]
+
+        if output_misloc:
+            if mpi_rank == 0:
+                recv_counts = np.array(npts_counts, dtype=int)
+                recv_displs = np.array(begin_indices, dtype=int)
+            mpi_datatype = dtlib.from_numpy_dtype(status_part.dtype)
+            mpi_comm.Gatherv(
+                status_part, [status_glob, recv_counts, recv_displs, mpi_datatype], root=0
+            )
+            mpi_datatype = dtlib.from_numpy_dtype(misloc_part.dtype)
+            mpi_comm.Gatherv(
+                misloc_part, [misloc_glob, recv_counts, recv_displs, mpi_datatype], root=0
+            )
+            mpi_datatype = dtlib.from_numpy_dtype(misratio_part.dtype)
+            mpi_comm.Gatherv(
+                misratio_part,
+                [misratio_glob, recv_counts, recv_displs, mpi_datatype],
+                root=0,
+            )
+            if mpi_rank == 0:
+                status_gll[reg_element_mask, :] = status_glob[reg_indices, :]
+                misloc_gll[reg_element_mask, :] = misloc_glob[reg_indices, :]
+                misratio_gll[reg_element_mask, :] = misratio_glob[reg_indices, :]
+    
     if mpi_rank == 0:
-        recv_counts = np.array(npts_counts, dtype=int) * nmodel
-        recv_displs = np.array(begin_indices, dtype=int) * nmodel
-    mpi_datatype = dtlib.from_numpy_dtype(model_part.dtype)
-    mpi_comm.Gatherv(
-        model_part, [model_glob, recv_counts, recv_displs, mpi_datatype], root=0
-    )
-
-    # save interpolated model
-    if mpi_rank == 0:
+        # save interpolated model
         for imodel in range(nmodel):
             model_tag = model_tags[imodel]
-            model_gll = model_glob[ibool_target, imodel]
-            write_gll_file(model_dir_target, model_tag, iproc_target, model_gll)
-
-    # #===== DEBUG
-    # if mpi_rank == 0:
-    #     recv_counts = np.array(npts_counts, dtype=int) * 3
-    #     recv_displs = np.array(begin_indices, dtype=int) * 3
-    # mpi_datatype = dtlib.from_numpy_dtype(uvw_part.dtype)
-    # mpi_comm.Gatherv(
-    #     uvw_part, [uvw_glob, recv_counts, recv_displs, mpi_datatype], root=0
-    # )
-    # uvw_tags = ["u", "v", "w"]
-    # if mpi_rank == 0:
-    #     for i in range(3):
-    #         uvw_tag = uvw_tags[i]
-    #         uvw_gll = uvw_glob[ibool_target, i]
-    #         write_gll_file(model_dir_target, uvw_tag, iproc_target, uvw_gll)
-    #
-    # if mpi_rank == 0:
-    #     recv_counts = np.array(npts_counts, dtype=int)
-    #     recv_displs = np.array(begin_indices, dtype=int)
-    # mpi_datatype = dtlib.from_numpy_dtype(ispec_part.dtype)
-    # mpi_comm.Gatherv(
-    #     ispec_part, [ispec_glob, recv_counts, recv_displs, mpi_datatype], root=0
-    # )
-    # if mpi_rank == 0:
-    #     write_gll_file(model_dir_target, 'ispec', iproc_target, ispec_glob[ibool_target])
-
-    if output_misloc:
-        if mpi_rank == 0:
-            recv_counts = np.array(npts_counts, dtype=int)
-            recv_displs = np.array(begin_indices, dtype=int)
-
-        mpi_datatype = dtlib.from_numpy_dtype(status_part.dtype)
-        mpi_comm.Gatherv(
-            status_part, [status_glob, recv_counts, recv_displs, mpi_datatype], root=0
-        )
-
-        mpi_datatype = dtlib.from_numpy_dtype(misloc_part.dtype)
-        mpi_comm.Gatherv(
-            misloc_part, [misloc_glob, recv_counts, recv_displs, mpi_datatype], root=0
-        )
-
-        mpi_datatype = dtlib.from_numpy_dtype(misratio_part.dtype)
-        mpi_comm.Gatherv(
-            misratio_part,
-            [misratio_glob, recv_counts, recv_displs, mpi_datatype],
-            root=0,
-        )
-
+            write_gll_file(model_dir_target, model_tag, iproc_target, model_gll[..., imodel])
         # save misloc, status
-        if mpi_rank == 0:
-            write_gll_file(
-                model_dir_target, "status", iproc_target, status_glob[ibool_target]
-            )
-            write_gll_file(
-                model_dir_target, "misloc", iproc_target, misloc_glob[ibool_target]
-            )
-            write_gll_file(
-                model_dir_target, "misratio", iproc_target, misratio_glob[ibool_target]
-            )
+        if output_misloc:
+            write_gll_file(model_dir_target, "status", iproc_target, status_gll)
+            write_gll_file(model_dir_target, "misloc", iproc_target, misloc_gll)
+            write_gll_file(model_dir_target, "misratio", iproc_target, misratio_gll)
 
 
 def sem_boundary_mesh_read(mesh_file):

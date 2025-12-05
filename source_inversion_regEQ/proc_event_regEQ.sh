@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # source inversion for regional earthquake
 

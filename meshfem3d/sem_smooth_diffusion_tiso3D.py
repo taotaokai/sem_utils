@@ -131,7 +131,7 @@ ecef2gps = pyproj.Transformer.from_crs("EPSG:4978", "EPSG:4326")  # ECEF to GPS
 lat_gll, lon_gll, alt_gll = ecef2gps.transform(xyz_gll[:,0], xyz_gll[:,1], xyz_gll[:,2], radians=True)
 
 nspec, ngllz, nglly, ngllx = ibool.shape 
-@numba.jit(nogil=True)
+@numba.jit(nopython=True, nogil=True)
 def rotate_K(Kxx_gll, Kyy_gll, Kzz_gll, Kxy_gll, Kxz_gll, Kyz_gll): 
     rotmat = np.zeros((3, 3))
     kl = np.zeros((3,3))

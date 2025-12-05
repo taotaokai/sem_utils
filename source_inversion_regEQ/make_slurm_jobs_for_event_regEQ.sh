@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Make jobs files for slurm
 # source inversion

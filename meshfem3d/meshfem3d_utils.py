@@ -930,7 +930,7 @@ def sem_mesh_interp_mesh(
     idoubling_values = np.unique(idoubling_target)
     for reg_idoubling in idoubling_values:
         reg_element_mask = idoubling_target == reg_idoubling
-        reg_iglob_gll = ibool_target[reg_element_mask, :]
+        reg_iglob_gll = ibool_target[reg_element_mask, ...]
         reg_iglob_unique, reg_indices = np.unique(reg_iglob_gll, return_inverse=True)
         reg_indices = np.reshape(reg_indices, reg_iglob_gll.shape)
 
@@ -993,7 +993,7 @@ def sem_mesh_interp_mesh(
             model_part, [model_glob, recv_counts, recv_displs, mpi_datatype], root=0
         )
         if mpi_rank == 0:
-            model_gll[reg_element_mask, :] = model_glob[reg_indices, :]
+            model_gll[reg_element_mask, ...] = model_glob[reg_indices, :]
 
         if output_misloc:
             if mpi_rank == 0:
@@ -1014,9 +1014,9 @@ def sem_mesh_interp_mesh(
                 root=0,
             )
             if mpi_rank == 0:
-                status_gll[reg_element_mask, :] = status_glob[reg_indices, :]
-                misloc_gll[reg_element_mask, :] = misloc_glob[reg_indices, :]
-                misratio_gll[reg_element_mask, :] = misratio_glob[reg_indices, :]
+                status_gll[reg_element_mask, ...] = status_glob[reg_indices]
+                misloc_gll[reg_element_mask, ...] = misloc_glob[reg_indices]
+                misratio_gll[reg_element_mask, ...] = misratio_glob[reg_indices]
     
     if mpi_rank == 0:
         # save interpolated model

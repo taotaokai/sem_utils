@@ -27,12 +27,12 @@ model_names = ['vph', 'vpv', 'vsv', 'vsh']
 
 #-- plot controls
 # map plot
-map_lat_center = 38.5
-map_lon_center = 118.0
-map_lat_min= 15
-map_lat_max= 55
-map_lon_min= 90
-map_lon_max= 160
+map_lat_center = 51.5
+map_lon_center = 7
+map_lat_min= 13
+map_lat_max= 90
+map_lon_min= -32
+map_lon_max= 46
 map_parallels = np.arange(0.,81,10.)
 map_meridians = np.arange(0.,351,10.)
 
@@ -48,8 +48,8 @@ height = 0.9
 #------ read nc files 
 fh = Dataset("{:s}/{:s}.nc".format(model_dir, nc_tag), mode='r')
 
-lats = fh.variables['latitude'][:]
-lons = fh.variables['longitude'][:]
+lats = fh.variables['lat'][:]
+lons = fh.variables['lon'][:]
 
 model = {}
 for tag in model_names:
@@ -84,6 +84,8 @@ for irow in range(nrow):
   m.drawcountries(linewidth=0.2)
   m.drawparallels(map_parallels, linewidth=0.1, labels=[1,0,0,1], fontsize=8)
   m.drawmeridians(map_meridians, linewidth=0.1, labels=[1,0,0,1], fontsize=8)
+  
+  ax.set_aspect('equal')
   
   # contourf model
   xx, yy = m(lons2, lats2)

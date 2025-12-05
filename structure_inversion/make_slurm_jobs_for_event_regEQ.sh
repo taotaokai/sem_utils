@@ -22,6 +22,7 @@ mkdir -p $slurm_dir
 forward_job=$slurm_dir/forward.job
 misfit_job=$slurm_dir/misfit.job
 kernel_job=$slurm_dir/kernel.job
+mask_job=$slurm_dir/mask.job
 plot_job=$slurm_dir/plot.job
 #hess_job=$slurm_dir/hess.job
 #precond_job=$slurm_dir/precond.job
@@ -231,11 +232,48 @@ mv $event_dir/DATABASES_MPI/*_kernel.bin $event_dir/\$out_dir/kernel/
 # mv $event_dir/DATABASES_MPI/*reg1_cijkl_kernel.bin $event_dir/\$out_dir/kernel/
 # mv $event_dir/DATABASES_MPI/*reg1_rho_kernel.bin $event_dir/\$out_dir/kernel/
 
+chmod u+w $event_dir/forward_saved_frames
+rm -rf $event_dir/forward_saved_frames
+
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 EOF
 
+#====== kernel mask
+cat <<EOF > $mask_job
+#!/bin/bash
+#SBATCH -J ${event_id}.mask
+#SBATCH -o $mask_job.o%j
+#SBATCH ${SLURM_args_kernel_mask_sum}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
+
+mesh_dir=${SEM_iter_dir}/mesh
+out_dir=${event_dir}/output_kernel/kernel
+
+mkdir -p \$out_dir
+
+awk 'NR==6{print \$0, a}' a="$SEM_kernel_mask_source_sigma_km" \\
+  ${event_dir}/output_kernel/source.vtk \\
+  > \${out_dir}/mask.lst
+
+awk 'NR>=6&&NF==3{print \$0, a}' a=$SEM_kernel_mask_receiver_sigma_km \\
+  ${event_dir}/output_kernel/receiver.vtk \\
+  >> \${out_dir}/mask.lst
+
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_make_gaussian_mask.py \\
+  ${SEM_nproc_total} \\
+  \${mesh_dir}/DATABASES_MPI \\
+  \${out_dir}/mask.lst \\
+  \${out_dir}
+
+echo
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
+EOF
 
 #====== plot misfit and waveforms
 cat <<EOF > $plot_job

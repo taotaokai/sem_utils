@@ -6,18 +6,7 @@ control_file=${1:?[arg]need control_file}
 event_list=${2:?[arg]need event_list}
 
 #====== source control_file
-if [ ! -f "$control_file" ]
-then
-  echo "[ERROR] $control_file NOT found!"
-  exit -1
-fi
 source $control_file
-if [ $? -ne 0 ]
-then
-  echo "[ERROR] source $control_file failed!"
-  exit -1
-fi
-
 event_list=$(readlink -f $event_list)
 
 #====== define directories
@@ -106,33 +95,33 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-echo "====== create source and receiver masks"
+# echo "====== create source and receiver masks"
 
-mesh_dir=${SEM_iter_dir}/mesh
+# mesh_dir=${SEM_iter_dir}/mesh
 
-for event_id in \$(awk 'NF&&\$1!~/#/{print \$1}' $event_list)
-do
-  echo "------ \$event_id"
+# for event_id in \$(awk 'NF&&\$1!~/#/{print \$1}' $event_list)
+# do
+#   echo "------ \$event_id"
   
-  event_dir=${SEM_iter_dir}/events/\$event_id
+#   event_dir=${SEM_iter_dir}/events/\$event_id
 
-  out_dir=\${event_dir}/output_kernel/kernel
-  mkdir -p \$out_dir
+#   out_dir=\${event_dir}/output_kernel/kernel
+#   mkdir -p \$out_dir
 
-  awk 'NR==6{print \$0, a}' a="$SEM_kernel_mask_source_sigma_km" \\
-    \${event_dir}/output_kernel/source.vtk \\
-    > \${out_dir}/mask.lst
+#   awk 'NR==6{print \$0, a}' a="$SEM_kernel_mask_source_sigma_km" \\
+#     \${event_dir}/output_kernel/source.vtk \\
+#     > \${out_dir}/mask.lst
 
-  awk 'NR>=6&&NF==3{print \$0, a}' a=$SEM_kernel_mask_receiver_sigma_km \\
-    \${event_dir}/output_kernel/receiver.vtk \\
-    >> \${out_dir}/mask.lst
+#   awk 'NR>=6&&NF==3{print \$0, a}' a=$SEM_kernel_mask_receiver_sigma_km \\
+#     \${event_dir}/output_kernel/receiver.vtk \\
+#     >> \${out_dir}/mask.lst
 
-  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_make_gaussian_mask.py \\
-    ${SEM_nproc_total} \\
-    \${mesh_dir}/DATABASES_MPI \\
-    \${out_dir}/mask.lst \\
-    \${out_dir}
-done
+#   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_make_gaussian_mask.py \\
+#     ${SEM_nproc_total} \\
+#     \${mesh_dir}/DATABASES_MPI \\
+#     \${out_dir}/mask.lst \\
+#     \${out_dir}
+# done
 
 echo "====== sum up all event kernels with mask"
 

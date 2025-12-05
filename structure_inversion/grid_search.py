@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """ get model update step length from grid search results
 """
-# import sys
+import sys
 import argparse
 # from datetime import datetime
 import tables as pt
@@ -10,7 +10,6 @@ import tables as pt
 import numpy as np
 from matplotlib import pyplot as plt
 import xarray as xr
-
 parser = argparse.ArgumentParser()
 
 parser.add_argument("misfit_h5_list" )  # list of misfit.h5 of each events
@@ -30,7 +29,7 @@ wcc_sum = None
 weight_sum = 0.0
 
 for misfit_h5file in misfit_h5_list:
-
+    print(f"[DEBUG]: Working on {misfit_h5file}", file=sys.stderr, flush=True)
     with pt.open_file(misfit_h5file, "r") as h5f:
 
         if "/grid_search/structure/wcc_sum" not in h5f:
@@ -58,11 +57,10 @@ for misfit_h5file in misfit_h5_list:
                 raise Exception(msg)
             data = h5f.get_node(f"/grid_search/structure/{tag}")
             dm1[tag] = data[:]
-
         if dm is None:
             dm = dm1
         else:
-            if dm != dm1:
+            if set(dm.keys()) != set(dm1.keys()) or not all(np.array_equal(dm[k], dm1[k]) for k in dm):
                 msg = f"{dm1=} in {misfit_h5file=} should be equal to {dm=}"
                 raise Exception(msg)
 

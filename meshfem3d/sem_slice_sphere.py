@@ -14,7 +14,7 @@ import xarray as xr
 
 from meshfem3d_constants import NGLLX,NGLLY,NGLLZ,GAUSSALPHA,GAUSSBETA,R_EARTH
 from gll_library import zwgljd, lagrange_poly
-from meshfem3d_utils import sem_mesh_read, sem_locate_points_hex27
+from meshfem3d_utils import sem_mesh_read, sem_mesh_locate_points, interp_model_gll
 
 #====== parameters
 nproc = int(sys.argv[1])
@@ -46,8 +46,8 @@ ref_ellps = 'WGS84'
 ecef = pyproj.Proj(proj='geocent', ellps=ref_ellps)
 lla = pyproj.Proj(proj='latlong', ellps=ref_ellps)
 xx, yy, zz = pyproj.transform(lla, ecef, grd_lon2, grd_lat2, grd_alt2)
-xyz_interp = np.vstack((xx.ravel(), yy.ravel(), zz.ravel())) / R_EARTH
-npts_interp = xyz_interp.shape[1]
+xyz_interp = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel())) / R_EARTH
+npts_interp = xyz_interp.shape[0]
 
 #====== interpolate
 #comm = MPI.COMM_WORLD
@@ -59,7 +59,7 @@ misloc_local = np.zeros(npts_interp)
 
 status_interp = np.zeros(npts_interp)
 misloc_interp = np.zeros(npts_interp)
-model_interp = np.zeros((nmodel,npts_interp))
+model_interp = np.zeros((npts_interp, nmodel))
 
 status_local[:] = -1
 misloc_local[:] = np.inf
@@ -95,7 +95,7 @@ for iproc in range(nproc):
       model_gll[imodel,:,:,:,:] = np.reshape(f.read_ints(dtype='f4'), gll_dims, order='F')
 
   #--- locate each points
-  status_local, ispec_local, uvw_local, misloc_local, misratio_local = sem_locate_points_hex27(mesh_data, xyz_interp)
+  status_local, ispec_local, uvw_local, misloc_local, misratio_local = sem_mesh_locate_points(mesh_data, xyz_interp)
 
   # merge interpolation results from the current mesh slice into the final results based on misloc and status  
   # index selection for merge: (not located inside an element yet) and (located for the current mesh slice) and (smaller misloc or located inside an element in this mesh slice)
@@ -106,11 +106,21 @@ for iproc in range(nproc):
   #misratio_interp[ii] = misratio_local[ii]
 
   ipoint_select = np.nonzero(ii)[0]
-  for ipoint in ipoint_select:
-    hlagx = lagrange_poly(xigll, uvw_local[0,ipoint])[:,0]
-    hlagy = lagrange_poly(yigll, uvw_local[1,ipoint])[:,0]
-    hlagz = lagrange_poly(zigll, uvw_local[2,ipoint])[:,0]
-    model_interp[:,ipoint] = np.sum(model_gll[:,:,:,:,ispec_local[ipoint]]*hlagx[:,None,None]*hlagy[None,:,None]*hlagz[None,None,:], axis=(1,2,3))
+  interp_model_gll(
+            ipoint_select,
+            zigll,
+            ispec_local,
+            uvw_local,
+            model_gll,
+            model_interp,
+            method='linear',
+        )
+  # for ipoint in ipoint_select:
+    
+  #   hlagx = lagrange_poly(xigll, uvw_local[ipoint, 0])[:,0]
+  #   hlagy = lagrange_poly(yigll, uvw_local[ipoint, 1])[:,0]
+  #   hlagz = lagrange_poly(zigll, uvw_local[ipoint, 2])[:,0]
+  #   model_interp[:,ipoint] = np.sum(model_gll[:,ispec_local[ipoint],:,:,:]*hlagx[:,None,None]*hlagy[None,:,None]*hlagz[None,None,:], axis=(1,2,3))
 
 #--- synchronize all processes
 #comm.Barrier()
@@ -137,7 +147,7 @@ for iproc in range(nproc):
 #--- output interpolated model
 outdata = xr.Dataset()
 for imodel in range(nmodel):
-   model = xr.DataArray(np.transpose(np.reshape(model_interp[imodel,:],(nlon,nlat))), coords={'lon':grd_lon1, 'lat':grd_lat1}, dims=('lat', 'lon'))
+   model = xr.DataArray(np.transpose(np.reshape(model_interp[:, imodel],(nlon,nlat))), coords={'lon':grd_lon1, 'lat':grd_lat1}, dims=('lat', 'lon'))
    model.attrs = {'unit':model_units[imodel]}
    outdata[model_names[imodel]] = model
 

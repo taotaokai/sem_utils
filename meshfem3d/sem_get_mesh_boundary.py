@@ -4,19 +4,21 @@ import numpy as np
 import pyvista as pv
 import simplekml
 
+from meshfem3d_utils import ecef2latlon_zeroalt, geodetic_lat2geocentric_lat
+
 def vector2latlon_deg(v):
-    lon = np.arctan2(v[1], v[0])
-    latc = np.arctan2(v[2], (v[0]**2+v[1]**2)**0.5)
-    f = 1/299.8
-    factor = 1.0 / (1 - f)**2
-    lat = np.arctan(factor * np.tan(latc))
+    # lon = np.arctan2(v[1], v[0])
+    # latc = np.arctan2(v[2], (v[0]**2+v[1]**2)**0.5)
+    # f = 1/299.8
+    # factor = 1.0 / (1 - f)**2
+    # lat = np.arctan(factor * np.tan(latc))
+    lat, lon = ecef2latlon_zeroalt(v[0], v[1], v[2])
     return np.rad2deg(lat), np.rad2deg(lon)
 
-def geodetic_lat2geocentric_lat(geodetic_lat):
-    f = 1/299.8
-    factor = (1 - f)**2
-    return np.arctan(factor * np.tan(geodetic_lat))
-
+# def geodetic_lat2geocentric_lat(geodetic_lat):
+#     f = 1/299.8
+#     factor = (1 - f)**2
+#     return np.arctan(factor * np.tan(geodetic_lat))
 
 
 sem_parfile = sys.argv[1]

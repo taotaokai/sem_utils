@@ -10,7 +10,7 @@ import xarray as xr
 from netCDF4 import Dataset
 from scipy.interpolate import interp1d, interpn, RegularGridInterpolator
 
-from meshfem3d_utils import xyz2latlon_deg, geodetic_lat2geocentric_lat
+from meshfem3d_utils import geodetic_lat2geocentric_lat
 from meshfem3d_constants import R_EARTH
 
 parser = argparse.ArgumentParser()

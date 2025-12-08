@@ -9,7 +9,8 @@ parameters from constants.h
 # -- radius of the Earth
 R_EARTH = 6371000.0
 R_EARTH_KM = 6371.0
-EARTH_FLATTENING = 1 / 299.8
+EARTH_FLATTENING_SEM = 1.0 / 299.8
+EARTH_FLATTENING_WGS84 = 1.0 / 298.257223563
 
 # --- GLL
 

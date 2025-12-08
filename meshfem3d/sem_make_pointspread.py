@@ -4,7 +4,7 @@ import numpy as np
 import pyvista as pv
 import argparse
 
-from meshfem3d_utils import R_EARTH_KM, xyz2latlon_deg, geodetic_lat2geocentric_lat
+from meshfem3d_utils import R_EARTH_KM, ecef2latlon_zeroalt, geodetic_lat2geocentric_lat
 
 parser = argparse.ArgumentParser()
 
@@ -148,7 +148,7 @@ for eta in grid_eta:
 
     r = v0_eta * np.sin(eta) + v0_r * np.cos(eta)
     r = r / sum(r**2) ** 0.5
-    lat, lon = xyz2latlon_deg(r)
+    lat, lon = ecef2latlon_zeroalt(r[0], r[1], r[2])
 
     theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat)
     phi = lon

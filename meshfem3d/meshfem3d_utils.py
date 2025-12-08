@@ -220,18 +220,16 @@ def write_gll_file(gll_dir, gll_tag, iproc, data, region_code="reg1", dtype="f4"
 # ==================================================#
 
 
-def geodetic_lat2geocentric_lat(geodetic_lat):
-    f = EARTH_FLATTENING
+def geodetic_lat2geocentric_lat(geodetic_lat, f=EARTH_FLATTENING_SEM):
     factor = (1 - f) ** 2
-    return np.arctan(factor * np.tan(geodetic_lat))
+    gencentric_lat = np.arctan(factor * np.tan(geodetic_lat))
+    return gencentric_lat
 
 
-def xyz2latlon_deg(v):
-    lon = np.arctan2(v[1], v[0])
-    latc = np.arctan2(v[2], (v[0] ** 2 + v[1] ** 2) ** 0.5)
-    f = EARTH_FLATTENING
-    factor = 1.0 / (1 - f) ** 2
-    lat = np.arctan(factor * np.tan(latc))
+def ecef2latlon_zeroalt(x, y, z, f=EARTH_FLATTENING_SEM):
+    """get lat/lon where ECEF vector intercepts the reference ellipsoid"""
+    lat = np.arctan2(z, (x**2 + y**2) ** 0.5 * (1 - f) ** 2)
+    lon = np.arctan2(y, x)
     return lat, lon
 
 
@@ -654,7 +652,7 @@ def sem_mesh_locate_points(
     idoubling: interpolation is only done for those elements with the same idoubling value for each point.
         integer: idoubling value for all points
         integer(n): idoubling value of each point
-        None: no specific region and interpolation will be done over all the elements in the mesh, 
+        None: no specific region and interpolation will be done over all the elements in the mesh,
     kdtree_num_element: radius factor as number of multiples of the maximum element half size used in kdtree search of neighboring elements to target point.
     max_dist_ratio: maximum ratio between the distance from target point to the element center and the element half size. Used to ignore element which is too far away from the target point. Sometimes if this value is too close to one, the target point slightly outside the mesh will be marked as NOT located, even if the SEM could allow a point outside the element be located.
 
@@ -801,7 +799,7 @@ def sem_mesh_interp_points(
     mesh_dir,
     model_dir,
     model_tags,
-    interp_points, # [npoints, 3]
+    interp_points,  # [npoints, 3]
     idoubling=None,
     method="linear",
 ):
@@ -842,14 +840,12 @@ def sem_mesh_interp_points(
             )
 
         # locate points in the mesh slice
-        status, ispec, uvw, misloc, misratio = (
-            sem_mesh_locate_points(
-                mesh_data,
-                interp_points,
-                idoubling=idoubling,
-                kdtree_num_element=2.0,
-                max_dist_ratio=2.0,
-            )
+        status, ispec, uvw, misloc, misratio = sem_mesh_locate_points(
+            mesh_data,
+            interp_points,
+            idoubling=idoubling,
+            kdtree_num_element=2.0,
+            max_dist_ratio=2.0,
         )
 
         # select which points to update using the current mesh slice
@@ -878,7 +874,7 @@ def sem_mesh_interp_points(
 
 
 def sem_mesh_interp_mesh(
-    mpi_comm : MPI.Comm,
+    mpi_comm: MPI.Comm,
     iproc_target,
     mesh_dir_target,
     model_dir_target,
@@ -896,7 +892,7 @@ def sem_mesh_interp_mesh(
     the targe mesh slice is devided into several sub-chunks for parallel processing
     This is to reduce the memory usage when the targe mesh slice is big
     """
-    
+
     from mpi4py.util import dtlib
 
     mpi_size = mpi_comm.Get_size()
@@ -1001,11 +997,15 @@ def sem_mesh_interp_mesh(
                 recv_displs = np.array(begin_indices, dtype=int)
             mpi_datatype = dtlib.from_numpy_dtype(status_part.dtype)
             mpi_comm.Gatherv(
-                status_part, [status_glob, recv_counts, recv_displs, mpi_datatype], root=0
+                status_part,
+                [status_glob, recv_counts, recv_displs, mpi_datatype],
+                root=0,
             )
             mpi_datatype = dtlib.from_numpy_dtype(misloc_part.dtype)
             mpi_comm.Gatherv(
-                misloc_part, [misloc_glob, recv_counts, recv_displs, mpi_datatype], root=0
+                misloc_part,
+                [misloc_glob, recv_counts, recv_displs, mpi_datatype],
+                root=0,
             )
             mpi_datatype = dtlib.from_numpy_dtype(misratio_part.dtype)
             mpi_comm.Gatherv(
@@ -1017,12 +1017,14 @@ def sem_mesh_interp_mesh(
                 status_gll[reg_element_mask, ...] = status_glob[reg_indices]
                 misloc_gll[reg_element_mask, ...] = misloc_glob[reg_indices]
                 misratio_gll[reg_element_mask, ...] = misratio_glob[reg_indices]
-    
+
     if mpi_rank == 0:
         # save interpolated model
         for imodel in range(nmodel):
             model_tag = model_tags[imodel]
-            write_gll_file(model_dir_target, model_tag, iproc_target, model_gll[..., imodel])
+            write_gll_file(
+                model_dir_target, model_tag, iproc_target, model_gll[..., imodel]
+            )
         # save misloc, status
         if output_misloc:
             write_gll_file(model_dir_target, "status", iproc_target, status_gll)

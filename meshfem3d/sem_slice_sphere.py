@@ -1,184 +1,292 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-""" create horizontal slice of SEM model at a given depth
-"""
-import sys
-import time
+"""create horizontal slice of SEM model at a given depth"""
+import argparse
 
 import numpy as np
-from scipy.io import FortranFile
 import pyproj
 import xarray as xr
-#from netCDF4 import Dataset
-#from mpi4py import MPI
+import pyvista as pv
 
-from meshfem3d_constants import NGLLX,NGLLY,NGLLZ,GAUSSALPHA,GAUSSBETA,R_EARTH
-from gll_library import zwgljd, lagrange_poly
-from meshfem3d_utils import sem_mesh_read, sem_mesh_locate_points, interp_model_gll
+from meshfem3d_constants import R_EARTH
 
-#====== parameters
-nproc = int(sys.argv[1])
-mesh_dir = str(sys.argv[2]) # <mesh_dir>/proc******_external_mesh.bin
-model_dir = str(sys.argv[3]) # <model_dir>/proc******_<model_name>.bin
-model_names = str(sys.argv[4]) # comma delimited e.g. vp,vs,rho,qmu,qkappa
-model_units = str(sys.argv[5]) # comma delimited e.g. km.s-1,km.s-1,kg.m-3,count,count
-min_lat = float(sys.argv[6])
-max_lat = float(sys.argv[7])
-nlat = int(sys.argv[8])
-min_lon = float(sys.argv[9])
-max_lon = float(sys.argv[10])
-nlon = int(sys.argv[11])
-depth_km = float(sys.argv[12]) # negative ellipsoidal height or ~ below mean sea level
-out_file = str(sys.argv[13])
+from meshfem3d_utils import (
+    geodetic_lat2geocentric_lat,
+    ecef2latlon_zeroalt,
+    sem_mesh_interp_points,
+)
 
-# model names
-model_names = model_names.split(',')
-model_units = model_units.split(',')
-nmodel = len(model_names)
 
-#--- create slice grid
-grd_lon1 = np.linspace(min_lon, max_lon, nlon)
-grd_lat1 = np.linspace(min_lat, max_lat, nlat)
-grd_lon2, grd_lat2 = np.meshgrid(grd_lon1, grd_lat1, indexing='ij')
-grd_alt2 = np.ones(grd_lon2.shape) * -1000.0 * depth_km
-# convert (lon,lat,alt) to ECEF
-ref_ellps = 'WGS84'
-ecef = pyproj.Proj(proj='geocent', ellps=ref_ellps)
-lla = pyproj.Proj(proj='latlong', ellps=ref_ellps)
-xx, yy, zz = pyproj.transform(lla, ecef, grd_lon2, grd_lat2, grd_alt2)
-xyz_interp = np.column_stack((xx.ravel(), yy.ravel(), zz.ravel())) / R_EARTH
-npts_interp = xyz_interp.shape[0]
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Generate horizontal cross-section from SEM mesh data"
+    )
+    parser.add_argument("nproc", type=int, help="number of mesh mpi processes")
+    parser.add_argument(
+        "mesh_dir",
+        help="SEM DATABASES_MPI directory",
+        default="DATABASES_MPI",
+    )
+    parser.add_argument(
+        "model_dir",
+        help="SEM GLL model directory",
+        default="DATABASES_MPI",
+    )
+    parser.add_argument(
+        "--model_names",
+        nargs="+",
+        default=["vsv"],
+        help="Model parameter names to extract",
+    )
+    parser.add_argument(
+        "--central_lat", type=float, default=0, help="Mesh central latitude"
+    )
+    parser.add_argument(
+        "--central_lon", type=float, default=0, help="Mesh central longitude"
+    )
+    parser.add_argument(
+        "--rotation_angle", type=float, default=0, help="Mesh rotation angle"
+    )
+    parser.add_argument(
+        "--width_xi", type=float, default=0, help="Mesh angular width in xi"
+    )
+    parser.add_argument(
+        "--width_eta", type=float, default=0, help="Mesh angular width in eta"
+    )
+    parser.add_argument("--depth", type=float, default=100, help="xsection depth in km")
+    parser.add_argument(
+        "-n",
+        "--ngrid",
+        nargs=2,
+        metavar=("xi", "eta"),
+        help="number of grids along %(metavar)s directions",
+        default=[100, 100],
+        type=int,
+    )
+    parser.add_argument("--vtk", default="xsection.vtk", help="output VTK files")
+    parser.add_argument("--nc", default="xsection.nc", help="output NETCDF file")
+    parser.add_argument(
+        "--method",
+        default="linear",
+        choices=["gll", "linear"],
+        help="Interpolation method (gll or linear)",
+    )
 
-#====== interpolate
-#comm = MPI.COMM_WORLD
-#mpi_size = comm.Get_size()
-#mpi_rank = comm.Get_rank()
+    return parser.parse_args()
 
-status_local = np.zeros(npts_interp)
-misloc_local = np.zeros(npts_interp)
 
-status_interp = np.zeros(npts_interp)
-misloc_interp = np.zeros(npts_interp)
-model_interp = np.zeros((npts_interp, nmodel))
+def create_horizontal_xsection_grids(
+    xi,  # degrees
+    eta,  # degrees
+    depth,  # km
+    central_lat=0,  # degrees
+    central_lon=0,  # degrees
+    rotation_angle=0,  # degrees
+):
+    """
+    Create 3D points for a vertical cross-section.
 
-status_local[:] = -1
-misloc_local[:] = np.inf
+    Args:
+        xi: 1-D array of xi coordinates
+        eta: 1-D array of eta coordinates
+        depth: depth of the horizontal cross-section in km
+        central_lat: Central latitude of the mesh chunk
+        central_lon: Central longitude of the mesh chunk
+        rotation_angle: rotation angle of the mesh chunk
 
-status_interp[:] = -1
-misloc_interp[:] = np.inf
-model_interp[:] = np.nan
+    Returns:
+        xyz[n_xi, n_eta, 3]: coordinates of the 2-D grid points
+        lats[n_xi, n_eta]: latitudes of the 2-D grid points
+        lons[n_xi, n_eta]: longitudes of the 2-D grid points
+        alts[n_xi, n_eta]: altitudes of the 2-D grid points
+    """
+    gps2ecef = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:4978")
 
-# GLL
-xigll, wx = zwgljd(NGLLX,GAUSSALPHA,GAUSSBETA)
-yigll, wy = zwgljd(NGLLY,GAUSSALPHA,GAUSSBETA)
-zigll, wz = zwgljd(NGLLZ,GAUSSALPHA,GAUSSBETA)
+    # Convert to radians
+    lat0 = np.deg2rad(central_lat)
+    lon0 = np.deg2rad(central_lon)
+    gamma = np.deg2rad(rotation_angle)
 
-#--- loop over each SEM mesh
-#for iproc in range(mpi_rank,nproc,mpi_size):
-for iproc in range(nproc):
+    # Convert geographic to geocentric coordinates
+    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0)
+    phi = lon0
 
-  print("====== proc# ", iproc)
-  sys.stdout.flush()
+    # Unit vectors in spherical coordinate system
+    # Easting vector
+    ve = np.array([-np.sin(phi), np.cos(phi), 0])  # East
+    # Northing vector
+    vn = np.array(
+        [
+            -np.cos(theta) * np.cos(phi),
+            -np.cos(theta) * np.sin(phi),
+            np.sin(theta),
+        ]
+    )
+    # Radial vector
+    vr = np.array(
+        [
+            np.sin(theta) * np.cos(phi),
+            np.sin(theta) * np.sin(phi),
+            np.cos(theta),
+        ]
+    )
+    # unit vector along xi at the mesh center
+    v_xi = np.cos(gamma) * ve + np.sin(gamma) * vn
+    # unit vector along eta at the mesh center
+    v_eta = -np.sin(gamma) * ve + np.cos(gamma) * vn
 
-  #--- read in target SEM mesh
-  mesh_file = "%s/proc%06d_reg1_solver_data.bin"%(mesh_dir, iproc)
-  mesh_data = sem_mesh_read(mesh_file)
+    # 2-D grid
+    xi2, eta2 = np.meshgrid(np.deg2rad(xi), np.deg2rad(eta), indexing="ij")
 
-  #--- read model values of the contributing mesh slice
-  gll_dims = mesh_data['gll_dims']
-  model_gll = np.zeros((nmodel,)+gll_dims)
-  for imodel in range(nmodel):
-    model_tag = model_names[imodel]
-    model_file = "%s/proc%06d_reg1_%s.bin"%(model_dir, iproc, model_tag)
-    with FortranFile(model_file, 'r') as f:
-      # note: must use fortran convention when reshape to N-D array!!!
-      model_gll[imodel,:,:,:,:] = np.reshape(f.read_ints(dtype='f4'), gll_dims, order='F')
+    l_xi = np.tan(xi2)
+    l_eta = np.tan(eta2)
+    v = (
+        l_xi[:, :, None] * v_xi[None, None, :]
+        + l_eta[:, :, None] * v_eta[None, None, :]
+        + vr[None, None, :]
+    )
+    v = v / np.sum(v**2, axis=-1, keepdims=True) ** 0.5
 
-  #--- locate each points
-  status_local, ispec_local, uvw_local, misloc_local, misratio_local = sem_mesh_locate_points(mesh_data, xyz_interp)
+    lat2, lon2 = ecef2latlon_zeroalt(v[..., 0], v[..., 1], v[..., 2])
+    alt2 = (
+        -1 * np.ones_like(lat2) * depth * 1000.0
+    )  # depth to negative ellipsoidal height
+    lat2 = np.rad2deg(lat2)
+    lon2 = np.rad2deg(lon2)
+    xx, yy, zz = gps2ecef.transform(lat2, lon2, alt2)
+    xyz = np.zeros(xx.shape + (3,))
+    xyz[..., 0] = xx
+    xyz[..., 1] = yy
+    xyz[..., 2] = zz
+    xyz = xyz / R_EARTH
 
-  # merge interpolation results from the current mesh slice into the final results based on misloc and status  
-  # index selection for merge: (not located inside an element yet) and (located for the current mesh slice) and (smaller misloc or located inside an element in this mesh slice)
-  ii = (status_interp != 1) & (status_local != -1) & ( (misloc_local < misloc_interp) | (status_local == 1) )
+    return xyz, lat2, lon2, alt2
 
-  status_interp[ii] = status_local[ii]
-  misloc_interp[ii] = misloc_local[ii]
-  #misratio_interp[ii] = misratio_local[ii]
 
-  ipoint_select = np.nonzero(ii)[0]
-  interp_model_gll(
-            ipoint_select,
-            zigll,
-            ispec_local,
-            uvw_local,
-            model_gll,
-            model_interp,
-            method='linear',
-        )
-  # for ipoint in ipoint_select:
-    
-  #   hlagx = lagrange_poly(xigll, uvw_local[ipoint, 0])[:,0]
-  #   hlagy = lagrange_poly(yigll, uvw_local[ipoint, 1])[:,0]
-  #   hlagz = lagrange_poly(zigll, uvw_local[ipoint, 2])[:,0]
-  #   model_interp[:,ipoint] = np.sum(model_gll[:,ispec_local[ipoint],:,:,:]*hlagx[:,None,None]*hlagy[None,:,None]*hlagz[None,None,:], axis=(1,2,3))
+def create_vtk_output(
+    model_names,
+    model_interp,
+    xyz,
+    out_file,
+):
+    """
+    Create VTK output files for visualization.
+    """
+    nxi, neta = xyz.shape[:2]
+    ncells = (nxi - 1) * (neta - 1)
 
-#--- synchronize all processes
-#comm.Barrier()
+    # Create mesh connectivity
+    connectivity = np.zeros((ncells, 4), dtype=int)
+    iy, ix = np.unravel_index(np.arange(ncells), (nxi - 1, neta - 1))
 
-##--- gather info to the root process 
-#MPI_TAG_misloc = 10
-#MPI_TAG_model = 11
-#
-#if mpi_rank != 0:
-#  comm.Send(misloc, dest=0, tag=MPI_TAG_misloc)
-#  comm.Send(model_interp, dest=0, tag=MPI_TAG_model)
-#
-#else:
-#  misloc_copy = np.empty(npts_interp)
-#  model_interp_copy = np.empty((nmodel,npts_interp))
-#  for iproc in range(1,mpi_size):
-#    comm.Recv(misloc_copy, source=iproc, tag=MPI_TAG_misloc) 
-#    comm.Recv(model_interp_copy, source=iproc, tag=MPI_TAG_model) 
-#    for ipoint in range(npts_interp):
-#      if misloc_copy[ipoint] < misloc[ipoint]:
-#        misloc[ipoint] = misloc_copy[ipoint]
-#        model_interp[:,ipoint] = model_interp_copy[:,ipoint]
+    for ii, (dx, dy) in enumerate([(0, 0), (1, 0), (1, 1), (0, 1)]):
+        connectivity[:, ii] = neta * (iy + dy) + (ix + dx)
 
-#--- output interpolated model
-outdata = xr.Dataset()
-for imodel in range(nmodel):
-   model = xr.DataArray(np.transpose(np.reshape(model_interp[:, imodel],(nlon,nlat))), coords={'lon':grd_lon1, 'lat':grd_lat1}, dims=('lat', 'lon'))
-   model.attrs = {'unit':model_units[imodel]}
-   outdata[model_names[imodel]] = model
+    mesh = pv.UnstructuredGrid({pv.CellType.QUAD: connectivity}, xyz.reshape((-1, 3)))
 
-outdata.attrs = {
-    'description':"sem_slice_sphere",
-    'depth_km':depth_km,
+    for i, tag in enumerate(model_names):
+        model = model_interp[:, :, i]
+        mesh.point_data[tag] = model.flatten()
+
+    mesh.save(out_file)
+
+
+def create_netcdf_output(
+    model_names, model_data, points, xi, eta, lats, lons, alts, out_file, attrs=None
+):
+    """
+    Create NetCDF output with all cross-sections.
+    """
+    # datasets = []
+
+    # Create dataset for this cross-section
+    data_vars = {}
+    for i, model_name in enumerate(model_names):
+        data_vars[model_name] = (["xi", "eta"], model_data[:, :, i])
+
+    coords = {
+        "xi": (["xi"], xi, {"units": "degree"}),
+        "eta": (["eta"], eta, {"units": "degree"}),
     }
 
-outdata.to_netcdf(out_file)
+    data_vars["latitude"] = (["xi", "eta"], lats)
+    data_vars["longitude"] = (["xi", "eta"], lons)
+    data_vars["altitude"] = (["xi", "eta"], alts)
 
-#dataset = Dataset(out_file ,'w',format='NETCDF4_CLASSIC')
-#dataset.description = "sem_slice_sphere"
-##
-#dataset.createDimension('longitude',nlon)
-#dataset.createDimension('latitude',nlat)
-##
-#longitudes = dataset.createVariable('longitude', np.float32, ('longitude',))
-#latitudes = dataset.createVariable('latitude', np.float32, ('latitude',))
-#longitudes.units = 'degree_east'
-#latitudes.units = 'degree_north'
-#longitudes[:] = grd_lon1
-#latitudes[:] = grd_lat1
-## model values
-#for imodel in range(nmodel):
-#  model = dataset.createVariable(model_names[imodel], np.float32, ('longitude','latitude',))
-#  model.units = model_units[imodel]
-#  #model.long_name = model_names[imodel]
-#  model[:,:] = model_interp[imodel,:].reshape((nlon,nlat))
-## location misfit of interpolation points 
-#misloc_data = dataset.createVariable('misloc', np.float32, ('longitude','latitude',))
-#misloc_data.units = 'meter'
-#misloc_data[:,:] = misloc_interp.reshape((nlon,nlat))
-##
-#dataset.close()
+    data_vars["x"] = (["xi", "eta"], points[:, :, 0])
+    data_vars["y"] = (["xi", "eta"], points[:, :, 1])
+    data_vars["z"] = (["xi", "eta"], points[:, :, 2])
+
+    ds = xr.Dataset(data_vars, coords=coords, attrs=attrs)
+    ds.to_netcdf(out_file)
+
+
+def main():
+    """Main execution function."""
+    args = parse_arguments()
+
+    nmodel = len(args.model_names)
+
+    # Grid parameters
+    nxi, neta = args.ngrid
+    xi_grids = np.linspace(0, args.width_xi, nxi) - 0.5 * args.width_xi
+    eta_grids = np.linspace(0, args.width_eta, neta) - 0.5 * args.width_eta
+
+    # Create grids points on the horizontal cross-section
+    xyz, lats, lons, alts = create_horizontal_xsection_grids(
+        xi_grids,
+        eta_grids,
+        args.depth,
+        central_lat=args.central_lat,
+        central_lon=args.central_lon,
+        rotation_angle=args.rotation_angle,
+    )
+
+    # Reshape for processing
+    points_flat = xyz.reshape((-1,3))
+    model_interp, *_ = sem_mesh_interp_points(
+        args.nproc,
+        args.mesh_dir,
+        args.model_dir,
+        args.model_names,
+        points_flat,
+        idoubling=None,
+        method=args.method,
+    )
+    # Reshape results
+    model_interp = model_interp.reshape((nxi, neta, nmodel))
+
+    # Create VTK output if requested
+    create_vtk_output(
+        args.model_names,
+        model_interp,
+        xyz,
+        args.vtk,
+    )
+
+    attrs = {
+        "central_lat": args.central_lat,
+        "central_lon": args.central_lon,
+        "rotation_angle": args.rotation_angle,
+        "depth": args.depth,
+        "width_xi": args.width_xi,
+        "width_eta": args.width_eta,
+        "description": f"Horizontal cross-section at depth {args.depth} km",
+    }
+    create_netcdf_output(
+        args.model_names,
+        model_interp,
+        xyz,
+        xi_grids,
+        eta_grids,
+        lats,
+        lons,
+        alts,
+        args.nc,
+        attrs=attrs,
+    )
+
+
+if __name__ == "__main__":
+    main()

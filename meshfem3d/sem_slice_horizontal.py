@@ -5,7 +5,7 @@ import pyvista as pv
 # import simplekml
 import argparse
 
-from meshfem3d_utils import xyz2latlon_deg, geodetic_lat2geocentric_lat
+from meshfem3d_utils import geodetic_lat2geocentric_lat
 
 parser = argparse.ArgumentParser()
 

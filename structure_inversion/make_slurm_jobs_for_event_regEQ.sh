@@ -7,6 +7,11 @@ control_file=${1:?[arg]need control_file}
 event_id=${2:?[arg]need event_id}
 
 # source control_file
+if [ ! -f "$control_file" ]
+then
+  echo "[ERROR] $control_file NOT found!"
+  exit -1
+fi
 source $control_file
 
 #====== define variables

@@ -8,7 +8,7 @@ from mpi4py import MPI
 import numba
 
 from meshfem3d_constants import R_EARTH_KM
-from meshfem3d_utils import sem_mesh_read
+from meshfem3d_utils import sem_mesh_read, read_gll_file, write_gll_file
 
 # MPI initialization
 comm_world = MPI.COMM_WORLD
@@ -27,7 +27,7 @@ def parse_arguments():
         "model_dir", help="directory with proc*_reg1_[vpv,vph,vsv,vsh,eta,rho].bin"
     )
     parser.add_argument(
-        "reference_dir", help="directory with refernece [Vp0,Vs0] model "
+        "reference_dir", help="directory with reference model proc*_reg1_[vp0,vs0].bin"
     )
     parser.add_argument(
         "kernel_dir", help="directory with proc*_reg1_[cijkl,rho]_kernel.bin"
@@ -92,29 +92,16 @@ def make_gaussian_mask(xyz_glob, xyz_mask, sigma_mask):
     return weight_mask
 
 
-def read_fortran_file(filename, dtype="f4"):
-    """Read a Fortran unformatted file and return the data."""
-    with FortranFile(filename, "r") as f:
-        data = f.read_reals(dtype=dtype)
-    return data
-
-
-def write_fortran_file(filename, data, dtype="f4"):
-    """Write data to a Fortran unformatted file."""
-    with FortranFile(filename, "w") as f:
-        f.write_record(np.array(data, dtype=dtype))
-
-
 def read_model_tiso(iproc, model_dir):
     """Read velocity models from a directory.
     note: velocities in km/s, density in g/cm^3
     """
-    vpv = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_vpv.bin"))
-    vph = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_vph.bin"))
-    vsv = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_vsv.bin"))
-    vsh = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_vsh.bin"))
-    eta = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_eta.bin"))
-    rho = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_rho.bin"))
+    vpv = read_gll_file(model_dir, "vpv", iproc)
+    vph = read_gll_file(model_dir, "vph", iproc)
+    vsv = read_gll_file(model_dir, "vsv", iproc)
+    vsh = read_gll_file(model_dir, "vsh", iproc)
+    eta = read_gll_file(model_dir, "eta", iproc)
+    rho = read_gll_file(model_dir, "rho", iproc)
     return vpv, vph, vsv, vsh, eta, rho
 
 
@@ -122,8 +109,8 @@ def read_model_ref(iproc, reference_dir):
     """Read velocity models from a directory.
     note: velocities in km/s
     """
-    vp = read_fortran_file(os.path.join(reference_dir, f"proc{iproc:06d}_reg1_vp.bin"))
-    vs = read_fortran_file(os.path.join(reference_dir, f"proc{iproc:06d}_reg1_vs.bin"))
+    vp = read_gll_file(reference_dir, "vp", iproc)
+    vs = read_gll_file(reference_dir, "vs", iproc)
     return vp, vs
 
 
@@ -141,12 +128,10 @@ def process_kernel(iproc, model_dir, reference_dir, kernel_dir, out_dir, mask=No
     # ! final unit : [s km^(-3) (kg/m^3)^(-1)]  ! for rho_kernel
 
     # Read cijkl kernel data
-    cijkl_file = os.path.join(kernel_dir, f"proc{iproc:06d}_reg1_cijkl_kernel.bin")
-    cijkl_kernel = read_fortran_file(cijkl_file, "f4").reshape((-1, 21))
+    cijkl_kernel = read_gll_file(kernel_dir, "cijkl_kernel", iproc).reshape((-1, 21))
 
     # Read rho kernel data
-    rho_file = os.path.join(kernel_dir, f"proc{iproc:06d}_reg1_rho_kernel.bin")
-    rho_kernel = read_fortran_file(rho_file, "f4")
+    rho_kernel = read_gll_file(kernel_dir, "rho_kernel", iproc)
     rho_kernel = rho_kernel * 1.0e3  # convert to [s km^(-3) (g/cm^3)^(-1)]
 
     # Read reference velocity models (km/s)
@@ -154,13 +139,13 @@ def process_kernel(iproc, model_dir, reference_dir, kernel_dir, out_dir, mask=No
     # velocity models (velocities in km/s, density in g/cm^3)
     vpv, vph, vsv, vsh, eta, rho = read_model_tiso(iproc, model_dir)
 
-    # convert to relative velocity perturbation 
-    vp = ((vpv**2 + 4*vph**2) / 5)**0.5
-    vs = ((2*vsv**2 + vsh**2) / 3)**0.5
-    alpha = vp/vp0 - 1
-    beta = vs/vs0 - 1
-    phi = (vph**2-vpv**2) / vp**2
-    xi = (vsh**2-vsv**2) / vs**2
+    # convert to relative velocity perturbation
+    vp = ((vpv**2 + 4 * vph**2) / 5) ** 0.5
+    vs = ((2 * vsv**2 + vsh**2) / 3) ** 0.5
+    alpha = vp / vp0 - 1
+    beta = vs / vs0 - 1
+    phi = (vph**2 - vpv**2) / vp**2
+    xi = (vsh**2 - vsv**2) / vs**2
 
     # Extract specific components
     K_C11 = cijkl_kernel[:, 0]  # dChi/dC11
@@ -175,34 +160,63 @@ def process_kernel(iproc, model_dir, reference_dir, kernel_dir, out_dir, mask=No
 
     # Convert to relative velocity using chain rule: dChi/dA = dChi/dCij * dCij/dA
 
-    K_alpha = ( 
-        (K_C11+K_C22+K_C12)*(1.0+1.0/5.0*phi)
-        +K_C33*(1.0-4.0/5.0*phi)
-        +(K_C13+K_C23)*(1.0+1.0/5.0*phi)*eta
-    ) * 2.0 * rho * vp0**2 * (1+alpha)
+    K_alpha = (
+        (
+            (K_C11 + K_C22 + K_C12) * (1.0 + 1.0 / 5.0 * phi)
+            + K_C33 * (1.0 - 4.0 / 5.0 * phi)
+            + (K_C13 + K_C23) * (1.0 + 1.0 / 5.0 * phi) * eta
+        )
+        * 2.0
+        * rho
+        * vp0**2
+        * (1 + alpha)
+    )
 
-    K_beta = ( 
-        K_C12*(-2.0*(1.0+2.0/3.0*xi))
-        + (K_C13+K_C23)*(-2.0*eta*(1.0-1.0/3.0*xi))
-        + (K_C44+K_C55)*(1.0-1.0/3.0*xi)
-        + K_C66*(1.0+2.0/3.0*xi)
-    ) * 2.0 * rho * vs0**2 * (1+beta)
+    K_beta = (
+        (
+            K_C12 * (-2.0 * (1.0 + 2.0 / 3.0 * xi))
+            + (K_C13 + K_C23) * (-2.0 * eta * (1.0 - 1.0 / 3.0 * xi))
+            + (K_C44 + K_C55) * (1.0 - 1.0 / 3.0 * xi)
+            + K_C66 * (1.0 + 2.0 / 3.0 * xi)
+        )
+        * 2.0
+        * rho
+        * vs0**2
+        * (1 + beta)
+    )
 
     K_phi = (
-        (K_C11+K_C22+K_C12)*1.0/5.0
-        + K_C33*(-4.0/5.0)
-        + (K_C13+K_C23)*1.0/5.0*eta
-    ) * vp**2 * rho
+        (
+            (K_C11 + K_C22 + K_C12) * 1.0 / 5.0
+            + K_C33 * (-4.0 / 5.0)
+            + (K_C13 + K_C23) * 1.0 / 5.0 * eta
+        )
+        * vp**2
+        * rho
+    )
 
     K_xi = (
-        (K_C44+K_C55)*(-1.0/3.0)
-        + K_C66*(2.0/3.0)
-        + K_C12*(-4.0/3.0)
-        + (K_C13+K_C23)*(2.0/3.0*eta)
-    ) * vs**2 * rho
+        (
+            (K_C44 + K_C55) * (-1.0 / 3.0)
+            + K_C66 * (2.0 / 3.0)
+            + K_C12 * (-4.0 / 3.0)
+            + (K_C13 + K_C23) * (2.0 / 3.0 * eta)
+        )
+        * vs**2
+        * rho
+    )
 
-    K_eta = (K_C13+K_C23)*((1.0+1.0/5.0*phi)*vp**2 - 2.0*(1-1.0/3.0*xi)*vs**2) * rho
+    K_eta = (K_C13 + K_C23) * (vph**2 - 2.0 * vsv**2) * rho
 
+    K_rho = (
+        rho_kernel
+        + (K_C11 + K_C22) * vph**2
+        + K_C33 * vpv**2
+        + K_C12 * (vph**2 - 2 * vsh**2)
+        + (K_C13 + K_C23) * eta * (vph**2 - vsv**2)
+        + (K_C44 + K_C55) * vsv**2
+        + K_C66 * vsh**2
+    )
 
     if mask is not None:
         mask = mask.flatten()
@@ -214,24 +228,12 @@ def process_kernel(iproc, model_dir, reference_dir, kernel_dir, out_dir, mask=No
         K_rho *= mask
 
     # Write each kernel to a separate file
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_alpha_kernel.bin"), K_alpha
-    )
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_beta_kernel.bin"), K_beta
-    )
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_phi_kernel.bin"), K_phi
-    )
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_xi_kernel.bin"), K_xi
-    )
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_eta_kernel.bin"), K_eta
-    )
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_rho_kernel.bin"), rho_kernel
-    )
+    write_gll_file(out_dir, "alpha_kernel", iproc, K_alpha)
+    write_gll_file(out_dir, "beta_kernel", iproc, K_beta)
+    write_gll_file(out_dir, "phi_kernel", iproc, K_phi)
+    write_gll_file(out_dir, "xi_kernel", iproc, K_xi)
+    write_gll_file(out_dir, "eta_kernel", iproc, K_eta)
+    write_gll_file(out_dir, "rho_kernel", iproc, K_rho)
 
 
 def main():
@@ -263,7 +265,12 @@ def main():
 
         try:
             process_kernel(
-                iproc, args.model_dir,args.refernce_dir, args.kernel_dir, args.out_dir, mask=mask_gll
+                iproc,
+                args.model_dir,
+                args.refernce_dir,
+                args.kernel_dir,
+                args.out_dir,
+                mask=mask_gll,
             )
         except Exception as e:
             print(f"Error processing iproc {iproc}: {e}")

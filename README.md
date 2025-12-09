@@ -431,3 +431,67 @@ $$
 > \sum\limits_{G(e,\alpha ) = g} {\dot u_\alpha ^e{w_\alpha }\det {{\bf{J}}^e}\left( {{\bf{\xi }}_\alpha ^{GLL}} \right)}  =- \sum\limits_{G(e,\alpha ) = g} {\sum\limits_m {\sum\limits_{{\beta _m}} {{w_{{\beta _m},{\alpha _{ \cdot  \ne m}}}}\dot \ell _{{\alpha _m}}^{GLL}\left( {\xi _{{\beta _m}}^{GLL}} \right){\Psi _{m,\left( {{\beta _m},{\alpha _{ \cdot  \ne m}}} \right)}}} } }
 > $$
 > for every basis function $\psi_g$ of the test function space. 
+
+
+
+## Parameterization for radial anisotropy 
+
+In Voigt notation the radial anisotropy with symmetric axis along the 3rd axis can be written in Love parameters
+$$
+{C_{IJ}} = \left( {\begin{array}{*{20}{c}}
+A&{A - 2N}&F&0&0&0\\
+{}&A&F&0&0&0\\
+{}&{}&C&0&0&0\\
+{}&{}&{}&L&0&0\\
+{}&{}&{}&{}&L&0\\
+{}&{}&{}&{}&{}&N
+\end{array}} \right)
+$$
+The relation between the Love parameters (A,C,L,N,F) and  $V_{PH},V_{PV},V_{SH},V_{SV},\eta$
+$$
+\begin{array}{l}
+A = \rho V_{PH}^2\\
+C = \rho V_{PV}^2\\
+L = \rho V_{SV}^2\\
+N = \rho V_{SH}^2\\
+F = \eta \left( {A - 2L} \right) = \rho \eta \left( {V_{PH}^2 - 2V_{SV}^2} \right)
+\end{array}
+$$
+Re-parameterization $a_{IJ} = \rho^{-1} C_{IJ}$
+$$
+{a_{IJ}} = \frac{{{C_{IJ}}}}{\rho } = \left( {\begin{array}{*{20}{c}}
+{V_{PH}^2}&{V_{PH}^2 - 2V_{SH}^2}&{\eta \left( {V_{PH}^2 - 2V_{SV}^2} \right)}&0&0&0\\
+{}&{V_{PH}^2}&{\eta \left( {V_{PH}^2 - 2V_{SV}^2} \right)}&0&0&0\\
+{}&{}&{V_{PV}^2}&0&0&0\\
+{}&{}&{}&{V_{SV}^2}&0&0\\
+{}&{}&{}&{}&{V_{SV}^2}&0\\
+{}&{}&{}&{}&{}&{V_{SH}^2}
+\end{array}} \right)
+$$
+Conversion of kernels $K_{C_{IJ}},K_{\rho} \to K_{a_{IJ}},K_{\rho\prime}$ :
+$$
+\begin{array}{l}
+{K_{{a_{IJ}}}} = \rho {K_{{C_{IJ}}}}\\
+{K_{\rho '}} = {K_\rho } + \sum {{a_{IJ}}{K_{{C_{IJ}}}}} 
+\end{array}
+$$
+Re-parameterization velocities as $\alpha,\beta,\xi,\phi,\eta$ 
+$$
+\begin{array}{l}
+{V_P} = \left( {1 + \alpha } \right){V_{P0}}\\
+{V_S} = \left( {1 + \beta } \right){V_{S0}}\\
+V_P^2 = \frac{{V_{PV}^2 + 4V_{PH}^2}}{5}\\
+V_S^2 = \frac{{2V_{SV}^2 + V_{SH}^2}}{3}\\
+\xi  = \frac{{V_{SH}^2 - V_{SV}^2}}{{V_S^2}}\\
+\phi  = \frac{{V_{PH}^2 - V_{PV}^2}}{{V_P^2}}
+\end{array}
+$$
+So the velocities can be written as
+$$
+\begin{array}{l}
+V_{PH}^2 = \left( {1 + \frac{1}{5}\phi } \right){\left( {1 + \alpha } \right)^2}V_{P0}^2\\
+V_{PV}^2 = \left( {1 - \frac{4}{5}\phi } \right){\left( {1 + \alpha } \right)^2}V_{P0}^2\\
+V_{SH}^2 = \left( {1 + \frac{2}{3}\xi } \right){\left( {1 + \beta } \right)^2}V_{S0}^2\\
+V_{SV}^2 = \left( {1 - \frac{1}{3}\xi } \right){\left( {1 + \beta } \right)^2}V_{S0}^2
+\end{array}
+$$

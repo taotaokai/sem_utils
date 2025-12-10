@@ -120,6 +120,8 @@ def make_gaussian_mask(xyz_glob, xyz_mask, sigma_mask):
 
 def main():
     args = parse_arguments()
+    if rank_world == 0: 
+        print(args)
 
     if size_world != args.nproc:
         raise ValueError(f"{size_world=} != {args.nproc=}")

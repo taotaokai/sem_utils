@@ -133,9 +133,8 @@ def create_vertical_xsection_grids(
 
     # tangent vector along the cross-section
     vx = np.cos(az) * vn + np.sin(az) * ve
-
     vz = np.sin(az) * vn - np.cos(az) * ve
-    print(f"normal: {vz}")
+    # print(f"normal: {vz}")
 
     # create 2-D mesh grids
     # na = angles.size
@@ -268,6 +267,7 @@ def create_netcdf_output(
 def main():
     """Main execution function."""
     args = parse_arguments()
+    print(args)
 
     # Create output directory if it doesn't exist
     os.makedirs(args.out_dir, exist_ok=True)

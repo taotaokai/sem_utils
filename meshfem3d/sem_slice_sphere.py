@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """create horizontal slice of SEM model at a given depth"""
+import os
 import argparse
 
 import numpy as np
 import pyproj
 import xarray as xr
 import pyvista as pv
+import pandas as pd
 
 from meshfem3d_constants import R_EARTH
 
@@ -39,33 +41,42 @@ def parse_arguments():
         default=["vsv"],
         help="Model parameter names to extract",
     )
+    # parser.add_argument(
+    #     "--central_lat", type=float, default=0, help="Mesh central latitude"
+    # )
+    # parser.add_argument(
+    #     "--central_lon", type=float, default=0, help="Mesh central longitude"
+    # )
+    # parser.add_argument(
+    #     "--rotation_angle", type=float, default=0, help="Mesh rotation angle"
+    # )
+    # parser.add_argument(
+    #     "--width_xi", type=float, default=0, help="Mesh angular width in xi"
+    # )
+    # parser.add_argument(
+    #     "--width_eta", type=float, default=0, help="Mesh angular width in eta"
+    # )
+    # parser.add_argument("--depth", type=float, default=100, help="xsection depth in km")
     parser.add_argument(
-        "--central_lat", type=float, default=0, help="Mesh central latitude"
+        "--slice_list",
+        default=0,
+        help="csv file of xsection params (depth_km,central_lat,central_lon,width_xi,width_eta,rotation_angle)",
     )
     parser.add_argument(
-        "--central_lon", type=float, default=0, help="Mesh central longitude"
+        "--grid_spacing",
+        help="grid spacing in degrees",
+        default=0.1,
+        type=float,
     )
+    # parser.add_argument("--vtk", default="xsection.vtk", help="output VTK files")
+    # parser.add_argument("--nc", default="xsection.nc", help="output NETCDF file")
     parser.add_argument(
-        "--rotation_angle", type=float, default=0, help="Mesh rotation angle"
+        "--depth_at_constant_radius",
+        action="store_true",
+        help="slice is at constant radius = R_EARTH - depth, "
+        "otherwise slice is at constant WGS84 altitude (ellipsoidal height) = -1 * depth",
     )
-    parser.add_argument(
-        "--width_xi", type=float, default=0, help="Mesh angular width in xi"
-    )
-    parser.add_argument(
-        "--width_eta", type=float, default=0, help="Mesh angular width in eta"
-    )
-    parser.add_argument("--depth", type=float, default=100, help="xsection depth in km")
-    parser.add_argument(
-        "-n",
-        "--ngrid",
-        nargs=2,
-        metavar=("xi", "eta"),
-        help="number of grids along %(metavar)s directions",
-        default=[100, 100],
-        type=int,
-    )
-    parser.add_argument("--vtk", default="xsection.vtk", help="output VTK files")
-    parser.add_argument("--nc", default="xsection.nc", help="output NETCDF file")
+    parser.add_argument("--out_dir", default="./", help="output diretory")
     parser.add_argument(
         "--method",
         default="linear",
@@ -83,6 +94,7 @@ def create_horizontal_xsection_grids(
     central_lat=0,  # degrees
     central_lon=0,  # degrees
     rotation_angle=0,  # degrees
+    depth_at_constant_radius=False,
 ):
     """
     Create 3D points for a vertical cross-section.
@@ -102,6 +114,7 @@ def create_horizontal_xsection_grids(
         alts[n_xi, n_eta]: altitudes of the 2-D grid points
     """
     gps2ecef = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:4978")
+    ecef2gps = pyproj.Transformer.from_crs("EPSG:4978", "EPSG:4326")
 
     # Convert to radians
     lat0 = np.deg2rad(central_lat)
@@ -148,18 +161,27 @@ def create_horizontal_xsection_grids(
     )
     v = v / np.sum(v**2, axis=-1, keepdims=True) ** 0.5
 
-    lat2, lon2 = ecef2latlon_zeroalt(v[..., 0], v[..., 1], v[..., 2])
-    alt2 = (
-        -1 * np.ones_like(lat2) * depth * 1000.0
-    )  # depth to negative ellipsoidal height
-    lat2 = np.rad2deg(lat2)
-    lon2 = np.rad2deg(lon2)
-    xx, yy, zz = gps2ecef.transform(lat2, lon2, alt2)
-    xyz = np.zeros(xx.shape + (3,))
-    xyz[..., 0] = xx
-    xyz[..., 1] = yy
-    xyz[..., 2] = zz
-    xyz = xyz / R_EARTH
+    if depth_at_constant_radius:
+        # depth at constant radius
+        r = R_EARTH - depth * 1000.0
+        xyz = v * r
+        lat2, lon2, alt2 = ecef2gps.transform(xyz[...,0], xyz[...,1], xyz[...,2])
+        xyz = xyz / R_EARTH
+    else:
+        # depth at constant WGS84 altitude
+        lat2, lon2 = ecef2latlon_zeroalt(v[..., 0], v[..., 1], v[..., 2])
+        alt2 = (
+            -1 * np.ones_like(lat2) * depth * 1000.0
+        )  # depth to negative ellipsoidal height
+        lat2 = np.rad2deg(lat2)
+        lon2 = np.rad2deg(lon2)
+
+        xx, yy, zz = gps2ecef.transform(lat2, lon2, alt2)
+        xyz = np.zeros_like(v)
+        xyz[..., 0] = xx
+        xyz[..., 1] = yy
+        xyz[..., 2] = zz
+        xyz = xyz / R_EARTH
 
     return xyz, lat2, lon2, alt2
 
@@ -225,67 +247,89 @@ def create_netcdf_output(
 def main():
     """Main execution function."""
     args = parse_arguments()
+    print(args)
 
     nmodel = len(args.model_names)
 
-    # Grid parameters
-    nxi, neta = args.ngrid
-    xi_grids = np.linspace(0, args.width_xi, nxi) - 0.5 * args.width_xi
-    eta_grids = np.linspace(0, args.width_eta, neta) - 0.5 * args.width_eta
+    # Grid spacing
+    dtheta = args.grid_spacing
 
-    # Create grids points on the horizontal cross-section
-    xyz, lats, lons, alts = create_horizontal_xsection_grids(
-        xi_grids,
-        eta_grids,
-        args.depth,
-        central_lat=args.central_lat,
-        central_lon=args.central_lon,
-        rotation_angle=args.rotation_angle,
-    )
+    # Read cross-section parameters
+    slices_params = pd.read_csv(args.slice_list, comment="#")
 
-    # Reshape for processing
-    points_flat = xyz.reshape((-1,3))
-    model_interp, *_ = sem_mesh_interp_points(
-        args.nproc,
-        args.mesh_dir,
-        args.model_dir,
-        args.model_names,
-        points_flat,
-        idoubling=None,
-        method=args.method,
-    )
-    # Reshape results
-    model_interp = model_interp.reshape((nxi, neta, nmodel))
+    # Process each cross-section
+    for islice, params in slices_params.iterrows():
+        print(f"Processing cross-section {islice:03d}")
 
-    # Create VTK output if requested
-    create_vtk_output(
-        args.model_names,
-        model_interp,
-        xyz,
-        args.vtk,
-    )
+        central_lat = params["central_lat"]
+        central_lon = params["central_lon"]
+        rotation_angle = params["rotation_angle"]
+        depth_km = params["depth_km"]
+        width_xi = params["width_xi"]
+        width_eta = params["width_eta"]
 
-    attrs = {
-        "central_lat": args.central_lat,
-        "central_lon": args.central_lon,
-        "rotation_angle": args.rotation_angle,
-        "depth": args.depth,
-        "width_xi": args.width_xi,
-        "width_eta": args.width_eta,
-        "description": f"Horizontal cross-section at depth {args.depth} km",
-    }
-    create_netcdf_output(
-        args.model_names,
-        model_interp,
-        xyz,
-        xi_grids,
-        eta_grids,
-        lats,
-        lons,
-        alts,
-        args.nc,
-        attrs=attrs,
-    )
+        nxi = int(np.ceil(width_xi / dtheta)) + 1
+        neta = int(np.ceil(width_eta / dtheta)) + 1
+        xi_grids = np.linspace(0, width_xi, nxi) - 0.5 * width_xi
+        eta_grids = np.linspace(0, width_eta, neta) - 0.5 * width_eta
+
+        # Create grids points on the horizontal cross-section
+        xyz, lats, lons, alts = create_horizontal_xsection_grids(
+            xi_grids,
+            eta_grids,
+            depth_km,
+            central_lat=central_lat,
+            central_lon=central_lon,
+            rotation_angle=rotation_angle,
+            depth_at_constant_radius=args.depth_at_constant_radius,
+        )
+
+        # Reshape for processing
+        points_flat = xyz.reshape((-1, 3))
+        model_interp, *_ = sem_mesh_interp_points(
+            args.nproc,
+            args.mesh_dir,
+            args.model_dir,
+            args.model_names,
+            points_flat,
+            idoubling=None,
+            method=args.method,
+        )
+        # Reshape results
+        model_interp = model_interp.reshape((nxi, neta, nmodel))
+
+        # Create VTK output if requested
+        out_vtk = os.path.join(args.out_dir, f"slice_sphere_{islice:04d}.vtk")
+        create_vtk_output(
+            args.model_names,
+            model_interp,
+            xyz,
+            out_vtk,
+        )
+
+        # Create netcdf output
+        out_nc = os.path.join(args.out_dir, f"slice_sphere_{islice:04d}.nc")
+        attrs = {
+            "central_lat": central_lat,
+            "central_lon": central_lon,
+            "rotation_angle": rotation_angle,
+            "depth_km": depth_km,
+            "width_xi": width_xi,
+            "width_eta": width_eta,
+            "description": f"Horizontal cross-section at depth {depth_km} km",
+        }
+        create_netcdf_output(
+            args.model_names,
+            model_interp,
+            xyz,
+            xi_grids,
+            eta_grids,
+            lats,
+            lons,
+            alts,
+            out_nc,
+            attrs=attrs,
+        )
 
 
 if __name__ == "__main__":

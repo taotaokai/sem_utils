@@ -202,8 +202,9 @@ def create_vtk_output(
 
         # Calculate scaling for profile visualization
         ref_val = np.nanmean(model)
-        if ref_val != 0:
-            scale = scale_factor * profile_interval / ref_val
+        amp = np.nanmax(np.abs(model - ref_val))
+        if amp != 0:
+            scale = scale_factor * profile_interval / amp 
         else:
             scale = scale_factor
 

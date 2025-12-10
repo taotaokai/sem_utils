@@ -26,12 +26,18 @@ def parse_arguments():
     )
     parser.add_argument("nproc", type=int, help="number of mesh mpi processes")
     parser.add_argument(
-        "mesh_dir",
+        "slice_list",
+        default="slices.csv",
+        help="csv file of xsection params (depth_km,central_lat,central_lon,width_xi,width_eta,rotation_angle)",
+    )
+
+    parser.add_argument(
+        "--mesh_dir",
         help="SEM DATABASES_MPI directory",
         default="DATABASES_MPI",
     )
     parser.add_argument(
-        "model_dir",
+        "--model_dir",
         help="SEM GLL model directory",
         default="DATABASES_MPI",
     )
@@ -57,11 +63,6 @@ def parse_arguments():
     #     "--width_eta", type=float, default=0, help="Mesh angular width in eta"
     # )
     # parser.add_argument("--depth", type=float, default=100, help="xsection depth in km")
-    parser.add_argument(
-        "--slice_list",
-        default=0,
-        help="csv file of xsection params (depth_km,central_lat,central_lon,width_xi,width_eta,rotation_angle)",
-    )
     parser.add_argument(
         "--grid_spacing",
         help="grid spacing in degrees",

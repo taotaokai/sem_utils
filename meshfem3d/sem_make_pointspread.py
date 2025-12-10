@@ -178,7 +178,7 @@ for xi in grid_xi:
 
     r = v0_xi * np.sin(xi) + v0_r * np.cos(xi)
     r = r / sum(r**2) ** 0.5
-    lat, lon = xyz2latlon_deg(r)
+    lat, lon = ecef2latlon_zeroalt(r[0], r[1], r[2])
 
     theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat)
     phi = lon

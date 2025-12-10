@@ -133,7 +133,7 @@ def create_vertical_xsection_grids(
 
     # tangent vector along the cross-section
     vx = np.cos(az) * vn + np.sin(az) * ve
-    vz = np.sin(az) * vn - np.cos(az) * ve
+    # vz = np.sin(az) * vn - np.cos(az) * ve
     # print(f"normal: {vz}")
 
     # create 2-D mesh grids
@@ -179,25 +179,27 @@ def create_vtk_output(
     na, nr = len(angles), len(radius)
     ncells = (na - 1) * (nr - 1)
 
+    # Create vtk mesh for cross-section 
+    connectivity = np.zeros((ncells, 4), dtype=int)
+    iy, ix = np.unravel_index(np.arange(ncells), (na - 1, nr - 1))
+    for ii, (dx, dy) in enumerate([(0, 0), (1, 0), (1, 1), (0, 1)]):
+        connectivity[:, ii] = (ix + dx) + nr * (iy + dy)
+    mesh_xsection = pv.UnstructuredGrid(
+        {pv.CellType.QUAD: connectivity}, points.reshape((-1, 3))
+    )
+
     max_radius = np.max(radius)
     dangle = angles[angle_interval] - angles[0]
     profile_interval = np.deg2rad(dangle) * max_radius
 
+    fn_root, _ = os.path.splitext(out_file)
+
+    # blocks = pv.MultiBlock()
     for i, tag in enumerate(model_names):
         model = model_interp[:, :, i]
-        blocks = pv.MultiBlock()
 
-        # Create mesh connectivity
-        connectivity = np.zeros((ncells, 4), dtype=int)
-        iy, ix = np.unravel_index(np.arange(ncells), (na - 1, nr - 1))
-
-        for ii, (dx, dy) in enumerate([(0, 0), (1, 0), (1, 1), (0, 1)]):
-            connectivity[:, ii] = (ix + dx) + nr * (iy + dy)
-
-        mesh = pv.UnstructuredGrid(
-            {pv.CellType.QUAD: connectivity}, points.reshape((-1, 3))
-        )
-        mesh.point_data[tag] = model.flatten()
+        mesh_xsection.point_data[tag] = model.flatten()
+        profiles = []
 
         # Calculate scaling for profile visualization
         ref_val = np.nanmean(model)
@@ -220,16 +222,16 @@ def create_vtk_output(
             x = p + scale * m[:, None] * t[None, :]
 
             # Perturbed profile line
-            line = pv.lines_from_points(x)
-            blocks.append(line)
-
+            line1 = pv.lines_from_points(x)
             # Original profile line
-            line = pv.lines_from_points(p)
-            line.point_data[tag] = m0
-            blocks.append(line)
+            line2 = pv.lines_from_points(p)
+            # line2.point_data[tag] = m0
 
-        blocks.append(mesh)
-        blocks.save(out_file)
+            profiles.extend([line1, line2])
+        mesh_profile = pv.merge(profiles)
+        mesh_profile.save(f"{fn_root}_{tag}.vtk")
+
+    mesh_xsection.save(out_file)
 
 
 def create_netcdf_output(
@@ -321,7 +323,7 @@ def main():
 
         # Create VTK output if requested
         if args.vtk:
-            out_file = os.path.join(args.out_dir, f"xsection_{islice:04d}.vtmb")
+            out_file = os.path.join(args.out_dir, f"xsection_{islice:04d}.vtk")
             create_vtk_output(
                 args.model_names,
                 model_interp,

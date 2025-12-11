@@ -8,7 +8,7 @@ from mpi4py import MPI
 import numba
 
 from meshfem3d_constants import R_EARTH_KM
-from meshfem3d_utils import sem_mesh_read
+from meshfem3d_utils import sem_mesh_read, read_gll_file, write_gll_file
 
 # MPI initialization
 comm_world = MPI.COMM_WORLD
@@ -36,27 +36,14 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def read_fortran_file(filename, dtype="f4"):
-    """Read a Fortran unformatted file and return the data."""
-    with FortranFile(filename, "r") as f:
-        data = f.read_reals(dtype=dtype)
-    return data
-
-
-def write_fortran_file(filename, data, dtype="f4"):
-    """Write data to a Fortran unformatted file."""
-    with FortranFile(filename, "w") as f:
-        f.write_record(np.array(data, dtype=dtype))
-
-
 def read_model_tiso(iproc, model_dir):
     """Read velocity models from a directory.
     note: velocities in km/s, density in g/cm^3
     """
-    vpv = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_vpv.bin"))
-    vph = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_vph.bin"))
-    vsv = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_vsv.bin"))
-    vsh = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_vsh.bin"))
+    vpv = read_gll_file(model_dir, "vpv", iproc)
+    vph = read_gll_file(model_dir, "vph", iproc)
+    vsv = read_gll_file(model_dir, "vsv", iproc)
+    vsh = read_gll_file(model_dir, "vsh", iproc)
     return vpv, vph, vsv, vsh
 
 
@@ -64,8 +51,8 @@ def read_model_ref(iproc, reference_dir):
     """Read velocity models from a directory.
     note: velocities in km/s
     """
-    vp = read_fortran_file(os.path.join(reference_dir, f"proc{iproc:06d}_reg1_vp.bin"))
-    vs = read_fortran_file(os.path.join(reference_dir, f"proc{iproc:06d}_reg1_vs.bin"))
+    vp = read_gll_file(reference_dir, "vp", iproc)
+    vs = read_gll_file(reference_dir, "vs", iproc)
     return vp, vs
 
 
@@ -91,19 +78,11 @@ def process_kernel(iproc, reference_dir, model_dir, out_dir, mask=None):
     xi = (vsh**2 - vsv**2) / vs2
 
     # Write each kernel to a separate file
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_alpha.bin"), alpha
-    )
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_beta.bin"), beta
-    )
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_phi.bin"), phi
-    )
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_xi.bin"), xi
-    )
-
+    write_gll_file(out_dir, "alpha", iproc, alpha)
+    write_gll_file(out_dir, "beta", iproc, beta)
+    write_gll_file(out_dir, "phi", iproc, phi)
+    write_gll_file(out_dir, "xi", iproc, xi)
+    
 
 def main():
     """Main function to orchestrate the model conversion process."""

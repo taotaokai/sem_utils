@@ -8,7 +8,7 @@ from mpi4py import MPI
 import numba
 
 from meshfem3d_constants import R_EARTH_KM
-from meshfem3d_utils import sem_mesh_read
+from meshfem3d_utils import sem_mesh_read, read_gll_file, write_gll_file
 
 # MPI initialization
 comm_world = MPI.COMM_WORLD
@@ -45,26 +45,13 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def read_fortran_file(filename, dtype="f4"):
-    """Read a Fortran unformatted file and return the data."""
-    with FortranFile(filename, "r") as f:
-        data = f.read_reals(dtype=dtype)
-    return data
-
-
-def write_fortran_file(filename, data, dtype="f4"):
-    """Write data to a Fortran unformatted file."""
-    with FortranFile(filename, "w") as f:
-        f.write_record(np.array(data, dtype=dtype))
-
-
 def read_perturb_model_tiso(iproc, model_dir):
     # Read velocity perturbation models from a directory.
-    alpha = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_alpha.bin"))
-    beta = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_beta.bin"))
-    phi = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_phi.bin"))
-    xi = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_xi.bin"))
-    eta = read_fortran_file(os.path.join(model_dir, f"proc{iproc:06d}_reg1_eta.bin"))
+    alpha = read_gll_file(model_dir, "alpha", iproc)
+    beta = read_gll_file(model_dir, "beta", iproc)
+    phi = read_gll_file(model_dir, "phi", iproc)
+    xi = read_gll_file(model_dir, "xi", iproc)
+    eta = read_gll_file(model_dir, "eta", iproc)
     return alpha, beta, phi, xi, eta
 
 
@@ -72,8 +59,8 @@ def read_model_ref(iproc, reference_dir):
     """Read velocity models from a directory.
     note: velocities in km/s
     """
-    vp = read_fortran_file(os.path.join(reference_dir, f"proc{iproc:06d}_reg1_vp.bin"))
-    vs = read_fortran_file(os.path.join(reference_dir, f"proc{iproc:06d}_reg1_vs.bin"))
+    vp = read_gll_file(reference_dir, "vp", iproc)
+    vs = read_gll_file(reference_dir, "vs", iproc)
     return vp, vs
 
 
@@ -112,21 +99,11 @@ def process_kernel(
     vsh = (1+2/3*xi)**0.5 * vs
 
     # Write each kernel to a separate file
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_vpv.bin"), vpv
-    )
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_vph.bin"), vph
-    )
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_vsh.bin"), vsh
-    )
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_vsv.bin"), vsv
-    )
-    write_fortran_file(
-        os.path.join(out_dir, f"proc{iproc:06d}_reg1_eta.bin"), eta
-    )
+    write_gll_file(out_dir, "vpv", iproc, vpv)
+    write_gll_file(out_dir, "vph", iproc, vph)
+    write_gll_file(out_dir, "vsh", iproc, vsh)
+    write_gll_file(out_dir, "vsv", iproc, vsv)
+    write_gll_file(out_dir, "eta", iproc, eta)
 
 
 def main():

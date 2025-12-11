@@ -20,7 +20,7 @@ def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         description="Create Gaussian mask around source/receiver locations, "
-        "prod(1 - exp(-0.5 * (x - x_i)**2 / sigma_i**2), i=0,n_mask)"
+        "max(1.0 - sum(exp(-0.5 * (x - x_i)**2 / sigma_i**2), i=0,n_mask), 0)"
     )
 
     parser.add_argument("nproc", type=int, help="number of mesh slices")
@@ -81,10 +81,12 @@ def make_gaussian_mask(xyz_glob, xyz_mask, sigma_mask):
     inverse_two_sigma_squared = 0.5 / sigma_mask**2
 
     for imask in range(nmask):
-        weight_mask *= 1.0 - np.exp(
+        weight_mask[:] -= np.exp(
             -1.0 * inverse_two_sigma_squared[imask]
             * np.sum((xyz_glob[:, :] - xyz_mask[imask, :]) ** 2, axis=-1)
         )
+    
+    weight_mask = np.maximum(weight_mask, 0.0)
 
     # for iglob in range(nglob):
     #     weight = 1
@@ -122,9 +124,6 @@ def main():
     args = parse_arguments()
     if rank_world == 0: 
         print(args)
-
-    if size_world != args.nproc:
-        raise ValueError(f"{size_world=} != {args.nproc=}")
 
     xyz_mask, sigma_mask = read_list(args.point_list, args.sigma_km)
 

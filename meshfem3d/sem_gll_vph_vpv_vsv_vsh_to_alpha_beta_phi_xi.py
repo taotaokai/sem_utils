@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 import argparse
 import os
-import numpy as np
-from scipy.io import FortranFile
 from mpi4py import MPI
-import numba
 
-from meshfem3d_constants import R_EARTH_KM
-from meshfem3d_utils import sem_mesh_read, read_gll_file, write_gll_file
+from meshfem3d_utils import (
+    read_gll_file,
+    write_gll_file,
+    sem_VTI_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi,
+)
 
 # MPI initialization
 comm_world = MPI.COMM_WORLD
@@ -30,7 +30,8 @@ def parse_arguments():
         "model_dir", help="directory with proc*_reg1_[vpv,vph,vsv,vsh,eta,rho].bin"
     )
     parser.add_argument(
-        "out_dir", help="output dir for proc*_reg1_[alpha,beta,phi,xi,eta,rho]_kernel.bin"
+        "out_dir",
+        help="output dir for proc*_reg1_[alpha,beta,phi,xi,eta,rho]_kernel.bin",
     )
 
     return parser.parse_args()
@@ -56,7 +57,7 @@ def read_model_ref(iproc, reference_dir):
     return vp, vs
 
 
-def process_kernel(iproc, reference_dir, model_dir, out_dir, mask=None):
+def process(iproc, reference_dir, model_dir, out_dir, mask=None):
     """Process model data for a single processor slice."""
     print(f"# iproc {iproc}")
 
@@ -65,24 +66,16 @@ def process_kernel(iproc, reference_dir, model_dir, out_dir, mask=None):
     # Read reference velocity models (km/s)
     vp0, vs0 = read_model_ref(iproc, reference_dir)
 
-    # voigt average
-    vp2 = (vpv**2 + 4*vph**2) / 5
-    vs2 = (2*vsv**2 + vsh**2) / 3
-
-    # isotropic perturbation
-    alpha = vp2**0.5/vp0 - 1
-    beta = vs2**0.5/vs0 - 1
-
-    # P and S anisotropy
-    phi = (vph**2 - vpv**2) / vp2
-    xi = (vsh**2 - vsv**2) / vs2
+    alpha, beta, phi, xi = sem_VTI_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(
+        vpv, vph, vsv, vsh, vp0, vs0
+    )
 
     # Write each kernel to a separate file
     write_gll_file(out_dir, "alpha", iproc, alpha)
     write_gll_file(out_dir, "beta", iproc, beta)
     write_gll_file(out_dir, "phi", iproc, phi)
     write_gll_file(out_dir, "xi", iproc, xi)
-    
+
 
 def main():
     """Main function to orchestrate the model conversion process."""
@@ -97,7 +90,7 @@ def main():
     for iproc in range(mpi_rank, args.nproc, mpi_size):
 
         try:
-            process_kernel(iproc, args.reference_dir,args.model_dir, args.out_dir)
+            process(iproc, args.reference_dir, args.model_dir, args.out_dit)
         except Exception as e:
             print(f"Error processing iproc {iproc}: {e}")
             raise SystemExit(1)

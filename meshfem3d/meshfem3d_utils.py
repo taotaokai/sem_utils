@@ -217,6 +217,46 @@ def write_gll_file(gll_dir, gll_tag, iproc, data, region_code="reg1", dtype="f4"
         f.write_record(np.array(data, dtype=dtype))
 
 
+def sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
+    alpha, beta, phi, xi, vp0, vs0
+):
+    """Re-parameterize TISO model from vpv,vph,vsv,vsh to alpha, beta, phi, xi
+    vp**2 = (vpv**2 + 4 * vph**2) / 5
+    vs**2 = (2 * vsv**2 + vsh**2) / 3
+    phi = (vph**2 - vpv**2) / vp**2
+    xi = (vsh**2 - vsv**2) / vs**2
+    vp = vp0 * (1.0 + alpha)
+    vs = vs0 * (1.0 + beta)
+    """
+    vp = vp0 * (1.0 + alpha)
+    vs = vs0 * (1.0 + beta)
+    vpv = vp * np.sqrt(1.0 - 4.0 / 5.0 * phi)
+    vph = vp * np.sqrt(1.0 + 1.0 / 5.0 * phi)
+    vsv = vs * np.sqrt(1.0 - 1.0 / 3.0 * xi)
+    vsh = vs * np.sqrt(1.0 + 2.0 / 3.0 * xi)
+
+    return vpv, vph, vsv, vsh
+
+
+def sem_VTI_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(vpv, vph, vsv, vsh, vp0, vs0):
+    """Re-parameterize TISO model from alpha,beta,phi,xi to vpv,vph,vsv,vsh
+    vp = sqrt((vpv**2 + 4 * vph**2) / 5)
+    vs = sqrt((2 * vsv**2 + vsh**2) / 3)
+    phi = (vph**2 - vpv**2) / vp
+    xi = (vsh**2 - vsv**2) / vs
+    vp = vp0 * (1.0 + alpha)
+    vs = vs0 * (1.0 + beta)
+    """
+    vp = ((vpv**2 + 4 * vph**2) / 5)**0.5
+    vs = ((2 * vsv**2 + vsh**2) / 3)**0.5
+    alpha = vp / vp0 - 1.0
+    beta = vs / vs0 - 1.0
+    phi = (vph**2 - vpv**2) / vp**2
+    xi = (vsh**2 - vsv**2) / vs**2
+
+    return alpha, beta, phi, xi
+
+
 # ==================================================#
 
 

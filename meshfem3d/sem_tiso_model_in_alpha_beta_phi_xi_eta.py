@@ -3,8 +3,14 @@
 import argparse
 import os
 from mpi4py import MPI
+import numpy as np
 
-from meshfem3d_utils import read_gll_file, write_gll_file
+from meshfem3d_utils import (
+    read_gll_file,
+    write_gll_file,
+    sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh,
+    sem_VTI_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi,
+)
 
 # MPI initialization
 comm_world = MPI.COMM_WORLD
@@ -23,16 +29,22 @@ def parse_arguments():
         "model_dir", help="directory with proc*_reg1_[vpv,vph,vsv,vsh,eta,rho].bin"
     )
     parser.add_argument(
-        "reference_dir", help="directory with reference isotropy model proc*_reg1_[vp,vs].bin"
+        "reference_dir",
+        help="directory with reference isotropy model proc*_reg1_[vp,vs].bin",
     )
     parser.add_argument(
         "out_dir", help="output dir for proc*_reg1_[alpha,beta,phi,xi].bin"
+    )
+    parser.add_argument(
+        "--reverse",
+        action="store_true",
+        help="flag to reverse conversion from alpha,beta,phi,xi to vpv,vph,vsv,vsh",
     )
 
     return parser.parse_args()
 
 
-def read_model_tiso(iproc, model_dir):
+def read_vpv_vph_vsv_vsh(iproc, model_dir):
     """Read velocity models from a directory.
     note: velocities in km/s, density in g/cm^3
     """
@@ -42,7 +54,18 @@ def read_model_tiso(iproc, model_dir):
     vsh = read_gll_file(model_dir, "vsh", iproc)
     # eta = read_gll_file(model_dir, "eta", iproc)
     # rho = read_gll_file(model_dir, "rho", iproc)
-    return vpv, vph, vsv, vsh #, eta, rho
+    return vpv, vph, vsv, vsh  # , eta, rho
+
+
+def read_alpha_beta_phi_xi(iproc, model_dir):
+    """Read velocity models from a directory.
+    note: velocities in km/s, density in g/cm^3
+    """
+    alpha = read_gll_file(model_dir, "alpha", iproc)
+    beta = read_gll_file(model_dir, "beta", iproc)
+    phi = read_gll_file(model_dir, "phi", iproc)
+    xi = read_gll_file(model_dir, "xi", iproc)
+    return alpha, beta, phi, xi
 
 
 def read_model_ref(iproc, reference_dir):
@@ -54,7 +77,7 @@ def read_model_ref(iproc, reference_dir):
     return vp, vs
 
 
-def convert_model(iproc, model_dir, reference_dir, out_dir):
+def convert_model(iproc, model_dir, reference_dir, out_dir, reverse=False):
     """Process model files for a single processor slice."""
     print(f"# iproc {iproc}")
 
@@ -62,21 +85,31 @@ def convert_model(iproc, model_dir, reference_dir, out_dir):
     vp0, vs0 = read_model_ref(iproc, reference_dir)
 
     # velocity models (velocities in km/s, density in g/cm^3)
-    vpv, vph, vsv, vsh = read_model_tiso(iproc, model_dir)
+    if reverse:
+        alpha, beta, phi, xi = read_alpha_beta_phi_xi(iproc, model_dir)
 
-    # convert to relative velocity perturbation
-    vp = ((vpv**2 + 4 * vph**2) / 5) ** 0.5
-    vs = ((2 * vsv**2 + vsh**2) / 3) ** 0.5
-    alpha = vp / vp0 - 1
-    beta = vs / vs0 - 1
-    phi = (vph**2 - vpv**2) / vp**2
-    xi = (vsh**2 - vsv**2) / vs**2
+        vpv, vph, vsv, vsh = sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
+            alpha, beta, phi, xi, vp0, vs0
+        )
 
-    # Write each kernel to a separate file
-    write_gll_file(out_dir, "alpha", iproc, alpha)
-    write_gll_file(out_dir, "beta", iproc, beta)
-    write_gll_file(out_dir, "phi", iproc, phi)
-    write_gll_file(out_dir, "xi", iproc, xi)
+        # Write each kernel to a separate file
+        write_gll_file(out_dir, "vpv", iproc, vpv)
+        write_gll_file(out_dir, "vph", iproc, vph)
+        write_gll_file(out_dir, "vsv", iproc, vsv)
+        write_gll_file(out_dir, "vsh", iproc, vsh)
+
+    else:
+        vpv, vph, vsv, vsh = read_vpv_vph_vsv_vsh(iproc, model_dir)
+
+        alpha, beta, phi, xi = sem_VTI_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(
+            vpv, vph, vsv, vsh, vp0, vs0
+        )
+
+        # Write each kernel to a separate file
+        write_gll_file(out_dir, "alpha", iproc, alpha)
+        write_gll_file(out_dir, "beta", iproc, beta)
+        write_gll_file(out_dir, "phi", iproc, phi)
+        write_gll_file(out_dir, "xi", iproc, xi)
 
 
 def main():
@@ -98,6 +131,7 @@ def main():
                 args.model_dir,
                 args.refernce_dir,
                 args.out_dir,
+                reverse=args.reverse,
             )
         except Exception as e:
             print(f"Error processing iproc {iproc}: {e}")

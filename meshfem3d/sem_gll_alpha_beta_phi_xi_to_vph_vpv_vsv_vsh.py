@@ -2,18 +2,19 @@
 # -*- coding: utf-8 -*-
 import argparse
 import os
-import numpy as np
-from scipy.io import FortranFile
 from mpi4py import MPI
-import numba
 
-from meshfem3d_constants import R_EARTH_KM
-from meshfem3d_utils import sem_mesh_read, read_gll_file, write_gll_file
+from meshfem3d_utils import (
+    read_gll_file,
+    write_gll_file,
+    sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh,
+)
 
 # MPI initialization
 comm_world = MPI.COMM_WORLD
 mpi_size = comm_world.Get_size()
 mpi_rank = comm_world.Get_rank()
+
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -26,10 +27,10 @@ def parse_arguments():
         "reference_dir", help="directory with reference model proc*_reg1_[vp,vs].bin"
     )
     parser.add_argument(
-        "model_dir", help="directory with proc*_reg1_[vpv,vph,vsv,vsh,eta,rho].bin"
+        "model_dir", help="directory with proc*_reg1_[alpha,beta,phi,xi].bin"
     )
     parser.add_argument(
-        "out_dir", help="output dir for proc*_reg1_[alpha,beta,phi,xi,eta,rho]_kernel.bin"
+        "out_dir", help="output dir for proc*_reg1_[vpv,vph,vsv,vsh].bin"
     )
     parser.add_argument("min_alpha", type=float)
     parser.add_argument("max_alpha", type=float)
@@ -45,7 +46,7 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def read_perturb_model_tiso(iproc, model_dir):
+def read_model(iproc, model_dir):
     # Read velocity perturbation models from a directory.
     alpha = read_gll_file(model_dir, "alpha", iproc)
     beta = read_gll_file(model_dir, "beta", iproc)
@@ -64,16 +65,25 @@ def read_model_ref(iproc, reference_dir):
     return vp, vs
 
 
-def process_kernel(
-        iproc, reference_dir, model_dir, out_dir,
-        min_alpha, max_alpha, min_beta, max_beta, min_phi,
-        max_phi, min_xi, max_xi, min_eta, max_eta, mask=None
-    ):
+def process(
+    iproc,
+    reference_dir,
+    model_dir,
+    out_dir,
+    min_alpha,
+    max_alpha,
+    min_beta,
+    max_beta,
+    min_phi,
+    max_phi,
+    min_xi,
+    max_xi,
+    min_eta,
+    max_eta,
+):
     """Process model data for a single processor slice."""
     # velocity perturbation models
-    alpha, beta, phi, xi, eta= read_perturb_model_tiso(iproc, model_dir)
-    # Read reference velocity models (km/s)
-    vp0, vs0 = read_model_ref(iproc, reference_dir)
+    alpha, beta, phi, xi, eta = read_model(iproc, model_dir)
 
     # limit model value range
     alpha[alpha < min_alpha] = min_alpha
@@ -87,21 +97,19 @@ def process_kernel(
     eta[eta < min_eta] = min_eta
     eta[eta > max_eta] = max_eta
 
-    # voigt average
-    vp = (1+alpha)*vp0
-    vs = (1+beta)*vs0
+    # Read reference velocity models (km/s)
+    vp0, vs0 = read_model_ref(iproc, reference_dir)
 
-    vpv = (1-4/5*phi)**0.5 * vp
-    vph = (1+1/5*phi)**0.5 * vp
-    vsv = (1-1/3*xi)**0.5 * vs
-    vsh = (1+2/3*xi)**0.5 * vs
+    vpv, vph, vsv, vsh = sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
+        alpha, beta, phi, xi, vp0, vs0
+    )
 
     # Write each kernel to a separate file
     write_gll_file(out_dir, "vpv", iproc, vpv)
     write_gll_file(out_dir, "vph", iproc, vph)
-    write_gll_file(out_dir, "vsh", iproc, vsh)
     write_gll_file(out_dir, "vsv", iproc, vsv)
-    write_gll_file(out_dir, "eta", iproc, eta)
+    write_gll_file(out_dir, "vsh", iproc, vsh)
+    write_gll_file(out_dir, "eta", iproc, vsh)
 
 
 def main():
@@ -117,14 +125,22 @@ def main():
     for iproc in range(mpi_rank, args.nproc, mpi_size):
 
         try:
-            process_kernel(
-                iproc, args.reference_dir,args.model_dir, args.out_dir,
-                args.min_alpha, args.max_alpha,
-                args.min_beta, args.max_beta,
-                args.min_phi, args.max_phi,
-                args.min_xi, args.max_xi,
-                args.min_eta, args.max_eta,
-                )
+            process(
+                iproc,
+                args.reference_dir,
+                args.model_dir,
+                args.out_dit,
+                args.min_alpha,
+                args.max_alpha,
+                args.min_beta,
+                args.max_beta,
+                args.min_phi,
+                args.max_phi,
+                args.min_xi,
+                args.max_xi,
+                args.min_eta,
+                args.max_eta,
+            )
         except Exception as e:
             print(f"Error processing iproc {iproc}: {e}")
             raise SystemExit(1)

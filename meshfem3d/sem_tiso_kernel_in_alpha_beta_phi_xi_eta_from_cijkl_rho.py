@@ -105,6 +105,16 @@ def read_model_tiso(iproc, model_dir):
     return vpv, vph, vsv, vsh, eta, rho
 
 
+def read_model_tiso_perturb(iproc, model_dir):
+    # Read velocity perturbation models from a directory.
+    alpha = read_gll_file(model_dir, "alpha", iproc)
+    beta = read_gll_file(model_dir, "beta", iproc)
+    phi = read_gll_file(model_dir, "phi", iproc)
+    xi = read_gll_file(model_dir, "xi", iproc)
+    eta = read_gll_file(model_dir, "eta", iproc)
+    return alpha, beta, phi, xi, eta
+
+
 def read_model_ref(iproc, reference_dir):
     """Read velocity models from a directory.
     note: velocities in km/s
@@ -138,14 +148,11 @@ def process_kernel(iproc, model_dir, reference_dir, kernel_dir, out_dir, mask=No
     vp0, vs0 = read_model_ref(iproc, reference_dir)
     # velocity models (velocities in km/s, density in g/cm^3)
     vpv, vph, vsv, vsh, eta, rho = read_model_tiso(iproc, model_dir)
+    alpha, beta, phi, xi, eta = read_model_tiso_perturb(iproc, model_dir)
 
-    # convert to relative velocity perturbation
-    vp = ((vpv**2 + 4 * vph**2) / 5) ** 0.5
-    vs = ((2 * vsv**2 + vsh**2) / 3) ** 0.5
-    alpha = vp / vp0 - 1
-    beta = vs / vs0 - 1
-    phi = (vph**2 - vpv**2) / vp**2
-    xi = (vsh**2 - vsv**2) / vs**2
+    # convert to relative velocity perturbation 
+    vp = (1 + alpha) * vp0 
+    vs = (1 + beta) * vs0
 
     # Extract specific components
     K_C11 = cijkl_kernel[:, 0]  # dChi/dC11
@@ -206,7 +213,11 @@ def process_kernel(iproc, model_dir, reference_dir, kernel_dir, out_dir, mask=No
         * rho
     )
 
-    K_eta = (K_C13 + K_C23) * (vph**2 - 2.0 * vsv**2) * rho
+    K_eta = (
+        (K_C13 + K_C23) 
+        * (vph**2 - 2.0 * vsv**2)
+        * rho
+    )
 
     K_rho = (
         rho_kernel
@@ -217,6 +228,7 @@ def process_kernel(iproc, model_dir, reference_dir, kernel_dir, out_dir, mask=No
         + (K_C44 + K_C55) * vsv**2
         + K_C66 * vsh**2
     )
+
 
     if mask is not None:
         mask = mask.flatten()
@@ -267,7 +279,7 @@ def main():
             process_kernel(
                 iproc,
                 args.model_dir,
-                args.refernce_dir,
+                args.reference_dir,
                 args.kernel_dir,
                 args.out_dir,
                 mask=mask_gll,

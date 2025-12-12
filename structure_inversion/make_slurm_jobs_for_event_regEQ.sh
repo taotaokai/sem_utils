@@ -240,6 +240,8 @@ mv $event_dir/DATABASES_MPI/*_kernel.bin $event_dir/\$out_dir/kernel/
 chmod u+w $event_dir/forward_saved_frames
 rm -rf $event_dir/forward_saved_frames
 
+rm -rf $event_dir/SEM/*.adj
+
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo

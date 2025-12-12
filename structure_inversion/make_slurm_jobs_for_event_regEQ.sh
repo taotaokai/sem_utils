@@ -263,11 +263,13 @@ out_dir=${event_dir}/output_kernel/kernel
 
 mkdir -p \$out_dir
 
-awk 'NR==6{print \$0, a}' a="$SEM_kernel_mask_source_sigma_km" \\
-  ${event_dir}/output_kernel/source.vtk \\
-  > \${out_dir}/mask.lst
+echo "x,y,z,sigma_km" > \${out_dir}/mask.lst
 
-awk 'NR>=6&&NF==3{print \$0, a}' a=$SEM_kernel_mask_receiver_sigma_km \\
+awk 'NR==6{print \$1 "," \$2 "," \$3 "," a}' a="$SEM_kernel_mask_source_sigma_km" \\
+  ${event_dir}/output_kernel/source.vtk \\
+  >> \${out_dir}/mask.lst
+
+awk 'NR>=6&&NF==3{print \$1 "," \$2 "," \$3 "," a}' a=$SEM_kernel_mask_receiver_sigma_km \\
   ${event_dir}/output_kernel/receiver.vtk \\
   >> \${out_dir}/mask.lst
 

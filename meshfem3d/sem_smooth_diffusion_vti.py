@@ -33,15 +33,16 @@ parser.add_argument("nproc", type=int)  # number of slices
 parser.add_argument("mesh_dir")  # <mesh_dir>/*_solver_data[_mpi].bin
 parser.add_argument("model_dir")  # directory of model files to smooth
 parser.add_argument("model_name")  # <model_dir>/proc***_<model_name>.bin
-parser.add_argument("nstep", type=int)  # nt
+
 parser.add_argument("out_dir")  # num of processes
 parser.add_argument(
-    "--horizontal_length", type=float, default=1.0, help="horizontal smoothing length in km"
+    "--sigma_h", type=float, default=1.0, help="horizontal Gaussian sigma in km"
 )
 parser.add_argument(
-    "--vertical_length", type=float, default=1.0, help="vertical smoothing length in km"
+    "--sigma_v", type=float, default=1.0, help="vertical Gaussian sigma in km"
 )
 # control parameters for CG solver
+parser.add_argument("--nstep", type=int, default=100, help="number of iteration steps")  # nt
 parser.add_argument(
     "--max_iter", type=int, default=100, help="maximum number of iteration"
 )
@@ -63,8 +64,8 @@ nt = args.nstep
 out_dir = args.out_dir
 max_iter = args.max_iter
 max_tolerance = args.max_tolerance
-horizontal_length = args.horizontal_length
-vertical_length = args.vertical_length
+sigma_h = args.sigma_h
+sigma_v = args.sigma_v
 
 # time range [0, 1]
 dt = 1.0 / nt
@@ -98,8 +99,10 @@ with FortranFile(model_file, "r") as f:
 
 # smooth_length is defined as the full width at half maximum (FWHM) of gaussian function
 # smooth_length = FWHM = 2*sqrt(2*log2(2)) * sigma
-sigma_h = horizontal_length / R_EARTH_KM / (2 * np.sqrt(2 * np.log(2)))  # to sigma
-sigma_v = vertical_length / R_EARTH_KM / (2 * np.sqrt(2 * np.log(2)))  # to sigma
+# sigma_h = horizontal_length / R_EARTH_KM / (2 * np.sqrt(2 * np.log(2)))  # to sigma
+# sigma_v = vertical_length / R_EARTH_KM / (2 * np.sqrt(2 * np.log(2)))  # to sigma
+sigma_h = sigma_h / R_EARTH_KM
+sigma_v = sigma_v / R_EARTH_KM
 
 # kappa = sigma^2 / 2
 # in local ENU coordinates (easting, northing, up)

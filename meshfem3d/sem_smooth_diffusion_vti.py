@@ -17,8 +17,8 @@ import pyproj
 
 from meshfem3d_constants import R_EARTH, R_EARTH_KM
 from meshfem3d_utils import (
-    sem_mesh_read, 
-    sem_mesh_get_vol_gll, 
+    sem_mesh_read,
+    sem_mesh_get_vol_gll,
     sem_mesh_mpi_read,
     gll2glob,
     laplacian_ani3D,
@@ -33,16 +33,21 @@ parser.add_argument("nproc", type=int)  # number of slices
 parser.add_argument("mesh_dir")  # <mesh_dir>/*_solver_data[_mpi].bin
 parser.add_argument("model_dir")  # directory of model files to smooth
 parser.add_argument("model_name")  # <model_dir>/proc***_<model_name>.bin
-
 parser.add_argument("out_dir")  # num of processes
 parser.add_argument(
-    "--sigma_h", type=float, default=1.0, help="horizontal Gaussian sigma in km"
+    "--horizontal_length",
+    type=float,
+    default=1.0,
+    help="horizontal smoothing length in km (Gaussian FWHM)",
 )
 parser.add_argument(
-    "--sigma_v", type=float, default=1.0, help="vertical Gaussian sigma in km"
+    "--vertical_length",
+    type=float,
+    default=1.0,
+    help="vertical smoothing length in km (Gaussian FWHM)",
 )
 # control parameters for CG solver
-parser.add_argument("--nstep", type=int, default=100, help="number of iteration steps")  # nt
+parser.add_argument("--nstep", type=int, default=100, help="number of time steps")  # nt
 parser.add_argument(
     "--max_iter", type=int, default=100, help="maximum number of iteration"
 )
@@ -52,9 +57,7 @@ parser.add_argument(
     default=1e-5,
     help="relative residual to stop iteration",
 )
-
 args = parser.parse_args()
-print(args)
 
 nproc = args.nproc
 mesh_dir = args.mesh_dir  # <mesh_dir>/proc******_solver_data[_mpi].bin
@@ -64,8 +67,8 @@ nt = args.nstep
 out_dir = args.out_dir
 max_iter = args.max_iter
 max_tolerance = args.max_tolerance
-sigma_h = args.sigma_h
-sigma_v = args.sigma_v
+horizontal_length = args.horizontal_length
+vertical_length = args.vertical_length
 
 # time range [0, 1]
 dt = 1.0 / nt
@@ -74,6 +77,9 @@ dt = 1.0 / nt
 comm = MPI.COMM_WORLD
 mpi_size = comm.Get_size()
 mpi_rank = comm.Get_rank()
+
+if mpi_rank == 0:
+    print(args)
 
 if mpi_size != nproc:
     raise Exception(f"{mpi_size=} must euqal {nproc=}!")
@@ -99,17 +105,15 @@ with FortranFile(model_file, "r") as f:
 
 # smooth_length is defined as the full width at half maximum (FWHM) of gaussian function
 # smooth_length = FWHM = 2*sqrt(2*log2(2)) * sigma
-# sigma_h = horizontal_length / R_EARTH_KM / (2 * np.sqrt(2 * np.log(2)))  # to sigma
-# sigma_v = vertical_length / R_EARTH_KM / (2 * np.sqrt(2 * np.log(2)))  # to sigma
-sigma_h = sigma_h / R_EARTH_KM
-sigma_v = sigma_v / R_EARTH_KM
+sigma_h = horizontal_length / R_EARTH_KM / (2 * np.sqrt(2 * np.log(2)))  # to sigma
+sigma_v = vertical_length / R_EARTH_KM / (2 * np.sqrt(2 * np.log(2)))  # to sigma
 
 # kappa = sigma^2 / 2
 # in local ENU coordinates (easting, northing, up)
 Kh_glob = np.zeros(nglob)
 Kv_glob = np.zeros(nglob)
-Kh_glob[:] = 0.5 * sigma_h**2 # vertical
-Kv_glob[:] = 0.5 * sigma_v**2 # horizontal
+Kh_glob[:] = 0.5 * sigma_h**2  # vertical
+Kv_glob[:] = 0.5 * sigma_v**2  # horizontal
 
 # rotate to ECEF coordinates
 Kxx_glob = np.zeros(nglob)
@@ -119,19 +123,22 @@ Kxy_glob = np.zeros(nglob)
 Kxz_glob = np.zeros(nglob)
 Kyz_glob = np.zeros(nglob)
 
-xyz_glob = mesh['xyz_glob']
+xyz_glob = mesh["xyz_glob"]
 xyz = R_EARTH * xyz_glob
 # convert to lat,lon,alt
 ecef2gps = pyproj.Transformer.from_crs("EPSG:4978", "EPSG:4326")  # ECEF to GPS
-lat_glob, lon_glob, alt_glob = ecef2gps.transform(xyz[:,0], xyz[:,1], xyz[:,2], radians=True)
+lat_glob, lon_glob, alt_glob = ecef2gps.transform(
+    xyz[:, 0], xyz[:, 1], xyz[:, 2], radians=True
+)
+
 
 @numba.jit(nopython=True, nogil=True)
-def rotate_K(Kxx_glob, Kyy_glob, Kzz_glob, Kxy_glob, Kxz_glob, Kyz_glob): 
+def rotate_K(Kxx_glob, Kyy_glob, Kzz_glob, Kxy_glob, Kxz_glob, Kyz_glob):
     rotmat = np.zeros((3, 3))
-    kl = np.zeros((3,3))
+    kl = np.zeros((3, 3))
     for idof in range(nglob):
         # kl in ENU coordinates
-        kl[:,:] = 0
+        kl[:, :] = 0
         kl[0, 0] = Kh_glob[idof]
         kl[1, 1] = Kh_glob[idof]
         kl[2, 2] = Kv_glob[idof]
@@ -142,17 +149,18 @@ def rotate_K(Kxx_glob, Kyy_glob, Kzz_glob, Kxy_glob, Kxz_glob, Kyz_glob):
         sinlon = np.sin(lon_glob[idof])
         # rotmat[i,m] = ECEF_Vi .dot. ENU_Vm (Vi: i-th unit vector)
         rotmat[0, :] = [-sinlon, -sinlat * coslon, coslat * coslon]
-        rotmat[1, :] = [ coslon, -sinlat * sinlon, coslat * sinlon]
-        rotmat[2, :] = [      0,           coslat,          sinlat]
+        rotmat[1, :] = [coslon, -sinlat * sinlon, coslat * sinlon]
+        rotmat[2, :] = [0, coslat, sinlat]
         # rotate from ENU to ECEF: Kij = A_im * kl_mn * A_jn
         for m in range(3):
             for n in range(3):
-                    Kxx_glob[idof] += rotmat[0,m] * kl[m,n] * rotmat[0,n]
-                    Kyy_glob[idof] += rotmat[1,m] * kl[m,n] * rotmat[1,n]
-                    Kzz_glob[idof] += rotmat[2,m] * kl[m,n] * rotmat[2,n]
-                    Kxy_glob[idof] += rotmat[0,m] * kl[m,n] * rotmat[1,n]
-                    Kxz_glob[idof] += rotmat[0,m] * kl[m,n] * rotmat[2,n]
-                    Kyz_glob[idof] += rotmat[1,m] * kl[m,n] * rotmat[2,n]
+                Kxx_glob[idof] += rotmat[0, m] * kl[m, n] * rotmat[0, n]
+                Kyy_glob[idof] += rotmat[1, m] * kl[m, n] * rotmat[1, n]
+                Kzz_glob[idof] += rotmat[2, m] * kl[m, n] * rotmat[2, n]
+                Kxy_glob[idof] += rotmat[0, m] * kl[m, n] * rotmat[1, n]
+                Kxz_glob[idof] += rotmat[0, m] * kl[m, n] * rotmat[2, n]
+                Kyz_glob[idof] += rotmat[1, m] * kl[m, n] * rotmat[2, n]
+
 
 rotate_K(Kxx_glob, Kyy_glob, Kzz_glob, Kxy_glob, Kxz_glob, Kyz_glob)
 comm.Barrier()
@@ -203,6 +211,7 @@ zgll, wgll, dlag_dzgll = get_gll_weights()
 # (M - dt/2 * K) * u_{n+1} = (M + dt/2 * K) * u_n
 # (1 - dt/2 * M^{-1} * K) * u_{n+1} = (1 + dt/2 * M^{-1} * K) * u_n
 
+
 def Kx(x_glob):
     kx_glob = laplacian_ani3D(
         x_glob,
@@ -238,6 +247,7 @@ def Kx(x_glob):
 
     return kx_glob
 
+
 def solve_cg(u):
     def Ax(x_glob):
         return x_glob - 0.5 * dt * Kx(x_glob) / dv_glob
@@ -272,6 +282,7 @@ def solve_cg(u):
         #     print(f"{i=}, {rsold=}, {pAp=}")
         #     sys.stdout.flush()
     return x, iter
+
 
 if mpi_rank == 0:
     elapsed_time = time.time() - tic

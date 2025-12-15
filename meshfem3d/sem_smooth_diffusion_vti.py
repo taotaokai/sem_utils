@@ -103,10 +103,10 @@ sigma_v = vertical_length / R_EARTH_KM / (2 * np.sqrt(2 * np.log(2)))  # to sigm
 
 # kappa = sigma^2 / 2
 # in local ENU coordinates (easting, northing, up)
-Kv_glob = np.zeros(nglob)
 Kh_glob = np.zeros(nglob)
-Kv_glob[:] = 0.5 * sigma_h**2 # vertical
-Kh_glob[:] = 0.5 * sigma_v**2 # horizontal
+Kv_glob = np.zeros(nglob)
+Kh_glob[:] = 0.5 * sigma_h**2 # vertical
+Kv_glob[:] = 0.5 * sigma_v**2 # horizontal
 
 # rotate to ECEF coordinates
 Kxx_glob = np.zeros(nglob)

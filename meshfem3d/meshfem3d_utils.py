@@ -1529,12 +1529,12 @@ def laplacian_iso3D(
 @numba.jit(nogil=True)  # , cache=True)
 def laplacian_ani3D(
     u_glob,
-    Kxx_gll,
-    Kyy_gll,
-    Kzz_gll,
-    Kxy_gll,
-    Kxz_gll,
-    Kyz_gll,
+    Kxx_glob,
+    Kyy_glob,
+    Kzz_glob,
+    Kxy_glob,
+    Kxz_glob,
+    Kyz_glob,
     wgll,
     dlag_gll,
     ibool,
@@ -1615,12 +1615,13 @@ def laplacian_ani3D(
                     )
 
                     # Start product: Kij * du_dxi * dxsi_dxj
-                    kxx = Kxx_gll[e, k, j, i]
-                    kyy = Kyy_gll[e, k, j, i]
-                    kzz = Kzz_gll[e, k, j, i]
-                    kxy = Kxy_gll[e, k, j, i]
-                    kxz = Kxz_gll[e, k, j, i]
-                    kyz = Kyz_gll[e, k, j, i]
+                    idof = ibool[e, k, j, i]
+                    kxx = Kxx_glob[idof]
+                    kyy = Kyy_glob[idof]
+                    kzz = Kzz_glob[idof]
+                    kxy = Kxy_glob[idof]
+                    kxz = Kxz_glob[idof]
+                    kyz = Kyz_glob[idof]
 
                     grad_xsil[k, j, i] = jacobianl * (
                         kxx * dsl_dxl * dxsi_dxl

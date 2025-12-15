@@ -268,7 +268,7 @@ def solve_cg(u):
         #     i += 1
         #     print(f"{i=}, {rsold=}, {pAp=}")
         #     sys.stdout.flush()
-    return x
+    return x, iter
 
 if mpi_rank == 0:
     elapsed_time = time.time() - tic
@@ -279,11 +279,11 @@ u = u_glob
 for it in range(nt):
     # ku = Kx(u)
     # mu = Mx(u)
-    u = solve_cg(u)
+    u, iter = solve_cg(u)
     if mpi_rank == 0:
         elapsed_time = time.time() - tic
         # print(f"{it=}, {max(abs(mu))=}, {max(abs(ku))=}, {max(abs(b))=}, {max(abs(u))=}, {elapsed_time=}")
-        print(f"{it=}, {max(abs(u))=}, {elapsed_time=}")
+        print(f"{it=}, {max(abs(u))=}, {iter=}, {elapsed_time=}")
         sys.stdout.flush()
 
 comm.Barrier()

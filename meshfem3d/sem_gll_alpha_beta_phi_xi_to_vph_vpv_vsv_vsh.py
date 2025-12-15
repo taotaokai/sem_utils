@@ -31,16 +31,16 @@ def parse_arguments():
     parser.add_argument(
         "out_dir", help="output dir for proc*_reg1_[alpha,beta,phi,xi,eta,rho]_kernel.bin"
     )
-    parser.add_argument("min_alpha")
-    parser.add_argument("max_alpha")
-    parser.add_argument("min_beta")
-    parser.add_argument("max_beta")
-    parser.add_argument("min_phi")
-    parser.add_argument("max_phi")
-    parser.add_argument("min_xi")
-    parser.add_argument("max_xi")
-    parser.add_argument("min_eta")
-    parser.add_argument("max_eta")
+    parser.add_argument("min_alpha", type=float)
+    parser.add_argument("max_alpha", type=float)
+    parser.add_argument("min_beta", type=float)
+    parser.add_argument("max_beta", type=float)
+    parser.add_argument("min_phi", type=float)
+    parser.add_argument("max_phi", type=float)
+    parser.add_argument("min_xi", type=float)
+    parser.add_argument("max_xi", type=float)
+    parser.add_argument("min_eta", type=float)
+    parser.add_argument("max_eta", type=float)
 
     return parser.parse_args()
 
@@ -70,8 +70,6 @@ def process_kernel(
         max_phi, min_xi, max_xi, min_eta, max_eta, mask=None
     ):
     """Process model data for a single processor slice."""
-    print(f"# iproc {iproc}")
-
     # velocity perturbation models
     alpha, beta, phi, xi, eta= read_perturb_model_tiso(iproc, model_dir)
     # Read reference velocity models (km/s)

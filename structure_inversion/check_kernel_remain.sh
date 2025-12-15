@@ -1,6 +1,5 @@
 #!/bin/bash
 
-cd ../../
 echo "Working dir: $PWD"
 
 control_file=${1:?[arg]need control_file}

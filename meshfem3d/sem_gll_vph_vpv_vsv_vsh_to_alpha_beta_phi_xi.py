@@ -97,7 +97,7 @@ def main():
     for iproc in range(mpi_rank, args.nproc, mpi_size):
 
         try:
-            process_kernel(iproc, args.reference_dir,args.model_dir, args.out_dit)
+            process_kernel(iproc, args.reference_dir,args.model_dir, args.out_dir)
         except Exception as e:
             print(f"Error processing iproc {iproc}: {e}")
             raise SystemExit(1)

@@ -129,7 +129,7 @@ def main():
             convert_model(
                 iproc,
                 args.model_dir,
-                args.refernce_dir,
+                args.reference_dir,
                 args.out_dir,
                 reverse=args.reverse,
             )

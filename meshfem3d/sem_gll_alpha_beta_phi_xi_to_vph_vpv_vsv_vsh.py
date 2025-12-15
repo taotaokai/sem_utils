@@ -120,7 +120,7 @@ def main():
 
         try:
             process_kernel(
-                iproc, args.reference_dir,args.model_dir, args.out_dit,
+                iproc, args.reference_dir,args.model_dir, args.out_dir,
                 args.min_alpha, args.max_alpha,
                 args.min_beta, args.max_beta,
                 args.min_phi, args.max_phi,

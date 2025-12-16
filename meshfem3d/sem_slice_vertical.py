@@ -172,6 +172,8 @@ def create_vtk_output(
     out_file,
     scale_factor=1.0,
     angle_interval=10,
+    ref_val=None,
+    amp=None,
 ):
     """
     Create VTK output files for visualization.
@@ -202,8 +204,15 @@ def create_vtk_output(
         profiles = []
 
         # Calculate scaling for profile visualization
-        ref_val = np.nanmean(model)
-        amp = np.nanmax(np.abs(model - ref_val))
+        if ref_val is None:
+            ref_val = np.nanmean(model)
+        if amp is None:
+            amp = np.nanmax(np.abs(model - ref_val))
+        # ref_val = np.nanmean(model)
+        #amp = np.nanmax(np.abs(model - ref_val))
+
+        print(f"{tag}: ref_val={ref_val}, amp={amp}")
+
         if amp != 0:
             scale = scale_factor * profile_interval / amp 
         else:

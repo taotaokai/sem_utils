@@ -21,7 +21,7 @@ Since the solution of the intitial value problem is u(t) = P(x, t) * u(x, t=0) (
 
 , it approximates the smoothing by convolution with a Gaussian window except difference near the boundary:
 
-(e.g. initial value is even extended from the boundary)
+(e.g. initial value is evenly extended from the boundary in 1-D case)
 
 """
 import sys

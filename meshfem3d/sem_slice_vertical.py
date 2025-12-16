@@ -78,6 +78,8 @@ def parse_arguments():
         choices=["gll", "linear"],
         help="Interpolation method (gll or linear)",
     )
+    parser.add_argument("--vtk_ref_val", default=None, type=float, help="vtk profile reference value")
+    parser.add_argument("--vtk_amp", default=None, type=float, help="vtk profile amplitude")
 
     return parser.parse_args()
 
@@ -341,6 +343,8 @@ def main():
                 angles,
                 radius,
                 out_file,
+                ref_val=args.vtk_ref_val,
+                amp=args.vtk_amp
             )
 
         # Create NetCDF output

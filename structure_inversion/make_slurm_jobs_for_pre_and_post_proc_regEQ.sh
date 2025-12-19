@@ -147,7 +147,7 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_sum.py \\
   --mask_tag=mask --ncomp=1
 
 while read -r d; do
-    echo rm -rf "\$d"
+    rm -rf "\$d"
 done < \${kernel_dir}/event_kernel_dir.list
 
 echo "====== convert cijkl,rho_kernel to tiso kernel"

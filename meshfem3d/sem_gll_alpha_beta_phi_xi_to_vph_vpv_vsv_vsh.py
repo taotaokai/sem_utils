@@ -129,7 +129,7 @@ def main():
                 iproc,
                 args.reference_dir,
                 args.model_dir,
-                args.out_dit,
+                args.out_dir,
                 args.min_alpha,
                 args.max_alpha,
                 args.min_beta,

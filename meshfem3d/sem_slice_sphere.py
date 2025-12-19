@@ -299,14 +299,14 @@ def main():
         # Reshape results
         model_interp = model_interp.reshape((nxi, neta, nmodel))
 
-        # Create VTK output if requested
-        out_vtk = os.path.join(args.out_dir, f"slice_sphere_{islice:04d}.vtk")
-        create_vtk_output(
-            args.model_names,
-            model_interp,
-            xyz,
-            out_vtk,
-        )
+        # # Create VTK output if requested
+        # out_vtk = os.path.join(args.out_dir, f"slice_sphere_{islice:04d}.vtk")
+        # create_vtk_output(
+        #     args.model_names,
+        #     model_interp,
+        #     xyz,
+        #     out_vtk,
+        # )
 
         # Create netcdf output
         out_nc = os.path.join(args.out_dir, f"slice_sphere_{islice:04d}.nc")

@@ -109,7 +109,7 @@ def process(
     write_gll_file(out_dir, "vph", iproc, vph)
     write_gll_file(out_dir, "vsv", iproc, vsv)
     write_gll_file(out_dir, "vsh", iproc, vsh)
-    write_gll_file(out_dir, "eta", iproc, vsh)
+    write_gll_file(out_dir, "eta", iproc, eta)
 
 
 def main():

@@ -111,6 +111,14 @@ ln -s $SEM_mesh_dir/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
 
 $SLURM_mpiexec $SEM_build_dir/bin/xspecfem3D
 
+# check if simulation finished successfully
+if grep -qF "End of the simulation" $event_dir/\$out_dir/output_solver.txt; then
+  echo "====== green job SUCCESS: $event_id"
+else
+  echo "====== green job FAILED: $event_id"
+  exit 1
+fi
+
 mkdir $event_dir/\$out_dir/sac
 mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 
@@ -233,6 +241,14 @@ cp -L DATA/CMTSOLUTION OUTPUT_FILES
 cd $event_dir
 $SLURM_mpiexec $SEM_build_dir/bin/xspecfem3D
 
+# check if simulation finished successfully
+if grep -qF "End of the simulation" $event_dir/\$out_dir/output_solver.txt; then
+  echo "====== srcfrechet job SUCCESS: $event_id"
+else
+  echo "====== srcfrechet job FAILED: $event_id"
+  exit 1
+fi
+
 grep "End of the simulation" OUTPUT_FILES/output_solver.txt
 if [ \$? -ne 0 ]
 then
@@ -304,12 +320,20 @@ do
   cd $event_dir
   $SLURM_mpiexec $SEM_build_dir/bin/xspecfem3D
 
-  grep "End of the simulation" OUTPUT_FILES/output_solver.txt
-  if [ \$? -ne 0 ]
-  then
-    echo "[ERROR] check if dgreen.job finished OK!"
-    exit -1
+  # check if simulation finished successfully
+  if grep -qF "End of the simulation" $event_dir/\$out_dir/output_solver.txt; then
+    echo "====== dgreen_\${tag} job SUCCESS: $event_id"
+  else
+    echo "====== dgreen_\${tag} job FAILED: $event_id"
+    exit 1
   fi
+
+  # grep "End of the simulation" OUTPUT_FILES/output_solver.txt
+  # if [ \$? -ne 0 ]
+  # then
+  #   echo "[ERROR] check if dgreen.job finished OK!"
+  #   exit -1
+  # fi
 
   mkdir $event_dir/\$out_dir/sac
   mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac

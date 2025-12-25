@@ -69,7 +69,8 @@ do
   fi
   if [ "$SEM_iter_num" -eq 0 ]
   then
-    cmt_file=$SEM_data_dir/${event_id}/CMTSOLUTION.ecef
+    # cmt_file=$SEM_data_dir/${event_id}/CMTSOLUTION.ecef
+    cmt_file=${SEM_initial_cmtsolution_dir}/${event_id}.cmt
   else
     cmt_file=$SEM_prev_iter_dir/CMTSOLUTION_updated/${event_id}.cmt
   fi

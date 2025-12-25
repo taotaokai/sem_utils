@@ -28,6 +28,7 @@ forward_job=$slurm_dir/forward.job
 misfit_job=$slurm_dir/misfit.job
 kernel_job=$slurm_dir/kernel.job
 mask_job=$slurm_dir/mask.job
+threshold_job=$slurm_dir/threshold.job
 plot_job=$slurm_dir/plot.job
 #hess_job=$slurm_dir/hess.job
 #precond_job=$slurm_dir/precond.job
@@ -119,6 +120,14 @@ cp -L DATA/STATIONS OUTPUT_FILES
 cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
 ${SLURM_mpiexec} $SEM_build_dir/bin/xspecfem3D
+
+# check if simulation finished successfully
+if grep -qF "End of the simulation" \$out_dir/output_solver.txt; then
+  echo "====== forward job SUCCESS: $event_id"
+else
+  echo "====== forward job FAILED: $event_id"
+  exit 1
+fi
 
 mkdir $event_dir/\$out_dir/sac
 mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
@@ -229,6 +238,14 @@ cp -L DATA/CMTSOLUTION OUTPUT_FILES
 cd $event_dir
 ${SLURM_mpiexec} $SEM_build_dir/bin/xspecfem3D
 
+# check if simulation finished successfully
+if grep -qF "End of the simulation" \$out_dir/output_solver.txt; then
+  echo "====== kernel job SUCCESS: $event_id"
+else
+  echo "====== kernel job FAILED: $event_id"
+  exit 1
+fi
+
 mkdir $event_dir/\$out_dir/sac
 mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 
@@ -237,10 +254,11 @@ mv $event_dir/DATABASES_MPI/*_kernel.bin $event_dir/\$out_dir/kernel/
 # mv $event_dir/DATABASES_MPI/*reg1_cijkl_kernel.bin $event_dir/\$out_dir/kernel/
 # mv $event_dir/DATABASES_MPI/*reg1_rho_kernel.bin $event_dir/\$out_dir/kernel/
 
+# remove forward saved frames adn adjoint source files to save disk space
 chmod u+w $event_dir/forward_saved_frames
 rm -rf $event_dir/forward_saved_frames
-
 rm -rf $event_dir/SEM/*.adj
+
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
@@ -283,6 +301,64 @@ echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 EOF
+
+
+#====== kernel clippling   
+cat <<EOF > $threshold_job
+#!/bin/bash
+#SBATCH -J ${event_id}.threshold
+#SBATCH -o $threshold_job.o%j
+#SBATCH ${SLURM_args_kernel_threshold}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
+
+echo
+echo ====== convert cijkl kernel to VTI kernel
+echo
+
+mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
+kernel_dir=${event_dir}/output_kernel/kernel
+out_dir=${event_dir}/kernel/GLL
+mkdir -p \$out_dir
+
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_tiso_kernel_in_alpha_beta_phi_xi_eta_from_cijkl_rho.py \\
+  ${SEM_nproc_total} \\
+  ${SEM_iter_dir}/model_initial \\
+  ${SEM_reference_model_dir} \\
+  \${kernel_dir} \\
+  \${out_dir}
+
+# rm -rf \${kernel_dir} # remove kernel directory to save disk space
+
+echo
+echo ====== apply threshold
+echo
+
+kernel_dir=${event_dir}/kernel/GLL
+out_dir=${event_dir}/kernel/GLL_threshold
+mkdir -p \$out_dir
+
+for model_name in ${SEM_model_names[@]}
+do
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_histogram.py  \\
+    ${SEM_nproc_total} \\
+    \${mesh_dir} \\
+    \${kernel_dir} \\
+    \${model_name}${SEM_kernel_tag} \\
+    --nbin ${SEM_histogram_nbin} \\
+    --exponential_base ${SEM_histogram_exponential_base} \\
+    --out_hist \${out_dir}/histogram_\${model_name}.txt \\
+    --cdf_threshold ${SEM_cdf_threshold} \\
+    --out_dir \${out_dir} 
+done
+
+echo
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
+EOF
+
 
 #====== plot misfit and waveforms
 cat <<EOF > $plot_job
@@ -354,6 +430,14 @@ do
   cp -L DATA/CMTSOLUTION OUTPUT_FILES
 
   ${SLURM_mpiexec} $SEM_build_dir/bin/xspecfem3D
+
+  # check if simulation finished successfully
+  if grep -qF "End of the simulation" \$out_dir/output_solver.txt; then
+    echo "====== forward perturb job SUCCESS: $event_id \${dm_tag}"
+  else
+    echo "====== forward perturb job FAILED: $event_id \${dm_tag}"
+    exit 1
+  fi
 
   mkdir $event_dir/\$out_dir/sac
   mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac

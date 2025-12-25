@@ -79,6 +79,7 @@ do
 
   # copy Par_file
   mkdir -p $event_dir/DATA
+  chmod -R u+w $event_dir/DATA
   cp ${SEM_config_dir}/DATA/Par_file $event_dir/DATA/
 
   # copy latest updated CMTSOLUTION file

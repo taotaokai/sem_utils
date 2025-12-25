@@ -78,8 +78,26 @@ def parse_arguments():
         choices=["gll", "linear"],
         help="Interpolation method (gll or linear)",
     )
-    parser.add_argument("--vtk_ref_val", default=None, type=float, help="vtk profile reference value")
-    parser.add_argument("--vtk_amp", default=None, type=float, help="vtk profile amplitude")
+    parser.add_argument(
+        "--profile_interval",
+        default=10,
+        type=int,
+        help="interval of vertical profiles along theta grids",
+    )
+    parser.add_argument(
+        "--profile_ref_val",
+        default=None,
+        nargs="+",
+        type=float,
+        help="vtk profile reference value",
+    )
+    parser.add_argument(
+        "--profile_norm_amp",
+        default=None,
+        nargs="+",
+        type=float,
+        help="vtk profile normalization amplitude",
+    )
 
     return parser.parse_args()
 
@@ -171,11 +189,12 @@ def create_vtk_output(
     tangents,
     angles,
     radius,
-    out_file,
+    out_dir,
+    label="",
     scale_factor=1.0,
     angle_interval=10,
-    ref_val=None,
-    amp=None,
+    ref_values=None,
+    norm_amplitudes=None,
 ):
     """
     Create VTK output files for visualization.
@@ -183,7 +202,7 @@ def create_vtk_output(
     na, nr = len(angles), len(radius)
     ncells = (na - 1) * (nr - 1)
 
-    # Create vtk mesh for cross-section 
+    # Create vtk mesh for cross-section
     connectivity = np.zeros((ncells, 4), dtype=int)
     iy, ix = np.unravel_index(np.arange(ncells), (na - 1, nr - 1))
     for ii, (dx, dy) in enumerate([(0, 0), (1, 0), (1, 1), (0, 1)]):
@@ -196,7 +215,7 @@ def create_vtk_output(
     dangle = angles[angle_interval] - angles[0]
     profile_interval = np.deg2rad(dangle) * max_radius
 
-    fn_root, _ = os.path.splitext(out_file)
+    # fn_root, _ = os.path.splitext(out_file)
 
     # blocks = pv.MultiBlock()
     for i, tag in enumerate(model_names):
@@ -206,17 +225,18 @@ def create_vtk_output(
         profiles = []
 
         # Calculate scaling for profile visualization
-        if ref_val is None:
-            ref_val = np.nanmean(model)
-        if amp is None:
-            amp = np.nanmax(np.abs(model - ref_val))
-        # ref_val = np.nanmean(model)
-        #amp = np.nanmax(np.abs(model - ref_val))
+        if ref_values is None:
+            profile_ref_val = np.nanmean(model)
+        else:
+            profile_ref_val = ref_values[i]
+        if norm_amplitudes is None:
+            profile_norm_amp = np.nanmax(np.abs(model - profile_ref_val))
+        else:
+            profile_norm_amp = norm_amplitudes[i]
+        print(f"{tag}: ref_val={profile_ref_val}, norm_amp={profile_norm_amp}")
 
-        print(f"{tag}: ref_val={ref_val}, amp={amp}")
-
-        if amp != 0:
-            scale = scale_factor * profile_interval / amp 
+        if profile_norm_amp != 0:
+            scale = scale_factor * profile_interval / profile_norm_amp
         else:
             scale = scale_factor
 
@@ -227,7 +247,7 @@ def create_vtk_output(
             if np.all(mask):  # skip profile of all nan's
                 continue
 
-            m = model[itheta, :] - ref_val
+            m = model[itheta, :] - profile_ref_val
             p = points[itheta, :, :]
             t = tangents[itheta, :]
             x = p + scale * m[:, None] * t[None, :]
@@ -240,8 +260,10 @@ def create_vtk_output(
 
             profiles.extend([line1, line2])
         mesh_profile = pv.merge(profiles)
-        mesh_profile.save(f"{fn_root}_{tag}.vtk")
+        out_file = os.path.join(out_dir, f"{tag}_profile{label}.vtk")
+        mesh_profile.save(out_file)
 
+    out_file = os.path.join(out_dir, f"xsection{label}.vtk")
     mesh_xsection.save(out_file)
 
 
@@ -286,6 +308,18 @@ def main():
     os.makedirs(args.out_dir, exist_ok=True)
 
     nmodel = len(args.model_names)
+
+    profile_ref_val = args.profile_ref_val
+    profile_norm_amp = args.profile_norm_amp
+
+    if profile_ref_val is not None:
+        if len(profile_ref_val) == 1 and nmodel > 1:
+            profile_ref_val = profile_ref_val * nmodel
+        assert len(profile_ref_val) == nmodel
+    if profile_norm_amp is not None:
+        if len(profile_norm_amp) == 1 and nmodel > 1:
+            profile_norm_amp = profile_norm_amp * nmodel
+        assert len(profile_norm_amp) == nmodel
 
     # Grid parameters
     na, nr = args.ngrid
@@ -334,7 +368,7 @@ def main():
 
         # Create VTK output if requested
         if args.vtk:
-            out_file = os.path.join(args.out_dir, f"xsection_{islice:04d}.vtk")
+            # out_file = os.path.join(args.out_dir, f"xsection_{islice:04d}.vtk")
             create_vtk_output(
                 args.model_names,
                 model_interp,
@@ -342,9 +376,11 @@ def main():
                 tangents,
                 angles,
                 radius,
-                out_file,
-                ref_val=args.vtk_ref_val,
-                amp=args.vtk_amp
+                args.out_dir,
+                label=f"{islice:04d}",
+                angle_interval=args.profile_interval,
+                ref_values=profile_ref_val,
+                norm_amplitudes=profile_norm_amp,
             )
 
         # Create NetCDF output

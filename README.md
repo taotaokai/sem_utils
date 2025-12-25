@@ -495,3 +495,13 @@ V_{SH}^2 = \left( {1 + \frac{2}{3}\xi } \right){\left( {1 + \beta } \right)^2}V_
 V_{SV}^2 = \left( {1 - \frac{1}{3}\xi } \right){\left( {1 + \beta } \right)^2}V_{S0}^2
 \end{array}
 $$
+
+
+## Scheme for kernel preconditioning
+
+|      | receiver mask | source mask | amplitude thresholding | smoothing |
+| ---- | ------------- | ----------- | ---------------------- | --------- |
+| 1    |               |             | x                      | x         |
+| 2    |               |             |                        |           |
+| 3    |               |             |                        |           |
+

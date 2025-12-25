@@ -27,7 +27,7 @@ def parse_arguments():
         "model_dir", help="directory with proc*_reg1_[alpha,beta,phi,xi,eta,rho].bin"
     )
     parser.add_argument(
-        "reference_dir", help="directory with reference model proc*_reg1_[vp0,vs0].bin"
+        "reference_dir", help="directory with reference model proc*_reg1_[vp,vs].bin"
     )
     parser.add_argument(
         "kernel_dir", help="directory with proc*_reg1_[cijkl,rho]_kernel.bin"
@@ -174,6 +174,7 @@ def process_kernel(
     write_gll_file(out_dir, "phi_kernel", iproc, K_phi)
     write_gll_file(out_dir, "xi_kernel", iproc, K_xi)
     write_gll_file(out_dir, "eta_kernel", iproc, K_eta)
+    #NOTE maybe use rhonotprime to distinguish from original rho kernel?
     write_gll_file(out_dir, "rho_kernel", iproc, K_rho)
 
 

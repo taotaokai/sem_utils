@@ -50,22 +50,20 @@ def parse_arguments():
         "out_dir", help="output dir for scaled GLL files, proc*_reg1_[dmodel_tag].bin"
     )
     parser.add_argument(
-        "--model_tags",
+        "--models",
         nargs="+",
         default=["vp", "vs"],
-        help="tag as in prev/curr_model_dir/proc*_reg1_[model_tag].bin",
+        help="tag as in prev/curr_model_dir/proc*_reg1_[model].bin",
     )
     parser.add_argument(
-        "--kernel_tags",
-        nargs="+",
-        default=["vp_kernel", "vs_kernel"],
-        help="tag as in prev,curr_kernel_dir/proc*_reg1_[kernel_tag].bin",
+        "--kernel_tag",
+        default="_kernel",
+        help="tag as in prev,curr_kernel_dir/proc*_reg1_[model][kernel_tag].bin",
     )
     parser.add_argument(
-        "--dmodel_tags",
-        nargs="+",
-        default=["vp_dmodel", "vs_dmodel"],
-        help="tag as in out_dir/proc*_reg1_[dmodel_tag].bin",
+        "--dmodel_tag",
+        default="_dmodel",
+        help="tag as in out_dir/proc*_reg1_[model][dmodel_tag].bin",
     )
     parser.add_argument(
         "--scaled_amplitude",
@@ -86,9 +84,9 @@ def process(
     curr_kernel_dir,
     curr_precond_kernel_dir,
     out_dir,
-    model_tags,
-    kernel_tags,
-    dmodel_tags,
+    model_names,
+    kernel_tag,
+    dmodel_tag,
     scaled_amplitude=0.1,
 ):
     """Process and scale GLL files to scaled amplitude."""
@@ -113,18 +111,19 @@ def process(
         mesh_data = sem_mesh_read(mesh_file)
         vol_gll = sem_mesh_get_vol_gll(mesh_data)
         vol_gll = vol_gll.reshape(-1)
-        for model_tag, ker_tag in zip(model_tags, kernel_tags):
+        for model_name in model_names:
             # since the search direction might be clipped by the maximum amplitude,
             # we calculate the acutal model difference
-            prev_model = read_gll_file(prev_model_dir, model_tag, iproc)
-            curr_model = read_gll_file(curr_model_dir, model_tag, iproc)
+            prev_model = read_gll_file(prev_model_dir, model_name, iproc)
+            curr_model = read_gll_file(curr_model_dir, model_name, iproc)
             dmodel = curr_model - prev_model # d_k
             # gradient difference
-            prev_kernel = read_gll_file(prev_kernel_dir, ker_tag, iproc)
-            curr_kernel = read_gll_file(curr_kernel_dir, ker_tag, iproc)
+            ker_name = f"{model_name}{kernel_tag}"
+            prev_kernel = read_gll_file(prev_kernel_dir, ker_name, iproc)
+            curr_kernel = read_gll_file(curr_kernel_dir, ker_name, iproc)
             dkernel = curr_kernel - prev_kernel  # y_k = g_k+1 - g_k
             # preconditioned gradient
-            curr_precond_kernel = read_gll_file(curr_precond_kernel_dir, ker_tag, iproc) # Pg_k+1
+            curr_precond_kernel = read_gll_file(curr_precond_kernel_dir, ker_name, iproc) # Pg_k+1
             pgy_l += np.sum(vol_gll * curr_precond_kernel * dkernel)  # sum(Pg_k+1 * y_k)
             dy_l += np.sum(vol_gll * dmodel * dkernel)  # sum(d_k * y_k)
 
@@ -139,11 +138,12 @@ def process(
     # get maximum amplitude of curr_dmodel
     max_amp_l = 0
     for iproc in range(mpi_rank, nproc, mpi_size):
-        for model_tag, ker_tag in zip(model_tags, kernel_tags):
-            prev_model = read_gll_file(prev_model_dir, model_tag, iproc)
-            curr_model = read_gll_file(curr_model_dir, model_tag, iproc)
+        for model_name in model_names:
+            prev_model = read_gll_file(prev_model_dir, model_name, iproc)
+            curr_model = read_gll_file(curr_model_dir, model_name, iproc)
             dmodel = curr_model - prev_model
-            curr_precond_kernel = read_gll_file(curr_precond_kernel_dir, ker_tag, iproc)
+            ker_name = f"{model_name}{kernel_tag}"
+            curr_precond_kernel = read_gll_file(curr_precond_kernel_dir, ker_name, iproc)
             curr_dmodel = curr_precond_kernel - cg_beta * dmodel
             max_amp_l = max(max_amp_l, np.max(np.abs(curr_dmodel)))
 
@@ -152,21 +152,21 @@ def process(
 
     # write out scaled curr_dmodel
     for iproc in range(mpi_rank, nproc, mpi_size):
-        for model_tag, ker_tag, dm_tag in zip(model_tags, kernel_tags, dmodel_tags):
-            prev_model = read_gll_file(prev_model_dir, model_tag, iproc)
-            curr_model = read_gll_file(curr_model_dir, model_tag, iproc)
+        for model_name in model_names:
+            prev_model = read_gll_file(prev_model_dir, model_name, iproc)
+            curr_model = read_gll_file(curr_model_dir, model_name, iproc)
             dmodel = curr_model - prev_model
-            curr_precond_kernel = read_gll_file(curr_precond_kernel_dir, ker_tag, iproc)
+            ker_name = f"{model_name}{kernel_tag}"
+            curr_precond_kernel = read_gll_file(curr_precond_kernel_dir, ker_name, iproc)
             curr_dmodel = curr_precond_kernel - cg_beta * dmodel
-            write_gll_file(out_dir, dm_tag, iproc, scale_factor * curr_dmodel)
+            dmodel_name = f"{model_name}{dmodel_tag}"
+            write_gll_file(out_dir, dmodel_name, iproc, scale_factor * curr_dmodel)
 
 
 def main():
     args = parse_arguments()
     if mpi_rank == 0:
         print(args)
-
-    assert len(args.kernel_tags) == len(args.dmodel_tags)
 
     # Create output directory if it doesn't exist
     os.makedirs(args.out_dir, exist_ok=True)
@@ -181,9 +181,9 @@ def main():
             args.curr_kernel_dir,
             args.curr_precond_kernel_dir,
             args.out_dir,
-            args.model_tags,
-            args.kernel_tags,
-            args.dmodel_tags,
+            args.models,
+            args.kernel_tag,
+            args.dmodel_tag,
             scaled_amplitude=args.scaled_amplitude,
         )
     except Exception as e:

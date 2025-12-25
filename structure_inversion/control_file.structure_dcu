@@ -146,7 +146,8 @@ SLURM_args_forward="-N ${SEM_num_nodes} -n ${SEM_nproc_total} -p ${SLURM_partiti
 SLURM_args_misfit="-N 1 -n 20 -p ${SLURM_partition_cpu} -t 00:30:00"
 SLURM_args_kernel="-N ${SEM_num_nodes} -n ${SEM_nproc_total} -p ${SLURM_partition_dcu} -t 01:00:00 --exclusive --mem=0 --gres=dcu:4"
 
-SLURM_args_kernel_mask_sum=${SLURM_args_mesh}
+SLURM_args_kernel_threshold=${SLURM_args_mesh}
+SLURM_args_kernel_sum=${SLURM_args_mesh}
 SLURM_args_kernel_precond=${SLURM_args_mesh}
 SLURM_args_dmodel=${SLURM_args_mesh}
 SLURM_args_model_perturb=${SLURM_args_mesh}
@@ -163,11 +164,18 @@ SLURM_args_plot=${SLURM_args_misfit}
 
 #====== model parameterization
 
-SEM_model_tags=(vpv vph vsv vsh eta rho)
-# SEM_kernel_tags=(dvpv_kernel dvph_kernel dvsv_kernel dvsh_kernel deta_kernel drho_kernel)
-SEM_kernel_tags=(alpha_kernel beta_kernel phi_kernel xi_kernel eta_kernel rho_kernel)
-# SEM_dmodel_tags=(dvpv_dmodel dvph_dmodel dvsv_dmodel dvsh_dmodel deta_dmodel drho_dmodel)
-SEM_dmodel_tags=(alpha_dmodel beta_dmodel phi_dmodel xi_dmodel eta_dmodel rho_dmodel)
+SEM_model_names=(alpha beta phi xi eta) # rho) # model parameters
+
+# model a priori bounds
+SEM_model_min_values=(-0.15 -0.15 -0.1 -0.1 0.8)
+SEM_model_max_values=(0.15  0.15  0.1  0.1 1.2)
+
+SEM_kernel_tag="_kernel" # gradient of model parameters
+SEM_dmodel_tag="_dmodel" # search direction
+# SEM_model_tags=(alpha beta phi xi eta) # rho)
+# SEM_kernel_tags=(alpha_kernel beta_kernel phi_kernel xi_kernel eta_kernel) # rho_kernel)
+# SEM_dmodel_tags=(alpha_dmodel beta_dmodel phi_dmodel xi_dmodel eta_dmodel) # rho_dmodel)
+
 
 #====== kernel preconditioning
 
@@ -184,11 +192,16 @@ SEM_dmodel_tags=(alpha_dmodel beta_dmodel phi_dmodel xi_dmodel eta_dmodel rho_dm
 SEM_kernel_mask_source_sigma_km=50
 SEM_kernel_mask_receiver_sigma_km=10
 
+# clipping 
+SEM_histogram_nbin=100
+SEM_histogram_exponential_base=0.9
+SEM_cdf_threshold=0.9999
+
 # smoothing
 SEM_kernel_smooth_diffusion_niter=50 # iteration steps for diffusion based smoothing 
 SEM_kernel_smooth_iso_FWHM_km=10 # full width at half maximum (FWHM) of Gaussian kernel in km
-# sem_kernel_smooth_sigmaH_km=30 # horizontal smoothing 1 sigma (km)
-# sem_kernel_smooth_sigmaV_km=15 # vertical smoothing 1 sigma (km)
+SEM_kernel_smooth_horizontal_length_km=30 # horizontal smoothing length as FWHM
+SEM_kernel_smooth_vertical_length_km=15 # vertical smoothing length as FWHM
 
 #TODO: different somothing length for different parameter classes (e.g. larger for vp, smaller for vs?)
 
@@ -216,8 +229,12 @@ SEM_dmodel_scale=0.05
 
 # perturbations along different parameter groups
 SEM_perturb_group_names=("dm")  # only one group
-SEM_perturb_model_tag_groups=("alpha,beta,phi,xi,eta,rho")
-SEM_perturb_dmodel_tag_groups=("alpha_dmodel,beta_dmodel,phi_dmodel,xi_dmodel,eta_dmodel,rho_dmodel")
+SEM_perturb_model_groups=("alpha,beta,phi,xi,eta,rho")
+# SEM_perturb_model_tag_groups=("alpha,beta,phi,xi,eta") #,rho")
+# SEM_perturb_dmodel_tag_groups=("alpha_dmodel,beta_dmodel,phi_dmodel,xi_dmodel,eta_dmodel") #,rho_dmodel")
+# model values are clipped to the range [min,max]
+# SEM_perturb_min_values=("-0.15,-0.15,-0.1,-0.1,0.8")
+# SEM_perturb_max_values=("0.15,0.15,0.1,0.1,1.2")
 # steps along each perturbation group (min,max,ngrids) as in numpy.linspace(min,max,ngrids)
 SEM_search_step_sizes=("0,3,31")
 
@@ -226,22 +243,21 @@ SEM_search_step_sizes=("0,3,31")
 # sem_perturb_dmodel_tag_groups=("dvpv_dmodel,dvph_dmodel" "dvsv_dmodel,dvsh_dmodel" "deta_dmodel,drho_dmodel")
 # sem_search_group_steps=("0,4,20" "0,4,20" "0,4,20")
 
+#----- update model
 
-##----- update model
 ##model_scale_phi_to_xi=1.5
 ##model_scale_eta_to_xi=2.5
 #model_scale_rho_to_beta=0.33
-#
-model_update_min_alpha=-0.15
-model_update_max_alpha=0.15
-model_update_min_beta=-0.15
-model_update_max_beta=0.15
-model_update_min_phi=-0.15
-model_update_max_phi=0.15
-model_update_min_xi=-0.15
-model_update_max_xi=0.15
-model_update_min_eta=0.80
-model_update_max_eta=1.20
+# model_update_min_alpha=-0.15
+# model_update_max_alpha=0.15
+# model_update_min_beta=-0.15
+# model_update_max_beta=0.15
+# model_update_min_phi=-0.15
+# model_update_max_phi=0.15
+# model_update_min_xi=-0.15
+# model_update_max_xi=0.15
+# model_update_min_eta=0.80
+# model_update_max_eta=1.20
 
 ##-- preconditioning
 ## depth weighting (xsem_make_depth_mask)

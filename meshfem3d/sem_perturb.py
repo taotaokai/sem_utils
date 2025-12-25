@@ -45,6 +45,20 @@ def parse_arguments():
         help="dmodel tags as in dmodel_dir/proc*_reg1_[dmodel_tag].bin",
     )
     parser.add_argument(
+        "--max_values",
+        nargs="+",
+        default=None,
+        type=float,
+        help="output models are clipped above the maximum values",
+    )
+    parser.add_argument(
+        "--min_values",
+        nargs="+",
+        default=None,
+        type=float,
+        help="output model are clipped below the minimum values",
+    )
+    parser.add_argument(
         "--scale",
         default=1.0,
         type=float,
@@ -61,17 +75,23 @@ def parse_arguments():
 
 
 def apply_perturbation(
-    model_gll: np.ndarray, dm_gll: np.ndarray, method: str
+    model_gll: np.ndarray,
+    dm_gll: np.ndarray,
+    method: str,
+    min_value=None,
+    max_value=None,
 ) -> np.ndarray:
     """Apply perturbation based on specified type."""
     if method == "absolute":
-        return model_gll + dm_gll
+        model_out = model_gll + dm_gll
     elif method == "relative":
-        return model_gll * (1.0 + dm_gll)
+        model_out = model_gll * (1.0 + dm_gll)
     elif method == "exponential":
-        return model_gll * np.exp(dm_gll)
+        model_out = model_gll * np.exp(dm_gll)
     else:
         raise ValueError(f"Invalid perturbation method: {method}")
+    model_out = np.clip(model_out, min_value, max_value)
+    return model_out
 
 
 def process(
@@ -83,6 +103,8 @@ def process(
     dmodel_tags: list,
     scale: float = 1.0,
     method: str = "absolute",
+    min_values: list | None = None,
+    max_values: list | None = None,
 ) -> None:
     """
     Process and perturb GLL files.
@@ -99,10 +121,21 @@ def process(
     """
 
     for iproc in range(mpi_rank, nproc, mpi_size):
-        for model_tag, dmodel_tag in zip(model_tags, dmodel_tags):
+        for i, (model_tag, dmodel_tag) in enumerate(zip(model_tags, dmodel_tags)):
             model_gll = read_gll_file(model_dir, model_tag, iproc)
             dm_gll = read_gll_file(dmodel_dir, dmodel_tag, iproc)
             dm_gll = scale * dm_gll  # scale dmodel
+            if min_values is not None:
+                min_value = min_values[i]
+            else:
+                min_value = None
+            if max_values is not None:
+                max_value = max_values[i]
+            else:
+                max_value = None
+            dm_gll = apply_perturbation(
+                model_gll, dm_gll, method, min_value=min_value, max_value=max_value
+            )
             out_gll = apply_perturbation(model_gll, dm_gll, method)
             write_gll_file(out_dir, model_tag, iproc, out_gll)
 
@@ -120,6 +153,11 @@ def main():
 
     assert len(args.model_tags) == len(args.dmodel_tags)
 
+    if args.max_values is not None:
+        assert len(args.model_tags) == len(args.max_values)
+    if args.min_values is not None:
+        assert len(args.model_tags) == len(args.min_values)
+
     # Create output directory if it doesn't exist
     os.makedirs(args.out_dir, exist_ok=True)
 
@@ -131,8 +169,10 @@ def main():
             args.out_dir,
             args.model_tags,
             args.dmodel_tags,
-            args.scale,
-            args.method,
+            scale=args.scale,
+            method=args.method,
+            min_values=args.min_values,
+            max_values=args.max_values,
         )
     except Exception as e:
         print(f"Error: {e}")

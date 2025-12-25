@@ -72,7 +72,7 @@ def read_list(point_list, sigma_km):
     return xyz_mask, sigma_mask
 
 
-@numba.jit(nopython=True, nogil=True)
+# @numba.jit(nopython=True, nogil=True)
 def make_gaussian_mask(xyz_glob, xyz_mask, sigma_mask):
     nglob = xyz_glob.shape[0]
     nmask = xyz_mask.shape[0]

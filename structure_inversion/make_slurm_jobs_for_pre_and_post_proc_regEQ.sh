@@ -23,7 +23,7 @@ mkdir -p $slurm_dir
 #====== define job names
 mesh_job=$slurm_dir/mesh.job
 
-kernel_mask_sum_job=$slurm_dir/kernel_mask_sum.job
+kernel_sum_job=$slurm_dir/kernel_sum.job
 kernel_precond_job=$slurm_dir/kernel_precond.job
 
 dmodel_job=$slurm_dir/dmodel.job
@@ -84,98 +84,70 @@ echo
 
 EOF
 
-#====== kernel_mask_sum
-cat <<EOF > $kernel_mask_sum_job
+#====== kernel_sum
+cat <<EOF > $kernel_sum_job
 #!/bin/bash
-#SBATCH -J kernel_mask_sum
-#SBATCH -o ${kernel_mask_sum_job}.o%j
-#SBATCH ${SLURM_args_kernel_mask_sum}
+#SBATCH -J kernel_sum
+#SBATCH -o ${kernel_sum_job}.o%j
+#SBATCH ${SLURM_args_kernel_sum}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-# echo "====== create source and receiver masks"
-
-# mesh_dir=${SEM_iter_dir}/mesh
-
-# for event_id in \$(awk 'NF&&\$1!~/#/{print \$1}' $event_list)
-# do
-#   echo "------ \$event_id"
-  
-#   event_dir=${SEM_iter_dir}/events/\$event_id
-
-#   out_dir=\${event_dir}/output_kernel/kernel
-#   mkdir -p \$out_dir
-
-#   awk 'NR==6{print \$0, a}' a="$SEM_kernel_mask_source_sigma_km" \\
-#     \${event_dir}/output_kernel/source.vtk \\
-#     > \${out_dir}/mask.lst
-
-#   awk 'NR>=6&&NF==3{print \$0, a}' a=$SEM_kernel_mask_receiver_sigma_km \\
-#     \${event_dir}/output_kernel/receiver.vtk \\
-#     >> \${out_dir}/mask.lst
-
-#   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_make_gaussian_mask.py \\
-#     ${SEM_nproc_total} \\
-#     \${mesh_dir}/DATABASES_MPI \\
-#     \${out_dir}/mask.lst \\
-#     \${out_dir}
-# done
-
-echo "====== sum up all event kernels with mask"
+echo "====== sum up all event kernels"
 
 kernel_dir=${SEM_iter_dir}/kernel_sum
 mkdir -p \$kernel_dir
 
-awk 'NF&&\$1!~/#/{printf "%s/events/%s/output_kernel/kernel\\n", a,\$1}' \\
+awk 'NF&&\$1!~/#/{printf "%s/events/%s/kernel/GLL_threshold\\n", a,\$1}' \\
   a="$SEM_iter_dir" $event_list > \\
   \${kernel_dir}/event_kernel_dir.list
 
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_sum.py \\
-  ${SEM_nproc_total} \\
-  \${kernel_dir}/event_kernel_dir.list \\
-  cijkl_kernel \\
-  \${kernel_dir} \\
-  --mask_tag=mask --ncomp=21
+for model_name in ${SEM_model_names[@]}
+do
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_sum.py \\
+    ${SEM_nproc_total} \\
+    \${kernel_dir}/event_kernel_dir.list \\
+    \${model_name}${SEM_kernel_tag} \\
+    \${kernel_dir} \\
+    --ncomp=1
+done
 
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_sum.py \\
-  ${SEM_nproc_total} \\
-  \${kernel_dir}/event_kernel_dir.list \\
-  rho_kernel \\
-  \${kernel_dir} \\
-  --mask_tag=mask --ncomp=1
+# awk 'NF&&\$1!~/#/{printf "%s/events/%s/output_kernel/kernel\\n", a,\$1}' \\
+#   a="$SEM_iter_dir" $event_list > \\
+#   \${kernel_dir}/event_kernel_dir.list
+# 
+# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_sum.py \\
+#   ${SEM_nproc_total} \\
+#   \${kernel_dir}/event_kernel_dir.list \\
+#   cijkl_kernel \\
+#   \${kernel_dir} \\
+#   --mask_tag=mask --ncomp=21
+# 
+# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_sum.py \\
+#   ${SEM_nproc_total} \\
+#   \${kernel_dir}/event_kernel_dir.list \\
+#   rho_kernel \\
+#   \${kernel_dir} \\
+#   --mask_tag=mask --ncomp=1
 
-while read -r d; do
-    rm -rf "\$d"
-done < \${kernel_dir}/event_kernel_dir.list
+# delete event kernel directories to save disk space
+# for event_kernel_dir in \$(cat \${kernel_dir}/event_kernel_dir.list)
+# do
+#   rm -rf \$event_kernel_dir
+# done
 
-echo "====== convert cijkl,rho_kernel to tiso kernel"
-
-kernel_dir=${SEM_iter_dir}/kernel_sum
-
-# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_tiso_kernel_from_cijkl_rho.py \\
+# echo "====== readuce cijkl,rho_kernel to VTI model parameters"
+# 
+# kernel_dir=${SEM_iter_dir}/kernel_sum
+# 
+# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_tiso_kernel_in_alpha_beta_phi_xi_eta_from_cijkl_rho.py \\
 #   ${SEM_nproc_total} \\
 #   ${SEM_iter_dir}/model_initial \\
+#   ${SEM_reference_model_dir} \\
 #   \${kernel_dir} \\
 #   \${kernel_dir}
-
-
-# "====== convert initial vpv, vph, vsv, vsh to alpha, beta, xi, phi, eta"
-
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_vph_vpv_vsv_vsh_to_alpha_beta_phi_xi.py \\
-  ${SEM_nproc_total} \\
-  ${SEM_reference_model_dir} \\
-  ${SEM_iter_dir}/model_initial \\
-  ${SEM_iter_dir}/model_initial
-
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_tiso_kernel_in_alpha_beta_phi_xi_eta_from_cijkl_rho.py \\
-  ${SEM_nproc_total} \\
-  ${SEM_iter_dir}/model_initial \\
-  ${SEM_reference_model_dir} \\
-  \${kernel_dir} \\
-  \${kernel_dir}
-
 
 echo
 echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
@@ -188,16 +160,16 @@ cat <<EOF > $kernel_precond_job
 #!/bin/bash
 #SBATCH -J kernel_precond
 #SBATCH -o ${kernel_precond_job}.o%A_%a
-#SBATCH --array 0-$(( ${#SEM_kernel_tags[@]} - 1 ))
+#SBATCH --array 0-$(( ${#SEM_model_names[@]} - 1 ))
 #SBATCH ${SLURM_args_kernel_precond}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-kernel_tags=(${SEM_kernel_tags[@]})
+model_names=(${SEM_model_names[@]})
 
-kernel_tag=\${kernel_tags[\${SLURM_ARRAY_TASK_ID}]}
+kernel_name=\${model_names[\${SLURM_ARRAY_TASK_ID}]}${SEM_kernel_tag}
 
 echo "====== smooth kernel"
 
@@ -207,15 +179,26 @@ kernel_dir=${SEM_iter_dir}/kernel_sum
 out_dir=${SEM_iter_dir}/kernel_precond
 mkdir -p \$out_dir
 
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_iso.py \\
+# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_iso.py \\
+#   ${SEM_nproc_total} \\
+#   \${mesh_dir}/DATABASES_MPI \\
+#   \${kernel_dir} \\
+#   \${kernel_name} \\
+#   ${SEM_kernel_smooth_iso_FWHM_km} \\
+#   ${SEM_kernel_smooth_diffusion_niter} \\
+#   \${out_dir} \\
+#   --max_tolerance=1e-5
+
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_vti.py \\
   ${SEM_nproc_total} \\
   \${mesh_dir}/DATABASES_MPI \\
   \${kernel_dir} \\
-  \${kernel_tag} \\
-  ${SEM_kernel_smooth_iso_FWHM_km} \\
-  ${SEM_kernel_smooth_diffusion_niter} \\
+  \${kernel_name} \\
   \${out_dir} \\
-  --max_tolerance=1e-5
+  --horizontal_length ${SEM_kernel_smooth_horizontal_length_km} \\
+  --vertical_length ${SEM_kernel_smooth_vertical_length_km} \\
+  --nstep ${SEM_kernel_smooth_diffusion_niter} \\
+  --max_tolerance=1e-3
 
 echo
 echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
@@ -243,27 +226,31 @@ mkdir -p \${out_dir}
 if [ "$SEM_iter_num" -eq 0 ]
 then
 
-  # first iteration use gradient as search direction
-  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_scale.py \\
+  # first iteration use scaled gradient as search direction
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_scale2.py \\
     ${SEM_nproc_total} \\
     ${SEM_iter_dir}/kernel_precond \\
     \${out_dir} \\
-    --in_tags ${SEM_kernel_tags[@]} \\
-    --out_tags ${SEM_dmodel_tags[@]} \\
+    --models ${SEM_model_names[@]} \\
+    --in_tag ${SEM_kernel_tag} \\
+    --out_tag ${SEM_dmodel_tag} \\
     --scaled_amplitude=${SEM_dmodel_scale}
 
 else
 
   # search direction by CG method: Hestenes and Stiefel (1952)
-  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_cg_maximize.py \\
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_cg_maximize2.py \\
     ${SEM_nproc_total} \\
     ${SEM_iter_dir}/mesh/DATABASES_MPI \\
-    ${SEM_prev_iter_dir}/dmodel \\
-    ${SEM_prev_iter_dir}/kernel_precond \\
+    ${SEM_prev_iter_dir}/model_initial \\
+    ${SEM_iter_dir}/model_initial \\
+    ${SEM_prev_iter_dir}/kernel_sum \\
+    ${SEM_iter_dir}/kernel_sum \\
     ${SEM_iter_dir}/kernel_precond \\
     \${out_dir} \\
-    --kernel_tags ${SEM_kernel_tags[@]} \\
-    --dmodel_tags ${SEM_dmodel_tags[@]} \\
+    --models ${SEM_model_names[@]} \\
+    --kernel_tag ${SEM_kernel_tag} \\
+    --dmodel_tag ${SEM_dmodel_tag} \\
     --scaled_amplitude=${SEM_dmodel_scale}
 
 fi
@@ -286,44 +273,63 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-perturb_group_names=(${SEM_perturb_group_names[@]})
-perturb_model_tag_groups=(${SEM_perturb_model_tag_groups[@]})
-perturb_dmodel_tag_groups=(${SEM_perturb_dmodel_tag_groups[@]})
+#====== model perturbation for each group
 
-ngroup=\${#perturb_group_names[@]}
+group_names=(${SEM_perturb_group_names[@]})
+model_groups=(${SEM_perturb_model_groups[@]})
 
+ngroup=\${#group_names[@]}
 for ((i=0; i<\$ngroup; i++))
 do
 
-  dm_tag=\${perturb_group_names[\$i]} 
+  dm_tag=\${group_names[\$i]} 
   out_dir=$SEM_iter_dir/model_perturb_\${dm_tag}
   [ -e \$out_dir ] && rm -rf \$out_dir
   mkdir -p \$out_dir
 
-  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb.py \\
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb_groups.py \\
     ${SEM_nproc_total} \\
     $SEM_iter_dir/model_initial \\
     $SEM_iter_dir/dmodel \\
     \$out_dir \\
-    --model_tags \${perturb_model_tag_groups[\$i]//,/ } \\
-    --dmodel_tags \${perturb_dmodel_tag_groups[\$i]//,/ } \\
-    --scale 1.0 \\
-    --method "absolute"
+    --model_groups \${model_groups[\$i]} \\
+    --group_scales 1.0 \\
+    --dmodel_tag ${SEM_dmodel_tag} \\
+    --method "absolute" # \\
+    # --models ${SEM_model_names[@]} \\
+    # --model_min_values ${SEM_model_min_values[@]} \\
+    # --model_max_values ${SEM_model_max_values[@]}
 
 done
 
-# "====== convert dmodel from alpha, beta, xi, phi, eta to vpv, vph, vsv, vsh "
+#   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb.py \\
+#     ${SEM_nproc_total} \\
+#     $SEM_iter_dir/model_initial \\
+#     $SEM_iter_dir/dmodel \\
+#     \$out_dir \\
+#     --model_tags \${perturb_model_tag_groups[\$i]//,/ } \\
+#     --dmodel_tags \${perturb_dmodel_tag_groups[\$i]//,/ } \\
+#     --min_values \${perturb_min_values[\$i]//,/ } \\
+#     --max_values \${perturb_max_values[\$i]//,/ } \\
+#     --scale 1.0 \\
+#     --method "absolute"
+# 
+# done
 
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_alpha_beta_phi_xi_to_vph_vpv_vsv_vsh.py \\
+#====== convert model from alpha,beta,xi,phi to vpv,vph,vsv,vsh
+
+# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_alpha_beta_phi_xi_to_vph_vpv_vsv_vsh.py \\
+#   ${SEM_nproc_total} \\
+#   ${SEM_reference_model_dir} \\
+#   \$out_dir \\
+#   \$out_dir
+
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_tiso_model_in_alpha_beta_phi_xi_eta.py \\
   ${SEM_nproc_total} \\
   ${SEM_reference_model_dir} \\
   \$out_dir \\
   \$out_dir \\
-  $model_update_min_alpha $model_update_max_alpha \\
-  $model_update_min_beta  $model_update_max_beta  \\
-  $model_update_min_phi   $model_update_max_phi   \\
-  $model_update_min_xi    $model_update_max_xi    \\
-  $model_update_min_eta   $model_update_max_eta
+  --reverse
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
@@ -343,16 +349,13 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-perturb_group_names=(${SEM_perturb_group_names[@]})
-perturb_model_tag_groups=(${SEM_perturb_model_tag_groups[@]})
-perturb_dmodel_tag_groups=(${SEM_perturb_dmodel_tag_groups[@]})
-
-ngroup=\${#perturb_group_names[@]}
+group_names=(${SEM_perturb_group_names[@]})
+ngroup=${#SEM_perturb_group_names[@]}
 
 for ((i=0; i<\$ngroup; i++))
 do
 
-  dm_tag=\${perturb_group_names[\$i]} 
+  dm_tag=\${group_names[\$i]} 
 
   model_dir=${SEM_iter_dir}/model_perturb_\${dm_tag}
   if [ ! -d "\$model_dir" ]
@@ -407,7 +410,7 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-echo #====== collect grid search results from all events
+echo ====== collect grid search results from all events
 
 out_dir=${SEM_iter_dir}/line_search
 mkdir -p \${out_dir}
@@ -422,7 +425,7 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/structure_inversion/grid_sear
   --out_figure \${out_dir}/grid_search.pdf \\
   --out_txt \${out_dir}/grid_search.txt
 
-echo #====== apply model update
+echo ====== apply model update
 
 if [ -d "$SEM_iter_dir/model_updated" ]
 then
@@ -430,43 +433,82 @@ then
 fi
 mkdir -p $SEM_iter_dir/model_updated
 
-perturb_group_names=(${SEM_perturb_group_names[@]})
-perturb_model_tag_groups=(${SEM_perturb_model_tag_groups[@]})
-perturb_dmodel_tag_groups=(${SEM_perturb_dmodel_tag_groups[@]})
+# copy initial model in case some model parameters are not inverted, e.g., qmu, rho 
+cp -L $SEM_iter_dir/model_initial/*.bin $SEM_iter_dir/model_updated/
+chmod -R u+w $SEM_iter_dir/model_updated
 
-ngroup=\${#perturb_group_names[@]}
+group_names=(${SEM_perturb_group_names[@]})
+model_groups=(${SEM_perturb_model_groups[@]})
+ngroup=\${#group_names[@]}
 
+# get optimal step length for each model search direction
+group_scales=()
 for ((i=0; i<\$ngroup; i++))
 do
-
-  dm_tag=\${perturb_group_names[\$i]} 
-
+  dm_tag=\${group_names[\$i]} 
   opt_dm_scale=\$(grep \$dm_tag \${out_dir}/grid_search.txt | awk '{print \$NF}')
-
+  group_scales[\$i]=\$opt_dm_scale
   echo "# apply model update for [\${dm_tag}] with step length [\${opt_dm_scale}]"
-
-  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb.py \\
-    ${SEM_nproc_total} \\
-    $SEM_iter_dir/model_initial \\
-    $SEM_iter_dir/dmodel \\
-    $SEM_iter_dir/model_updated \\
-    --model_tags \${perturb_model_tag_groups[\$i]//,/ } \\
-    --dmodel_tags \${perturb_dmodel_tag_groups[\$i]//,/ } \\
-    --scale \$opt_dm_scale \\
-    --method "absolute"
-
 done
 
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_alpha_beta_phi_xi_to_vph_vpv_vsv_vsh.py \\
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb_groups.py \\
+  ${SEM_nproc_total} \\
+  $SEM_iter_dir/model_initial \\
+  $SEM_iter_dir/dmodel \\
+  $SEM_iter_dir/model_updated \\
+  --model_groups \${model_groups[@]} \\
+  --group_scales \${group_scales[@]} \\
+  --dmodel_tag ${SEM_dmodel_tag} \\
+  --method "absolute" \\
+  --models ${SEM_model_names[@]} \\
+  --model_min_values ${SEM_model_min_values[@]} \\
+  --model_max_values ${SEM_model_max_values[@]}
+
+
+# ngroup=\${#perturb_group_names[@]}
+# 
+# for ((i=0; i<\$ngroup; i++))
+# do
+# 
+#   dm_tag=\${perturb_group_names[\$i]} 
+# 
+#   opt_dm_scale=\$(grep \$dm_tag \${out_dir}/grid_search.txt | awk '{print \$NF}')
+# 
+#   echo "# apply model update for [\${dm_tag}] with step length [\${opt_dm_scale}]"
+# 
+#   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb.py \\
+#     ${SEM_nproc_total} \\
+#     $SEM_iter_dir/model_initial \\
+#     $SEM_iter_dir/dmodel \\
+#     $SEM_iter_dir/model_updated \\
+#     --model_tags \${perturb_model_tag_groups[\$i]//,/ } \\
+#     --dmodel_tags \${perturb_dmodel_tag_groups[\$i]//,/ } \\
+#     --min_values \${perturb_min_values[\$i]//,/ } \\
+#     --max_values \${perturb_max_values[\$i]//,/ } \\
+#     --scale \$opt_dm_scale \\
+#     --method "absolute"
+# 
+# done
+
+# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_alpha_beta_phi_xi_to_vph_vpv_vsv_vsh.py \\
+#   ${SEM_nproc_total} \\
+#   ${SEM_reference_model_dir} \\
+#   $SEM_iter_dir/model_updated \\
+#   $SEM_iter_dir/model_updated \\
+#   $model_update_min_alpha $model_update_max_alpha \\
+#   $model_update_min_beta  $model_update_max_beta  \\
+#   $model_update_min_phi   $model_update_max_phi   \\
+#   $model_update_min_xi    $model_update_max_xi    \\
+#   $model_update_min_eta   $model_update_max_eta
+
+echo ====== convert alpha,beta,phi,xi to vph,vpv,vsv,vsh
+
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_tiso_model_in_alpha_beta_phi_xi_eta.py \\
   ${SEM_nproc_total} \\
   ${SEM_reference_model_dir} \\
   $SEM_iter_dir/model_updated \\
   $SEM_iter_dir/model_updated \\
-  $model_update_min_alpha $model_update_max_alpha \\
-  $model_update_min_beta  $model_update_max_beta  \\
-  $model_update_min_phi   $model_update_max_phi   \\
-  $model_update_min_xi    $model_update_max_xi    \\
-  $model_update_min_eta   $model_update_max_eta
+  --reverse
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"

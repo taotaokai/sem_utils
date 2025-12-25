@@ -218,7 +218,7 @@ def write_gll_file(gll_dir, gll_tag, iproc, data, region_code="reg1", dtype="f4"
 
 
 def sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
-    alpha, beta, phi, xi, vp0, vs0
+    alpha, beta, phi, xi, vp0, vs0, output_iso=False
 ):
     """Re-parameterize TISO model from vpv,vph,vsv,vsh to alpha, beta, phi, xi
     vp**2 = (vpv**2 + 4 * vph**2) / 5
@@ -235,7 +235,11 @@ def sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
     vsv = vs * np.sqrt(1.0 - 1.0 / 3.0 * xi)
     vsh = vs * np.sqrt(1.0 + 2.0 / 3.0 * xi)
 
-    return vpv, vph, vsv, vsh
+    if output_iso: 
+        # also output isotropic vp,vs
+        return vpv, vph, vsv, vsh, vp, vs
+    else:
+        return vpv, vph, vsv, vsh
 
 
 def sem_VTI_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(vpv, vph, vsv, vsh, vp0, vs0):

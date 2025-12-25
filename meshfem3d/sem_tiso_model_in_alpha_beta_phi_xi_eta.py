@@ -26,11 +26,11 @@ def parse_arguments():
 
     parser.add_argument("nproc", type=int, help="number of mesh slices")
     parser.add_argument(
-        "model_dir", help="directory with proc*_reg1_[vpv,vph,vsv,vsh,eta,rho].bin"
-    )
-    parser.add_argument(
         "reference_dir",
         help="directory with reference isotropy model proc*_reg1_[vp,vs].bin",
+    )
+    parser.add_argument(
+        "model_dir", help="directory with proc*_reg1_[vpv,vph,vsv,vsh,eta,rho].bin"
     )
     parser.add_argument(
         "out_dir", help="output dir for proc*_reg1_[alpha,beta,phi,xi].bin"
@@ -88,8 +88,8 @@ def convert_model(iproc, model_dir, reference_dir, out_dir, reverse=False):
     if reverse:
         alpha, beta, phi, xi = read_alpha_beta_phi_xi(iproc, model_dir)
 
-        vpv, vph, vsv, vsh = sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
-            alpha, beta, phi, xi, vp0, vs0
+        vpv, vph, vsv, vsh, vp, vs = sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
+            alpha, beta, phi, xi, vp0, vs0, output_iso=True
         )
 
         # Write each kernel to a separate file
@@ -97,6 +97,8 @@ def convert_model(iproc, model_dir, reference_dir, out_dir, reverse=False):
         write_gll_file(out_dir, "vph", iproc, vph)
         write_gll_file(out_dir, "vsv", iproc, vsv)
         write_gll_file(out_dir, "vsh", iproc, vsh)
+        write_gll_file(out_dir, "vp", iproc, vp)
+        write_gll_file(out_dir, "vs", iproc, vs)
 
     else:
         vpv, vph, vsv, vsh = read_vpv_vph_vsv_vsh(iproc, model_dir)

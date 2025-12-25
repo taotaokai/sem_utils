@@ -226,20 +226,20 @@ def create_netcdf_output(
     # Create dataset for this cross-section
     data_vars = {}
     for i, model_name in enumerate(model_names):
-        data_vars[model_name] = (["xi", "eta"], model_data[:, :, i])
+        data_vars[model_name] = (["mesh_xi", "mesh_eta"], model_data[:, :, i])
 
     coords = {
-        "xi": (["xi"], xi, {"units": "degree"}),
-        "eta": (["eta"], eta, {"units": "degree"}),
+        "mesh_xi":  (["mesh_xi"],   xi, {"units": "degree"}),
+        "mesh_eta": (["mesh_eta"], eta, {"units": "degree"}),
     }
 
-    data_vars["latitude"] = (["xi", "eta"], lats)
-    data_vars["longitude"] = (["xi", "eta"], lons)
-    data_vars["altitude"] = (["xi", "eta"], alts)
+    data_vars["latitude"] =  (["mesh_xi", "mesh_eta"], lats)
+    data_vars["longitude"] = (["mesh_xi", "mesh_eta"], lons)
+    data_vars["altitude"] =  (["mesh_xi", "mesh_eta"], alts)
 
-    data_vars["x"] = (["xi", "eta"], points[:, :, 0])
-    data_vars["y"] = (["xi", "eta"], points[:, :, 1])
-    data_vars["z"] = (["xi", "eta"], points[:, :, 2])
+    data_vars["x"] = (["mesh_xi", "mesh_eta"], points[:, :, 0])
+    data_vars["y"] = (["mesh_xi", "mesh_eta"], points[:, :, 1])
+    data_vars["z"] = (["mesh_xi", "mesh_eta"], points[:, :, 2])
 
     ds = xr.Dataset(data_vars, coords=coords, attrs=attrs)
     ds.to_netcdf(out_file)

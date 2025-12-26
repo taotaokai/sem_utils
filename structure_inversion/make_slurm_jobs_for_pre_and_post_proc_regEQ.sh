@@ -206,6 +206,8 @@ echo
 
 EOF
 
+#TODO scale kernel_precond ?
+
 
 #====== search direction
 cat <<EOF > $dmodel_job

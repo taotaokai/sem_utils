@@ -38,6 +38,9 @@ SEM_stage_tag=source_dcu
 SEM_stage_num=0
 SEM_iter_num=8
 
+# source dir at iter00
+SEM_initial_cmtsolution_dir=${SEM_base_dir}/stage00_source_dcu/CMTSOLUTION_latest
+
 # mesh directory
 SEM_mesh_dir=${SEM_base_dir}/mesh_dcu
 

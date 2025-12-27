@@ -207,7 +207,7 @@ SEM_kernel_smooth_vertical_length_km=15 # vertical smoothing length as FWHM
 
 #====== model search direction (dm)
 # conjugate gradient
-#sem_cg_type=HS
+SEM_cg_type=HS # PR
 
 # maximum amplitude of dmodel
 SEM_dmodel_scale=0.05

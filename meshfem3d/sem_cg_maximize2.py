@@ -71,6 +71,12 @@ def parse_arguments():
         help="value to scale the maximum amplitude of the output GLL file",
         default=0.1,
     )
+    parser.add_argument(
+        "--cg_type",
+        help="CG type, SD: steepestest descent, PR: Polak-Ribière, HS: Hestenes-Stiefel",
+        choices=["HS", "PR", "SD"],
+        default="HS",
+    )
 
     return parser.parse_args()
 
@@ -88,6 +94,7 @@ def process(
     kernel_tag,
     dmodel_tag,
     scaled_amplitude=0.1,
+    cg_type="PR",
 ):
     """Process and scale GLL files to scaled amplitude."""
 
@@ -106,6 +113,7 @@ def process(
     # get CG parameter beta
     pgy_l = 0
     dy_l = 0
+    gg_l = 0
     for iproc in range(mpi_rank, nproc, mpi_size):
         mesh_file = os.path.join(mesh_dir, f"proc{iproc:06d}_reg1_solver_data.bin")
         mesh_data = sem_mesh_read(mesh_file)
@@ -126,15 +134,25 @@ def process(
             curr_precond_kernel = read_gll_file(curr_precond_kernel_dir, ker_name, iproc) # Pg_k+1
             pgy_l += np.sum(vol_gll * curr_precond_kernel * dkernel)  # sum(Pg_k+1 * y_k)
             dy_l += np.sum(vol_gll * dmodel * dkernel)  # sum(d_k * y_k)
+            gg_l += np.sum(vol_gll * prev_kernel * prev_kernel) # sum(g_k * g_k)
 
     pgy = mpi_comm.allreduce(pgy_l, op=MPI.SUM)
     dy = mpi_comm.allreduce(dy_l, op=MPI.SUM)
-    cg_beta = pgy / dy  # beta = sum(Pg_k+1 * y_k) / sum(d_k * y_k)
+    gg = mpi_comm.allreduce(gg_l, op=MPI.SUM)
+    if cg_type == "HS":
+        cg_beta = pgy / dy  # beta = sum(Pg_k+1 * y_k) / sum(d_k * y_k)
+    elif cg_type == "PR":
+        cg_beta = pgy / gg  # beta = sum(Pg_k+1 * y_k) / sum(g_k * g_k)
+    elif cg_type == "SD": # steepest descent
+        cg_beta = 0.0
+    else:
+        raise ValueError(f"ERROR: unknown cg_type {cg_type}")
+
     if mpi_rank == 0:
         # for maximization problem this value should be negative since Hessian is negative definite
         # and Hessian * d_k ~ g_k+1 - g_k, so sum(d_k * (g_k+1 - g_k) ) = d_k * Hessian * d_k < 0
         print(f"INFO: sum(d_k * (g_k+1 - g_k) ) = {dy} should be negative") 
-        print(f"INFO: {cg_beta=}") 
+        print(f"INFO: {cg_type=}, {cg_beta=}") 
 
 
     # get maximum amplitude of curr_dmodel
@@ -187,6 +205,7 @@ def main():
             args.kernel_tag,
             args.dmodel_tag,
             scaled_amplitude=args.scaled_amplitude,
+            cg_type=args.cg_type,
         )
     except Exception as e:
         print(f"Error: {e}")

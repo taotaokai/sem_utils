@@ -253,7 +253,8 @@ else
     --models ${SEM_model_names[@]} \\
     --kernel_tag ${SEM_kernel_tag} \\
     --dmodel_tag ${SEM_dmodel_tag} \\
-    --scaled_amplitude=${SEM_dmodel_scale}
+    --scaled_amplitude=${SEM_dmodel_scale} \\
+    --cg_type=${SEM_cg_type}
 
 fi
 

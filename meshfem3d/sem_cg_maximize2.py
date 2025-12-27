@@ -155,6 +155,31 @@ def process(
         print(f"INFO: {cg_type=}, {cg_beta=}") 
 
 
+    dg_l = 0
+    for iproc in range(mpi_rank, nproc, mpi_size):
+        mesh_file = os.path.join(mesh_dir, f"proc{iproc:06d}_reg1_solver_data.bin")
+        mesh_data = sem_mesh_read(mesh_file)
+        vol_gll = sem_mesh_get_vol_gll(mesh_data)
+        vol_gll = vol_gll.reshape(-1)
+        for model_name in model_names:
+            # since the search direction might be clipped by the maximum amplitude,
+            # we calculate the acutal model difference
+            prev_model = read_gll_file(prev_model_dir, model_name, iproc)
+            curr_model = read_gll_file(curr_model_dir, model_name, iproc)
+            dmodel = curr_model - prev_model # d_k
+            # gradient difference
+            ker_name = f"{model_name}{kernel_tag}"
+            curr_kernel = read_gll_file(curr_kernel_dir, ker_name, iproc)
+            # preconditioned gradient
+            curr_precond_kernel = read_gll_file(curr_precond_kernel_dir, ker_name, iproc) # Pg_k+1
+            # search direction
+            curr_dmodel = curr_precond_kernel - cg_beta * dmodel
+            # g_k+1 * d_k+1
+            dg_l += np.sum(vol_gll * curr_dmodel * curr_kernel)
+    dg = mpi_comm.allreduce(dg_l, op=MPI.SUM)
+    if mpi_rank == 0:
+        print(f"INFO: g_k * d_k = {dg} should be positive")
+
     # get maximum amplitude of curr_dmodel
     max_amp_l = 0
     for iproc in range(mpi_rank, nproc, mpi_size):

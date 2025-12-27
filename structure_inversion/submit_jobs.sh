@@ -72,19 +72,21 @@ done
 job_list=submitted_job.lst
 [ -f ${job_list} ] && rm ${job_list} || touch ${job_list}
 
+dep_jobs=:$job_id  # last job mesh_perturb
 for event_id in $(awk 'NF&&$1!~/#/{print $1}' $event_list)
 do
   event_dir=$SEM_iter_dir/events/$event_id
+  prev_job=${dep_jobs}
   for job_name in perturb search
   do
     job_file=${event_dir}/slurm/${job_name}.job
-    job_id=$(sbatch --parsable -d afterok${dep_jobs} $job_file)
+    job_id=$(sbatch --parsable -d afterok${prev_job} $job_file)
     if [ $? -ne 0 ]
     then
       echo "[ERROR] failed submitting $job_file"
       exit -1
     fi
-    dep_jobs=:$job_id
+    prev_job=:$job_id
     echo ${event_id} ${job_name} ${job_id}  
   done
   echo $job_id >> $job_list

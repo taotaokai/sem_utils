@@ -84,6 +84,7 @@ do
       echo "[ERROR] failed submitting $job_file"
       exit -1
     fi
+    dep_jobs=:$job_id
     echo ${event_id} ${job_name} ${job_id}  
   done
   echo $job_id >> $job_list

@@ -10,8 +10,10 @@ job_id=$job_dep
 for work in ${job_names//,/ }
 do 
 
+  job_file=$slurm_dir/${work}.job
+
   echo
-  echo "====== job: $work"
+  echo "====== job: $work ($job_file)"
 
   job_file=$slurm_dir/${work}.job
 

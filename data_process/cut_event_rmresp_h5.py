@@ -12,35 +12,26 @@ from obspy.taup import TauPyModel
 
 
 """ data structure
-/
-|- attrs: event, origin_time, location
-|
-|- NET_STA[0:nchan, 0:npts] : carray
-   attrs: net,sta,loc,
-          channels[0:nchan], (e.g. [(name:HHE, azimuth:90, dip:0), ('HHN',...), ('HHZ',...)])
-          stla,stlo,stel,stdp
-          starttime, sampling_rate, npts,
-          unit (e.g. count, meter, m/s)
-          filter_type, filter_param
-          response_corner_frequency
 
-e.g.
-
-/
-|- attrs: event_id="C202006211907A", origin_time='2020-06-21T19:07:00.000000', ...
-|
-|- BE_MEM[0:3, 0:npts]
-         |- attrs: network='BE', station='MEM', location='00',
-         |         channels=[('HHE',90,0), ('HHN',0,0), ('HHZ',0,-90)],
-         |         starttime='2020-03-21T00:49:51.008393',
-         |         stla,stlo,stel,stdp
-         |         sampling_rate=10.0,
-         |         npts=18000,
-         |         type='displacement'
-         |         unit='meter',
-         |         filter_type='butter',
-         |         filter_param={'N':8, 'Wn':[0.008, 1]}
-         |         response_corner_frequency=[0.01, 5]
+/root
+    |- attrs: event_id="C202006211907A", origin_time='2020-06-21T19:07:00.000000', ...
+    |
+    |- BE_MEM
+    |   |- attrs: network='BE', station='MEM', location='00',
+    |   |         stla,stlo,stel,stdp
+    |   |
+    |   |- DATA_VEL[0:3, 0:npts] (carray)
+    |       |- attrs: channels=[('HHE',90,0), ('HHN',0,0), ('HHZ',0,-90)],
+    |       |         filter=[{'type': 'lowpass', 'N': 15, 'Wn': 0.5}, 
+    |       |                 {'type': 'highpass', 'N': 2, 'Wn': 0.033}]
+    |       |         response_corner_frequency=[0.01, 5],
+    |       |         sampling_rate=10.0,
+    |       |         npts=18000,
+    |       |         unit='meter',
+    |       |         type='VEL'
+    |       |         starttime='2020-03-21T00:49:51.008393',
+    |
+    |- (other stations) 
 
 NOTE: time precision is microsecond
 

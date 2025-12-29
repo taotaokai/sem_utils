@@ -18,6 +18,7 @@ import xarray as xr
 import pyvista as pv
 
 from meshfem3d_utils import (
+    R_EARTH_KM,
     geodetic_lat2geocentric_lat,
     sem_mesh_interp_points,
 )
@@ -65,7 +66,7 @@ def parse_arguments():
         "--delta",
         nargs=2,
         metavar=("theta", "r"),
-        help="grid spacing along %(metavar)s directions",
+        help="grid spacing along %(metavar)s directions as degrees and km",
         default=[1, 50],
         type=float,
     )
@@ -277,16 +278,16 @@ def create_netcdf_output(
     # Create dataset for this cross-section
     data_vars = {}
     for i, model_name in enumerate(model_names):
-        data_vars[model_name] = (["gcarc", "radius"], model_data[:, :, i])
+        data_vars[model_name] = (["theta", "radius"], model_data[:, :, i])
 
     coords = {
-        "gcarc": (["gcarc"], angles, {"units": "degree"}),
-        "radius": (["radius"], radius, {"units": "earth_radii"}),
+        "theta": (["theta"], angles, {"units": "degree"}),
+        "radius": (["radius"], radius, {"units": f"{R_EARTH_KM} km"}),
     }
 
-    data_vars["x"] = (["gcarc", "radius"], points[:, :, 0])
-    data_vars["y"] = (["gcarc", "radius"], points[:, :, 1])
-    data_vars["z"] = (["gcarc", "radius"], points[:, :, 2])
+    data_vars["x"] = (["theta", "radius"], points[:, :, 0])
+    data_vars["y"] = (["theta", "radius"], points[:, :, 1])
+    data_vars["z"] = (["theta", "radius"], points[:, :, 2])
 
     ds = xr.Dataset(data_vars, coords=coords, attrs=attrs)
     ds.to_netcdf(out_file)
@@ -323,6 +324,7 @@ def main():
     # Grid parameters
     dtheta, dr = args.delta
     rmin, rmax = args.r_range
+    dr = dr / R_EARTH_KM
     nr = int(np.ceil(rmax - rmin) / dr) + 1
     radius = np.linspace(rmin, rmax, nr)
 

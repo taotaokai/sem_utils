@@ -62,13 +62,12 @@ def parse_arguments():
         type=float,
     )
     parser.add_argument(
-        "-n",
-        "--ngrid",
+        "--delta",
         nargs=2,
         metavar=("theta", "r"),
-        help="number of grids along %(metavar)s directions",
-        default=[100, 50],
-        type=int,
+        help="grid spacing along %(metavar)s directions",
+        default=[1, 50],
+        type=float,
     )
     parser.add_argument("--vtk", action="store_true", help="Output VTK files")
     parser.add_argument("-o", "--out_dir", default="./", help="output directory")
@@ -322,8 +321,9 @@ def main():
         assert len(profile_norm_amp) == nmodel
 
     # Grid parameters
-    na, nr = args.ngrid
+    dtheta, dr = args.delta
     rmin, rmax = args.r_range
+    nr = int(np.ceil(rmax - rmin) / dr) + 1
     radius = np.linspace(rmin, rmax, nr)
 
     # Read cross-section parameters
@@ -340,6 +340,7 @@ def main():
 
         min_theta = params["min_theta"]
         max_theta = params["max_theta"]
+        na = int(np.ceil(max_theta - min_theta) / dtheta) + 1
         angles = np.linspace(min_theta, max_theta, na)
 
         # Create cross-section points

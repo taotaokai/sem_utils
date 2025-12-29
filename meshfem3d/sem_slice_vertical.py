@@ -325,7 +325,7 @@ def main():
     dtheta, dr = args.delta
     rmin, rmax = args.r_range
     dr = dr / R_EARTH_KM
-    nr = int(np.ceil(rmax - rmin) / dr) + 1
+    nr = int(np.ceil((rmax - rmin) / dr)) + 1
     radius = np.linspace(rmin, rmax, nr)
 
     # Read cross-section parameters
@@ -344,6 +344,7 @@ def main():
         max_theta = params["max_theta"]
         na = int(np.ceil(max_theta - min_theta) / dtheta) + 1
         print(f"{nr=}, {na=}")
+        sys.stdout.flush()
         angles = np.linspace(min_theta, max_theta, na)
 
         # Create cross-section points

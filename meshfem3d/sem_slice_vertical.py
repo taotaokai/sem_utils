@@ -343,6 +343,7 @@ def main():
         min_theta = params["min_theta"]
         max_theta = params["max_theta"]
         na = int(np.ceil(max_theta - min_theta) / dtheta) + 1
+        print(f"{nr=}, {na=}")
         angles = np.linspace(min_theta, max_theta, na)
 
         # Create cross-section points

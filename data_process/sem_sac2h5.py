@@ -55,6 +55,12 @@ def parse_arguments():
     parser.add_argument(
         "--data_type", default="DISP", help="data type of SEM sac files, e.g. VEL, DISP"
     )
+    parser.add_argument(
+        "--pad_before",
+        default=0.0,
+        type=float,
+        help="time length to pad before each trace (seconds)",
+    )
 
     return parser.parse_args()
 
@@ -64,30 +70,30 @@ def apply_lowpass_filter(
 ) -> None:
     """
     Apply low-pass filter to a trace using a Butterworth filter.
-    
+
     Args:
         trace: ObsPy trace to filter
         low_pass_freq: Corner frequency for the low-pass filter
         low_pass_order: Order of the Butterworth filter
     """
     fs = trace.stats.sampling_rate
-    
+
     # Calculate padding and FFT length
     npad = int(2.0 * fs / low_pass_freq)
     nfft = scipy.fft.next_fast_len(trace.stats.npts + npad)
     freqs = np.fft.rfftfreq(nfft, d=1 / fs)
-    
+
     # Apply low-pass filter in frequency domain
     lp_sos = scipy.signal.butter(
         low_pass_order, low_pass_freq, "lowpass", fs=fs, output="sos"
     )
     _, h_lp = scipy.signal.freqz_sos(lp_sos, worN=freqs, fs=fs)
-    
+
     # Transform to frequency domain, apply filter, transform back
     sig_spectrum = np.fft.rfft(trace.data, nfft)
     sig_spectrum *= abs(h_lp)
     filtered_data = np.fft.irfft(sig_spectrum, nfft)[: trace.stats.npts]
-    
+
     trace.data = filtered_data
 
 
@@ -96,7 +102,7 @@ def interpolate_trace(
 ) -> None:
     """
     Interpolate trace to desired sampling rate and time window.
-    
+
     Args:
         trace: ObsPy trace to interpolate
         resample_fs: Target sampling frequency
@@ -115,10 +121,10 @@ def interpolate_trace(
 def load_station_data(station_file: str) -> pd.DataFrame:
     """
     Load station information from CSV file.
-    
+
     Args:
         station_file: Path to station file
-        
+
     Returns:
         DataFrame with station information
     """
@@ -135,10 +141,11 @@ def process_station_traces(
     resample_fs: float,
     low_pass_freq: float,
     low_pass_order: int,
+    pad_before: float,
 ) -> Optional[Stream]:
     """
     Process all traces for a single station.
-    
+
     Args:
         sac_dir: Directory containing SAC files
         net: Network name
@@ -149,24 +156,29 @@ def process_station_traces(
         resample_fs: Resampling frequency
         low_pass_freq: Low-pass filter frequency
         low_pass_order: Low-pass filter order
-        
+        pad_before: time to pad before each trace (seconds)
+
     Returns:
         ObsPy Stream object with processed traces, or None if failed
     """
     st = Stream()
-    
+
     # Load all channel traces
     for cha in channels:
         sac_file = os.path.join(sac_dir, f"{net}.{sta}.{loc}.{cha}{sac_suffix}")
         if not os.path.exists(sac_file):
-            warnings.warn(f"[WARN] {sac_file} does not exist, skipping station {net}.{sta}.")
+            warnings.warn(
+                f"[WARN] {sac_file} does not exist, skipping station {net}.{sta}."
+            )
             return None
-            
+
         try:
             tr = obspy.read(sac_file)
             st.extend(tr)
         except Exception as e:
-            warnings.warn(f"[WARN] Failed to read {sac_file}: {e}, skipping station {net}.{sta}.")
+            warnings.warn(
+                f"[WARN] Failed to read {sac_file}: {e}, skipping station {net}.{sta}."
+            )
             return None
 
     # Determine common time window for resampling
@@ -174,11 +186,17 @@ def process_station_traces(
     min_endtime = max(tr.stats.endtime for tr in st)
     resample_starttime = max_starttime
     resample_npts = int((min_endtime - resample_starttime) * resample_fs)
+    pad_npts, pad_time = 0, 0.0
+    if pad_before > 0:
+        pad_npts = int(pad_before * resample_fs)
+        pad_time = pad_npts / resample_fs
 
     # Process each trace: filter and resample
     for tr in st:
         apply_lowpass_filter(tr, low_pass_freq, low_pass_order)
         interpolate_trace(tr, resample_fs, resample_starttime, resample_npts)
+        tr.data = np.pad(tr.data, (pad_npts, 0), mode="constant")
+        tr.stats.starttime -= pad_time
 
     return st
 
@@ -189,32 +207,34 @@ def create_h5_dataset(
     array_name: str,
     data: np.ndarray,
     attrs: dict,
-    filters: tables.Filters
+    filters: tables.Filters,
 ) -> tables.CArray:
     """
     Create HDF5 dataset with specified attributes.
-    
+
     Args:
         h5f: HDF5 file handle
         group_name: Name of the group to create dataset in
         data: Data array to store
         attrs: Attributes dictionary
         filters: HDF5 compression filters
-        
+
     Returns:
         Created CArray object
     """
     atom = tables.Atom.from_dtype(np.dtype(np.float32))
     # array_name = attrs.get("array_name", "DATA")
-    
+
     # Create dataset
-    ca = h5f.create_carray(h5f.root[group_name], array_name, atom, data.shape, filters=filters)
+    ca = h5f.create_carray(
+        h5f.root[group_name], array_name, atom, data.shape, filters=filters
+    )
     ca[:] = data.astype(np.float32)
-    
+
     # Set attributes
     for key, value in attrs.items():
         setattr(ca.attrs, key, value)
-        
+
     return ca
 
 
@@ -228,10 +248,11 @@ def sac2h5(
     sac_suffix: str = ".sem.sac",
     data_type: str = "DISP",
     h5_file: str = "out.h5",
+    pad_before: float = 0,
 ):
     """
     Convert SAC files to HDF5 format with filtering and resampling.
-    
+
     Args:
         sac_dir: Directory containing SAC files
         station_file: File with station information
@@ -245,7 +266,7 @@ def sac2h5(
     """
     if channels is None:
         channels = ["BXE", "BXN", "BXZ"]
-    
+
     # Open HDF5 file
     with tables.open_file(h5_file, mode="w") as h5f:
         groot = h5f.root
@@ -265,10 +286,18 @@ def sac2h5(
 
             # Process all traces for this station
             st = process_station_traces(
-                sac_dir, net, sta, loc, channels, sac_suffix,
-                resample_fs, low_pass_freq, low_pass_order
+                sac_dir,
+                net,
+                sta,
+                loc,
+                channels,
+                sac_suffix,
+                resample_fs,
+                low_pass_freq,
+                low_pass_order,
+                pad_before,
             )
-            
+
             if st is None:
                 continue  # Skip if traces couldn't be processed
 
@@ -277,7 +306,7 @@ def sac2h5(
             if station_name in groot:
                 warnings.warn(f"[WARN] {station_name} already exists, overwriting.")
                 h5f.remove_node(groot, station_name)
-                
+
             gsta = h5f.create_group(groot, station_name)
             gsta._v_attrs["network"] = net
             gsta._v_attrs["station"] = sta
@@ -290,45 +319,55 @@ def sac2h5(
             # Prepare waveform data array
             nchan = len(st)
             npts = st[0].stats.npts
-            # resample_npts = int((max(tr.stats.endtime for tr in st) - 
+            # resample_npts = int((max(tr.stats.endtime for tr in st) -
             #                     min(tr.stats.starttime for tr in st)) * resample_fs)
             shape = (nchan, npts)
-            
+
             # Create compressed dataset
             compression_filter = tables.Filters(complevel=3, complib="zlib")
             waveform_data = np.zeros(shape, dtype=np.float32)
             for i in range(nchan):
                 waveform_data[i, :] = np.array(st[i].data, dtype=np.float32)
-            
+
             # Define channel metadata
             dtype = [("name", "S3"), ("azimuth", float), ("dip", float)]
             channel_info = [
-                (tr.stats.channel, #.encode('utf-8'), 
-                 float(tr.stats.sac["cmpaz"]), 
-                 float(tr.stats.sac["cmpinc"] - 90))
+                (
+                    tr.stats.channel,  # .encode('utf-8'),
+                    float(tr.stats.sac["cmpaz"]),
+                    float(tr.stats.sac["cmpinc"] - 90),
+                )
                 for tr in st
             ]
-            
+
             # Create dataset and set attributes
             array_name = f"DATA_{data_type}"
             attrs = {
-                
                 "channels": np.array(channel_info, dtype=dtype),
                 "starttime": st[0].stats.starttime,
                 "sampling_rate": resample_fs,
                 "npts": npts,
-                "filter": [{"type": "lowpass", "N": low_pass_order, "Wn": low_pass_freq}],
+                "filter": [
+                    {"type": "lowpass", "N": low_pass_order, "Wn": low_pass_freq}
+                ],
                 "response_corner_frequency": [],
-                "type": data_type
+                "type": data_type,
             }
-            
-            create_h5_dataset(h5f, station_name, array_name, waveform_data, attrs, compression_filter)
+
+            create_h5_dataset(
+                h5f, station_name, array_name, waveform_data, attrs, compression_filter
+            )
 
 
 def main():
     """Main entry point."""
     args = parse_arguments()
     print(f"Arguments: {args}")
+
+    assert args.resample_fs > 0
+    assert args.low_pass_freq > 0
+    assert args.low_pass_order > 0
+    assert args.low_pass_freq < args.resample_fs / 2
 
     sac2h5(
         args.sac_dir,
@@ -340,6 +379,7 @@ def main():
         sac_suffix=args.sac_suffix,
         data_type=args.data_type,
         h5_file=args.out_h5,
+        pad_before=args.pad_before,
     )
 
 

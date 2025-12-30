@@ -735,12 +735,14 @@ def _measure_adj_one_sta(
             win["valid"] = False
             continue
         if Amax_noise == 0:
-            # could occure when the data begin time is too close to the first arrival
-            msg = f"empty noise trace ({win}), SKIP."
+            # could occure when using synthetic seismograms as data for pointspread test
+            msg = f"noise amplitude is zero for ({win}). SNR is set to 9999.0"
             warnings.warn(msg)
-            win["valid"] = False
-            continue
-        snr = 20.0 * np.log10(Amax_obs / Amax_noise)
+            snr = 9999.0
+            # win["valid"] = False
+            # continue
+        else:
+            snr = 20.0 * np.log10(Amax_obs / Amax_noise)
 
         # ------ measure CC time shift (between w*F*d and w*F*u)
         obs_norm = np.sqrt(np.sum(obs_filt_win**2))

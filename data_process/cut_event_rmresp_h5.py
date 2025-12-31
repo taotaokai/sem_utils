@@ -481,12 +481,13 @@ for network, station, location, channel in nslc_filtered:
     for tr in st:
         fs = tr.stats.sampling_rate
         npts = tr.stats.npts
-        # npad = int(2.0 * fs / config_highpass_Wn)
-        # # npad = int(2.0 / min(config_lower_corner_taper_width, config_higher_corner_taper_width) * fs)
-        # # print(f'[INFO] resample npad = {npad}')
-        # nfft = scipy.fft.next_fast_len(npts + npad)
-        # freqs = np.fft.rfftfreq(nfft, d=1 / fs)
+        npad = 2 * int(1.0 / config_highpass_Wn) * fs
+        # npad = int(2.0 / min(config_lower_corner_taper_width, config_higher_corner_taper_width) * fs)
+        # print(f'[INFO] resample npad = {npad}')
+        nfft = scipy.fft.next_fast_len(npts + 2 * npad)
+        freqs = np.fft.rfftfreq(nfft, d=1 / fs)
         # sig_spectrum = np.fft.rfft(tr.data, nfft)
+        sig_spectrum = np.fft.rfft(np.pad(tr.data, (npad, nfft-npts-npad), mode='reflect'), nfft)
         # pre-filter
         lp_sos = scipy.signal.butter(
             config_lowpass_N, config_lowpass_Wn, "lowpass", fs=fs, output="sos"
@@ -494,11 +495,11 @@ for network, station, location, channel in nslc_filtered:
         hp_sos = scipy.signal.butter(
             config_highpass_N, config_highpass_Wn, "highpass", fs=fs, output="sos"
         )
-        tr.data = scipy.signal.sosfiltfilt(lp_sos, tr.data)
-        tr.data = scipy.signal.sosfiltfilt(hp_sos, tr.data)
-        # _, h_lp = scipy.signal.freqz_sos(lp_sos, worN=freqs, fs=fs)
-        # _, h_hp = scipy.signal.freqz_sos(hp_sos, worN=freqs, fs=fs)
-        # sig_spectrum *= abs(h_lp) * abs(h_hp)
+        # tr.data = scipy.signal.sosfiltfilt(lp_sos, tr.data)
+        # tr.data = scipy.signal.sosfiltfilt(hp_sos, tr.data)
+        _, h_lp = scipy.signal.freqz_sos(lp_sos, worN=freqs, fs=fs)
+        _, h_hp = scipy.signal.freqz_sos(hp_sos, worN=freqs, fs=fs)
+        sig_spectrum *= abs(h_lp) * abs(h_hp)
         # if _DEBUG:
         #     plt.loglog(freqs, abs(h_lp) * abs(h_hp))
         #     plt.title('Butterworth filter frequency response')
@@ -506,14 +507,7 @@ for network, station, location, channel in nslc_filtered:
         #     plt.ylabel('Amplitude')
         #     plt.grid(which='both', axis='both')
         #     plt.show()
-
         # remove instrument response in frequency domain
-        npad = int(2.0 * fs / config_highpass_Wn)
-        # npad = int(2.0 / min(config_lower_corner_taper_width, config_higher_corner_taper_width) * fs)
-        # print(f'[INFO] resample npad = {npad}')
-        nfft = scipy.fft.next_fast_len(npts + 2 * npad)
-        freqs = np.fft.rfftfreq(nfft, d=1 / fs)
-        sig_spectrum = np.fft.rfft(np.pad(tr.data, (npad, nfft-npts-npad), mode='reflect'), nfft)
         try:
             resp = tr.stats.response
             output_resp = resp.get_evalresp_response_for_frequencies(

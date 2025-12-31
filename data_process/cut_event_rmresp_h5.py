@@ -487,7 +487,7 @@ for network, station, location, channel in nslc_filtered:
         nfft = scipy.fft.next_fast_len(npts + 2 * npad)
         freqs = np.fft.rfftfreq(nfft, d=1 / fs)
         # sig_spectrum = np.fft.rfft(tr.data, nfft)
-        sig_spectrum = np.fft.rfft(np.pad(tr.data, (npad, nfft-npts-npad), mode='reflect'), nfft)
+        sig_spectrum = np.fft.rfft(np.pad(tr.data, (npad, nfft-npts-npad), 'mean'), nfft)
         # pre-filter
         lp_sos = scipy.signal.butter(
             config_lowpass_N, config_lowpass_Wn, "lowpass", fs=fs, output="sos"

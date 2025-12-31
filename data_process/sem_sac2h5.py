@@ -18,7 +18,7 @@ import numpy as np
 import tables
 import pandas as pd
 import obspy
-from obspy import Stream, Trace
+from obspy import Stream, Trace, read_events
 
 
 def parse_arguments():
@@ -28,6 +28,7 @@ def parse_arguments():
     parser.add_argument("sac_dir", help="directory of SAC files")
     parser.add_argument("station", help="SEM STATIONS file")
     parser.add_argument("out_h5", help="output h5 file")
+    parser.add_argument("--cmt_file", default=None, help="CMTSOLUTION file")
     parser.add_argument(
         "--resample_fs", type=float, default=2.0, help="resampling frequency"
     )
@@ -77,10 +78,11 @@ def apply_lowpass_filter(
         low_pass_order: Order of the Butterworth filter
     """
     fs = trace.stats.sampling_rate
+    npts = trace.stats.npts
 
     # Calculate padding and FFT length
-    npad = int(2.0 * fs / low_pass_freq)
-    nfft = scipy.fft.next_fast_len(trace.stats.npts + npad)
+    npad = int(2.0 / low_pass_freq * fs)
+    nfft = scipy.fft.next_fast_len(npts + 2 * npad)
     freqs = np.fft.rfftfreq(nfft, d=1 / fs)
 
     # Apply low-pass filter in frequency domain
@@ -90,9 +92,9 @@ def apply_lowpass_filter(
     _, h_lp = scipy.signal.freqz_sos(lp_sos, worN=freqs, fs=fs)
 
     # Transform to frequency domain, apply filter, transform back
-    sig_spectrum = np.fft.rfft(trace.data, nfft)
+    sig_spectrum = np.fft.rfft(np.pad(trace.data, (npad, nfft-npts-npad), mode='edge'), nfft)
     sig_spectrum *= abs(h_lp)
-    filtered_data = np.fft.irfft(sig_spectrum, nfft)[: trace.stats.npts]
+    filtered_data = np.fft.irfft(sig_spectrum, nfft)[npad:(npts+npad)]
 
     trace.data = filtered_data
 
@@ -184,19 +186,21 @@ def process_station_traces(
     # Determine common time window for resampling
     max_starttime = min(tr.stats.starttime for tr in st)
     min_endtime = max(tr.stats.endtime for tr in st)
-    resample_starttime = max_starttime
+    resample_starttime = max_starttime - pad_before
     resample_npts = int((min_endtime - resample_starttime) * resample_fs)
-    pad_npts, pad_time = 0, 0.0
-    if pad_before > 0:
-        pad_npts = int(pad_before * resample_fs)
-        pad_time = pad_npts / resample_fs
+    # pad_npts, pad_time = 0, 0.0
+    # if pad_before > 0:
+    #     pad_npts = int(pad_before * resample_fs)
+    #     pad_time = pad_npts / resample_fs
 
     # Process each trace: filter and resample
     for tr in st:
+        if tr.stats.starttime > resample_starttime:
+            pad_npts = int((tr.stats.starttime - resample_starttime) * tr.stats.sampling_rate) + 5
+            tr.data = np.pad(tr.data, (pad_npts, 0), mode="edge")
+            tr.stats.starttime -= pad_npts / tr.stats.sampling_rate
         apply_lowpass_filter(tr, low_pass_freq, low_pass_order)
         interpolate_trace(tr, resample_fs, resample_starttime, resample_npts)
-        tr.data = np.pad(tr.data, (pad_npts, 0), mode="constant")
-        tr.stats.starttime -= pad_time
 
     return st
 
@@ -241,13 +245,14 @@ def create_h5_dataset(
 def sac2h5(
     sac_dir: str,
     station_file: str,
+    h5_file: str,
+    cmt_file: Optional[str] = None,
     resample_fs: float = 2.0,
     low_pass_freq: float = 0.5,
     low_pass_order: int = 15,
     channels: List[str] = None,
     sac_suffix: str = ".sem.sac",
     data_type: str = "DISP",
-    h5_file: str = "out.h5",
     pad_before: float = 0,
 ):
     """
@@ -256,6 +261,7 @@ def sac2h5(
     Args:
         sac_dir: Directory containing SAC files
         station_file: File with station information
+        cmt_file: CMTSOLUTION file
         resample_fs: Target sampling frequency
         low_pass_freq: Low-pass filter corner frequency
         low_pass_order: Low-pass filter order
@@ -270,6 +276,11 @@ def sac2h5(
     # Open HDF5 file
     with tables.open_file(h5_file, mode="w") as h5f:
         groot = h5f.root
+
+        if cmt_file is not None:
+            event_data = read_events(cmt_file)[0]
+            groot._v_attrs["event"] = event_data
+
         stations = load_station_data(station_file)
 
         for i, station in stations.iterrows():
@@ -372,13 +383,14 @@ def main():
     sac2h5(
         args.sac_dir,
         args.station,
+        args.out_h5,
+        cmt_file=args.cmt_file,
         resample_fs=args.resample_fs,
         low_pass_freq=args.low_pass_freq,
         low_pass_order=args.low_pass_order,
         channels=args.channels,
         sac_suffix=args.sac_suffix,
         data_type=args.data_type,
-        h5_file=args.out_h5,
         pad_before=args.pad_before,
     )
 

@@ -58,6 +58,7 @@ import yaml
 #   x(n*dt): DFT[x]*dt ~ FT[x], IDFT[FT[x]]/dt ~ x
 
 _DEBUG = False
+# _DEBUG = True 
 
 #
 # ====== utility functions
@@ -1728,7 +1729,7 @@ class Misfit(object):
                 if data_starttime > t0 or data_endtime < t1:
                     msg = f"{g_sta_obs._v_name}: timespan [{data_starttime}, {data_endtime}] does not cover required [{t0}, {t1}], skip"
                     warnings.warn(msg)
-                    # continue
+                    continue
 
                 # create station group, e.g. /waveforms/NET_STA
                 station_name = f"{net}_{sta}"
@@ -2004,8 +2005,9 @@ class Misfit(object):
             nt = solver_nt + nt_lpad + nt_rpad
 
             min_cutoff_freq = min([filter["Wn"] for filter in obs_filters])
-            npad = int(2.0 / min_cutoff_freq * solver_fs)
-            nfft = scipy.fft.next_fast_len(nt + npad)
+            pad_length = max(20.0, 2.0 / min_cutoff_freq)
+            npad = int(pad_length * solver_fs)
+            nfft = scipy.fft.next_fast_len(nt + 2 * npad) # pad both ends of the signal
             freqs = np.fft.rfftfreq(nfft, d=solver_dt)
             filter_h = np.ones_like(freqs)
             for filter in obs_filters:
@@ -2029,9 +2031,10 @@ class Misfit(object):
                 # st_tmp = Stream()
                 # st_tmp += tr.copy()
                 assert tr.id[-1] == syn_components[i]
-                x = np.zeros(nt)
-                x[nt_lpad : (solver_nt + nt_lpad)] = tr.data
-                x[:] = np.fft.irfft(np.fft.rfft(x, nfft) * abs(filter_h))[:nt]
+                # x = np.zeros(nt)
+                # x[nt_lpad : (solver_nt + nt_lpad)] = tr.data
+                x = np.pad(tr.data, (npad + nt_lpad, nfft-npad-nt_lpad-solver_nt), "edge")
+                x = np.fft.irfft(np.fft.rfft(x, nfft) * abs(filter_h))[npad:(npad+nt)]
 
                 # # NOTE: different precision between UTCDateTime.timestamp and (t1 -t2)
                 # #       UTCDateTime internally stores time in nanoseconds as an integer
@@ -2060,7 +2063,11 @@ class Misfit(object):
                 # st_tmp.plot()
 
             if _DEBUG:
+                for tr in syn_st:
+                    tr.stats.location = "SS"
                 syn_st1.extend(syn_st)
+                print("DEBUG:")
+                print(syn_st1)
                 syn_st1.plot()
 
             # store synthetic waveforms, e.g. /NET_STA/SYN_DISP[0:nchan, 0:npts]
@@ -2159,8 +2166,12 @@ class Misfit(object):
             baz = meta["back_azimuth"]
             gcarc = meta["dist_degree"]
 
-            if (obs_tag not in g_sta) or (syn_tag not in g_sta):
-                msg = f"{obs_tag} or {syn_tag} not in {g_sta._v_name}, skip"
+            if obs_tag not in g_sta: 
+                msg = f"{obs_tag} does not exist under {g_sta._v_file.filename}:{g_sta._v_pathname}, skip"
+                warnings.warn(msg)
+                continue
+            if syn_tag not in g_sta:
+                msg = f"{syn_tag} does not exist under {g_sta._v_file.filename}:{g_sta._v_pathname}, skip"
                 warnings.warn(msg)
                 continue
 
@@ -2618,6 +2629,15 @@ class Misfit(object):
             # loc = attrs['location']
             first_arrtime = attrs["first_arrtime"]
 
+            if obs_tag not in g_sta:
+                msg = f"{obs_tag} does not exist under {g_sta._v_file.filename}:{g_sta._v_pathname}, skip"
+                warnings.warn(msg)
+                continue
+            if syn_tag not in g_sta:
+                msg = f"{syn_tag} does not exist under {g_sta._v_file.filename}:{g_sta._v_pathname}, skip"
+                warnings.warn(msg)
+                continue
+
             obs = g_sta[obs_tag]
             syn = g_sta[syn_tag]
 
@@ -3037,27 +3057,34 @@ class Misfit(object):
                 #  plt.plot(syn_times, dchiw_dg[i,:], 'r')
                 # plt.show()
 
-                # # DEBUG
-                # print(f"cc_time_shift = {CC_time_shift}")
-                # print(f"cc_max = {CCmax}")
-                # print(f"SNR = {CCmax}")
-                # print(f"CC0 = {CC0}")
-                # phase_shift = np.exp(-2j * np.pi * freqs * CC_time_shift)
-                # Fsyn = np.fft.rfft(syn_filt_win, nfft) * phase_shift
-                # syn_filt_win_shift = np.fft.irfft(Fsyn, nfft)[:, :data_nt]
-                # scale_dcc = np.max(np.abs(syn_filt_win)) / np.max(np.abs(dchiw_du))
-                # for i in range(3):
-                #     plt.subplot(311 + i)
-                #     plt.plot(
-                #         data_times, obs_filt_win[i, :], "k",
-                #         # data_times, obs_ENZ[i, :], "k--",
-                #         data_times, syn_filt_win[i, :], "r",
-                #         # data_times, syn_ENZ[i, :], "r--",
-                #         data_times, syn_filt_win_shift[i, :], "c",
-                #         data_times[:noise_idx1], noise_filt_win[i,:], "b",
-                #         data_times, scale_dcc * dchiw_du[i,:], "y"
-                #     )
-                # plt.show()
+                # DEBUG
+                if _DEBUG:
+                    print(f"cc_time_shift = {CC_time_shift}")
+                    print(f"cc_max = {CCmax}")
+                    print(f"SNR = {snr}")
+                    print(f"CC0 = {CC0}")
+                    print(f"Aw = {Aw}")
+                    phase_shift = np.exp(-2j * np.pi * freqs * CC_time_shift)
+                    Fsyn = np.fft.rfft(syn_filt_win, nfft) * phase_shift
+                    syn_filt_win_shift = np.fft.irfft(Fsyn, nfft)[:, :data_nt]
+                    scale_dcc = np.max(np.abs(syn_filt_win)) / np.max(np.abs(dchiw_du))
+                    print(f"{scale_dcc=}")
+                    du = obs_filt_win - Aw * syn_filt_win
+                    for i in range(3):
+                        plt.subplot(311 + i)
+                        plt.plot(
+                            data_times, obs_filt_win[i, :], "k",
+                            # data_times, obs_ENZ[i, :], "k--",
+                            data_times, syn_filt_win[i, :], "r",
+                            # data_times, syn_ENZ[i, :], "r--",
+                            # data_times, syn_filt_win_shift[i, :], "c",
+                            # data_times[:noise_idx1], noise_filt_win[i,:], "b",
+                            # data_times, scale_dcc * dchiw_du[i,:], "y"
+                            data_times, 1.e6 * du[i, :], "y",
+                        )
+                        if i == 0:
+                            plt.title(f"{win['id']}")
+                    plt.show()
 
                 win["cc0"] = CC0
                 win["cc_time_shift"] = CC_time_shift

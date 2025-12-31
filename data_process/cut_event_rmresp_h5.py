@@ -481,7 +481,7 @@ for network, station, location, channel in nslc_filtered:
     for tr in st:
         fs = tr.stats.sampling_rate
         npts = tr.stats.npts
-        npad = 2 * int(1.0 / config_highpass_Wn) * fs
+        npad = 2 * int(1.0 / config_highpass_Wn * fs)
         # npad = int(2.0 / min(config_lower_corner_taper_width, config_higher_corner_taper_width) * fs)
         # print(f'[INFO] resample npad = {npad}')
         nfft = scipy.fft.next_fast_len(npts + 2 * npad)

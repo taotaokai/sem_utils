@@ -513,7 +513,7 @@ for network, station, location, channel in nslc_filtered:
         # print(f'[INFO] resample npad = {npad}')
         nfft = scipy.fft.next_fast_len(npts + 2 * npad)
         freqs = np.fft.rfftfreq(nfft, d=1 / fs)
-        sig_spectrum = np.fft.rfft(np.pad(tr.data, (npad, npad), mode='reflect'), nfft)
+        sig_spectrum = np.fft.rfft(np.pad(tr.data, (npad, nfft-npts-npad), mode='reflect'), nfft)
         try:
             resp = tr.stats.response
             output_resp = resp.get_evalresp_response_for_frequencies(

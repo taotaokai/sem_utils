@@ -128,7 +128,7 @@ config_max_resp_lc = config["remove_response"]["max_resp_lc"]
 config_min_resp_hc = config["remove_response"]["min_resp_hc"]
 # config_filter_lstop = config['remove_response']['filter']['lstop']
 # config_filter_min_lpass = config['remove_response']['filter']['min_lpass']
-config_highpass_N = config["remove_response"]["filter"]["N"]
+config_highpass_min_order = config["remove_response"]["filter"]["min_order"]
 config_highpass_min_cutoff_freq = config["remove_response"]["filter"]["min_cutoff_freq"]
 # config_filter_max_hpass = config['remove_response']['filter']['max_hpass']
 # config_filter_gpass = config['remove_response']['filter']['gpass']
@@ -469,11 +469,11 @@ for network, station, location, channel in nslc_filtered:
     # print(f'[INFO] filter butter: N, Wn = {butter_N}, {butter_Wn}\n')
     highpass_Wn = max(config_highpass_min_cutoff_freq, resp_lc)
 
-    highpass_N = config_highpass_N
+    highpass_N = config_highpass_min_order
     max_nzeros = max([tr.stats.num_zero_zeros for tr in st])
-    if max_nzeros > config_highpass_N:
+    if max_nzeros > config_highpass_min_order:
         highpass_N = max_nzeros
-        msg = f"number of zero zeros {max_nzeros} > {config_highpass_N=}, use {highpass_N} instead. ({station_id})"
+        msg = f"number of zero zeros {max_nzeros} > {config_highpass_min_order=}, use {highpass_N} instead. ({station_id})"
         warnings.warn(msg)
 
     # remove trend and apply taper

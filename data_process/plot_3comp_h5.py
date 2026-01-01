@@ -529,14 +529,14 @@ def plot_seismogram_3comp(
 
             # plot seismograms
             amp_Z = np.max(data_Z[plot_idx] ** 2) ** 0.5
-            noise_Z = np.max(data_Z[noise_idx] ** 2) ** 0.5
+            noise_Z = np.std(np.abs(data_Z[noise_idx]))
             amp_RT = 0
             noise_RT = 0
             if data_RT is not None:
                 amp_R = np.max(data_RT[0, plot_idx] ** 2) ** 0.5
-                noise_R = np.max(data_RT[0, noise_idx] ** 2) ** 0.5
+                noise_R = np.std(np.abs(data_RT[0, noise_idx]))
                 amp_T = np.max(data_RT[1, plot_idx] ** 2) ** 0.5
-                noise_T = np.max(data_RT[1, noise_idx] ** 2) ** 0.5
+                noise_T = np.std(np.abs(data_RT[1, noise_idx]))
             # data_max_amp = (amp2_Z + amp2_RT)**0.5
 
             if noise_Z == 0:
@@ -557,10 +557,18 @@ def plot_seismogram_3comp(
                 verticalalignment="center",
                 fontsize=7,
             )
+            h_snr_text = ax.text(
+                max(time_limit),
+                dist_degree,
+                f'{snr_Z:.1f} ',
+                horizontalalignment="right",
+                fontsize=5,
+            )
             if min_SNR and snr_Z < min_SNR:
                 for h in h_lines:
                     h.set_alpha(0.1)
                 h_text.set_alpha(0.2)
+                h_snr_text.set_alpha(0.2)
 
             if data_RT is not None:
                 ax = ax_RTZ[0]
@@ -574,9 +582,17 @@ def plot_seismogram_3comp(
                     snr_R = np.inf
                 else:
                     snr_R = 20 * np.log10(amp_R / noise_R)
+                h_snr_text = ax.text(
+                    max(time_limit),
+                    dist_degree,
+                    f'{snr_R:.1f} ',
+                    horizontalalignment="right",
+                    fontsize=5,
+                )
                 if min_SNR and snr_R < min_SNR:
                     for h in h_lines:
                         h.set_alpha(0.1)
+                    h_snr_text.set_alpha(0.2)
 
                 # # annotate amplitude
                 # ax.text(max(time_limit), dist_degree, '%.1e ' % (amp_RT),
@@ -595,9 +611,17 @@ def plot_seismogram_3comp(
                     snr_T = np.inf
                 else:
                     snr_T = 20 * np.log10(amp_T / noise_T)
+                h_snr_text = ax.text(
+                    max(time_limit),
+                    dist_degree,
+                    f'{snr_T:.1f} ',
+                    horizontalalignment="right",
+                    fontsize=5,
+                )
                 if min_SNR and snr_T < min_SNR:
                     for h in h_lines:
                         h.set_alpha(0.1)
+                    h_snr_text.set_alpha(0.2)
 
             # print(f'{sta}: snr_Z={snr_Z}, snr_R={snr_RT}')
 

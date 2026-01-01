@@ -300,7 +300,7 @@ class Window(pt.IsDescription):
     )  # (w*obs, w*syn)/(w*obs, w*obs), (*,*): inner product
     amp_ratio_ccmax = pt.Float64Col(pos=17)  # after time shift
     SNR = pt.Float64Col(pos=18)
-    noise_maxamp = pt.Float64Col(pos=19)
+    noise_stdamp = pt.Float64Col(pos=19)
     obs_maxamp = pt.Float64Col(pos=20)
     syn_maxamp = pt.Float64Col(pos=21)
     id = pt.StringCol(128, pos=22)
@@ -587,7 +587,7 @@ def _measure_adj_one_sta(
     data_te = data_tb + (data_nt - 1) * data_dt
     data_times = np.arange(data_nt, dtype=float) * data_dt
     noise_te = (first_arrtime - data_tb) - cfg_noise_before_first_arrival
-    noise_idx1 = int(noise_te * data_fs)  # 0:idx1 as noise
+    # noise_idx1 = int(noise_te * data_fs)  # 0:idx1 as noise
 
     # pre-filter parameters
     pre_filters = obs_attrs["filter"]
@@ -663,6 +663,7 @@ def _measure_adj_one_sta(
         width = win_len * min(win_taper, 0.4)
         win_c = [b, b + width, e - width, e]
         win_func = cosine_sac_taper(data_times, win_c)
+        # win_idx = (data_times >= b + width) & (data_times <= e - width)
 
         # component
         if cmpnm in ["Z", "R", "T"]:
@@ -713,10 +714,11 @@ def _measure_adj_one_sta(
         noise_win = cosine_sac_taper(
             data_times, [0, taper_width, noise_te - taper_width, noise_te]
         )
-        # cut noise window from obs_ENZ before applying bandpass filter Fw
-        noise_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ * noise_win, nfft), nfft)[
-            :, :data_nt
-        ]
+        noise_idx = (data_times >= taper_width) & (data_times <= noise_te - taper_width)
+        # # cut noise window from obs_ENZ before applying bandpass filter Fw
+        # noise_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ * noise_win, nfft), nfft)[
+        #     :, :data_nt
+        # ]
 
         # apply window and projection
         # obs: w*(Fw*Fd*d)
@@ -724,18 +726,21 @@ def _measure_adj_one_sta(
         # syn: w*(Fw*Fd*u)
         syn_filt_win = np.dot(proj_matrix, syn_filt) * win_func
         # noise
-        noise_filt_win = np.dot(proj_matrix, noise_filt)[:, :noise_idx1]
+        # noise_filt_win = np.dot(proj_matrix, noise_filt)[:, :noise_idx1]
+        noise_filt_win = np.dot(proj_matrix, obs_filt) * noise_win
 
         # ------ measure SNR (based on maximum amplitude)
         Amax_obs = np.sqrt(np.max(np.sum(obs_filt_win**2, axis=0)))
         Amax_syn = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
-        Amax_noise = np.sqrt(np.max(np.sum(noise_filt_win**2, axis=0)))
+        # Amax_noise = np.sqrt(np.max(np.sum(noise_filt_win**2, axis=0)))
+        Astd_noise = np.std(np.sqrt(np.sum(noise_filt_win[:,noise_idx]**2, axis=0)))
+
         if Amax_obs == 0:  # bad record
             msg = f"empty obs trace ({win}), skip"
             warnings.warn(msg)
             win["valid"] = False
             continue
-        if Amax_noise == 0:
+        if Astd_noise == 0:
             # could occure when using synthetic seismograms as data for pointspread test
             msg = f"noise amplitude is zero for ({win}). SNR is set to 9999.0"
             warnings.warn(msg)
@@ -743,7 +748,7 @@ def _measure_adj_one_sta(
             # win["valid"] = False
             # continue
         else:
-            snr = 20.0 * np.log10(Amax_obs / Amax_noise)
+            snr = 20.0 * np.log10(Amax_obs / Astd_noise)
 
         # ------ measure CC time shift (between w*F*d and w*F*u)
         obs_norm = np.sqrt(np.sum(obs_filt_win**2))
@@ -846,7 +851,7 @@ def _measure_adj_one_sta(
         win["cc_max"] = CCmax
         win["amp_ratio_cc0"] = AR0
         win["amp_ratio_ccmax"] = ARmax
-        win["noise_maxamp"] = Amax_noise
+        win["noise_stdamp"] = Astd_noise
         win["obs_maxamp"] = Amax_obs
         win["syn_maxamp"] = Amax_syn
         win["SNR"] = snr
@@ -2679,7 +2684,7 @@ class Misfit(object):
             data_te = data_tb + (data_nt - 1) * data_dt
             data_times = np.arange(data_nt, dtype=float) * data_dt
             noise_te = (first_arrtime - data_tb) - cfg_noise_before_first_arrival
-            noise_idx1 = int(noise_te * data_fs)  # 0:idx1 as noise
+            # noise_idx1 = int(noise_te * data_fs)  # 0:idx1 as noise
 
             # pre-filter parameters
             pre_filters = obs.attrs["filter"]
@@ -2813,10 +2818,11 @@ class Misfit(object):
                 noise_win = cosine_sac_taper(
                     data_times, [0, taper_width, noise_te - taper_width, noise_te]
                 )
-                # cut noise window from obs_ENZ before applying bandpass filter Fw
-                noise_filt = np.fft.irfft(
-                    Fw * np.fft.rfft(obs_ENZ * noise_win, nfft), nfft
-                )[:, :data_nt]
+                noise_idx = (data_times > taper_width) & (data_times < noise_te - taper_width)
+                # # cut noise window from obs_ENZ before applying bandpass filter Fw
+                # noise_filt = np.fft.irfft(
+                #     Fw * np.fft.rfft(obs_ENZ * noise_win, nfft), nfft
+                # )[:, :data_nt]
 
                 # # DEBUG
                 # for i in range(3):
@@ -2838,7 +2844,7 @@ class Misfit(object):
                 # syn: w*(Fw*Fd*u)
                 syn_filt_win = np.dot(proj_matrix, syn_filt) * win_func
                 # noise
-                noise_filt_win = np.dot(proj_matrix, noise_filt)[:, :noise_idx1]
+                noise_filt_win = np.dot(proj_matrix, obs_filt) * noise_win
 
                 # np.savez('measure_adj', obs_ENZ=obs_ENZ, syn_ENZ=syn_ENZ, syn_filt=syn_filt, win_func=win_func, obs_filt_win=obs_filt_win, syn_filt_win=syn_filt_win)
 
@@ -2861,17 +2867,17 @@ class Misfit(object):
                 # ------ measure SNR (based on maximum amplitude)
                 Amax_obs = np.sqrt(np.max(np.sum(obs_filt_win**2, axis=0)))
                 Amax_syn = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
-                Amax_noise = np.sqrt(np.max(np.sum(noise_filt_win**2, axis=0)))
+                Astd_noise = np.std(np.sqrt(np.sum(noise_filt_win[:, noise_idx]**2, axis=0)))
                 if Amax_obs == 0:  # bad record
                     msg = f"empty obs trace ({win}), skip"
                     warnings.warn(msg)
                     continue
-                if Amax_noise == 0:
+                if Astd_noise == 0:
                     # could occure when the data begin time is too close to the first arrival
                     msg = f"empty noise trace ({win}), SKIP."
                     warnings.warn(msg)
                     continue
-                snr = 20.0 * np.log10(Amax_obs / Amax_noise)
+                snr = 20.0 * np.log10(Amax_obs / Astd_noise)
 
                 # ------ measure CC time shift (between w*F*d and w*F*u)
                 obs_norm = np.sqrt(np.sum(obs_filt_win**2))
@@ -3091,7 +3097,7 @@ class Misfit(object):
                 win["cc_max"] = CCmax
                 win["amp_ratio_cc0"] = AR0
                 win["amp_ratio_ccmax"] = ARmax
-                win["noise_maxamp"] = Amax_noise
+                win["noise_stdamp"] = Astd_noise
                 win["obs_maxamp"] = Amax_obs
                 win["syn_maxamp"] = Amax_syn
                 win["SNR"] = snr

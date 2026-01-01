@@ -24,7 +24,7 @@ def parse_arguments():
     parser.add_argument("mesh_dir", help="directory with proc*_reg1_solver_data.bin")
     parser.add_argument(
         "point_list",
-        help="list of x,y,z,sigma_km,amplitude, where x,y,z are non-dimensionalized by R_EARTH (e.g. 6371 km), sigma_km is optional",
+        help="list of x,y,z,[sigma_km,amplitude], where x,y,z are non-dimensionalized by R_EARTH (e.g. 6371 km), sigma_km is optional",
     )
     parser.add_argument("--sigma_km", default=10.0, type=int, help="sigma of Gaussian balls in km")
     parser.add_argument("--amplitude", default=1.0, type=float, help="amplitude of Gaussian balls")
@@ -64,7 +64,7 @@ def read_list(point_list, sigma_km, amplitude):
         sigmas = df["sigma_km"].to_numpy(dtype=float)
     else:   
         sigmas = np.full(npts, sigma_km)
-    sigmas /= R_EARTH_KM
+    sigmas = sigmas / R_EARTH_KM
 
     if "amplitude" in df.columns:
         amplitudes = df["amplitude"].to_numpy(dtype=float)

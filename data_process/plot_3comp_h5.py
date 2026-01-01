@@ -80,6 +80,12 @@ def parse_arguments():
         help="time window for noise estimation (sec) relative to first arrival",
     )
     parser.add_argument(
+        "--noise_min_length",
+        type=float,
+        default=100.0,
+        help="minimum length of time window for noise estimation (sec)",
+    )
+    parser.add_argument(
         "--dist_limit",
         nargs=2,
         type=float,
@@ -149,6 +155,7 @@ def plot_seismogram_3comp(
     dist_limit=None,  # limit epi-distance (degree)
     min_SNR=10,  # minimum signal-to-noise ratio: 20*log10(Asig/Anoise)
     noise_twin=[-500, -100],  # relative to first arrival
+    noise_min_length=100.0,  # minimum length of time window for noise estimation (sec)
 ):
     if cmt_file is not None:
         event = read_events(cmt_file)[0]
@@ -281,13 +288,13 @@ def plot_seismogram_3comp(
         h5data = sta["h5data"]
         data_starttime = UTCDateTime(h5data._v_attrs["starttime"])
         data_t0 = data_starttime - event_origin.time
-        noise_t0 = sta["first_arrival"] + min(noise_twin)
+        # noise_twin_begin = sta["first_arrival"] + min(noise_twin)
+        noise_twin_end = sta["first_arrival"] + max(noise_twin)
 
-        if data_t0 > noise_t0:
-            print(
-                f'[WARN] not enough record length for noise, {data_t0} > {noise_t0}, skip {sta["name"]}'
-            )
-            print(f'[INFO] {data_starttime=}, {event_origin.time=}')
+        if (noise_twin_end - data_t0) < noise_min_length:
+            msg = f'[WARN] not enough record length for noise, {data_t0 - noise_twin_end =} < {noise_min_length=}, skip {sta["name"]}'
+            warnings.warn(msg)
+            # print(f'[INFO] {data_starttime=}, {event_origin.time=}')
             to_remove.append(sta)
     stations = [sta for sta in stations if sta not in to_remove]
 
@@ -511,14 +518,11 @@ def plot_seismogram_3comp(
             # noise window
             noise_t0 = sta["first_arrival"] + min(noise_twin)
             noise_t1 = sta["first_arrival"] + max(noise_twin)
-            # if data_t0 > noise_t0:
-            #     print(f'[WARN] not enough record length for noise, {data_t0} > {noise_t0}, skip {sta["name"]}')
-            #     continue
             noise_idx = (times > noise_t0) & (times < noise_t1)
 
             # plot time window
             plot_t0 = min(time_limit) + reduced_time
-            plot_t0 = max(plot_t0, noise_t0)
+            # plot_t0 = max(plot_t0, noise_t0)
             plot_t1 = max(time_limit) + reduced_time
             plot_idx = (times > plot_t0) & (times < plot_t1)
             t_plot = times[plot_idx] - reduced_time
@@ -536,7 +540,7 @@ def plot_seismogram_3comp(
             # data_max_amp = (amp2_Z + amp2_RT)**0.5
 
             if noise_Z == 0:
-                snr_Z = np.inf 
+                snr_Z = np.inf
             else:
                 snr_Z = 20 * np.log10(amp_Z / noise_Z)
             ax = ax_RTZ[2]
@@ -613,7 +617,7 @@ def plot_seismogram_3comp(
 
         # save figures
         if savefig:
-            #out_file = f"{out_dir}/bin{num_bins:03d}_az_{azmin:05.1f}_{azmax:05.1f}.pdf"
+            # out_file = f"{out_dir}/bin{num_bins:03d}_az_{azmin:05.1f}_{azmax:05.1f}.pdf"
             pdf.savefig(fig)
         else:
             plt.show()
@@ -653,8 +657,9 @@ if __name__ == "__main__":
         max_bin_sta=args.max_nsta,
         reduce_rayp=args.reduce_rayp,
         time_limit=args.time_limit,
-        min_SNR=5,
-        noise_twin=args.noise_twin,
         freq_limit=args.freq_limit,
         dist_limit=args.dist_limit,
+        min_SNR=5,
+        noise_twin=args.noise_twin,
+        noise_min_length=args.noise_min_length,
     )

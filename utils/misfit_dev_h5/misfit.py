@@ -300,7 +300,7 @@ class Window(pt.IsDescription):
     )  # (w*obs, w*syn)/(w*obs, w*obs), (*,*): inner product
     amp_ratio_ccmax = pt.Float64Col(pos=17)  # after time shift
     SNR = pt.Float64Col(pos=18)
-    noise_stdamp = pt.Float64Col(pos=19)
+    noise_maxamp = pt.Float64Col(pos=19)
     obs_maxamp = pt.Float64Col(pos=20)
     syn_maxamp = pt.Float64Col(pos=21)
     id = pt.StringCol(128, pos=22)
@@ -733,14 +733,14 @@ def _measure_adj_one_sta(
         Amax_obs = np.sqrt(np.max(np.sum(obs_filt_win**2, axis=0)))
         Amax_syn = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
         # Amax_noise = np.sqrt(np.max(np.sum(noise_filt_win**2, axis=0)))
-        Astd_noise = np.std(np.sqrt(np.sum(noise_filt_win[:,noise_idx]**2, axis=0)))
+        Amax_noise = np.sqrt(np.max(np.sum(noise_filt_win[:,noise_idx]**2, axis=0)))
 
         if Amax_obs == 0:  # bad record
             msg = f"empty obs trace ({win}), skip"
             warnings.warn(msg)
             win["valid"] = False
             continue
-        if Astd_noise == 0:
+        if Amax_noise == 0:
             # could occure when using synthetic seismograms as data for pointspread test
             msg = f"noise amplitude is zero for ({win}). SNR is set to 9999.0"
             warnings.warn(msg)
@@ -748,7 +748,7 @@ def _measure_adj_one_sta(
             # win["valid"] = False
             # continue
         else:
-            snr = 20.0 * np.log10(Amax_obs / Astd_noise)
+            snr = 20.0 * np.log10(Amax_obs / Amax_noise)
 
         # ------ measure CC time shift (between w*F*d and w*F*u)
         obs_norm = np.sqrt(np.sum(obs_filt_win**2))
@@ -851,7 +851,7 @@ def _measure_adj_one_sta(
         win["cc_max"] = CCmax
         win["amp_ratio_cc0"] = AR0
         win["amp_ratio_ccmax"] = ARmax
-        win["noise_stdamp"] = Astd_noise
+        win["noise_maxamp"] = Amax_noise
         win["obs_maxamp"] = Amax_obs
         win["syn_maxamp"] = Amax_syn
         win["SNR"] = snr
@@ -2867,17 +2867,17 @@ class Misfit(object):
                 # ------ measure SNR (based on maximum amplitude)
                 Amax_obs = np.sqrt(np.max(np.sum(obs_filt_win**2, axis=0)))
                 Amax_syn = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
-                Astd_noise = np.std(np.sqrt(np.sum(noise_filt_win[:, noise_idx]**2, axis=0)))
+                Amax_noise = np.sqrt(np.max(np.sum(noise_filt_win[:, noise_idx]**2, axis=0)))
                 if Amax_obs == 0:  # bad record
                     msg = f"empty obs trace ({win}), skip"
                     warnings.warn(msg)
                     continue
-                if Astd_noise == 0:
+                if Amax_noise == 0:
                     # could occure when the data begin time is too close to the first arrival
                     msg = f"empty noise trace ({win}), SKIP."
                     warnings.warn(msg)
                     continue
-                snr = 20.0 * np.log10(Amax_obs / Astd_noise)
+                snr = 20.0 * np.log10(Amax_obs / Amax_noise)
 
                 # ------ measure CC time shift (between w*F*d and w*F*u)
                 obs_norm = np.sqrt(np.sum(obs_filt_win**2))
@@ -3097,7 +3097,7 @@ class Misfit(object):
                 win["cc_max"] = CCmax
                 win["amp_ratio_cc0"] = AR0
                 win["amp_ratio_ccmax"] = ARmax
-                win["noise_stdamp"] = Astd_noise
+                win["noise_maxamp"] = Amax_noise
                 win["obs_maxamp"] = Amax_obs
                 win["syn_maxamp"] = Amax_syn
                 win["SNR"] = snr
@@ -4071,11 +4071,12 @@ class Misfit(object):
                     #  ax.text(max(plot_time), dist_degree, ' %.1f' % (window['weight']),
                     #      verticalalignment='center', fontsize=7)
                     ##annotate station names
-                    str_annot = " %s.%s (%.3f,%.3f,%.1f)" % (
+                    str_annot = "%s.%s(%.2f,%.1f,%.1f,%.1f)" % (
                         net,
                         sta,
                         win["cc0"],
                         win["cc_time_shift"],
+                        win["SNR"],
                         win["weight"],
                     )
                     ax_1comp.text(

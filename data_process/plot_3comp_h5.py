@@ -528,15 +528,15 @@ def plot_seismogram_3comp(
             t_plot = times[plot_idx] - reduced_time
 
             # plot seismograms
-            amp_Z = np.max(data_Z[plot_idx] ** 2) ** 0.5
-            noise_Z = np.std(np.abs(data_Z[noise_idx]))
+            amp_Z = np.max(np.abs(data_Z[plot_idx]))
+            noise_Z = np.max(np.abs(data_Z[noise_idx]))
             amp_RT = 0
             noise_RT = 0
             if data_RT is not None:
-                amp_R = np.max(data_RT[0, plot_idx] ** 2) ** 0.5
-                noise_R = np.std(np.abs(data_RT[0, noise_idx]))
-                amp_T = np.max(data_RT[1, plot_idx] ** 2) ** 0.5
-                noise_T = np.std(np.abs(data_RT[1, noise_idx]))
+                amp_R = np.max(np.abs(data_RT[0, plot_idx]))
+                noise_R = np.max(np.abs(data_RT[0, noise_idx]))
+                amp_T = np.max(np.abs(data_RT[1, plot_idx]))
+                noise_T = np.max(np.abs(data_RT[1, noise_idx]))
             # data_max_amp = (amp2_Z + amp2_RT)**0.5
 
             if noise_Z == 0:

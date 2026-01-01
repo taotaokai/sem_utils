@@ -625,6 +625,7 @@ for network, station, location, channel in nslc_filtered:
     gsta._v_attrs["longitude"] = float(st[0].stats.metadata["longitude"])
     gsta._v_attrs["elevation"] = float(st[0].stats.metadata["elevation"])
     gsta._v_attrs["depth"] = float(st[0].stats.metadata["local_depth"])
+    gsta._v_attrs["first_arrival"] = first_arrival_time
 
     assert all([tr.stats.starttime == resample_starttime for tr in st])
     assert all([tr.stats.npts == resample_npts for tr in st])

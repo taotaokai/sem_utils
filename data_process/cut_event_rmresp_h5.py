@@ -1,5 +1,6 @@
 import sys
 import os
+import warnings
 import datetime
 import numpy as np
 import tables
@@ -135,11 +136,15 @@ config_highpass_min_cutoff_freq = config["remove_response"]["filter"]["min_cutof
 
 time_before_first_arrival = config["time_window"]["before_first_arrival"]
 if not isinstance(time_before_first_arrival, list):
-    time_before_first_arrival = [time_before_first_arrival,]
+    time_before_first_arrival = [
+        time_before_first_arrival,
+    ]
 # time_after_first_arrival = config['data']['time_window']['after_first_arrival_seconds']
 time_after_origin = config["time_window"]["after_origin_time"]
 if not isinstance(time_after_origin, list):
-    time_after_origin = [time_after_origin,]
+    time_after_origin = [
+        time_after_origin,
+    ]
 
 # for merging traces
 # misalignment_threshold = config['misalignment_threshold']
@@ -298,7 +303,8 @@ for network, station, location, channel in nslc_filtered:
             station,
             location,
             channel[0:2] + "?",
-            t0, t1,
+            t0,
+            t1,
             merge=-1,
         )
     except Exception as err:
@@ -410,6 +416,7 @@ for network, station, location, channel in nslc_filtered:
         # number of zeros
         paz = resp.get_paz()
         nz = sum([1 if z == 0 else 0 for z in paz.zeros])
+        tr.stats.num_zero_zeros = nz
         print(f"num. of zero zeros = {nz}")
 
     for tr in traces_to_remove:
@@ -460,7 +467,14 @@ for network, station, location, channel in nslc_filtered:
     # butter_N, butter_Wn = scipy.signal.buttord([lpass, hpass], [lstop, hstop], config_filter_gpass, config_filter_gstop, fs=max_fs)
     # print(f'[INFO] filter design pass/stop band: [{lpass}, {hpass}], [{lstop}, {hstop}]\n')
     # print(f'[INFO] filter butter: N, Wn = {butter_N}, {butter_Wn}\n')
-    config_highpass_Wn = max(config_highpass_min_cutoff_freq, resp_lc)
+    highpass_Wn = max(config_highpass_min_cutoff_freq, resp_lc)
+
+    highpass_N = config_highpass_N
+    max_nzeros = max([tr.stats.num_zero_zeros for tr in st])
+    if max_nzeros > config_highpass_N:
+        highpass_N = max_nzeros
+        msg = f"number of zero zeros {max_nzeros} > {config_highpass_N=}, use {highpass_N} instead. ({station_id})"
+        warnings.warn(msg)
 
     # remove trend and apply taper
     st.detrend("linear")
@@ -481,19 +495,21 @@ for network, station, location, channel in nslc_filtered:
     for tr in st:
         fs = tr.stats.sampling_rate
         npts = tr.stats.npts
-        npad = 2 * int(1.0 / config_highpass_Wn * fs)
+        npad = 2 * int(1.0 / highpass_Wn * fs)
         # npad = int(2.0 / min(config_lower_corner_taper_width, config_higher_corner_taper_width) * fs)
         # print(f'[INFO] resample npad = {npad}')
         nfft = scipy.fft.next_fast_len(npts + 2 * npad)
         freqs = np.fft.rfftfreq(nfft, d=1 / fs)
         # sig_spectrum = np.fft.rfft(tr.data, nfft)
-        sig_spectrum = np.fft.rfft(np.pad(tr.data, (npad, nfft-npts-npad), 'mean'), nfft)
+        sig_spectrum = np.fft.rfft(
+            np.pad(tr.data, (npad, nfft - npts - npad), "mean"), nfft
+        )
         # pre-filter
         lp_sos = scipy.signal.butter(
             config_lowpass_N, config_lowpass_Wn, "lowpass", fs=fs, output="sos"
         )
         hp_sos = scipy.signal.butter(
-            config_highpass_N, config_highpass_Wn, "highpass", fs=fs, output="sos"
+            highpass_N, highpass_Wn, "highpass", fs=fs, output="sos"
         )
         # tr.data = scipy.signal.sosfiltfilt(lp_sos, tr.data)
         # tr.data = scipy.signal.sosfiltfilt(hp_sos, tr.data)
@@ -523,7 +539,7 @@ for network, station, location, channel in nslc_filtered:
         sig_spectrum[inds] /= output_resp[inds]
         sig_spectrum[0] = 0  # ensure no amplitude at zero-frequency
         # tr.data = np.fft.irfft(sig_spectrum, nfft)[:npts]
-        tr.data = np.fft.irfft(sig_spectrum, nfft)[npad:(npad+npts)]
+        tr.data = np.fft.irfft(sig_spectrum, nfft)[npad : (npad + npts)]
         # resample by lanczos interpolation
         tr.interpolate(
             config_sampling_rate,
@@ -661,7 +677,7 @@ for network, station, location, channel in nslc_filtered:
     ca.attrs["npts"] = resample_npts
     ca.attrs["filter"] = [
         {"type": "lowpass", "N": config_lowpass_N, "Wn": config_lowpass_Wn},
-        {"type": "highpass", "N": config_highpass_N, "Wn": config_highpass_Wn},
+        {"type": "highpass", "N": highpass_N, "Wn": highpass_Wn},
     ]
     ca.attrs["response_corner_frequency"] = [resp_lc, resp_hc]
     ca.attrs["type"] = config_output_type

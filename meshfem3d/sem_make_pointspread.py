@@ -122,6 +122,7 @@ for i, xi in enumerate(grid_xi):
                     "x": points[i, j, k, 0],
                     "y": points[i, j, k, 1],
                     "z": points[i, j, k, 2],
+                    "amplitude": (-1.0)**(i + j + k)
                 }
             )
         # points[i, j, :, :] = grid_radius[:, None] * v[None, :]
@@ -134,6 +135,7 @@ df.to_csv(
 
 # save to vtk
 mesh = pv.PolyData(points.reshape((-1, 3)))
+mesh.point_data["amplitude"] = df["amplitude"].to_numpy()
 mesh.save(os.path.join(args.out_dir, args.vtk))
 
 # make cross-sections

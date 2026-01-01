@@ -101,7 +101,7 @@ def main():
         # toc = time.time() - tic
         # print("iproc=%d, time=%f" % (iproc, toc))
         ibool = mesh_data["ibool"]
-        write_gll_file(args.out_dir, iproc, args.out_tag, model[ibool])
+        write_gll_file(args.out_dir, args.out_tag, iproc, model[ibool])
 
 
 if __name__ == "__main__":

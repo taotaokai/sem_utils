@@ -314,7 +314,7 @@ def main():
     # Create output directory if it doesn't exist
     if mpi_rank == 0:
         os.makedirs(args.out_dir, exist_ok=True)
-    MPI.barrier()
+    mpi_comm.barrier()
 
     nmodel = len(args.model_names)
 

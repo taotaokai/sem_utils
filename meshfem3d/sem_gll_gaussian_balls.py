@@ -26,7 +26,7 @@ def parse_arguments():
         "point_list",
         help="list of x,y,z,[sigma_km,amplitude], where x,y,z are non-dimensionalized by R_EARTH (e.g. 6371 km), sigma_km is optional",
     )
-    parser.add_argument("--sigma_km", default=10.0, type=int, help="sigma of Gaussian balls in km")
+    parser.add_argument("--sigma_km", default=10.0, type=float, help="sigma of Gaussian balls in km")
     parser.add_argument("--amplitude", default=1.0, type=float, help="amplitude of Gaussian balls")
     parser.add_argument("--out_dir", default="./", help="output directory of GLL file")
     parser.add_argument(

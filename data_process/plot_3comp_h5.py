@@ -159,8 +159,10 @@ def plot_seismogram_3comp(
 ):
     if cmt_file is not None:
         event = read_events(cmt_file)[0]
-    else:
+    elif "event" in event_h5grp._v_attrs:
         event = event_h5grp._v_attrs["event"]
+    else:
+        raise Exception("event information is not found, specify --cmt_file")
 
     event_name = event.event_descriptions[0].text
 
@@ -664,13 +666,6 @@ if __name__ == "__main__":
         print(f"[Error] not hdf5 file {data_file_h5}\n")
         sys.exit()
 
-    event = h5f.root._v_attrs["event"]
-    event_name = event.event_descriptions[0].text
-
-    # out_dir = os.path.join(figure_dir, event_name)
-    # os.makedirs(out_dir, exist_ok=True)
-
-    print(f"plotting {event_name}")
     plot_seismogram_3comp(
         h5f.root,
         savefig=True,

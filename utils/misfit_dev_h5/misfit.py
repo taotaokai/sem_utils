@@ -2038,6 +2038,7 @@ class Misfit(object):
                 assert tr.id[-1] == syn_components[i]
                 # x = np.zeros(nt)
                 # x[nt_lpad : (solver_nt + nt_lpad)] = tr.data
+                # extend synthetic data by edge values from both ends
                 x = np.pad(tr.data, (npad + nt_lpad, nfft-npad-nt_lpad-solver_nt), "edge")
                 x = np.fft.irfft(np.fft.rfft(x, nfft) * abs(filter_h))[npad:(npad+nt)]
 

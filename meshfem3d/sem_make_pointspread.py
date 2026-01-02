@@ -54,7 +54,7 @@ parser.add_argument("--vtk", default="pointspread_points.vtk", help="output VTK 
 parser.add_argument(
     "--point_list",
     default="pointspread_points.csv",
-    help="filename of point-spread point list",
+    help="output csv filename of point-spread points, each line is (xi, eta, depth, x, y, z, amplitude)",
 )
 parser.add_argument(
     "--vertical_list",

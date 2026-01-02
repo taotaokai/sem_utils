@@ -16,12 +16,18 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import pyvista as pv
+import mpi4py.MPI as MPI
 
 from meshfem3d_utils import (
     R_EARTH_KM,
     geodetic_lat2geocentric_lat,
     sem_mesh_interp_points,
 )
+
+# MPI initialization
+mpi_comm = MPI.COMM_WORLD
+mpi_size = mpi_comm.Get_size()
+mpi_rank = mpi_comm.Get_rank()
 
 
 def parse_arguments():
@@ -302,10 +308,13 @@ def create_netcdf_output(
 def main():
     """Main execution function."""
     args = parse_arguments()
-    print(args)
+    if mpi_rank == 0:
+        print(args)
 
     # Create output directory if it doesn't exist
-    os.makedirs(args.out_dir, exist_ok=True)
+    if mpi_rank == 0:
+        os.makedirs(args.out_dir, exist_ok=True)
+    MPI.barrier()
 
     nmodel = len(args.model_names)
 
@@ -332,9 +341,12 @@ def main():
     xsection_params = pd.read_csv(args.xsection_list, comment="#")
 
     # Process each cross-section
-    for islice, params in xsection_params.iterrows():
+
+    # for islice, params in xsection_params.iterrows():
+    for islice in range(mpi_rank, len(xsection_params), mpi_size):
         print(f"Processing cross-section {islice:03d}")
-        sys.stdout.flush()
+
+        params = xsection_params.iloc[islice]
 
         lat0 = params["lat"]
         lon0 = params["lon"]

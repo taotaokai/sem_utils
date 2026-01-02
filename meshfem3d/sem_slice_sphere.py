@@ -9,6 +9,7 @@ import pyproj
 import xarray as xr
 import pyvista as pv
 import pandas as pd
+import mpi4py.MPI as MPI
 
 from meshfem3d_constants import R_EARTH
 
@@ -17,6 +18,11 @@ from meshfem3d_utils import (
     ecef2latlon_zeroalt,
     sem_mesh_interp_points,
 )
+
+# MPI initialization
+mpi_comm = MPI.COMM_WORLD
+mpi_size = mpi_comm.Get_size()
+mpi_rank = mpi_comm.Get_rank()
 
 
 def parse_arguments():
@@ -166,7 +172,7 @@ def create_horizontal_xsection_grids(
         # depth at constant radius
         r = R_EARTH - depth * 1000.0
         xyz = v * r
-        lat2, lon2, alt2 = ecef2gps.transform(xyz[...,0], xyz[...,1], xyz[...,2])
+        lat2, lon2, alt2 = ecef2gps.transform(xyz[..., 0], xyz[..., 1], xyz[..., 2])
         xyz = xyz / R_EARTH
     else:
         # depth at constant WGS84 altitude
@@ -229,13 +235,13 @@ def create_netcdf_output(
         data_vars[model_name] = (["mesh_xi", "mesh_eta"], model_data[:, :, i])
 
     coords = {
-        "mesh_xi":  (["mesh_xi"],   xi, {"units": "degree"}),
+        "mesh_xi": (["mesh_xi"], xi, {"units": "degree"}),
         "mesh_eta": (["mesh_eta"], eta, {"units": "degree"}),
     }
 
-    data_vars["latitude"] =  (["mesh_xi", "mesh_eta"], lats)
+    data_vars["latitude"] = (["mesh_xi", "mesh_eta"], lats)
     data_vars["longitude"] = (["mesh_xi", "mesh_eta"], lons)
-    data_vars["altitude"] =  (["mesh_xi", "mesh_eta"], alts)
+    data_vars["altitude"] = (["mesh_xi", "mesh_eta"], alts)
 
     data_vars["x"] = (["mesh_xi", "mesh_eta"], points[:, :, 0])
     data_vars["y"] = (["mesh_xi", "mesh_eta"], points[:, :, 1])
@@ -248,7 +254,13 @@ def create_netcdf_output(
 def main():
     """Main execution function."""
     args = parse_arguments()
-    print(args)
+    if mpi_rank == 0:
+        print(args)
+
+    # Create output directory if it doesn't exist
+    if mpi_rank == 0:
+        os.makedirs(args.out_dir, exist_ok=True)
+    MPI.barrier()
 
     nmodel = len(args.model_names)
 
@@ -259,8 +271,11 @@ def main():
     slices_params = pd.read_csv(args.slice_list, comment="#")
 
     # Process each cross-section
-    for islice, params in slices_params.iterrows():
+    # for islice, params in slices_params.iterrows():
+    for islice in range(mpi_rank, len(slices_params), mpi_size):
         print(f"Processing cross-section {islice:03d}")
+
+        params = slices_params.iloc[islice]
 
         central_lat = params["central_lat"]
         central_lon = params["central_lon"]

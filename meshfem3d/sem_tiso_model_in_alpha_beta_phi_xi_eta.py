@@ -21,7 +21,7 @@ mpi_rank = comm_world.Get_rank()
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Convert TISO model from vpv,vph,vsv,vsh to alpha,beta,phi,xi"
+        description="Convert TISO model from vpv,vph,vsv,vsh to alpha,beta,phi,xi,vp,vs"
     )
 
     parser.add_argument("nproc", type=int, help="number of mesh slices")
@@ -30,10 +30,10 @@ def parse_arguments():
         help="directory with reference isotropy model proc*_reg1_[vp,vs].bin",
     )
     parser.add_argument(
-        "model_dir", help="directory with proc*_reg1_[vpv,vph,vsv,vsh,eta,rho].bin"
+        "model_dir", help="directory with proc*_reg1_[vpv,vph,vsv,vsh].bin"
     )
     parser.add_argument(
-        "out_dir", help="output dir for proc*_reg1_[alpha,beta,phi,xi].bin"
+        "out_dir", help="output dir for proc*_reg1_[alpha,beta,phi,xi,vp,vs].bin"
     )
     parser.add_argument(
         "--reverse",
@@ -92,7 +92,7 @@ def convert_model(iproc, model_dir, reference_dir, out_dir, reverse=False):
             alpha, beta, phi, xi, vp0, vs0, output_iso=True
         )
 
-        # Write each kernel to a separate file
+        # Write each model to a separate file
         write_gll_file(out_dir, "vpv", iproc, vpv)
         write_gll_file(out_dir, "vph", iproc, vph)
         write_gll_file(out_dir, "vsv", iproc, vsv)
@@ -103,15 +103,17 @@ def convert_model(iproc, model_dir, reference_dir, out_dir, reverse=False):
     else:
         vpv, vph, vsv, vsh = read_vpv_vph_vsv_vsh(iproc, model_dir)
 
-        alpha, beta, phi, xi = sem_VTI_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(
-            vpv, vph, vsv, vsh, vp0, vs0
+        alpha, beta, phi, xi, vp, vs = sem_VTI_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(
+            vpv, vph, vsv, vsh, vp0, vs0, output_iso=True
         )
 
-        # Write each kernel to a separate file
+        # Write each model to a separate file
         write_gll_file(out_dir, "alpha", iproc, alpha)
         write_gll_file(out_dir, "beta", iproc, beta)
         write_gll_file(out_dir, "phi", iproc, phi)
         write_gll_file(out_dir, "xi", iproc, xi)
+        write_gll_file(out_dir, "vp", iproc, vp)
+        write_gll_file(out_dir, "vs", iproc, vs)
 
 
 def main():

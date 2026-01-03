@@ -242,7 +242,7 @@ def sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
         return vpv, vph, vsv, vsh
 
 
-def sem_VTI_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(vpv, vph, vsv, vsh, vp0, vs0):
+def sem_VTI_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(vpv, vph, vsv, vsh, vp0, vs0, output_iso=False):
     """Re-parameterize TISO model from alpha,beta,phi,xi to vpv,vph,vsv,vsh
     vp = sqrt((vpv**2 + 4 * vph**2) / 5)
     vs = sqrt((2 * vsv**2 + vsh**2) / 3)
@@ -258,7 +258,10 @@ def sem_VTI_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(vpv, vph, vsv, vsh, vp0, vs0):
     phi = (vph**2 - vpv**2) / vp**2
     xi = (vsh**2 - vsv**2) / vs**2
 
-    return alpha, beta, phi, xi
+    if output_iso: 
+        return alpha, beta, phi, xi, vp, vs
+    else:
+        return alpha, beta, phi, xi
 
 
 # ==================================================#

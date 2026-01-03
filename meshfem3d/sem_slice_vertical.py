@@ -214,7 +214,7 @@ def create_vtk_output(
     for ii, (dx, dy) in enumerate([(0, 0), (1, 0), (1, 1), (0, 1)]):
         connectivity[:, ii] = (ix + dx) + nr * (iy + dy)
     mesh_xsection = pv.UnstructuredGrid(
-        {pv.CellType.QUAD: connectivity}, points.reshape((-1, 3).astype(np.float32))
+        {pv.CellType.QUAD: connectivity}, points.reshape((-1, 3)).astype(np.float32)
     )
 
     # set depth value on mesh grid

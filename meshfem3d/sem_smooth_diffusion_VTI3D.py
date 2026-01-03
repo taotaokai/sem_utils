@@ -43,7 +43,6 @@ parser.add_argument("ref_model_name")  # reference velocity model name
 parser.add_argument(
     "min_period", type=float, help="smoothing length = min_period * ref_model"
 )  # minimum resolved period
-parser.add_argument("nstep", type=int)  # nt
 parser.add_argument("out_dir")  # num of processes
 parser.add_argument(
     "--horizontal_scale",

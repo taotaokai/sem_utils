@@ -214,8 +214,13 @@ def create_vtk_output(
     for ii, (dx, dy) in enumerate([(0, 0), (1, 0), (1, 1), (0, 1)]):
         connectivity[:, ii] = (ix + dx) + nr * (iy + dy)
     mesh_xsection = pv.UnstructuredGrid(
-        {pv.CellType.QUAD: connectivity}, points.reshape((-1, 3))
+        {pv.CellType.QUAD: connectivity}, points.reshape((-1, 3).astype(np.float32))
     )
+
+    # set depth value on mesh grid
+    depth_km = np.zeros((na, nr))
+    depth_km[:, :] = (1.0 - radius[None, :]) * R_EARTH_KM
+    mesh_xsection.point_data["depth"] = depth_km.flatten().astype(np.float32)
 
     max_radius = np.max(radius)
     dangle = angles[angle_interval] - angles[0]
@@ -227,7 +232,7 @@ def create_vtk_output(
     for i, tag in enumerate(model_names):
         model = model_interp[:, :, i]
 
-        mesh_xsection.point_data[tag] = model.flatten()
+        mesh_xsection.point_data[tag] = model.flatten().astype(np.float32)
         profiles = []
 
         # Calculate scaling for profile visualization
@@ -284,16 +289,19 @@ def create_netcdf_output(
     # Create dataset for this cross-section
     data_vars = {}
     for i, model_name in enumerate(model_names):
-        data_vars[model_name] = (["theta", "radius"], model_data[:, :, i])
+        data_vars[model_name] = (
+            ["theta", "radius"],
+            model_data[:, :, i].astype(np.float32),
+        )
 
     coords = {
         "theta": (["theta"], angles, {"units": "degree"}),
         "radius": (["radius"], radius, {"units": f"{R_EARTH_KM} km"}),
     }
 
-    data_vars["x"] = (["theta", "radius"], points[:, :, 0])
-    data_vars["y"] = (["theta", "radius"], points[:, :, 1])
-    data_vars["z"] = (["theta", "radius"], points[:, :, 2])
+    data_vars["x"] = (["theta", "radius"], points[:, :, 0].astype(np.float32))
+    data_vars["y"] = (["theta", "radius"], points[:, :, 1].astype(np.float32))
+    data_vars["z"] = (["theta", "radius"], points[:, :, 2].astype(np.float32))
 
     ds = xr.Dataset(data_vars, coords=coords, attrs=attrs)
     ds.to_netcdf(out_file)

@@ -198,6 +198,7 @@ def create_vtk_output(
     model_interp,
     xyz,
     out_file,
+    depth=None,
 ):
     """
     Create VTK output files for visualization.
@@ -212,11 +213,16 @@ def create_vtk_output(
     for ii, (dx, dy) in enumerate([(0, 0), (1, 0), (1, 1), (0, 1)]):
         connectivity[:, ii] = neta * (iy + dy) + (ix + dx)
 
-    mesh = pv.UnstructuredGrid({pv.CellType.QUAD: connectivity}, xyz.reshape((-1, 3)))
+    mesh = pv.UnstructuredGrid(
+        {pv.CellType.QUAD: connectivity}, xyz.reshape((-1, 3)).astype(np.float32)
+    )
 
     for i, tag in enumerate(model_names):
         model = model_interp[:, :, i]
-        mesh.point_data[tag] = model.flatten()
+        mesh.point_data[tag] = model.flatten().astype(np.float32)
+
+    if depth is not None:
+        mesh.point_data["depth"] = np.full(nxi * neta, depth, dtype=np.float32)
 
     mesh.save(out_file)
 
@@ -232,7 +238,10 @@ def create_netcdf_output(
     # Create dataset for this cross-section
     data_vars = {}
     for i, model_name in enumerate(model_names):
-        data_vars[model_name] = (["mesh_xi", "mesh_eta"], model_data[:, :, i])
+        data_vars[model_name] = (
+            ["mesh_xi", "mesh_eta"],
+            model_data[:, :, i].astype(np.float32),
+        )
 
     coords = {
         "mesh_xi": (["mesh_xi"], xi, {"units": "degree"}),
@@ -243,9 +252,9 @@ def create_netcdf_output(
     data_vars["longitude"] = (["mesh_xi", "mesh_eta"], lons)
     data_vars["altitude"] = (["mesh_xi", "mesh_eta"], alts)
 
-    data_vars["x"] = (["mesh_xi", "mesh_eta"], points[:, :, 0])
-    data_vars["y"] = (["mesh_xi", "mesh_eta"], points[:, :, 1])
-    data_vars["z"] = (["mesh_xi", "mesh_eta"], points[:, :, 2])
+    data_vars["x"] = (["mesh_xi", "mesh_eta"], points[:, :, 0].astype(np.float32))
+    data_vars["y"] = (["mesh_xi", "mesh_eta"], points[:, :, 1].astype(np.float32))
+    data_vars["z"] = (["mesh_xi", "mesh_eta"], points[:, :, 2].astype(np.float32))
 
     ds = xr.Dataset(data_vars, coords=coords, attrs=attrs)
     ds.to_netcdf(out_file)
@@ -316,12 +325,7 @@ def main():
 
         # Create VTK output if requested
         out_vtk = os.path.join(args.out_dir, f"slice_sphere_{islice:04d}.vtk")
-        create_vtk_output(
-            args.model_names,
-            model_interp,
-            xyz,
-            out_vtk,
-        )
+        create_vtk_output(args.model_names, model_interp, xyz, out_vtk, depth=depth_km)
 
         # Create netcdf output
         out_nc = os.path.join(args.out_dir, f"slice_sphere_{islice:04d}.nc")

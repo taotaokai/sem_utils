@@ -189,7 +189,7 @@ mkdir -p \$out_dir
 #   \${out_dir} \\
 #   --max_tolerance=1e-5
 
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_vti.py \\
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_VTI.py \\
   ${SEM_nproc_total} \\
   \${mesh_dir}/DATABASES_MPI \\
   \${kernel_dir} \\

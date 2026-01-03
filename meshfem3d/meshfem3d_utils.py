@@ -193,7 +193,7 @@ def read_gll_file(
     iproc: int,
     region_code="reg1",
     dtype="f4",
-    gll_dims=None,
+    shape=None,
 ) -> np.ndarray:
     """Read a Fortran unformatted file and return the data."""
     filename = os.path.join(gll_dir, f"proc{iproc:06d}_{region_code}_{gll_tag}.bin")
@@ -203,8 +203,8 @@ def read_gll_file(
     with FortranFile(filename, "r") as f:
         data = np.array(f.read_reals(dtype=dtype))
 
-    if gll_dims is not None:
-        data = data.reshape(gll_dims)
+    if shape is not None:
+        data = data.reshape(shape)
 
     return data
 
@@ -883,7 +883,7 @@ def sem_mesh_interp_points(
         for imodel in range(nmodel):
             model_tag = model_tags[imodel]
             model_gll[imodel] = read_gll_file(
-                model_dir, model_tag, iproc, gll_dims=gll_dims
+                model_dir, model_tag, iproc, shape=gll_dims
             )
 
         # locate points in the mesh slice

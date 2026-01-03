@@ -108,6 +108,7 @@ mesh_mpi = sem_mesh_mpi_read(mesh_file)
 
 nglob = mesh["nglob"]
 ibool = mesh["ibool"]
+gll_dims = mesh["gll_dims"]
 
 if mpi_rank == 0:
     elapsed_time = time.time() - tic
@@ -126,7 +127,7 @@ assemble_MPI_scalar(
 )
 
 # read model and get volume averaged value on global nodes
-model_gll = read_gll_file(model_dir, model_name, mpi_rank)
+model_gll = read_gll_file(model_dir, model_name, mpi_rank, shape=gll_dims)
 u_dv_glob = gll2glob(model_gll * dv_gll, nglob, ibool)
 assemble_MPI_scalar(
     u_dv_glob,
@@ -139,7 +140,7 @@ assemble_MPI_scalar(
 u_glob = u_dv_glob / dv_glob  # volumetric averaged value of GLL points on global nodes
 
 # smoothing length
-ref_model_gll = read_gll_file(ref_model_dir, ref_model_name, mpi_rank)
+ref_model_gll = read_gll_file(ref_model_dir, ref_model_name, mpi_rank, shape=gll_dims)
 ref_wavelength_gll = (
     abs(ref_model_gll * min_period) / R_EARTH_KM
 )  # resolving wavelength

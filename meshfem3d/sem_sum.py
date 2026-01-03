@@ -57,7 +57,7 @@ def process_gll_files(gll_folders, iproc, model_tag, mask_tag=None, ncomp=1):
             mask_gll = read_gll_file(gll_folder, mask_tag, iproc)
             mask_gll = mask_gll[:, None]  # add an extra last dimension for broadcasting
 
-        data_gll = read_gll_file(gll_folder, model_tag, iproc, gll_dims=(-1, ncomp))
+        data_gll = read_gll_file(gll_folder, model_tag, iproc, shape=(-1, ncomp))
 
         if model_gll is None:
             model_gll = mask_gll * data_gll

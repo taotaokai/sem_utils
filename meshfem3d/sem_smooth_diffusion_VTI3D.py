@@ -11,20 +11,25 @@ import argparse
 
 import numpy as np
 import numba
-from scipy.io import FortranFile
 from mpi4py import MPI
 import pyproj
 
 from meshfem3d_constants import R_EARTH, R_EARTH_KM
 from meshfem3d_utils import (
-    sem_mesh_read, 
-    sem_mesh_get_vol_gll, 
+    sem_mesh_read,
+    sem_mesh_get_vol_gll,
     sem_mesh_mpi_read,
+    read_gll_file,
+    write_gll_file,
     gll2glob,
     laplacian_ani3D,
     assemble_MPI_scalar,
     get_gll_weights,
 )
+
+comm = MPI.COMM_WORLD
+mpi_size = comm.Get_size()
+mpi_rank = comm.Get_rank()
 
 # ====== parameters
 parser = argparse.ArgumentParser()
@@ -33,18 +38,27 @@ parser.add_argument("nproc", type=int)  # number of slices
 parser.add_argument("mesh_dir")  # <mesh_dir>/*_solver_data[_mpi].bin
 parser.add_argument("model_dir")  # directory of model files to smooth
 parser.add_argument("model_name")  # <model_dir>/proc***_<model_name>.bin
-parser.add_argument("ref_model_dir")  # directory of reference velocity model name 
-parser.add_argument("ref_model_name")  # reference velocity model name 
-parser.add_argument("min_period", type=float, help="smoothing length = min_period * ref_model")  # minimum resolved period
+parser.add_argument("ref_model_dir")  # directory of reference velocity model name
+parser.add_argument("ref_model_name")  # reference velocity model name
+parser.add_argument(
+    "min_period", type=float, help="smoothing length = min_period * ref_model"
+)  # minimum resolved period
 parser.add_argument("nstep", type=int)  # nt
 parser.add_argument("out_dir")  # num of processes
 parser.add_argument(
-    "--horizontal_scale", type=float, default=1.0, help="scaling factor for horizontal smoothing length"
+    "--horizontal_scale",
+    type=float,
+    default=1.0,
+    help="scaling factor for horizontal smoothing length",
 )
 parser.add_argument(
-    "--vertical_scale", type=float, default=1.0, help="scaling factor for vertical smoothing length"
+    "--vertical_scale",
+    type=float,
+    default=1.0,
+    help="scaling factor for vertical smoothing length",
 )
 # control parameters for CG solver
+parser.add_argument("--nstep", type=int, default=100, help="number of time steps")  # nt
 parser.add_argument(
     "--max_iter", type=int, default=100, help="maximum number of iteration"
 )
@@ -56,13 +70,14 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-print(args)
+if mpi_rank == 0:
+    print(args)
 
 nproc = args.nproc
 mesh_dir = args.mesh_dir  # <mesh_dir>/proc******_solver_data[_mpi].bin
 model_dir = args.model_dir  # <model_dir>/proc******_<model_name>.bin
 model_name = args.model_name  # e.g. vpv,vsv,rho,qmu,qkappa
-ref_model_dir = args.ref_model_dir  # 
+ref_model_dir = args.ref_model_dir  #
 ref_model_name = args.ref_model_name  # e.g. vpv,vsv,rho,qmu,qkappa
 min_period = args.min_period
 nt = args.nstep
@@ -76,9 +91,8 @@ vertical_scale = args.vertical_scale
 dt = 1.0 / nt
 
 # ====== smooth each target mesh slice
-comm = MPI.COMM_WORLD
-mpi_size = comm.Get_size()
-mpi_rank = comm.Get_rank()
+if mpi_rank == 0:
+    print(args)
 
 if mpi_size != nproc:
     raise Exception(f"{mpi_size=} must euqal {nproc=}!")
@@ -93,80 +107,8 @@ mesh = sem_mesh_read(mesh_file)
 mesh_file = "%s/proc%06d_reg1_solver_data_mpi.bin" % (mesh_dir, mpi_rank)
 mesh_mpi = sem_mesh_mpi_read(mesh_file)
 
-nspec = mesh["nspec"]
 nglob = mesh["nglob"]
-gll_dims = mesh["gll_dims"]
 ibool = mesh["ibool"]
-
-model_file = "%s/proc%06d_reg1_%s.bin" % (model_dir, mpi_rank, model_name)
-with FortranFile(model_file, "r") as f:
-    model_gll = np.reshape(f.read_ints(dtype="f4"), gll_dims)
-
-ref_model_file = "%s/proc%06d_reg1_%s.bin" % (ref_model_dir, mpi_rank, ref_model_name)
-with FortranFile(ref_model_file, "r") as f:
-    ref_model_gll = np.reshape(f.read_ints(dtype="f4"), gll_dims)
-ref_smooth_length = abs(ref_model_gll * min_period)  / R_EARTH_KM
-# smooth_length is defined as the full width at half maximum (FWHM) of gaussian function
-# smooth_length = FWHM = 2*sqrt(2*log2(2)) * sigma
-ref_smooth_length /= 2 * np.sqrt(2 * np.log(2)) # to sigma
-
-# kappa = sigma^2 / 2
-# in local ENU coordinates (easting, northing, up)
-Kv_gll = 0.5 * (ref_smooth_length * vertical_scale)**2 # vertical
-Kh_gll = 0.5 * (ref_smooth_length * horizontal_scale)**2 # horizontal
-
-# rotate to ECEF coordinates
-Kxx_gll = np.zeros(gll_dims)
-Kyy_gll = np.zeros(gll_dims)
-Kzz_gll = np.zeros(gll_dims)
-Kxy_gll = np.zeros(gll_dims)
-Kxz_gll = np.zeros(gll_dims)
-Kyz_gll = np.zeros(gll_dims)
-
-ibool = mesh['ibool']
-xyz_glob = mesh['xyz_glob']
-xyz_gll = R_EARTH * xyz_glob[ibool, :]
-# convert to lat,lon,alt
-ecef2gps = pyproj.Transformer.from_crs("EPSG:4978", "EPSG:4326")  # ECEF to GPS
-lat_gll, lon_gll, alt_gll = ecef2gps.transform(xyz_gll[:,0], xyz_gll[:,1], xyz_gll[:,2], radians=True)
-
-nspec, ngllz, nglly, ngllx = ibool.shape 
-@numba.jit(nopython=True, nogil=True)
-def rotate_K(Kxx_gll, Kyy_gll, Kzz_gll, Kxy_gll, Kxz_gll, Kyz_gll): 
-    rotmat = np.zeros((3, 3))
-    kl = np.zeros((3,3))
-    for e in range(nspec):
-        # sl = u_glob[ibool[e, :, :, :]]
-        for k in range(ngllz):
-            for j in range(nglly):
-                for i in range(ngllx):
-                    # kl in ENU coordinates
-                    kl[:,:] = 0
-                    kl[0, 0] = Kh_gll[e,k,j,i]
-                    kl[1, 1] = Kh_gll[e,k,j,i]
-                    kl[2, 2] = Kv_gll[e,k,j,i]
-                    # rotation matrix (ENU to ECEF)
-                    coslat = np.cos(lat_gll[e,k,j,i])
-                    sinlat = np.sin(lat_gll[e,k,j,i])
-                    coslon = np.cos(lon_gll[e,k,j,i])
-                    sinlon = np.sin(lon_gll[e,k,j,i])
-                    # rotmat[i,m] = ECEF_Vi .dot. ENU_Vm (Vi: i-th unit vector)
-                    rotmat[0, :] = [-sinlon, -sinlat * coslon, coslat * coslon]
-                    rotmat[1, :] = [ coslon, -sinlat * sinlon, coslat * sinlon]
-                    rotmat[2, :] = [      0,           coslat,          sinlat]
-                    # rotate from ENU to ECEF: Kij = A_im * kl_mn * A_jn
-                    for m in range(3):
-                        for n in range(3):
-                                Kxx_gll[e,k,j,i] += rotmat[0,m] * kl[m,n] * rotmat[0,n]
-                                Kyy_gll[e,k,j,i] += rotmat[1,m] * kl[m,n] * rotmat[1,n]
-                                Kzz_gll[e,k,j,i] += rotmat[2,m] * kl[m,n] * rotmat[2,n]
-                                Kxy_gll[e,k,j,i] += rotmat[0,m] * kl[m,n] * rotmat[1,n]
-                                Kxz_gll[e,k,j,i] += rotmat[0,m] * kl[m,n] * rotmat[2,n]
-                                Kyz_gll[e,k,j,i] += rotmat[1,m] * kl[m,n] * rotmat[2,n]
-
-rotate_K(Kxx_gll, Kyy_gll, Kzz_gll, Kxy_gll, Kxz_gll, Kyz_gll)
-
-comm.Barrier()
 
 if mpi_rank == 0:
     elapsed_time = time.time() - tic
@@ -174,11 +116,7 @@ if mpi_rank == 0:
     sys.stdout.flush()
 
 dv_gll = sem_mesh_get_vol_gll(mesh)
-dv_glob = gll2glob(
-    dv_gll,
-    mesh["nglob"],
-    mesh["ibool"],
-)
+dv_glob = gll2glob(dv_gll, nglob, ibool)
 assemble_MPI_scalar(
     dv_glob,
     mesh_mpi["num_interfaces"],
@@ -188,11 +126,9 @@ assemble_MPI_scalar(
     mesh_mpi["my_neighbors"],
 )
 
-u_dv_glob = gll2glob(
-    model_gll * dv_gll,
-    nglob,
-    ibool,
-)
+# read model and get volume averaged value on global nodes
+model_gll = read_gll_file(model_dir, model_name, mpi_rank)
+u_dv_glob = gll2glob(model_gll * dv_gll, nglob, ibool)
 assemble_MPI_scalar(
     u_dv_glob,
     mesh_mpi["num_interfaces"],
@@ -201,9 +137,90 @@ assemble_MPI_scalar(
     mesh_mpi["ibool_interfaces"],
     mesh_mpi["my_neighbors"],
 )
+u_glob = u_dv_glob / dv_glob  # volumetric averaged value of GLL points on global nodes
 
-u_glob = u_dv_glob / dv_glob
+# smoothing length
+ref_model_gll = read_gll_file(ref_model_dir, ref_model_name, mpi_rank)
+ref_wavelength_gll = (
+    abs(ref_model_gll * min_period) / R_EARTH_KM
+)  # resolving wavelength
+# smooth_length is defined as the full width at half maximum (FWHM) of gaussian function
+# smooth_length = FWHM = 2*sqrt(2*log2(2)) * sigma
+ref_sigma_gll = ref_wavelength_gll / (2 * np.sqrt(2 * np.log(2)))  # to sigma
+# kappa = sigma^2 / 2
+# in local ENU coordinates (easting, northing, up)
+Kv_gll = 0.5 * (ref_sigma_gll * vertical_scale) ** 2  # vertical
+Kh_gll = 0.5 * (ref_sigma_gll * horizontal_scale) ** 2  # horizontal
+# rotate to ECEF coordinates
+Kxx_glob = np.zeros(nglob)
+Kyy_glob = np.zeros(nglob)
+Kzz_glob = np.zeros(nglob)
+Kxy_glob = np.zeros(nglob)
+Kxz_glob = np.zeros(nglob)
+Kyz_glob = np.zeros(nglob)
+# get lat/lon of global nodes
+xyz_glob = mesh["xyz_glob"]
+xyz = R_EARTH * xyz_glob
+# convert to lat,lon,alt
+ecef2gps = pyproj.Transformer.from_crs("EPSG:4978", "EPSG:4326")  # ECEF to GPS
+lat_glob, lon_glob, alt_glob = ecef2gps.transform(
+    xyz[:, 0], xyz[:, 1], xyz[:, 2], radians=True
+)
+# volumetric average of GLL points onto global nodes
+Kh_dv_glob = gll2glob(Kh_gll * dv_gll, nglob, ibool)
+assemble_MPI_scalar(
+    Kh_dv_glob,
+    mesh_mpi["num_interfaces"],
+    mesh_mpi["max_nibool_interfaces"],
+    mesh_mpi["nibool_interfaces"],
+    mesh_mpi["ibool_interfaces"],
+    mesh_mpi["my_neighbors"],
+)
+Kh_glob = Kh_dv_glob / dv_glob
 
+Kv_dv_glob = gll2glob(Kv_gll * dv_gll, nglob, ibool)
+assemble_MPI_scalar(
+    Kv_dv_glob,
+    mesh_mpi["num_interfaces"],
+    mesh_mpi["max_nibool_interfaces"],
+    mesh_mpi["nibool_interfaces"],
+    mesh_mpi["ibool_interfaces"],
+    mesh_mpi["my_neighbors"],
+)
+Kv_glob = Kv_dv_glob / dv_glob
+
+
+@numba.jit(nopython=True, nogil=True)
+def rotate_K(Kxx_glob, Kyy_glob, Kzz_glob, Kxy_glob, Kxz_glob, Kyz_glob):
+    rotmat = np.zeros((3, 3))
+    kl = np.zeros((3, 3))
+    for idof in range(nglob):
+        # kl in ENU coordinates
+        kl[:, :] = 0
+        kl[0, 0] = Kh_glob[idof]
+        kl[1, 1] = Kh_glob[idof]
+        kl[2, 2] = Kv_glob[idof]
+        # rotation matrix (ENU to ECEF)
+        coslat = np.cos(lat_glob[idof])
+        sinlat = np.sin(lat_glob[idof])
+        coslon = np.cos(lon_glob[idof])
+        sinlon = np.sin(lon_glob[idof])
+        # rotmat[i,m] = ECEF_Vi .dot. ENU_Vm (Vi: i-th unit vector)
+        rotmat[0, :] = [-sinlon, -sinlat * coslon, coslat * coslon]
+        rotmat[1, :] = [coslon, -sinlat * sinlon, coslat * sinlon]
+        rotmat[2, :] = [0, coslat, sinlat]
+        # rotate from ENU to ECEF: Kij = A_im * kl_mn * A_jn
+        for m in range(3):
+            for n in range(3):
+                Kxx_glob[idof] += rotmat[0, m] * kl[m, n] * rotmat[0, n]
+                Kyy_glob[idof] += rotmat[1, m] * kl[m, n] * rotmat[1, n]
+                Kzz_glob[idof] += rotmat[2, m] * kl[m, n] * rotmat[2, n]
+                Kxy_glob[idof] += rotmat[0, m] * kl[m, n] * rotmat[1, n]
+                Kxz_glob[idof] += rotmat[0, m] * kl[m, n] * rotmat[2, n]
+                Kyz_glob[idof] += rotmat[1, m] * kl[m, n] * rotmat[2, n]
+
+
+rotate_K(Kxx_glob, Kyy_glob, Kzz_glob, Kxy_glob, Kxz_glob, Kyz_glob)
 comm.Barrier()
 
 # GLL points weights
@@ -214,15 +231,16 @@ zgll, wgll, dlag_dzgll = get_gll_weights()
 # (M - dt/2 * K) * u_{n+1} = (M + dt/2 * K) * u_n
 # (1 - dt/2 * M^{-1} * K) * u_{n+1} = (1 + dt/2 * M^{-1} * K) * u_n
 
+
 def Kx(x_glob):
     kx_glob = laplacian_ani3D(
         x_glob,
-        Kxx_gll,
-        Kyy_gll,
-        Kzz_gll,
-        Kxy_gll,
-        Kxz_gll,
-        Kyz_gll,
+        Kxx_glob,
+        Kyy_glob,
+        Kzz_glob,
+        Kxy_glob,
+        Kxz_glob,
+        Kyz_glob,
         wgll,
         dlag_dzgll,
         mesh["ibool"],
@@ -248,6 +266,7 @@ def Kx(x_glob):
     )
 
     return kx_glob
+
 
 def solve_cg(u):
     def Ax(x_glob):
@@ -282,7 +301,8 @@ def solve_cg(u):
         #     i += 1
         #     print(f"{i=}, {rsold=}, {pAp=}")
         #     sys.stdout.flush()
-    return x
+    return x, iter
+
 
 if mpi_rank == 0:
     elapsed_time = time.time() - tic
@@ -293,11 +313,11 @@ u = u_glob
 for it in range(nt):
     # ku = Kx(u)
     # mu = Mx(u)
-    u = solve_cg(u)
+    u, iter = solve_cg(u)
     if mpi_rank == 0:
         elapsed_time = time.time() - tic
         # print(f"{it=}, {max(abs(mu))=}, {max(abs(ku))=}, {max(abs(b))=}, {max(abs(u))=}, {elapsed_time=}")
-        print(f"{it=}, {max(abs(u))=}, {elapsed_time=}")
+        print(f"{it=}, {max(abs(u))=}, {iter=}, {elapsed_time=}")
         sys.stdout.flush()
 
 comm.Barrier()
@@ -318,10 +338,7 @@ if mpi_rank == 0:
     # print(f"{du_glob=}, {du_glob.dtype=}")
 
 # write out smoothed model files
-out_file = "%s/proc%06d_reg1_%s.bin" % (out_dir, mpi_rank, model_name)
-with FortranFile(out_file, "w") as f:
-    # f.write_record(np.array(u_glob[ibool], dtype="f4"))
-    f.write_record(np.array(u[ibool], dtype="f4"))
+write_gll_file(out_dir, model_name, mpi_rank, u[ibool])
 
 if mpi_rank == 0:
     elapsed_time = time.time() - tic

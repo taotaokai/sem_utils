@@ -20,11 +20,17 @@ from meshfem3d_utils import (
     sem_mesh_read,
     sem_mesh_get_vol_gll,
     sem_mesh_mpi_read,
+    read_gll_file,
+    write_gll_file,
     gll2glob,
     laplacian_ani3D,
     assemble_MPI_scalar,
     get_gll_weights,
 )
+
+comm = MPI.COMM_WORLD
+mpi_size = comm.Get_size()
+mpi_rank = comm.Get_rank()
 
 # ====== parameters
 parser = argparse.ArgumentParser()
@@ -57,7 +63,10 @@ parser.add_argument(
     default=1e-5,
     help="relative residual to stop iteration",
 )
+
 args = parser.parse_args()
+if mpi_rank == 0:
+    print(args)
 
 nproc = args.nproc
 mesh_dir = args.mesh_dir  # <mesh_dir>/proc******_solver_data[_mpi].bin
@@ -74,10 +83,6 @@ vertical_length = args.vertical_length
 dt = 1.0 / nt
 
 # ====== smooth each target mesh slice
-comm = MPI.COMM_WORLD
-mpi_size = comm.Get_size()
-mpi_rank = comm.Get_rank()
-
 if mpi_rank == 0:
     print(args)
 
@@ -94,14 +99,37 @@ mesh = sem_mesh_read(mesh_file)
 mesh_file = "%s/proc%06d_reg1_solver_data_mpi.bin" % (mesh_dir, mpi_rank)
 mesh_mpi = sem_mesh_mpi_read(mesh_file)
 
-nspec = mesh["nspec"]
 nglob = mesh["nglob"]
-gll_dims = mesh["gll_dims"]
 ibool = mesh["ibool"]
 
-model_file = "%s/proc%06d_reg1_%s.bin" % (model_dir, mpi_rank, model_name)
-with FortranFile(model_file, "r") as f:
-    model_gll = np.reshape(f.read_ints(dtype="f4"), gll_dims)
+if mpi_rank == 0:
+    elapsed_time = time.time() - tic
+    print(f"====== finish reading mesh/model, {elapsed_time=}")
+    sys.stdout.flush()
+
+dv_gll = sem_mesh_get_vol_gll(mesh)
+dv_glob = gll2glob(dv_gll, nglob, ibool)
+assemble_MPI_scalar(
+    dv_glob,
+    mesh_mpi["num_interfaces"],
+    mesh_mpi["max_nibool_interfaces"],
+    mesh_mpi["nibool_interfaces"],
+    mesh_mpi["ibool_interfaces"],
+    mesh_mpi["my_neighbors"],
+)
+
+# read model and get volume averaged value on global nodes
+model_gll = read_gll_file(model_dir, model_name, mpi_rank)
+u_dv_glob = gll2glob(model_gll * dv_gll, nglob, ibool)
+assemble_MPI_scalar(
+    u_dv_glob,
+    mesh_mpi["num_interfaces"],
+    mesh_mpi["max_nibool_interfaces"],
+    mesh_mpi["nibool_interfaces"],
+    mesh_mpi["ibool_interfaces"],
+    mesh_mpi["my_neighbors"],
+)
+u_glob = u_dv_glob / dv_glob  # volumetric averaged value of GLL points on global nodes
 
 # smooth_length is defined as the full width at half maximum (FWHM) of gaussian function
 # smooth_length = FWHM = 2*sqrt(2*log2(2)) * sigma
@@ -122,7 +150,7 @@ Kzz_glob = np.zeros(nglob)
 Kxy_glob = np.zeros(nglob)
 Kxz_glob = np.zeros(nglob)
 Kyz_glob = np.zeros(nglob)
-
+# get lat/lon of global nodes
 xyz_glob = mesh["xyz_glob"]
 xyz = R_EARTH * xyz_glob
 # convert to lat,lon,alt
@@ -163,44 +191,6 @@ def rotate_K(Kxx_glob, Kyy_glob, Kzz_glob, Kxy_glob, Kxz_glob, Kyz_glob):
 
 
 rotate_K(Kxx_glob, Kyy_glob, Kzz_glob, Kxy_glob, Kxz_glob, Kyz_glob)
-comm.Barrier()
-
-if mpi_rank == 0:
-    elapsed_time = time.time() - tic
-    print(f"====== finish reading mesh/model, {elapsed_time=}")
-    sys.stdout.flush()
-
-dv_gll = sem_mesh_get_vol_gll(mesh)
-dv_glob = gll2glob(
-    dv_gll,
-    mesh["nglob"],
-    mesh["ibool"],
-)
-assemble_MPI_scalar(
-    dv_glob,
-    mesh_mpi["num_interfaces"],
-    mesh_mpi["max_nibool_interfaces"],
-    mesh_mpi["nibool_interfaces"],
-    mesh_mpi["ibool_interfaces"],
-    mesh_mpi["my_neighbors"],
-)
-
-u_dv_glob = gll2glob(
-    model_gll * dv_gll,
-    nglob,
-    ibool,
-)
-assemble_MPI_scalar(
-    u_dv_glob,
-    mesh_mpi["num_interfaces"],
-    mesh_mpi["max_nibool_interfaces"],
-    mesh_mpi["nibool_interfaces"],
-    mesh_mpi["ibool_interfaces"],
-    mesh_mpi["my_neighbors"],
-)
-
-u_glob = u_dv_glob / dv_glob
-
 comm.Barrier()
 
 # GLL points weights
@@ -318,10 +308,7 @@ if mpi_rank == 0:
     # print(f"{du_glob=}, {du_glob.dtype=}")
 
 # write out smoothed model files
-out_file = "%s/proc%06d_reg1_%s.bin" % (out_dir, mpi_rank, model_name)
-with FortranFile(out_file, "w") as f:
-    # f.write_record(np.array(u_glob[ibool], dtype="f4"))
-    f.write_record(np.array(u[ibool], dtype="f4"))
+write_gll_file(out_dir, model_name, mpi_rank, u[ibool])
 
 if mpi_rank == 0:
     elapsed_time = time.time() - tic

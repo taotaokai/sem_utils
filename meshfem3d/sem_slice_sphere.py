@@ -324,11 +324,11 @@ def main():
         model_interp = model_interp.reshape((nxi, neta, nmodel))
 
         # Create VTK output if requested
-        out_vtk = os.path.join(args.out_dir, f"slice_sphere_{islice:04d}.vtk")
+        out_vtk = os.path.join(args.out_dir, f"hslice_{islice:04d}.vtk")
         create_vtk_output(args.model_names, model_interp, xyz, out_vtk, depth=depth_km)
 
         # Create netcdf output
-        out_nc = os.path.join(args.out_dir, f"slice_sphere_{islice:04d}.nc")
+        out_nc = os.path.join(args.out_dir, f"hslice_{islice:04d}.nc")
         attrs = {
             "central_lat": central_lat,
             "central_lon": central_lon,

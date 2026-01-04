@@ -271,10 +271,10 @@ def create_vtk_output(
 
             profiles.extend([line1, line2])
         mesh_profile = pv.merge(profiles)
-        out_file = os.path.join(out_dir, f"{tag}_profile{label}.vtk")
+        out_file = os.path.join(out_dir, f"{tag}_profile_{label}.vtk")
         mesh_profile.save(out_file)
 
-    out_file = os.path.join(out_dir, f"xsection{label}.vtk")
+    out_file = os.path.join(out_dir, f"vslice_{label}.vtk")
     mesh_xsection.save(out_file)
 
 

@@ -10,6 +10,7 @@ import tables as pt
 import numpy as np
 from matplotlib import pyplot as plt
 import xarray as xr
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument("misfit_h5_list" )  # list of misfit.h5 of each events

@@ -49,6 +49,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
 
 import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 
 #
 import yaml
@@ -58,7 +59,7 @@ import yaml
 #   x(n*dt): DFT[x]*dt ~ FT[x], IDFT[FT[x]]/dt ~ x
 
 _DEBUG = False
-# _DEBUG = True 
+# _DEBUG = True
 
 #
 # ====== utility functions
@@ -212,8 +213,8 @@ def centerMap(lats, lons, scale):
 #     f = 1 / 299.8
 #     factor = (1 - f) ** 2
 #     return np.arctan(factor * np.tan(geodetic_lat))
-# 
-# 
+#
+#
 # def get_dist_from_mesh_boundary(lat_center, lon_center, gamma_rot, lat_test, lon_test):
 #     """get mesh specific xi/eta for (lat_test,lon_test)
 #     useful for testing whether a point lies inside the SEM mesh region
@@ -231,13 +232,13 @@ def centerMap(lats, lons, scale):
 #     v0_n = np.array(
 #         [-np.cos(theta) * np.cos(phi), -np.cos(theta) * np.sin(phi), np.sin(theta)]
 #     )
-# 
+#
 #     # rotate (v0_e, v0_n) to (v0_xi, v0_eta) through v0_r by gamma_rot counter-clockwise
 #     gamma = np.deg2rad(gamma_rot)
 #     v0_xi = np.cos(gamma) * v0_e + np.sin(gamma) * v0_n
 #     v0_eta = -np.sin(gamma) * v0_e + np.cos(gamma) * v0_n
 #     # print(v_xi, v_eta)
-# 
+#
 #     # test point
 #     lat1 = np.deg2rad(lat_test)
 #     lon1 = np.deg2rad(lon_test)
@@ -252,7 +253,7 @@ def centerMap(lats, lons, scale):
 #     l_eta = np.dot(v0_eta, v1)
 #     angle_xi = np.rad2deg(np.arctan2(l_xi, l_r))
 #     angle_eta = np.rad2deg(np.arctan2(l_eta, l_r))
-# 
+#
 #     return angle_xi, angle_eta
 
 
@@ -446,11 +447,15 @@ def _get_syn_ENZ(g_sta, syn_tag):
 
 
 def _extract_obs_syn_ENZ(
-    sta_attrs, obs_data, obs_attrs, syn_data, syn_attrs  # , event_tau
+    obs_data,
+    obs_attrs,
+    syn_data,
+    syn_attrs,  # , event_tau
+    # sta_attrs, obs_data, obs_attrs, syn_data, syn_attrs  # , event_tau
 ):
-    net = sta_attrs["network"]
-    sta = sta_attrs["station"]
-    stnm = f"{net}_{sta}"
+    # net = sta_attrs["network"]
+    # sta = sta_attrs["station"]
+    # stnm = f"{net}_{sta}"
 
     # check data type
     obs_type = obs_attrs["type"]
@@ -466,11 +471,13 @@ def _extract_obs_syn_ENZ(
     obs_Zchan = [cha for cha in obs_channels if cha["name"].decode()[-1] == "Z"]
     obs_Hchan = [cha for cha in obs_channels if cha["name"].decode()[-1] != "Z"]
     if len(obs_Zchan) != 1 or obs_Zchan[0]["dip"] != -90:
-        msg = f"{stnm} has problematic Z channel info: {obs_Zchan}, skip"
+        # msg = f"{stnm} has problematic Z channel info: {obs_Zchan}, skip"
+        msg = f"problematic Z channel info: {obs_Zchan}, skip"
         raise AssertionError(msg)
     no_Hchan = False
     if len(obs_Hchan) == 0:
-        msg = f"{stnm} has no horizontal channels"
+        # msg = f"{stnm} has no horizontal channels"
+        msg = f"no horizontal channels"
         warnings.warn(msg)
         no_Hchan = True
     else:
@@ -571,7 +578,11 @@ def _measure_adj_one_sta(
 
     try:
         obs_ENZ, syn_ENZ, no_Hchan = _extract_obs_syn_ENZ(
-            sta_attrs, obs_data, obs_attrs, syn_data, syn_attrs  # , event_tau
+            obs_data,
+            obs_attrs,
+            syn_data,
+            syn_attrs,  # , event_tau
+            # sta_attrs, obs_data, obs_attrs, syn_data, syn_attrs  # , event_tau
         )
         # debug
         # np.savez(f'{net}_{sta}_new.npz', obs_ENZ=obs_ENZ, syn_ENZ=syn_ENZ, no_Hchan=no_Hchan)
@@ -733,7 +744,7 @@ def _measure_adj_one_sta(
         Amax_obs = np.sqrt(np.max(np.sum(obs_filt_win**2, axis=0)))
         Amax_syn = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
         # Amax_noise = np.sqrt(np.max(np.sum(noise_filt_win**2, axis=0)))
-        Amax_noise = np.sqrt(np.max(np.sum(noise_filt_win[:,noise_idx]**2, axis=0)))
+        Amax_noise = np.sqrt(np.max(np.sum(noise_filt_win[:, noise_idx] ** 2, axis=0)))
 
         if Amax_obs == 0:  # bad record
             msg = f"empty obs trace ({win}), skip"
@@ -2012,7 +2023,7 @@ class Misfit(object):
             min_cutoff_freq = min([filter["Wn"] for filter in obs_filters])
             pad_length = max(20.0, 2.0 / min_cutoff_freq)
             npad = int(pad_length * solver_fs)
-            nfft = scipy.fft.next_fast_len(nt + 2 * npad) # pad both ends of the signal
+            nfft = scipy.fft.next_fast_len(nt + 2 * npad)  # pad both ends of the signal
             freqs = np.fft.rfftfreq(nfft, d=solver_dt)
             filter_h = np.ones_like(freqs)
             for filter in obs_filters:
@@ -2028,6 +2039,12 @@ class Misfit(object):
             # avoid filter response from edge
             valid_te = solver_te - 1.0 / min_cutoff_freq
 
+            #
+            taper = cosine_taper(
+                np.arange(nfft),
+                [0, npad + nt_lpad, nfft - npad - nt_lpad - solver_nt, nfft - 1],
+            )
+
             if _DEBUG:
                 syn_st1 = syn_st.copy()
 
@@ -2039,8 +2056,17 @@ class Misfit(object):
                 # x = np.zeros(nt)
                 # x[nt_lpad : (solver_nt + nt_lpad)] = tr.data
                 # extend synthetic data by edge values from both ends
-                x = np.pad(tr.data, (npad + nt_lpad, nfft-npad-nt_lpad-solver_nt), "edge")
-                x = np.fft.irfft(np.fft.rfft(x, nfft) * abs(filter_h))[npad:(npad+nt)]
+                x = (
+                    np.pad(
+                        tr.data,
+                        (npad + nt_lpad, nfft - npad - nt_lpad - solver_nt),
+                        "edge",
+                    )
+                    * taper
+                )
+                x = np.fft.irfft(np.fft.rfft(x, nfft) * abs(filter_h))[
+                    npad : (npad + nt)
+                ]
 
                 # # NOTE: different precision between UTCDateTime.timestamp and (t1 -t2)
                 # #       UTCDateTime internally stores time in nanoseconds as an integer
@@ -2172,7 +2198,7 @@ class Misfit(object):
             baz = meta["back_azimuth"]
             gcarc = meta["dist_degree"]
 
-            if obs_tag not in g_sta: 
+            if obs_tag not in g_sta:
                 msg = f"{obs_tag} does not exist under {g_sta._v_file.filename}:{g_sta._v_pathname}, skip"
                 warnings.warn(msg)
                 continue
@@ -2655,7 +2681,11 @@ class Misfit(object):
                 #     g_sta, obs_tag, syn_tag, event["tau"]
                 # )
                 obs_ENZ, syn_ENZ, no_Hchan = _extract_obs_syn_ENZ(
-                    sta_attrs, obs[:], obs_attrs, syn[:], syn_attrs
+                    obs[:],
+                    obs_attrs,
+                    syn[:],
+                    syn_attrs,
+                    # sta_attrs, obs[:], obs_attrs, syn[:], syn_attrs
                 )
                 # debug
                 # np.savez(f'{net}_{sta}_old.npz', obs_ENZ=obs_ENZ, syn_ENZ=syn_ENZ, no_Hchan=no_Hchan)
@@ -2819,7 +2849,9 @@ class Misfit(object):
                 noise_win = cosine_sac_taper(
                     data_times, [0, taper_width, noise_te - taper_width, noise_te]
                 )
-                noise_idx = (data_times > taper_width) & (data_times < noise_te - taper_width)
+                noise_idx = (data_times > taper_width) & (
+                    data_times < noise_te - taper_width
+                )
                 # # cut noise window from obs_ENZ before applying bandpass filter Fw
                 # noise_filt = np.fft.irfft(
                 #     Fw * np.fft.rfft(obs_ENZ * noise_win, nfft), nfft
@@ -2868,7 +2900,9 @@ class Misfit(object):
                 # ------ measure SNR (based on maximum amplitude)
                 Amax_obs = np.sqrt(np.max(np.sum(obs_filt_win**2, axis=0)))
                 Amax_syn = np.sqrt(np.max(np.sum(syn_filt_win**2, axis=0)))
-                Amax_noise = np.sqrt(np.max(np.sum(noise_filt_win[:, noise_idx]**2, axis=0)))
+                Amax_noise = np.sqrt(
+                    np.max(np.sum(noise_filt_win[:, noise_idx] ** 2, axis=0))
+                )
                 if Amax_obs == 0:  # bad record
                     msg = f"empty obs trace ({win}), skip"
                     warnings.warn(msg)
@@ -3080,14 +3114,20 @@ class Misfit(object):
                     for i in range(3):
                         plt.subplot(311 + i)
                         plt.plot(
-                            data_times, obs_filt_win[i, :], "k",
+                            data_times,
+                            obs_filt_win[i, :],
+                            "k",
                             # data_times, obs_ENZ[i, :], "k--",
-                            data_times, syn_filt_win[i, :], "r",
+                            data_times,
+                            syn_filt_win[i, :],
+                            "r",
                             # data_times, syn_ENZ[i, :], "r--",
                             # data_times, syn_filt_win_shift[i, :], "c",
                             # data_times[:noise_idx1], noise_filt_win[i,:], "b",
                             # data_times, scale_dcc * dchiw_du[i,:], "y"
-                            data_times, 1.e6 * du[i, :], "y",
+                            data_times,
+                            1.0e6 * du[i, :],
+                            "y",
                         )
                         if i == 0:
                             plt.title(f"{win['id']}")
@@ -3677,9 +3717,22 @@ class Misfit(object):
                 ax_origin = [0.02, 0.55]
                 ax = fig.add_axes(ax_origin + ax_size, projection=projection)
                 ax.set_extent(map_extent, crs=ccrs.PlateCarree())
-                ax.gridlines()
-                ax.coastlines(linewidth=0.2)
-                ax.stock_img()
+                ax.coastlines(resolution="50m", color="black", linewidth=0.5)
+                ax.add_feature(cfeature.BORDERS, linewidth=0.2, alpha=0.5)
+                ax.gridlines(
+                    draw_labels={"bottom": "x", "left": "y"},
+                    formatter_kwargs={
+                        "number_format": ".0f",
+                        "degree_symbol": "",
+                        "direction_label": False,
+                    },
+                    xlabel_style={"fontsize": 7},
+                    ylabel_style={"fontsize": 7},
+                    xpadding=1.5,
+                    ypadding=1.5,
+                    linewidth=0.2,
+                )
+                # ax.stock_img()
                 ax.set_title(f"lat:{evla:.3f} lon:{evlo:.3f} dep:{evdp:.1f}")
                 max_size = 6
                 # sizes = max_size * weight_all**0.5
@@ -3898,7 +3951,11 @@ class Misfit(object):
                         #     g_sta, obs_tag, syn_tag, event["tau"]
                         # )
                         obs_ENZ, syn_ENZ, no_Hchan = _extract_obs_syn_ENZ(
-                            sta_attrs, obs[:], obs_attrs, syn[:], syn_attrs
+                            obs[:],
+                            obs_attrs,
+                            syn[:],
+                            syn_attrs,
+                            # sta_attrs, obs[:], obs_attrs, syn[:], syn_attrs
                         )
                         # debug
                         # np.savez(f'{net}_{sta}_old.npz', obs_ENZ=obs_ENZ, syn_ENZ=syn_ENZ, no_Hchan=no_Hchan)

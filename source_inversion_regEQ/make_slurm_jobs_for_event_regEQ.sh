@@ -62,6 +62,11 @@ fi
 
 # set USER_T0 in Par_file to at least 3 * tau
 tau=$(grep "tau" ${initial_cmt_file} | awk -F: '{printf "%f", $2}')
+if [ -z "$tau" ]
+then
+  echo "[ERROR] failed to get tau value!"
+  exit -1
+fi
 min_user_t0=$(echo "3 * $tau + 1" | bc -l | awk '{printf "%d", $1}')
 sed -i "/^T0/s/=.*/= $min_user_t0/" ${sem_par_file}
 

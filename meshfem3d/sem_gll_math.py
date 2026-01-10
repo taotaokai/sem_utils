@@ -35,7 +35,7 @@ def parse_arguments():
     parser.add_argument("--out_dir", default=None, help="output directory for results")
     parser.add_argument(
         "--out_tag",
-        default=None,
+        default="out",
         help="tag for output GLL file as proc*_reg1_[out_tag].bin",
     )
 
@@ -63,7 +63,7 @@ def main():
         v = []
         for i, tag in enumerate(model_tags):
             tag = model_tags[i]
-            gll = read_gll_file(args.model_dirs[i], tag, iproc)
+            gll = read_gll_file(model_dirs[i], tag, iproc)
             v.append(gll)
 
         out_gll = eval(args.math_expr)

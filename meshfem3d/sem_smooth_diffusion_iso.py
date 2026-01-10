@@ -37,8 +37,8 @@ from mpi4py import MPI
 from meshfem3d_constants import R_EARTH_KM
 
 from meshfem3d_utils import (
-    sem_mesh_read, 
-    sem_mesh_get_vol_gll, 
+    sem_mesh_read,
+    sem_mesh_get_vol_gll,
     sem_mesh_mpi_read,
     gll2glob,
     laplacian_iso,
@@ -64,7 +64,9 @@ parser.add_argument(
     help="full width at half maximum (FWHM) of Gaussian kernel in km",
 )
 parser.add_argument("out_dir")  # num of processes
-parser.add_argument("--nstep", type=int, default=100, help="number of time steps between [0, 1]")  # nt
+parser.add_argument(
+    "--nstep", type=int, default=100, help="number of time steps between [0, 1]"
+)
 # control parameters for CG solver
 parser.add_argument(
     "--max_iter", type=int, default=100, help="maximum number of iteration"

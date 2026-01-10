@@ -18,8 +18,8 @@ from mpi4py import MPI
 from meshfem3d_constants import R_EARTH_KM
 
 from meshfem3d_utils import (
-    sem_mesh_read, 
-    sem_mesh_get_vol_gll, 
+    sem_mesh_read,
+    sem_mesh_get_vol_gll,
     sem_mesh_mpi_read,
     gll2glob,
     laplacian_iso3D,
@@ -34,11 +34,13 @@ parser.add_argument("nproc", type=int)  # number of slices
 parser.add_argument("mesh_dir")  # <mesh_dir>/*_solver_data[_mpi].bin
 parser.add_argument("model_dir")  # directory of model files to smooth
 parser.add_argument("model_name")  # <model_dir>/proc***_<model_name>.bin
-parser.add_argument("ref_model_dir")  # directory of reference velocity model name 
-parser.add_argument("ref_model_name")  # reference velocity model name 
+parser.add_argument("ref_model_dir")  # directory of reference velocity model name
+parser.add_argument("ref_model_name")  # reference velocity model name
 parser.add_argument("min_period", type=float)  # minimum resolved period
-parser.add_argument("nstep", type=int)  # nt
-parser.add_argument("out_dir")  # num of processes
+parser.add_argument("out_dir")
+parser.add_argument(
+    "--nstep", type=int, default=100, help="number of time steps between [0, 1]"
+)
 # control parameters for CG solver
 parser.add_argument(
     "--max_iter", type=int, default=100, help="maximum number of iteration"
@@ -57,7 +59,7 @@ nproc = args.nproc
 mesh_dir = args.mesh_dir  # <mesh_dir>/proc******_solver_data[_mpi].bin
 model_dir = args.model_dir  # <model_dir>/proc******_<model_name>.bin
 model_name = args.model_name  # e.g. vpv,vsv,rho,qmu,qkappa
-ref_model_dir = args.ref_model_dir  # 
+ref_model_dir = args.ref_model_dir  #
 ref_model_name = args.ref_model_name  # e.g. vpv,vsv,rho,qmu,qkappa
 min_period = args.min_period
 nt = args.nstep
@@ -98,10 +100,10 @@ with FortranFile(model_file, "r") as f:
 ref_model_file = "%s/proc%06d_reg1_%s.bin" % (ref_model_dir, mpi_rank, ref_model_name)
 with FortranFile(ref_model_file, "r") as f:
     ref_model_gll = np.reshape(f.read_ints(dtype="f4"), gll_dims)
-smooth_length = abs(ref_model_gll * min_period)  / R_EARTH_KM
+smooth_length = abs(ref_model_gll * min_period) / R_EARTH_KM
 # smooth_length is defined as the full width at half maximum (FWHM) of gaussian function
 # smooth_length = FWHM = 2*sqrt(2*log2(2)) * sigma
-smooth_length /= 2 * np.sqrt(2 * np.log(2)) # to sigma
+smooth_length /= 2 * np.sqrt(2 * np.log(2))  # to sigma
 # kappa = sigma^2 / 2
 kappa_gll = 0.5 * smooth_length**2
 
@@ -153,6 +155,7 @@ zgll, wgll, dlag_dzgll = get_gll_weights()
 # (M - dt/2 * K) * u_{n+1} = (M + dt/2 * K) * u_n
 # (1 - dt/2 * M^{-1} * K) * u_{n+1} = (1 + dt/2 * M^{-1} * K) * u_n
 
+
 def Kx(x_glob):
     kx_glob = laplacian_iso3D(
         x_glob,
@@ -182,6 +185,7 @@ def Kx(x_glob):
     )
 
     return kx_glob
+
 
 def solve_cg(u):
     def Ax(x_glob):
@@ -217,6 +221,7 @@ def solve_cg(u):
         #     print(f"{i=}, {rsold=}, {pAp=}")
         #     sys.stdout.flush()
     return x
+
 
 if mpi_rank == 0:
     elapsed_time = time.time() - tic

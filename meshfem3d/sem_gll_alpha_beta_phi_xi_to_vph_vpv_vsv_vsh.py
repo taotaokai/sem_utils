@@ -7,7 +7,7 @@ from mpi4py import MPI
 from meshfem3d_utils import (
     read_gll_file,
     write_gll_file,
-    sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh,
+    sem_VTI_model_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh,
 )
 
 # MPI initialization
@@ -100,7 +100,7 @@ def process(
     # Read reference velocity models (km/s)
     vp0, vs0 = read_model_ref(iproc, reference_dir)
 
-    vpv, vph, vsv, vsh = sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
+    vpv, vph, vsv, vsh = sem_VTI_model_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
         alpha, beta, phi, xi, vp0, vs0
     )
 

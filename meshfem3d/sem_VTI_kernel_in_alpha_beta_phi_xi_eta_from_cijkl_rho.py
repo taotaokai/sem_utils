@@ -7,7 +7,7 @@ from mpi4py import MPI
 from meshfem3d_utils import (
     read_gll_file,
     write_gll_file,
-    sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh,
+    sem_VTI_model_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh,
 )
 
 # MPI initialization
@@ -89,7 +89,7 @@ def process_kernel(
     alpha, beta, phi, xi, eta, rho = read_model(iproc, model_dir)
 
     # convert to vph, vpv, vsh, vsv
-    vpv, vph, vsv, vsh = sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
+    vpv, vph, vsv, vsh = sem_VTI_model_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
         alpha, beta, phi, xi, vp0, vs0
     )
 

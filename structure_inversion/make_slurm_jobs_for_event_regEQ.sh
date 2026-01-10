@@ -323,7 +323,7 @@ kernel_dir=${event_dir}/output_kernel/kernel
 out_dir=${event_dir}/kernel/GLL
 mkdir -p \$out_dir
 
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_tiso_kernel_in_alpha_beta_phi_xi_eta_from_cijkl_rho.py \\
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_in_alpha_beta_phi_xi_eta_from_cijkl_rho.py \\
   ${SEM_nproc_total} \\
   ${SEM_iter_dir}/model_initial \\
   ${SEM_reference_model_dir} \\

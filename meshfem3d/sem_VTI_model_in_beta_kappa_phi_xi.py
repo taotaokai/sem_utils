@@ -8,8 +8,8 @@ import numpy as np
 from meshfem3d_utils import (
     read_gll_file,
     write_gll_file,
-    sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh,
-    sem_VTI_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi,
+    sem_VTI_model_beta_kappa_phi_xi_to_vpv_vph_vsv_vsh,
+    sem_VTI_model_vpv_vph_vsv_vsh_to_beta_kappa_phi_xi,
 )
 
 # MPI initialization
@@ -21,24 +21,24 @@ mpi_rank = comm_world.Get_rank()
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Convert TISO model from vpv,vph,vsv,vsh to alpha,beta,phi,xi,vp,vs"
+        description="Convert VTI model from vpv,vph,vsv,vsh to alpha,beta,phi,xi,vp,vs"
     )
 
     parser.add_argument("nproc", type=int, help="number of mesh slices")
     parser.add_argument(
         "reference_dir",
-        help="directory with reference isotropy model proc*_reg1_[vp,vs].bin",
+        help="directory with reference isotropy model proc*_reg1_vs.bin",
     )
     parser.add_argument(
         "model_dir", help="directory with proc*_reg1_[vpv,vph,vsv,vsh].bin"
     )
     parser.add_argument(
-        "out_dir", help="output dir for proc*_reg1_[alpha,beta,phi,xi,vp,vs].bin"
+        "out_dir", help="output dir for proc*_reg1_[beta,kappa,phi,xi,vp,vs].bin"
     )
     parser.add_argument(
         "--reverse",
         action="store_true",
-        help="flag to reverse conversion from alpha,beta,phi,xi to vpv,vph,vsv,vsh",
+        help="flag to reverse conversion from beta,kappa,phi,xi to vpv,vph,vsv,vsh",
     )
 
     return parser.parse_args()
@@ -57,24 +57,23 @@ def read_vpv_vph_vsv_vsh(iproc, model_dir):
     return vpv, vph, vsv, vsh  # , eta, rho
 
 
-def read_alpha_beta_phi_xi(iproc, model_dir):
+def read_beta_kappa_phi_xi(iproc, model_dir):
     """Read velocity models from a directory.
     note: velocities in km/s, density in g/cm^3
     """
-    alpha = read_gll_file(model_dir, "alpha", iproc)
     beta = read_gll_file(model_dir, "beta", iproc)
+    kappa = read_gll_file(model_dir, "kappa", iproc)
     phi = read_gll_file(model_dir, "phi", iproc)
     xi = read_gll_file(model_dir, "xi", iproc)
-    return alpha, beta, phi, xi
+    return beta, kappa, phi, xi
 
 
 def read_model_ref(iproc, reference_dir):
     """Read velocity models from a directory.
     note: velocities in km/s
     """
-    vp = read_gll_file(reference_dir, "vp", iproc)
     vs = read_gll_file(reference_dir, "vs", iproc)
-    return vp, vs
+    return vs
 
 
 def convert_model(iproc, model_dir, reference_dir, out_dir, reverse=False):
@@ -82,14 +81,14 @@ def convert_model(iproc, model_dir, reference_dir, out_dir, reverse=False):
     print(f"# iproc {iproc}")
 
     # Read reference velocity models (km/s)
-    vp0, vs0 = read_model_ref(iproc, reference_dir)
+    vs0 = read_model_ref(iproc, reference_dir)
 
     # velocity models (velocities in km/s, density in g/cm^3)
     if reverse:
-        alpha, beta, phi, xi = read_alpha_beta_phi_xi(iproc, model_dir)
+        beta, kappa, phi, xi = read_beta_kappa_phi_xi(iproc, model_dir)
 
-        vpv, vph, vsv, vsh, vp, vs = sem_VTI_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
-            alpha, beta, phi, xi, vp0, vs0, output_iso=True
+        vpv, vph, vsv, vsh, vp, vs = sem_VTI_model_beta_kappa_phi_xi_to_vpv_vph_vsv_vsh(
+            beta, kappa, phi, xi, vs0, output_iso=True
         )
 
         # Write each model to a separate file
@@ -103,13 +102,13 @@ def convert_model(iproc, model_dir, reference_dir, out_dir, reverse=False):
     else:
         vpv, vph, vsv, vsh = read_vpv_vph_vsv_vsh(iproc, model_dir)
 
-        alpha, beta, phi, xi, vp, vs = sem_VTI_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(
-            vpv, vph, vsv, vsh, vp0, vs0, output_iso=True
+        beta, kappa, phi, xi, vp, vs = sem_VTI_model_vpv_vph_vsv_vsh_to_beta_kappa_phi_xi(
+            vpv, vph, vsv, vsh, vs0, output_iso=True
         )
 
         # Write each model to a separate file
-        write_gll_file(out_dir, "alpha", iproc, alpha)
         write_gll_file(out_dir, "beta", iproc, beta)
+        write_gll_file(out_dir, "kappa", iproc, kappa)
         write_gll_file(out_dir, "phi", iproc, phi)
         write_gll_file(out_dir, "xi", iproc, xi)
         write_gll_file(out_dir, "vp", iproc, vp)

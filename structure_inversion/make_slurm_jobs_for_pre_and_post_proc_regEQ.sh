@@ -142,7 +142,7 @@ done
 # 
 # kernel_dir=${SEM_iter_dir}/kernel_sum
 # 
-# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_tiso_kernel_in_alpha_beta_phi_xi_eta_from_cijkl_rho.py \\
+# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_in_alpha_beta_phi_xi_eta_from_cijkl_rho.py \\
 #   ${SEM_nproc_total} \\
 #   ${SEM_iter_dir}/model_initial \\
 #   ${SEM_reference_model_dir} \\
@@ -327,7 +327,7 @@ done
 #   \$out_dir \\
 #   \$out_dir
 
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_tiso_model_in_alpha_beta_phi_xi_eta.py \\
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_in_alpha_beta_phi_xi_eta.py \\
   ${SEM_nproc_total} \\
   ${SEM_reference_model_dir} \\
   \$out_dir \\
@@ -506,7 +506,7 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb_groups.
 
 echo ====== convert alpha,beta,phi,xi to vph,vpv,vsv,vsh
 
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_tiso_model_in_alpha_beta_phi_xi_eta.py \\
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_in_alpha_beta_phi_xi_eta.py \\
   ${SEM_nproc_total} \\
   ${SEM_reference_model_dir} \\
   $SEM_iter_dir/model_updated \\
@@ -553,7 +553,7 @@ exit -1
 #     \${event_dir}/output_kernel/receiver.vtk \\
 #     >> \${out_dir}/mask.lst
 # 
-#   ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/sem_tiso_kernel_from_cijkl_rho.py \\
+#   ${slurm_mpiexec} ${python_exec} $sem_utils_dir/meshfem3d/_from_cijkl_rho.py \\
 #     ${sem_nproc_total} \\
 #     \${event_dir}/DATABASES_MPI \\
 #     \${ker_dir} \\

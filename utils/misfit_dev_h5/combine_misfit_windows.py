@@ -33,10 +33,35 @@ tbl_dtypes = [ (k, v) for k, v in tbl_dtypes.items() ]
 out_h5f = pt.open_file(args.out_h5, "w")
 tbl_out = out_h5f.create_table("/", "window", np.dtype(tbl_dtypes), "misfit measurements")
 
+sta_descr = [
+    ("network", "S20"),
+    ("station", "S20"),
+    ("latitude", "f8"),
+    ("longitude", "f8"),
+    ("elevation", "f8"),
+]
+sta_dtype = np.dtype(sta_descr)
+tbl_sta = out_h5f.create_table("/", "station", sta_dtype, "station info")
+
 # get misfit window from each misfit.h5
+stations = {}
 for misfit_h5file in misfit_h5_list:
     print(f"[DEBUG]: Working on {misfit_h5file}", file=sys.stderr, flush=True)
     with pt.open_file(misfit_h5file, "r") as h5f:
+
+        if "/waveform" not in h5f:
+            msg = f"No /waveform in {misfit_h5file}"
+            raise Exception(msg)
+        g_waveform = h5f.get_node("/waveform")
+        for g_sta in g_waveform:
+            net = g_sta._v_attrs['network']
+            sta = g_sta._v_attrs['station']
+            if (net, sta) not in stations:
+                stations[(net, sta)] = {
+                    "latitude": g_sta._v_attrs['latitude'],
+                    "longitude": g_sta._v_attrs['longitude'],
+                    "elevation": g_sta._v_attrs['elevation'],
+                }
 
         if "/window" not in h5f:
             msg = f"No /window in {misfit_h5file}"
@@ -61,5 +86,8 @@ for misfit_h5file in misfit_h5_list:
 
         tbl_out.append(row_list)
         tbl_out.flush()
+
+row_list = [ (k[0], k[1], v['latitude'], v['longitude'], v['elevation']) for k, v in stations.items()]
+tbl_sta.append(row_list)
 
 out_h5f.close()

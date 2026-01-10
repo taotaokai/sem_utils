@@ -29,10 +29,21 @@ with pt.open_file(misfit_h5file, "r") as h5f:
         raise Exception(msg)
     tbl = h5f.get_node("/window")
 
+    tbl_sta = h5f.get_node("/station")
+
     net_sta_list = set((net, sta) for net, sta in zip(tbl.cols.network, tbl.cols.station))
     net_sta_list = sorted(net_sta_list)
     for net, sta in net_sta_list:
         print(f"[INFO] {net=}, {sta=}")
+        stations = tbl_sta.read_where(f"(network == {net}) & (station == {sta})")
+        if len(stations) != 1:
+            msg = f"{net=}, {sta=} has {len(stations)} stations"
+            raise Exception(msg)
+        stainfo = stations[0]
+        evla = stainfo["latitude"]
+        evlo = stainfo["longitude"]
+        print(f"[INFO] {net=}, {sta=}, {evla=}, {evlo=}")
+
         windows = tbl.read_where(f"(network == {net}) & (station == {sta})")
         if args.phase is not None:
             windows = windows[windows['phase'] == args.phase.encode()]
@@ -54,6 +65,8 @@ with pt.open_file(misfit_h5file, "r") as h5f:
 
         data['network'] = net.decode()
         data['station'] = sta.decode()
+        data['latitude'] = evla
+        data['longitude'] = evlo
         
         for cmpnm in args.cmpnm:
             ind = (windows['cmpnm'] == cmpnm.encode())
@@ -73,5 +86,5 @@ with pt.open_file(misfit_h5file, "r") as h5f:
         stats.append(data)
     
 df = pd.DataFrame(stats)
-
-df.to_csv(args.out_file, float_format="%.2f", index=False)
+# df.to_hdf("test.h5", "misfit", mode="w")
+df.to_csv(args.out_file, float_format="%.4f", index=False)

@@ -64,7 +64,7 @@ fi
 tau=$(grep "tau" ${initial_cmt_file} | awk -F: '{printf "%f", $2}')
 if [ -z "$tau" ]
 then
-  echo "[ERROR] failed to get tau value!"
+  echo "[ERROR] failed to get tau value from $initial_cmt_file!"
   exit -1
 fi
 min_user_t0=$(echo "3 * $tau + 1" | bc -l | awk '{printf "%d", $1}')

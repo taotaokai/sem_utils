@@ -62,9 +62,9 @@ parser.add_argument(
     "smooth_length",
     type=float,
     help="full width at half maximum (FWHM) of Gaussian kernel in km",
-)  #
-parser.add_argument("nstep", type=int)  # nt
+)
 parser.add_argument("out_dir")  # num of processes
+parser.add_argument("--nstep", type=int, default=100, help="number of time steps between [0, 1]")  # nt
 # control parameters for CG solver
 parser.add_argument(
     "--max_iter", type=int, default=100, help="maximum number of iteration"

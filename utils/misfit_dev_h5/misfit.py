@@ -2042,7 +2042,7 @@ class Misfit(object):
             #
             taper = cosine_taper(
                 np.arange(nfft),
-                [0, npad + nt_lpad, nfft - npad - nt_lpad - solver_nt, nfft - 1],
+                [0, npad + nt_lpad, npad + nt_lpad + solver_nt, nfft - 1],
             )
 
             if _DEBUG:
@@ -2330,7 +2330,7 @@ class Misfit(object):
                 win_tb = max(valid_tb + bp_long_period, event_t0 + tb)
                 win_te = min(
                     valid_te - bp_long_period, event_t0 + te
-                )  # +-bp_long_period: to avoid filter edge effect in the later bandpass process
+                )  # +/-bp_long_period: to avoid filter edge effect in the later bandpass process
                 # print(solver_te, obs_te, solver_valid_te, win_te)
 
                 required_winlen = tb - te

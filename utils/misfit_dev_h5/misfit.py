@@ -638,8 +638,11 @@ def _measure_adj_one_sta(
         butter_N = win["butter_N"]
         butter_Wn = win["butter_Wn"]
         # fft
-        npad = int(2 * data_fs / min(butter_Wn))
-        nfft = scipy.fft.next_fast_len(data_nt + npad)
+        pad_length = max(20.0, 2.0 / min(butter_Wn)) # pad both ends before apply filter to reduce edge effect
+        npad = int(pad_length * data_fs)
+        # nfft = scipy.fft.next_fast_len(data_nt + npad)
+        nfft = scipy.fft.next_fast_len(data_nt + 2 * npad)
+        taper = cosine_taper(np.arange(nfft), [0, npad, npad + data_nt, nfft-1]) # applied before filtering
         freqs = np.fft.rfftfreq(nfft, d=data_dt)
         # window filter
         sos = scipy.signal.butter(
@@ -711,15 +714,20 @@ def _measure_adj_one_sta(
 
         # apply filter to obs, syn
         # obs = Fw * (Fd * d), obs_ENZ = Fd * d, d = disp. or vel.
-        obs_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ, nfft), nfft)[:, :data_nt]
+        # obs_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ, nfft), nfft)[:, :data_nt]
+        obs_ENZ_pad = np.pad(obs_ENZ, ((0,0), (npad, nfft-data_nt-npad)), "edge") * taper[None, :]
+        obs_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ_pad, nfft), nfft)[:, npad:(npad+data_nt)]
         # syn = Fw * (Fd * [Ft] * [S] * u), (syn_ENZ = Fd * u)
-        f_syn = np.fft.rfft(syn_ENZ, nfft)
+        # f_syn = np.fft.rfft(syn_ENZ, nfft)
+        syn_ENZ_pad = np.pad(syn_ENZ, ((0,0), (npad, nfft-data_nt-npad)), "edge") * taper[None, :]
+        f_syn = np.fft.rfft(syn_ENZ_pad, nfft)
         if syn_to_vel:
             f_syn *= Ft
         if conv_stf:
             f_src = stf_gauss_spectrum(freqs, event_tau)
             f_syn *= f_src
-        syn_filt = np.fft.irfft(Fw * f_syn, nfft)[:, :data_nt]
+        # syn_filt = np.fft.irfft(Fw * f_syn, nfft)[:, :data_nt]
+        syn_filt = np.fft.irfft(Fw * f_syn, nfft)[:, npad:(npad+data_nt)]
         # noise
         taper_width = 0.5 / min(butter_Wn)
         noise_win = cosine_sac_taper(
@@ -2270,7 +2278,7 @@ class Misfit(object):
                 win_type = win["type"]
                 win_phase = win["phase"]
                 cmpnm = win["cmp"]
-                win_bp = win["bp"]
+                win_bp = win["bp"] # filter parameter defined as [order, freq_min, freq_max]
                 bp_long_period = 1.0 / min(win_bp[1:])
                 evdp_limit = win["evdp"]
                 gcarc_limit = win["gcarc"]
@@ -2327,10 +2335,13 @@ class Misfit(object):
                     warnings.warn(msg)
                     continue
 
-                win_tb = max(valid_tb + bp_long_period, event_t0 + tb)
-                win_te = min(
-                    valid_te - bp_long_period, event_t0 + te
-                )  # +/-bp_long_period: to avoid filter edge effect in the later bandpass process
+                # win_tb = max(valid_tb + bp_long_period, event_t0 + tb)
+                # win_te = min(
+                #     valid_te - bp_long_period, event_t0 + te
+                # )  # +/-bp_long_period: to avoid filter edge effect in the later bandpass process
+                win_tb = max(valid_tb, event_t0 + tb)
+                win_te = min(valid_te, event_t0 + te)  
+
                 # print(solver_te, obs_te, solver_valid_te, win_te)
 
                 required_winlen = tb - te
@@ -2588,7 +2599,7 @@ class Misfit(object):
 
         return obs_ENZ, syn_ENZ, no_Hchan
 
-    def measure_adj(self):
+    def __obsolete_measure_adj(self):
         """
         calculate adjoint sources (dchi_du)
 

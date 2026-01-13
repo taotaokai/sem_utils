@@ -209,9 +209,17 @@ def read_gll_file(
     return data
 
 
-def write_gll_file(gll_dir, gll_tag, iproc, data, region_code="reg1", dtype="f4"):
+def write_gll_file(
+    gll_dir, gll_tag, iproc, data, region_code="reg1", dtype="f4", overwrite=False
+):
     """Write data to a Fortran unformatted file."""
     filename = os.path.join(gll_dir, f"proc{iproc:06d}_{region_code}_{gll_tag}.bin")
+
+    if os.path.exists(filename):
+        if overwrite == False:
+            raise FileExistsError(f"File exists: {filename}, not overwriting")
+        else:
+            warnings.warn(f"File exists: {filename}, overwriting...")
 
     with FortranFile(filename, "w") as f:
         f.write_record(np.array(data, dtype=dtype))
@@ -272,6 +280,103 @@ def sem_VTI_model_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(
         return alpha, beta, phi, xi
 
 
+def sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
+    cijkl_kernel, rho_kernel, alpha, beta, phi, xi, eta, rho, vp0, vs0
+):
+    # About the kernel dimension
+    # base on specfem3D_glob/src/specfem3D/compute_kernels.F90:
+    # subroutine save_kernels_crust_mantle_ani()
+    # ! kernel unit [ s / km^3 ]                ! for objective function
+    # ! For anisotropic kernels
+    # ! final unit : [s km^(-3) GPa^(-1)]       ! for cijkl_kernel
+    # ! final unit : [s km^(-3) (kg/m^3)^(-1)]  ! for rho_kernel
+
+    # rho: [g cm^(-3)], vp0,vs0: [km/s], rho*vp^2: [GPa]
+
+    rho_kernel = rho_kernel * 1.0e3  # convert to [s km^(-3) (g/cm^3)^(-1)]
+
+    # convert to vph, vpv, vsh, vsv
+    vpv, vph, vsv, vsh = sem_VTI_model_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
+        alpha, beta, phi, xi, vp0, vs0
+    )
+
+    # voigt-averaged isotropic velocities
+    vp = (1.0 + alpha) * vp0
+    vs = (1.0 + beta) * vs0
+
+    # Extract specific components
+    K_C11 = cijkl_kernel[:, 0]  # dChi/dC11
+    K_C12 = cijkl_kernel[:, 1]  # dChi/dC12
+    K_C13 = cijkl_kernel[:, 2]  # dChi/dC13
+    K_C22 = cijkl_kernel[:, 6]  # dChi/dC22
+    K_C23 = cijkl_kernel[:, 7]  # dChi/dC23
+    K_C33 = cijkl_kernel[:, 11]  # dChi/dC33
+    K_C44 = cijkl_kernel[:, 15]  # dChi/dC44
+    K_C55 = cijkl_kernel[:, 18]  # dChi/dC55
+    K_C66 = cijkl_kernel[:, 20]  # dChi/dC66
+
+    # Convert to relative velocity using chain rule: dChi/dA = dChi/dCij * dCij/dA
+    K_alpha = (
+        (
+            (K_C11 + K_C22 + K_C12) * (1.0 + 1.0 / 5.0 * phi)
+            + K_C33 * (1.0 - 4.0 / 5.0 * phi)
+            + (K_C13 + K_C23) * (1.0 + 1.0 / 5.0 * phi) * eta
+        )
+        * 2.0
+        * rho
+        * vp0**2
+        * (1 + alpha)
+    )
+
+    K_beta = (
+        (
+            K_C12 * (-2.0 * (1.0 + 2.0 / 3.0 * xi))
+            + (K_C13 + K_C23) * (-2.0 * eta * (1.0 - 1.0 / 3.0 * xi))
+            + (K_C44 + K_C55) * (1.0 - 1.0 / 3.0 * xi)
+            + K_C66 * (1.0 + 2.0 / 3.0 * xi)
+        )
+        * 2.0
+        * rho
+        * vs0**2
+        * (1 + beta)
+    )
+
+    K_phi = (
+        (
+            (K_C11 + K_C22 + K_C12) * 1.0 / 5.0
+            + K_C33 * (-4.0 / 5.0)
+            + (K_C13 + K_C23) * 1.0 / 5.0 * eta
+        )
+        * vp**2
+        * rho
+    )
+
+    K_xi = (
+        (
+            (K_C44 + K_C55) * (-1.0 / 3.0)
+            + K_C66 * (2.0 / 3.0)
+            + K_C12 * (-4.0 / 3.0)
+            + (K_C13 + K_C23) * (2.0 / 3.0 * eta)
+        )
+        * vs**2
+        * rho
+    )
+
+    K_eta = (K_C13 + K_C23) * (vph**2 - 2.0 * vsv**2) * rho
+
+    K_rho = (
+        rho_kernel
+        + (K_C11 + K_C22) * vph**2
+        + K_C33 * vpv**2
+        + K_C12 * (vph**2 - 2 * vsh**2)
+        + (K_C13 + K_C23) * eta * (vph**2 - vsv**2)
+        + (K_C44 + K_C55) * vsv**2
+        + K_C66 * vsh**2
+    )
+
+    return K_alpha, K_beta, K_phi, K_xi, K_eta, K_rho
+
+
 def sem_VTI_model_vpv_vph_vsv_vsh_to_beta_kappa_phi_xi(
     vpv, vph, vsv, vsh, vs0, output_iso=False
 ):
@@ -324,6 +429,112 @@ def sem_VTI_model_beta_kappa_phi_xi_to_vpv_vph_vsv_vsh(
         return vpv, vph, vsv, vsh, vp, vs
     else:
         return vpv, vph, vsv, vsh
+
+
+def sem_VTI_kernel_cijkl_rho_to_beta_kappa_phi_xi_eta_rho(
+    cijkl_kernel, rho_kernel, beta, kappa, phi, xi, eta, rho, vs0
+):
+    # About the kernel dimension
+    # base on specfem3D_glob/src/specfem3D/compute_kernels.F90:
+    # subroutine save_kernels_crust_mantle_ani()
+    # ! kernel unit [ s / km^3 ]                ! for objective function
+    # ! For anisotropic kernels
+    # ! final unit : [s km^(-3) GPa^(-1)]       ! for cijkl_kernel
+    # ! final unit : [s km^(-3) (kg/m^3)^(-1)]  ! for rho_kernel
+    rho_kernel = rho_kernel * 1.0e3  # convert to [s km^(-3) (g/cm^3)^(-1)]
+
+    # convert to vph, vpv, vsh, vsv
+    vpv, vph, vsv, vsh = sem_VTI_model_beta_kappa_phi_xi_to_vpv_vph_vsv_vsh(
+        beta, kappa, phi, xi, vs0
+    )
+
+    # Voigt-averaged isotropic velocities
+    vs = (1.0 + beta) * vs0
+    vp = kappa * vs
+
+    # Extract specific components
+    K_C11 = cijkl_kernel[:, 0]  # dChi/dC11,  C11 = rho * vph**2
+    K_C12 = cijkl_kernel[:, 1]  # dChi/dC12,  C12 = C11 - 2 * C66
+    K_C13 = cijkl_kernel[:, 2]  # dChi/dC13,  C13 = eta * (C11 - 2 * C44)
+    K_C22 = cijkl_kernel[:, 6]  # dChi/dC22,  C22 = C11
+    K_C23 = cijkl_kernel[:, 7]  # dChi/dC23,  C23 = C13
+    K_C33 = cijkl_kernel[:, 11]  # dChi/dC33, C33 = rho * vpv**2
+    K_C44 = cijkl_kernel[:, 15]  # dChi/dC44, C44 = rho * vsv**2
+    K_C55 = cijkl_kernel[:, 18]  # dChi/dC55, C55 = C44
+    K_C66 = cijkl_kernel[:, 20]  # dChi/dC66, C66 = rho * vsh**2
+
+    # Convert to relative velocity using chain rule: dChi/dA = dChi/dCij * dCij/dA
+
+    # vph**2 = vs0**2 * (1 + beta)**2 * kappa**2 * (1 + 1/5 * phi)
+    # vpv**2 = vs0**2 * (1 + beta)**2 * kappa**2 * (1 - 4/5 * phi)
+    # vsv**2 = vs0**2 * (1 + beta)**2 * (1 - 1/3 * xi)
+    # vsh**2 = vs0**2 * (1 + beta)**2 * (1 + 2/3 * xi)
+
+    K_beta = (
+        rho
+        * vs0**2
+        * 2.0
+        * (1 + beta)
+        * (
+            kappa**2
+            * (
+                (K_C11 + K_C22 + K_C12) * (1.0 + 1.0 / 5.0 * phi)
+                + (K_C13 + K_C23) * (1.0 + 1.0 / 5.0 * phi) * eta
+                + K_C33 * (1.0 - 4.0 / 5.0 * phi)
+            )
+            + K_C12 * (-2.0 * (1.0 + 2.0 / 3.0 * xi))
+            + (K_C13 + K_C23) * (-2.0 * eta * (1.0 - 1.0 / 3.0 * xi))
+            + (K_C44 + K_C55) * (1.0 - 1.0 / 3.0 * xi)
+            + K_C66 * (1.0 + 2.0 / 3.0 * xi)
+        )
+    )
+
+    K_kappa = (
+        rho
+        * vs**2
+        * 2.0
+        * kappa
+        * (
+            (K_C11 + K_C22 + K_C12) * (1.0 + 1.0 / 5.0 * phi)
+            + K_C33 * (1.0 - 4.0 / 5.0 * phi)
+            + (K_C13 + K_C23) * (1.0 + 1.0 / 5.0 * phi) * eta
+        )
+    )
+
+    K_phi = (
+        (
+            (K_C11 + K_C22 + K_C12) * 1.0 / 5.0
+            + K_C33 * (-4.0 / 5.0)
+            + (K_C13 + K_C23) * 1.0 / 5.0 * eta
+        )
+        * vp**2
+        * rho
+    )
+
+    K_xi = (
+        (
+            (K_C44 + K_C55) * (-1.0 / 3.0)
+            + K_C66 * (2.0 / 3.0)
+            + K_C12 * (-2.0 * 2.0 / 3.0)
+            + (K_C13 + K_C23) * (-2.0 * eta * (-1.0 / 3.0))
+        )
+        * vs**2
+        * rho
+    )
+
+    K_eta = (K_C13 + K_C23) * (vph**2 - 2.0 * vsv**2) * rho
+
+    K_rho = (
+        rho_kernel
+        + (K_C11 + K_C22) * vph**2
+        + K_C33 * vpv**2
+        + K_C12 * (vph**2 - 2 * vsh**2)
+        + (K_C13 + K_C23) * eta * (vph**2 - vsv**2)
+        + (K_C44 + K_C55) * vsv**2
+        + K_C66 * vsh**2
+    )
+
+    return K_beta, K_kappa, K_phi, K_xi, K_eta, K_rho
 
 
 # ==================================================#

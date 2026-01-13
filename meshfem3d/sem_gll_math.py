@@ -11,6 +11,7 @@ mpi_comm = MPI.COMM_WORLD
 mpi_size = mpi_comm.Get_size()
 mpi_rank = mpi_comm.Get_rank()
 
+
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -35,7 +36,7 @@ def parse_arguments():
     parser.add_argument("--out_dir", default=None, help="output directory for results")
     parser.add_argument(
         "--out_tag",
-        default="out",
+        default=None,
         help="tag for output GLL file as proc*_reg1_[out_tag].bin",
     )
 
@@ -53,10 +54,10 @@ def main():
 
     if len(model_dirs) == 1 and ntags > 1:
         model_dirs = model_dirs * len(model_tags)
-    else:
-        assert (
-            len(model_dirs) == ntags
-        ), "number of model directories must equal number of model tags"
+    elif len(model_tags) == 1 and len(model_dirs) > 1:
+        model_tags = model_tags * len(model_dirs)
+    elif len(model_dirs) != len(model_tags):
+        raise ValueError("number of model directories must equal number of model tags")
 
     # for iproc in range(args.nproc):
     for iproc in range(mpi_rank, args.nproc, mpi_size):
@@ -68,8 +69,15 @@ def main():
 
         out_gll = eval(args.math_expr)
         print(
-            "[iproc%03d] %s: min %.3f max %.3f"
-            % (iproc, args.math_expr, np.min(out_gll), np.max(out_gll))
+            "[iproc%03d] %s: min %.3e max %.3e mean %.3e std %.3e"
+            % (
+                iproc,
+                args.math_expr,
+                np.min(out_gll),
+                np.max(out_gll),
+                np.mean(out_gll),
+                np.std(out_gll),
+            )
         )
 
         if args.out_dir is not None:

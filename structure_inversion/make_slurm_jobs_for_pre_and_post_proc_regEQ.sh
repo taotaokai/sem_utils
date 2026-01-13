@@ -31,9 +31,7 @@ model_perturb_job=$slurm_dir/model_perturb.job
 mesh_perturb_job=$slurm_dir/mesh_perturb.job
 model_update_job=$slurm_dir/model_update.job
 
-#model_random_job=$slurm_dir/model_random.job
-#mesh_hess_job=$slurm_dir/mesh_hess.job
-#hess_sum_job=$slurm_dir/hess_sum.job
+model_perturb_random_job=$slurm_dir/model_perturb_random.job
 
 #====== mesh
 cat <<EOF > $mesh_job
@@ -327,12 +325,13 @@ done
 #   \$out_dir \\
 #   \$out_dir
 
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_in_alpha_beta_phi_xi_eta.py \\
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
   ${SEM_nproc_total} \\
   ${SEM_reference_model_dir} \\
   \$out_dir \\
   \$out_dir \\
-  --reverse
+  --reverse \\
+  --type ${SEM_parameterization_type}
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
@@ -504,14 +503,49 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb_groups.
 #   $model_update_min_xi    $model_update_max_xi    \\
 #   $model_update_min_eta   $model_update_max_eta
 
-echo ====== convert alpha,beta,phi,xi to vph,vpv,vsv,vsh
+echo ====== convert back to vph,vpv,vsv,vsh
 
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_in_alpha_beta_phi_xi_eta.py \\
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
   ${SEM_nproc_total} \\
   ${SEM_reference_model_dir} \\
   $SEM_iter_dir/model_updated \\
   $SEM_iter_dir/model_updated \\
-  --reverse
+  --reverse \\
+  --type ${SEM_parameterization_type}
+
+echo
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
+
+EOF
+
+#====== random model perturbation
+cat <<EOF > $model_perturb_random_job
+#!/bin/bash
+#SBATCH -J model_perturb_random
+#SBATCH -o ${model_perturb_random_job}.o%j
+#SBATCH ${SLURM_args_model_perturb}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
+
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_random_perturb.py \\
+  ${SEM_nproc_total} \\
+  ${SEM_iter_dir}/model_initial \\
+  ${SEM_iter_dir}/model_perturb_random \\
+  --model_tags ${SEM_model_names[@]} \\
+  --amplitudes ${SEM_hessian_perturb_amplitude} \\
+  --method "absolute"
+
+# convert back to vpv,vph,vsv,vsh
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
+  ${SEM_nproc_total} \\
+  ${SEM_reference_model_dir} \\
+  $SEM_iter_dir/model_perturb_random \\
+  $SEM_iter_dir/model_perturb_random \\
+  --reverse \\
+  --type ${SEM_parameterization_type}
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"

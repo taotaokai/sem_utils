@@ -163,12 +163,16 @@ SLURM_args_plot=${SLURM_args_misfit}
 
 
 #====== model parameterization
+SEM_parameterization_type="alpha_beta_phi_xi" # or beta_kappa_phi_xi
 
 SEM_model_names=(alpha beta phi xi eta) # rho) # model parameters
+# SEM_model_names=(beta kappa phi xi eta rho) # model parameters
 
 # model a priori bounds
 SEM_model_min_values=(-0.15 -0.15 -0.1 -0.1 0.8)
 SEM_model_max_values=(0.15  0.15  0.1  0.1 1.2)
+# SEM_model_min_values=(-0.1 1.7 -0.1 -0.1 0.8)
+# SEM_model_max_values=(0.1  1.9  0.1  0.1 1.2)
 
 SEM_kernel_tag="_kernel" # gradient of model parameters
 SEM_dmodel_tag="_dmodel" # search direction
@@ -176,6 +180,8 @@ SEM_dmodel_tag="_dmodel" # search direction
 # SEM_kernel_tags=(alpha_kernel beta_kernel phi_kernel xi_kernel eta_kernel) # rho_kernel)
 # SEM_dmodel_tags=(alpha_dmodel beta_dmodel phi_dmodel xi_dmodel eta_dmodel) # rho_dmodel)
 
+# SEM_script_model="sem_VTI_model_in_beta_kappa_phi_xi.py"
+# SEM_script_kernel="sem_VTI_kernel_in_beta_kappa_phi_xi_eta_from_cijkl_rho.py"
 
 #====== kernel preconditioning
 
@@ -242,6 +248,30 @@ SEM_search_step_sizes=("0,3,31")
 # sem_perturb_model_tag_groups=("vpv,vph" "vsv,vsh" "eta,rho")
 # sem_perturb_dmodel_tag_groups=("dvpv_dmodel,dvph_dmodel" "dvsv_dmodel,dvsh_dmodel" "deta_dmodel,drho_dmodel")
 # sem_search_group_steps=("0,4,20" "0,4,20" "0,4,20")
+
+#----- estimate inverse of Hessian from kenrel of random model perturbation
+# Hess * dm = dKernel ~ Kernel(m+dm) - Kernel(m)
+# here, dm is chosen to be a random model perturbation
+# diag(Hess) is approximated by water-level inverse of smoothed abs(dKernel)
+
+# SEM_hessian_models=("alpha,beta,phi,xi,eta,rho")
+# SEM_Hessian_tag="_invhess"
+# random model perturbation
+SEM_hessian_perturb_type="abosolute"
+SEM_hessian_perturb_amplitude=0.01
+# # convert sac to h5 before measure_adj
+# SEM_hessian_resample_fs=2
+# SEM_hessian_low_pass_freq=0.5
+# SEM_hessian_low_pass_order=15
+# SEM_hessian_channels=("BXE" "BXN" "BXZ")
+# # setup windows use /window in misfit.h5
+# SEM_hessian_iter_dir_for_windos=${SEM_base_dir}/stage00.source_dcu/iter04
+# smoothing length (on kernel amplitude)
+SEM_hessian_smooth_horizontal_length_km=30 # horizontal smoothing length as FWHM
+SEM_hessian_smooth_vertical_length_km=15 # vertical smoothing length as FWHM
+# waterlevel for inverse hessian diagonals 
+SEM_hessian_inverse_nbin=5000
+SEM_hessian_inverse_threshold_percentage=0.90
 
 #----- update model
 

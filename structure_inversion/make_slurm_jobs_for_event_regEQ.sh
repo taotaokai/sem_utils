@@ -323,12 +323,13 @@ kernel_dir=${event_dir}/output_kernel/kernel
 out_dir=${event_dir}/kernel/GLL
 mkdir -p \$out_dir
 
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_in_alpha_beta_phi_xi_eta_from_cijkl_rho.py \\
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_reparameterization.py \\
   ${SEM_nproc_total} \\
-  ${SEM_iter_dir}/model_initial \\
   ${SEM_reference_model_dir} \\
+  ${SEM_iter_dir}/model_initial \\
   \${kernel_dir} \\
-  \${out_dir}
+  \${out_dir} \\
+  --type ${SEM_parameterization_type}
 
 # rm -rf \${kernel_dir} # remove kernel directory to save disk space
 

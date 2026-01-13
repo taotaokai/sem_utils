@@ -81,7 +81,8 @@ def apply_lowpass_filter(
     npts = trace.stats.npts
 
     # Calculate padding and FFT length
-    npad = int(2.0 / low_pass_freq * fs)
+    pad_length = max(10.0, 2.0 / low_pass_freq)
+    npad = int(pad_length * fs)
     nfft = scipy.fft.next_fast_len(npts + 2 * npad)
     freqs = np.fft.rfftfreq(nfft, d=1 / fs)
 

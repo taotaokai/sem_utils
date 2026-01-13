@@ -62,8 +62,8 @@ def process_kernel_for_alpha_beta_phi_xi(
     rho_kernel = read_gll_file(kernel_dir, "rho_kernel", iproc)
 
     # Read reference velocity models (km/s)
-    vp0 = read_gll_file(reference_dir, "vp0", iproc)
-    vs0 = read_gll_file(reference_dir, "vs0", iproc)
+    vp0 = read_gll_file(reference_dir, "vp", iproc)
+    vs0 = read_gll_file(reference_dir, "vs", iproc)
 
     # read models (velocities in km/s, density in g/cm^3)
     alpha = read_gll_file(model_dir, "alpha", iproc)
@@ -99,7 +99,7 @@ def process_kernel_for_beta_kappa_phi_xi(
     rho_kernel = read_gll_file(kernel_dir, "rho_kernel", iproc)
 
     # Read reference velocity models (km/s)
-    vs0 = read_gll_file(reference_dir, "vs0", iproc)
+    vs0 = read_gll_file(reference_dir, "vs", iproc)
 
     # read models (velocities in km/s, density in g/cm^3)
     beta = read_gll_file(model_dir, "beta", iproc)

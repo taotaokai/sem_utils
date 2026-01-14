@@ -321,6 +321,7 @@ echo
 mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
 kernel_dir=${event_dir}/output_kernel/kernel
 out_dir=${event_dir}/kernel/GLL
+[ -d \${out_dir} ] && rm -rf \${out_dir}
 mkdir -p \$out_dir
 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_reparameterization.py \\
@@ -339,6 +340,7 @@ echo
 
 kernel_dir=${event_dir}/kernel/GLL
 out_dir=${event_dir}/kernel/GLL_threshold
+[ -d \${out_dir} ] && rm -rf \${out_dir}
 mkdir -p \$out_dir
 
 for model_name in ${SEM_model_names[@]}

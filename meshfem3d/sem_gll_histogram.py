@@ -20,7 +20,7 @@ mpi_rank = mpi_comm.Get_rank()
 
 def parse_arguments():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Perturb model")
+    parser = argparse.ArgumentParser(description="volumn histogram of model amplitude")
 
     parser.add_argument("nproc", type=int, help="number of model slices")
     parser.add_argument(
@@ -53,6 +53,11 @@ def parse_arguments():
         help="amplitude threshold for CDF",
     )
     parser.add_argument(
+        "--use_zdv",
+        action="store_true",
+        help="calculate histogram of |Z|dV instead of dV",
+    )
+    parser.add_argument(
         "--out_dir",
         default=".",
         help="output directory of truncated GLL files",
@@ -79,6 +84,7 @@ def process(
     nbin=100,
     exponential_base=None,
     out_hist="histogram.txt",
+    use_zdv=False,
     cdf_threshold=None,
     out_dir=".",
     out_tag=None,
@@ -106,8 +112,11 @@ def process(
         vol_gll = sem_mesh_get_vol_gll(mesh_data)
         vol_gll = vol_gll.reshape(-1)
         model_gll = read_gll_file(model_dir, model_tag, iproc)
+        amp_gll = np.abs(model_gll)
+        if use_zdv:
+            vol_gll = vol_gll * amp_gll
         for ibin in range(nbin):
-            mask = (model_gll > bin_edges[ibin]) & (model_gll <= bin_edges[ibin + 1])
+            mask = (amp_gll > bin_edges[ibin]) & (amp_gll <= bin_edges[ibin + 1])
             pdf_l[ibin] += np.sum(vol_gll[mask])
 
     pdf = np.zeros_like(pdf_l)
@@ -156,6 +165,7 @@ def main():
             cdf_threshold=args.cdf_threshold,
             out_dir=args.out_dir,
             out_tag=args.out_tag,
+            use_zdv=args.use_zdv,
         )
     except Exception as e:
         print(f"Error: {e}")

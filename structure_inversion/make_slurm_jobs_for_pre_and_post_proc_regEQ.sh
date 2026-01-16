@@ -452,6 +452,14 @@ mkdir -p $SEM_iter_dir/model_updated
 cp -L $SEM_iter_dir/model_initial/*.bin $SEM_iter_dir/model_updated/
 chmod -R u+w $SEM_iter_dir/model_updated
 
+for model_names in ${SEM_perturb_model_groups[@]}
+do
+  for tag in \${model_names//,/ }
+  do
+    rm $SEM_iter_dir/model_updated/*_\${tag}.bin
+  done
+done
+
 group_names=(${SEM_perturb_group_names[@]})
 model_groups=(${SEM_perturb_model_groups[@]})
 ngroup=\${#group_names[@]}

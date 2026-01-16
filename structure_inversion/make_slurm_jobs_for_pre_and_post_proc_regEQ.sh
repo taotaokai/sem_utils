@@ -452,13 +452,13 @@ mkdir -p $SEM_iter_dir/model_updated
 cp -L $SEM_iter_dir/model_initial/*.bin $SEM_iter_dir/model_updated/
 chmod -R u+w $SEM_iter_dir/model_updated
 
-for model_names in ${SEM_perturb_model_groups[@]}
-do
-  for tag in \${model_names//,/ }
-  do
-    rm $SEM_iter_dir/model_updated/*_\${tag}.bin
-  done
-done
+# for model_names in ${SEM_perturb_model_groups[@]}
+# do
+#   for tag in \${model_names//,/ }
+#   do
+#     rm $SEM_iter_dir/model_updated/*_\${tag}.bin
+#   done
+# done
 
 group_names=(${SEM_perturb_group_names[@]})
 model_groups=(${SEM_perturb_model_groups[@]})
@@ -485,7 +485,8 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb_groups.
   --method "absolute" \\
   --models ${SEM_model_names[@]} \\
   --model_min_values ${SEM_model_min_values[@]} \\
-  --model_max_values ${SEM_model_max_values[@]}
+  --model_max_values ${SEM_model_max_values[@]} \\
+  --overwrite_ok
 
 
 # ngroup=\${#perturb_group_names[@]}
@@ -532,7 +533,8 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_repar
   $SEM_iter_dir/model_updated \\
   $SEM_iter_dir/model_updated \\
   --reverse \\
-  --type ${SEM_parameterization_type}
+  --type ${SEM_parameterization_type} \\
+  --overwrite_ok
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"

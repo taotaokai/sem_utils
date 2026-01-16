@@ -52,6 +52,11 @@ def parse_arguments():
         default="alpha_beta_phi_xi",
         help="type of parameterization",
     )
+    parser.add_argument(
+        "--overwrite_ok",
+        action="store_true",
+        help="overwrite output files if they already exist",
+    )
 
     return parser.parse_args()
 
@@ -92,7 +97,7 @@ def read_alpha_beta_phi_xi(iproc, model_dir):
 
 
 def convert_model_for_beta_kappa_phi_xi(
-    iproc, model_dir, reference_dir, out_dir, reverse=False
+    iproc, model_dir, reference_dir, out_dir, reverse=False, overwrite_ok=False
 ):
     """Process model files for a single processor slice."""
     print(f"# iproc {iproc}")
@@ -109,12 +114,12 @@ def convert_model_for_beta_kappa_phi_xi(
         )
 
         # Write each model to a separate file
-        write_gll_file(out_dir, "vpv", iproc, vpv)
-        write_gll_file(out_dir, "vph", iproc, vph)
-        write_gll_file(out_dir, "vsv", iproc, vsv)
-        write_gll_file(out_dir, "vsh", iproc, vsh)
-        write_gll_file(out_dir, "vp", iproc, vp)
-        write_gll_file(out_dir, "vs", iproc, vs)
+        write_gll_file(out_dir, "vpv", iproc, vpv, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vph", iproc, vph, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vsv", iproc, vsv, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vsh", iproc, vsh, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vp", iproc, vp, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vs", iproc, vs, overwrite=overwrite_ok)
 
     else:
         vpv, vph, vsv, vsh = read_vpv_vph_vsv_vsh(iproc, model_dir)
@@ -126,16 +131,16 @@ def convert_model_for_beta_kappa_phi_xi(
         )
 
         # Write each model to a separate file
-        write_gll_file(out_dir, "beta", iproc, beta)
-        write_gll_file(out_dir, "kappa", iproc, kappa)
-        write_gll_file(out_dir, "phi", iproc, phi)
-        write_gll_file(out_dir, "xi", iproc, xi)
-        write_gll_file(out_dir, "vp", iproc, vp)
-        write_gll_file(out_dir, "vs", iproc, vs)
+        write_gll_file(out_dir, "beta", iproc, beta, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "kappa", iproc, kappa, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "phi", iproc, phi, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "xi", iproc, xi, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vp", iproc, vp, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vs", iproc, vs, overwrite=overwrite_ok)
 
 
 def convert_model_for_alpha_beta_phi_xi(
-    iproc, model_dir, reference_dir, out_dir, reverse=False
+    iproc, model_dir, reference_dir, out_dir, reverse=False, overwrite_ok=False
 ):
     """Process model files for a single processor slice."""
     print(f"# iproc {iproc}")
@@ -153,12 +158,12 @@ def convert_model_for_alpha_beta_phi_xi(
         )
 
         # Write each model to a separate file
-        write_gll_file(out_dir, "vpv", iproc, vpv)
-        write_gll_file(out_dir, "vph", iproc, vph)
-        write_gll_file(out_dir, "vsv", iproc, vsv)
-        write_gll_file(out_dir, "vsh", iproc, vsh)
-        write_gll_file(out_dir, "vp", iproc, vp)
-        write_gll_file(out_dir, "vs", iproc, vs)
+        write_gll_file(out_dir, "vpv", iproc, vpv, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vph", iproc, vph, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vsv", iproc, vsv, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vsh", iproc, vsh, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vp", iproc, vp, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vs", iproc, vs, overwrite=overwrite_ok)
 
     else:
         vpv, vph, vsv, vsh = read_vpv_vph_vsv_vsh(iproc, model_dir)
@@ -170,12 +175,12 @@ def convert_model_for_alpha_beta_phi_xi(
         )
 
         # Write each model to a separate file
-        write_gll_file(out_dir, "alpha", iproc, alpha)
-        write_gll_file(out_dir, "beta", iproc, beta)
-        write_gll_file(out_dir, "phi", iproc, phi)
-        write_gll_file(out_dir, "xi", iproc, xi)
-        write_gll_file(out_dir, "vp", iproc, vp)
-        write_gll_file(out_dir, "vs", iproc, vs)
+        write_gll_file(out_dir, "alpha", iproc, alpha, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "beta", iproc, beta, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "phi", iproc, phi, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "xi", iproc, xi, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vp", iproc, vp, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "vs", iproc, vs, overwrite=overwrite_ok)
 
 
 def main():
@@ -199,6 +204,7 @@ def main():
                     args.reference_dir,
                     args.out_dir,
                     reverse=args.reverse,
+                    overwrite_ok=args.overwrite_ok,
                 )
             elif args.type == "beta_kappa_phi_xi":
                 convert_model_for_beta_kappa_phi_xi(
@@ -207,6 +213,7 @@ def main():
                     args.reference_dir,
                     args.out_dir,
                     reverse=args.reverse,
+                    overwrite_ok=args.overwrite_ok,
                 )
         except Exception as e:
             print(f"Error processing iproc {iproc}: {e}")

@@ -76,6 +76,11 @@ def parse_arguments():
         default="absolute",
         help="perturbation methods: absolute (m + dm), relative (m * (1 + dm)), exponential (m * exp(dm))",
     )
+    parser.add_argument(
+        "--overwrite_ok",
+        action="store_true",
+        help="overwrite output files if they already exist",
+    )
 
     return parser.parse_args()
 
@@ -104,6 +109,7 @@ def process(
     dmodel_tag="_dmodel",
     method="absolute",
     model_value_ranges={},
+    overwrite_ok=False
 ) -> None:
     """
     Process and perturb GLL files.
@@ -144,7 +150,7 @@ def process(
             if model_name in model_value_ranges:
                 min_value, max_value = model_value_ranges[model_name]
                 perturbed_model = np.clip(perturbed_model, min_value, max_value)
-            write_gll_file(out_dir, model_name, iproc, perturbed_model)
+            write_gll_file(out_dir, model_name, iproc, perturbed_model, overwrite=overwrite_ok)
 
 
 def main():
@@ -188,6 +194,7 @@ def main():
             dmodel_tag=args.dmodel_tag,
             method=args.method,
             model_value_ranges=model_value_ranges,
+            overwrite_ok=args.overwrite_ok
         )
     except Exception as e:
         print(f"Error: {e}")

@@ -95,20 +95,21 @@ echo
 
 echo "====== sum up all event kernels"
 
-kernel_dir=${SEM_iter_dir}/kernel_sum/GLL
-mkdir -p \$kernel_dir
+out_dir=${SEM_iter_dir}/kernel_sum/GLL
+[ -d \${out_dir} ] && rm -rf \${out_dir}
+mkdir -p \$out_dir
 
 awk 'NF&&\$1!~/#/{printf "%s/events/%s/kernel/GLL_mask\\n", a,\$1}' \\
   a="$SEM_iter_dir" $event_list > \\
-  \${kernel_dir}/event_kernel_dir.list
+  \${out_dir}/event_kernel_dir.list
 
 for model_name in ${SEM_model_names[@]}
 do
   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_sum.py \\
     ${SEM_nproc_total} \\
-    \${kernel_dir}/event_kernel_dir.list \\
+    \${out_dir}/event_kernel_dir.list \\
     \${model_name}${SEM_kernel_tag} \\
-    \${kernel_dir} \\
+    \${out_dir} \\
     --ncomp=1
 done
 

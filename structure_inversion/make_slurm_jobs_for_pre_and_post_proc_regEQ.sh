@@ -98,7 +98,7 @@ echo "====== sum up all event kernels"
 kernel_dir=${SEM_iter_dir}/kernel_sum
 mkdir -p \$kernel_dir
 
-awk 'NF&&\$1!~/#/{printf "%s/events/%s/kernel/GLL_threshold\\n", a,\$1}' \\
+awk 'NF&&\$1!~/#/{printf "%s/events/%s/kernel/GLL_mask\\n", a,\$1}' \\
   a="$SEM_iter_dir" $event_list > \\
   \${kernel_dir}/event_kernel_dir.list
 

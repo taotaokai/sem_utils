@@ -233,10 +233,11 @@ for it in range(nt):
     # ku = Kx(u)
     # mu = Mx(u)
     u = solve_cg(u)
+    maxamp_u = comm.reduce(max(abs(u)), op=MPI.MAX, root=0)
     if mpi_rank == 0:
         elapsed_time = time.time() - tic
         # print(f"{it=}, {max(abs(mu))=}, {max(abs(ku))=}, {max(abs(b))=}, {max(abs(u))=}, {elapsed_time=}")
-        print(f"{it=}, {max(abs(u))=}, {elapsed_time=}")
+        print(f"{it=}, max(abs(u))={maxamp_u}, {elapsed_time=}")
         sys.stdout.flush()
 
 comm.Barrier()

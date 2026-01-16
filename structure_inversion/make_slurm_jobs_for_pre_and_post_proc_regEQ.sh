@@ -176,7 +176,7 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_histogram.p
   \${kernel_name} \\
   --nbin ${SEM_histogram_nbin} \\
   --exponential_base ${SEM_histogram_exponential_base} \\
-  --out_hist \${out_dir}/histogram_\${model_name}.txt \\
+  --out_hist \${out_dir}/histogram_\${kernel_name}.txt \\
   --cdf_threshold ${SEM_cdf_threshold} \\
   --out_dir \${out_dir} \\
   --use_zdv

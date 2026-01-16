@@ -27,7 +27,7 @@ mkdir -p $slurm_dir
 forward_job=$slurm_dir/forward.job
 misfit_job=$slurm_dir/misfit.job
 kernel_job=$slurm_dir/kernel.job
-mask_job=$slurm_dir/mask.job
+process_job=$slurm_dir/process.job
 threshold_job=$slurm_dir/threshold.job
 plot_job=$slurm_dir/plot.job
 #hess_job=$slurm_dir/hess.job
@@ -265,20 +265,40 @@ echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 EOF
 
-#====== kernel mask
-cat <<EOF > $mask_job
+#====== kernel processing
+cat <<EOF > $process_job
 #!/bin/bash
-#SBATCH -J ${event_id}.mask
-#SBATCH -o $mask_job.o%j
-#SBATCH ${SLURM_args_kernel_mask_sum}
+#SBATCH -J ${event_id}.process
+#SBATCH -o $process_job.o%j
+#SBATCH ${SLURM_args_kernel_process}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-mesh_dir=${SEM_iter_dir}/mesh
-out_dir=${event_dir}/output_kernel/kernel
+echo ====== convert cijkl kernel to VTI kernel
 
+mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
+kernel_dir=${event_dir}/output_kernel/kernel
+out_dir=${event_dir}/kernel/GLL
+[ -d \${out_dir} ] && rm -rf \${out_dir}
+mkdir -p \$out_dir
+
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_reparameterization.py \\
+  ${SEM_nproc_total} \\
+  ${SEM_reference_model_dir} \\
+  ${SEM_iter_dir}/model_initial \\
+  \${kernel_dir} \\
+  \${out_dir} \\
+  --type ${SEM_parameterization_type}
+
+# rm -rf \${kernel_dir} # remove kernel directory to save disk space
+
+echo ====== create source/receiver mask
+
+mesh_dir=${SEM_iter_dir}/mesh
+out_dir=${event_dir}/kernel/mask
+[ -d \${out_dir} ] && rm -rf \${out_dir}
 mkdir -p \$out_dir
 
 echo "x,y,z,sigma_km" > \${out_dir}/mask.lst
@@ -296,6 +316,25 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_make_gaussian_m
   \${mesh_dir}/DATABASES_MPI \\
   \${out_dir}/mask.lst \\
   \${out_dir}
+
+echo ====== mask kernels
+
+out_dir=${event_dir}/kernel/GLL_mask
+[ -d \${out_dir} ] && rm -rf \${out_dir}
+mkdir -p \$out_dir
+
+for model in ${SEM_model_names[@]}
+do
+  tag=\${model}${SEM_kernel_tag}
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_math.py \\
+    ${SEM_nproc_total} \\
+    --model_dirs ${event_dir}/kernel/GLL_mask  ${event_dir}/kernel/mask \\
+    --model_tags ${tag} mask \\
+    --math_expr "v[0]*v[1]" \\
+    --out_dir ${out_dir} \\
+    --out_tag ${tag} \\
+    --overwrite_ok
+done
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"

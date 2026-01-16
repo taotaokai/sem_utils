@@ -145,8 +145,8 @@ SLURM_args_mesh="-n ${SEM_nproc_total} -p ${SLURM_partition_cpu} -t 01:00:00" #-
 SLURM_args_forward="-N ${SEM_num_nodes} -n ${SEM_nproc_total} -p ${SLURM_partition_dcu} -t 00:30:00 --exclusive --mem=0 --gres=dcu:4" 
 SLURM_args_misfit="-N 1 -n 20 -p ${SLURM_partition_cpu} -t 00:30:00"
 SLURM_args_kernel="-N ${SEM_num_nodes} -n ${SEM_nproc_total} -p ${SLURM_partition_dcu} -t 01:00:00 --exclusive --mem=0 --gres=dcu:4"
+SLURM_args_kernel_process=${SLURM_args_mesh}
 
-SLURM_args_kernel_threshold=${SLURM_args_mesh}
 SLURM_args_kernel_sum=${SLURM_args_mesh}
 SLURM_args_kernel_precond=${SLURM_args_mesh}
 SLURM_args_dmodel=${SLURM_args_mesh}

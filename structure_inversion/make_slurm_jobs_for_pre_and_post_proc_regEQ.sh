@@ -95,7 +95,7 @@ echo
 
 echo "====== sum up all event kernels"
 
-kernel_dir=${SEM_iter_dir}/kernel_sum
+kernel_dir=${SEM_iter_dir}/kernel_sum/GLL
 mkdir -p \$kernel_dir
 
 awk 'NF&&\$1!~/#/{printf "%s/events/%s/kernel/GLL_mask\\n", a,\$1}' \\
@@ -136,17 +136,6 @@ done
 #   rm -rf \$event_kernel_dir
 # done
 
-# echo "====== readuce cijkl,rho_kernel to VTI model parameters"
-# 
-# kernel_dir=${SEM_iter_dir}/kernel_sum
-# 
-# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_in_alpha_beta_phi_xi_eta_from_cijkl_rho.py \\
-#   ${SEM_nproc_total} \\
-#   ${SEM_iter_dir}/model_initial \\
-#   ${SEM_reference_model_dir} \\
-#   \${kernel_dir} \\
-#   \${kernel_dir}
-
 echo
 echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
@@ -169,12 +158,34 @@ model_names=(${SEM_model_names[@]})
 
 kernel_name=\${model_names[\${SLURM_ARRAY_TASK_ID}]}${SEM_kernel_tag}
 
+mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
+
+
+echo "====== threshold kernel"
+
+kernel_dir=${SEM_iter_dir}/kernel_sum/GLL
+out_dir=${SEM_iter_dir}/kernel_sum/GLL_threshold
+[ -d \${out_dir} ] && rm -rf \${out_dir}
+mkdir -p \$out_dir
+
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_histogram.py  \\
+  ${SEM_nproc_total} \\
+  \${mesh_dir} \\
+  \${kernel_dir} \\
+  \${kernel_name} \\
+  --nbin ${SEM_histogram_nbin} \\
+  --exponential_base ${SEM_histogram_exponential_base} \\
+  --out_hist \${out_dir}/histogram_\${model_name}.txt \\
+  --cdf_threshold ${SEM_cdf_threshold} \\
+  --out_dir \${out_dir} \\
+  --use_zdv
+
+
 echo "====== smooth kernel"
 
-mesh_dir=${SEM_iter_dir}/mesh
-kernel_dir=${SEM_iter_dir}/kernel_sum
-
-out_dir=${SEM_iter_dir}/kernel_precond
+kernel_dir=${SEM_iter_dir}/kernel_sum/GLL_threshold
+out_dir=${SEM_iter_dir}/kernel_sum/GLL_threshold_smooth
+[ -d \${out_dir} ] && rm -rf \${out_dir}
 mkdir -p \$out_dir
 
 # ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_iso.py \\
@@ -189,7 +200,7 @@ mkdir -p \$out_dir
 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_VTI.py \\
   ${SEM_nproc_total} \\
-  \${mesh_dir}/DATABASES_MPI \\
+  \${mesh_dir} \\
   \${kernel_dir} \\
   \${kernel_name} \\
   \${out_dir} \\
@@ -229,7 +240,7 @@ then
   # first iteration use scaled gradient as search direction
   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_scale2.py \\
     ${SEM_nproc_total} \\
-    ${SEM_iter_dir}/kernel_precond \\
+    ${SEM_iter_dir}/kernel_sum/GLL_threshold_smooth \\
     \${out_dir} \\
     --models ${SEM_model_names[@]} \\
     --in_tag ${SEM_kernel_tag} \\
@@ -244,9 +255,9 @@ else
     ${SEM_iter_dir}/mesh/DATABASES_MPI \\
     ${SEM_prev_iter_dir}/model_initial \\
     ${SEM_iter_dir}/model_initial \\
-    ${SEM_prev_iter_dir}/kernel_sum \\
-    ${SEM_iter_dir}/kernel_sum \\
-    ${SEM_iter_dir}/kernel_precond \\
+    ${SEM_prev_iter_dir}/kernel_sum/GLL \\
+    ${SEM_iter_dir}/kernel_sum/GLL \\
+    ${SEM_iter_dir}/kernel_sum/GLL_threshold_smooth \\
     \${out_dir} \\
     --models ${SEM_model_names[@]} \\
     --kernel_tag ${SEM_kernel_tag} \\

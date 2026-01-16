@@ -231,6 +231,7 @@ echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 out_dir=${SEM_iter_dir}/dmodel
+[ -d \${out_dir} ] && rm -rf \${out_dir}
 mkdir -p \${out_dir}
 
 # get search direction
@@ -297,7 +298,7 @@ do
 
   dm_tag=\${group_names[\$i]} 
   out_dir=$SEM_iter_dir/model_perturb_\${dm_tag}
-  [ -e \$out_dir ] && rm -rf \$out_dir
+  [ -d \$out_dir ] && rm -rf \$out_dir
   mkdir -p \$out_dir
 
   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb_groups.py \\
@@ -379,7 +380,7 @@ do
   fi
 
   mesh_dir=${SEM_iter_dir}/mesh_perturb_\${dm_tag}
-  [ -e \$mesh_dir ] && rm -rf \$mesh_dir
+  [ -d \$mesh_dir ] && rm -rf \$mesh_dir
   mkdir -p \$mesh_dir
 
   cd \$mesh_dir

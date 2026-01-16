@@ -328,7 +328,7 @@ do
   tag=\${model}${SEM_kernel_tag}
   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_math.py \\
     ${SEM_nproc_total} \\
-    --model_dirs ${event_dir}/kernel/GLL_mask  ${event_dir}/kernel/mask \\
+    --model_dirs ${event_dir}/kernel/GLL  ${event_dir}/kernel/mask \\
     --model_tags \${tag} mask \\
     --math_expr "v[0]*v[1]" \\
     --out_dir \${out_dir} \\

@@ -5317,15 +5317,17 @@ class Misfit(object):
 
         h5f.close()
 
-    def plot_histogram(self, out_fig, title_prefix=None):
+    def plot_histogram(self, out_fig, title_prefix=None, min_SNR=5.0, max_dt=20.0):
         h5f = pt.open_file(self.h5_path, "r")
 
         # config
         config = h5f.root._v_attrs["config"]
         # min_weight = config['plot']['min_weight']
         nbins = config["plot"]["nbins"]
-        max_dt = max(config["misfit"]["window_weight"]["cc_tshift"])
-        min_SNR = min(config["misfit"]["window_weight"]["SNR"])
+        if "cc_tshift" in config["misfit"]["window_weight"]:
+            max_dt = max(config["misfit"]["window_weight"]["cc_tshift"])
+        if "SNR" in config["misfit"]["window_weight"]:
+            min_SNR = min(config["misfit"]["window_weight"]["SNR"])
 
         # event info
         if "/source" not in h5f:

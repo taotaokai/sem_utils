@@ -99,10 +99,10 @@ out_h5_file = args.out_h5_file
 out_channel_file = args.out_channel_file
 log_file = args.log_file
 
-# 1. Create a custom logger
+# Create a custom logger
 logger = logging.getLogger(__name__) # Use __name__ for best practices
 logger.setLevel(logging.DEBUG)
-# 2. Create handlers
+# Create handlers
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
 if log_file:
@@ -111,6 +111,9 @@ if log_file:
 formatter = logging.Formatter('%(asctime)s :: %(name)s :: %(levelname)s :: %(message)s')
 console_handler.setFormatter(formatter)
 file_handler.setFormatter(formatter)
+# Add handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 # print("==================================\n")
 # print(f"START: {datetime.datetime.now()}\n")
@@ -219,7 +222,7 @@ for net, sta in stations:
     try:
         inv = read_inventory(sxml_file)
     except Exception as err:
-        logger.warning(f"[WARN] fail to read {sxml_file}, skip. (Error: {err})")
+        logger.warning(f"failed to read {sxml_file}, skip. (Error: {err})")
         continue
     # inv = inv.select(network=net, station=sta, time=event_origin.time)
     # if not inv:
@@ -237,7 +240,7 @@ for net, sta in stations:
             network=net, station=sta, location=loc, channel=cha, time=event_origin.time
         )
         if not inv1:
-            logger.warning(f"[WARN] fail to select inventory for {nslc} on {event_origin.time}")
+            logger.warning(f"failed to select inventory for {nslc} on {event_origin.time}")
             # print(f"[WARN] fail to select inventory for {nslc} on {event_origin.time}")
             continue
         duration = sum(
@@ -366,7 +369,7 @@ for network, station, location, channel in nslc_filtered:
             for tr in st1:
                 st.remove(tr)
     if len(st) == 0:
-        logger.warning(f"[WARN] no trace left, station ignored. ({station_id})")
+        logger.warning(f"no trace left, station ignored. ({station_id})")
         # print(f"[WARN] no trace left, station ignored. ({station_id})\n")
         continue
 
@@ -385,7 +388,7 @@ for network, station, location, channel in nslc_filtered:
             # )
             traces_to_remove.append(tr)
         elif tr.stats.endtime < t1:
-            logger.warning(f"[WARN] trace endtime {tr.stats.endtime} is earlier than required {t1}, {tr.id} ignored. ({station_id})")
+            logger.warning(f"trace endtime {tr.stats.endtime} is earlier than required {t1}, {tr.id} ignored. ({station_id})")
             logger.debug(f"{tr}")
             # print(
             #     f"{tr}\n[WARN] trace endtime {tr.stats.endtime} is earlier than required {t1}, {tr.id} ignored. ({station_id})\n"
@@ -471,7 +474,7 @@ for network, station, location, channel in nslc_filtered:
     for tr in traces_to_remove:
         st.remove(tr)
     if len(st) == 0:
-        logger.warning(f"[WARN] no trace left, station ignored. ({station_id})")
+        logger.warning(f"no trace left, station ignored. ({station_id})")
         # print(f"[WARN] no trace left, station ignored. ({station_id})\n")
         continue
 
@@ -591,7 +594,7 @@ for network, station, location, channel in nslc_filtered:
                 freqs, output=config_output_type
             )
         except Exception as err:
-            logger.warning(f"[WARN] failed to evaluate instrument response, {tr.id} ignored. ({station_id})\n")
+            logger.warning(f"failed to evaluate instrument response, {tr.id} ignored. ({station_id})\n")
             logger.debug(f"Error message: {err}")
             # print(
             #     f"{err}\n[WARN] failed to evaluate instrument response, {tr.id} ignored. ({station_id})\n"

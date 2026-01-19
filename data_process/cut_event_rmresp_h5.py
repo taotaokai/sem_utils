@@ -501,7 +501,7 @@ for network, station, location, channel in nslc_filtered:
     for tr in st:
         fs = tr.stats.sampling_rate
         npts = tr.stats.npts
-        npad = 2 * int(1.0 / highpass_Wn * fs)
+        npad = max(5, 2 * int(1.0 / highpass_Wn * fs))
         # npad = int(2.0 / min(config_lower_corner_taper_width, config_higher_corner_taper_width) * fs)
         # print(f'[INFO] resample npad = {npad}')
         nfft = scipy.fft.next_fast_len(npts + 2 * npad)
@@ -545,7 +545,9 @@ for network, station, location, channel in nslc_filtered:
         sig_spectrum[inds] /= output_resp[inds]
         sig_spectrum[0] = 0  # ensure no amplitude at zero-frequency
         # tr.data = np.fft.irfft(sig_spectrum, nfft)[:npts]
-        tr.data = np.fft.irfft(sig_spectrum, nfft)[npad : (npad + npts)]
+        # tr.data = np.fft.irfft(sig_spectrum, nfft)[npad : (npad + npts)]
+        tr.starttime = tr.stats.starttime - npad / fs
+        tr.data = np.fft.irfft(sig_spectrum, nfft)
         # resample by lanczos interpolation
         tr.interpolate(
             config_sampling_rate,

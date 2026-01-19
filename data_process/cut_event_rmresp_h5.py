@@ -546,7 +546,7 @@ for network, station, location, channel in nslc_filtered:
         sig_spectrum[0] = 0  # ensure no amplitude at zero-frequency
         # tr.data = np.fft.irfft(sig_spectrum, nfft)[:npts]
         # tr.data = np.fft.irfft(sig_spectrum, nfft)[npad : (npad + npts)]
-        tr.starttime = tr.stats.starttime - npad / fs
+        tr.stats.starttime = tr.stats.starttime - npad / fs
         tr.data = np.fft.irfft(sig_spectrum, nfft)
         # resample by lanczos interpolation
         tr.interpolate(

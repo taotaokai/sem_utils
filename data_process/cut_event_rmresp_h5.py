@@ -92,6 +92,7 @@ args.add_argument("CMT_file", help="CMT file")
 args.add_argument("out_h5_file", help="output h5 file")
 args.add_argument("out_channel_file", help="output channel file")
 args.add_argument("--log_file", default=None, help="log file")
+args.add_argument("--quiet", action="store_true", help="suppress output to console")
 args = args.parse_args()
 
 config_yaml = args.config_yaml
@@ -102,10 +103,13 @@ log_file = args.log_file
 
 # Create a custom logger
 logger = logging.getLogger("cut_event_rmresph5")  # Use __name__ for best practices
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 # Create handlers
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
+if args.quiet:
+    console_handler.setLevel(logging.ERROR)
+else:
+    console_handler.setLevel(logging.INFO)
 if log_file:
     file_handler = logging.FileHandler(log_file, mode="w")
     file_handler.setLevel(logging.DEBUG)
@@ -121,6 +125,7 @@ logger.addHandler(console_handler)
 # print("==================================\n")
 # print(f"START: {datetime.datetime.now()}\n")
 logger.info("START >>>>>>>>>>>>>>>>>>")
+logger.info(f"{args}")
 
 if os.path.dirname(out_h5_file):
     os.makedirs(os.path.dirname(out_h5_file), exist_ok=True)

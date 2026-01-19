@@ -103,7 +103,7 @@ log_file = args.log_file
 
 # Create a custom logger
 logger = logging.getLogger("cut_event_rmresph5")  # Use __name__ for best practices
-# logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 # Create handlers
 console_handler = logging.StreamHandler()
 if args.quiet:

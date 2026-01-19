@@ -6,6 +6,8 @@ import numpy as np
 import tables
 import scipy
 import yaml
+import argparse
+import logging
 
 from obspy import read_inventory, Inventory, read_events, geodetics
 from obspy.clients.filesystem.sds import Client
@@ -37,9 +39,6 @@ from obspy.taup import TauPyModel
 NOTE: time precision is microsecond
 
 """
-
-print("==================================\n")
-print(f"[INFO] START: {datetime.datetime.now()}\n")
 
 _DEBUG = True
 _DEBUG = False
@@ -86,12 +85,36 @@ def _get_resp_corner_freq(freqs, resp_amp, ref_freq=None, threshold_dB=3):
 
     return left_corner_freq, right_corner_freq
 
+args = argparse.ArgumentParser()
+args.add_argument("config_yaml", help="configuration yaml file")
+args.add_argument("CMT_file", help="CMT file")
+args.add_argument("out_h5_file", help="output h5 file")
+args.add_argument("out_channel_file", help="output channel file")
+args.add_argument("--log_file", default=None, help="log file")
+args = args.parse_args()
 
-#
-config_yaml = sys.argv[1]
-CMT_file = sys.argv[2]
-out_h5_file = sys.argv[3]
-out_channel_file = sys.argv[4]
+config_yaml = args.config_yaml
+CMT_file = args.CMT_file
+out_h5_file = args.out_h5_file
+out_channel_file = args.out_channel_file
+log_file = args.log_file
+
+# 1. Create a custom logger
+logger = logging.getLogger(__name__) # Use __name__ for best practices
+logger.setLevel(logging.DEBUG)
+# 2. Create handlers
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+if log_file:
+    file_handler = logging.FileHandler(log_file, mode="w")
+    file_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s :: %(name)s :: %(levelname)s :: %(message)s')
+console_handler.setFormatter(formatter)
+file_handler.setFormatter(formatter)
+
+# print("==================================\n")
+# print(f"START: {datetime.datetime.now()}\n")
+logger.info("START >>>>>>>>>>>>>>>>>>")
 
 if os.path.dirname(out_h5_file):
     os.makedirs(os.path.dirname(out_h5_file), exist_ok=True)
@@ -106,8 +129,7 @@ event_data = read_events(CMT_file)[0]
 event_id = event_data.event_descriptions[0].text
 event_origin = event_data.preferred_origin()
 
-print("==================================\n")
-print(f"[INFO] event: {event_origin}\n")
+logger.info(f"====== Process event: {event_origin}")
 
 # config
 with open(config_yaml, "r") as file:
@@ -197,7 +219,7 @@ for net, sta in stations:
     try:
         inv = read_inventory(sxml_file)
     except Exception as err:
-        print(f"[WARN] fail to read {sxml_file}, skip. (Error: {err})")
+        logger.warning(f"[WARN] fail to read {sxml_file}, skip. (Error: {err})")
         continue
     # inv = inv.select(network=net, station=sta, time=event_origin.time)
     # if not inv:
@@ -215,7 +237,8 @@ for net, sta in stations:
             network=net, station=sta, location=loc, channel=cha, time=event_origin.time
         )
         if not inv1:
-            print(f"[WARN] fail to select inventory for {nslc} on {event_origin.time}")
+            logger.warning(f"[WARN] fail to select inventory for {nslc} on {event_origin.time}")
+            # print(f"[WARN] fail to select inventory for {nslc} on {event_origin.time}")
             continue
         duration = sum(
             [tr.stats.endtime - tr.stats.starttime for tr in st1.select(*nslc)]
@@ -232,18 +255,20 @@ for net, sta in stations:
 # process
 inv_used = Inventory()
 for network, station, location, channel in nslc_filtered:
-    print("==================================")
     station_id = ".".join([network, station, location, channel[:-1] + "?"])
-    print(f"[INFO] {station_id}\n")
+    # print(f"[INFO] {station_id}\n")
+    logger.info(f"====== {station_id}")
 
     # read StationXML file
     sxml_file = os.path.join(stations_path, f"{network}.{station}.xml")
     try:
         inv = read_inventory(sxml_file)
     except Exception as err:
-        print(
-            f"{err}\n[WARN] fail to read {sxml_file}, station ignored. ({station_id})\n"
-        )
+        logger.warning(f"fail to read {sxml_file}, station ignored. ({station_id})")
+        logger.debug(f"Error message: {err}")
+        # print(
+        #     f"{err}\n[WARN] fail to read {sxml_file}, station ignored. ({station_id})\n"
+        # )
         continue
 
     inv = inv.select(
@@ -254,9 +279,12 @@ for network, station, location, channel in nslc_filtered:
         time=event_origin.time,
     )
     if not inv:
-        print(
-            f"[WARN] no station metadata on {event_origin.time}), station ignored. ({station_id})\n"
+        logger.warning(
+            f"no station metadata on {event_origin.time}), station ignored. ({station_id})"
         )
+        # print(
+        #     f"[WARN] no station metadata on {event_origin.time}), station ignored. ({station_id})\n"
+        # )
         continue
 
     # get channel coordinates
@@ -264,9 +292,11 @@ for network, station, location, channel in nslc_filtered:
         seed_id = ".".join([network, station, location, channel])
         station_coords = inv.get_coordinates(seed_id, event_origin.time)
     except Exception as err:
-        print(
-            f"{err}\n[WARN] cannot find station metadata for {seed_id}, station ignored. ({station_id})\n"
-        )
+        logger.warning(f"cannot find station metadata for {seed_id}, station ignored. ({station_id})")
+        logger.debug(f"Error message: {err}")
+        # print(
+        #     f"{err}\n[WARN] cannot find station metadata for {seed_id}, station ignored. ({station_id})\n"
+        # )
         continue
 
     # calculate event-station distance
@@ -310,9 +340,11 @@ for network, station, location, channel in nslc_filtered:
             merge=-1,
         )
     except Exception as err:
-        print(
-            f"{err}\n[WARN] failed to get waveforms, station ignored. ({station_id})\n"
-        )
+        logger.warning(f"failed to get waveforms, station ingored. ({station_id})")
+        logger.warning(f"encounter an error: {err}")
+        # print(
+        #     f"{err}\n[WARN] failed to get waveforms, station ignored. ({station_id})\n"
+        # )
         continue
 
     # merge adjacent traces with misalignment less than sub-sampling interval
@@ -327,12 +359,15 @@ for network, station, location, channel in nslc_filtered:
     for orientation in orientation_codes:
         st1 = st.select(component=orientation)
         if len(st1) != 1:
-            print(f"{st1.__str__(extended=True)}")
-            print(f"[WARN] gaps/overlaps found, {st1[0].id} ignored. ({station_id})\n")
+            # print(f"{st1.__str__(extended=True)}")
+            # print(f"[WARN] gaps/overlaps found, {st1[0].id} ignored. ({station_id})\n")
+            logger.warning(f"gaps/overlaps found, {st1[0].id} ignored. ({station_id})")
+            logger.debug(f"{st1.__str__(extended=True)}")
             for tr in st1:
                 st.remove(tr)
     if len(st) == 0:
-        print(f"[WARN] no trace left, station ignored. ({station_id})\n")
+        logger.warning(f"[WARN] no trace left, station ignored. ({station_id})")
+        # print(f"[WARN] no trace left, station ignored. ({station_id})\n")
         continue
 
     # check time coverage
@@ -343,19 +378,24 @@ for network, station, location, channel in nslc_filtered:
     for tr in st:
         dt = tr.stats.delta
         if tr.stats.starttime > t0:
-            print(
-                f"{tr}\n[WARN] trace starttime {tr.stats.starttime} is later than required {t0}, {tr.id} ignored. ({station_id})\n"
-            )
+            logger.warning(f"trace starttime {tr.stats.starttime} is later than required {t0}, {tr.id} ignored. ({station_id})")
+            logger.debug(f"{tr}")
+            # print(
+            #     f"{tr}\n[WARN] trace starttime {tr.stats.starttime} is later than required {t0}, {tr.id} ignored. ({station_id})\n"
+            # )
             traces_to_remove.append(tr)
         elif tr.stats.endtime < t1:
-            print(
-                f"{tr}\n[WARN] trace endtime {tr.stats.endtime} is earlier than required {t1}, {tr.id} ignored. ({station_id})\n"
-            )
+            logger.warning(f"[WARN] trace endtime {tr.stats.endtime} is earlier than required {t1}, {tr.id} ignored. ({station_id})")
+            logger.debug(f"{tr}")
+            # print(
+            #     f"{tr}\n[WARN] trace endtime {tr.stats.endtime} is earlier than required {t1}, {tr.id} ignored. ({station_id})\n"
+            # )
             traces_to_remove.append(tr)
     for tr in traces_to_remove:
         st.remove(tr)
     if len(st) == 0:
-        print(f"[WARN] no trace left, station ignored. ({station_id})\n")
+        logger.warning(f"no trace left, station ignored. ({station_id})")
+        # print(f"[WARN] no trace left, station ignored. ({station_id})\n")
         continue
 
     # attach channel metadata and instrument response
@@ -368,23 +408,27 @@ for network, station, location, channel in nslc_filtered:
             tr.stats.metadata = meta
             tr.stats.response = resp
         except Exception as err:
-            print(
-                f"{err}\n[WARN] cannot get instrument response, {tr.id} ignored. ({station_id})\n"
-            )
+            logger.warning(f"cannot get instrument response, {tr.id} ignored. ({station_id})")
+            logger.debug(f"{err}")
+            # print(
+            #     f"{err}\n[WARN] cannot get instrument response, {tr.id} ignored. ({station_id})\n"
+            # )
             traces_to_remove.append(tr)
     for tr in traces_to_remove:
         st.remove(tr)
     if len(st) == 0:
-        print(f"[WARN] no trace left, station ignored. ({station_id})\n")
+        logger.warning(f"no trace left, station ignored. ({station_id})")
+        # print(f"[WARN] no trace left, station ignored. ({station_id})\n")
         continue
 
     # check if all components have the same coordinates
     for key in ["latitude", "longitude", "elevation", "local_depth"]:
         val0 = st[0].stats.metadata[key]
         if not all([tr.stats.metadata[key] == val0 for tr in st[1:]]):
-            print(
-                f"[WARN] coordinates are not the same across all components, only one is kept. ({station_id})\n"
-            )
+            logger.warning(f"coordinates are not the same across all components, only one is kept. ({station_id})")
+            # print(
+            #     f"[WARN] coordinates are not the same across all components, only one is kept. ({station_id})\n"
+            # )
             break
 
     # get response corner frequency on response spectrum
@@ -402,9 +446,11 @@ for network, station, location, channel in nslc_filtered:
                 ref_freqs, output=config_ref_resp_type
             )
         except Exception as err:
-            print(
-                f"{err}\n[WARN] failed to evaluate instrument response, {tr.id} ignored. ({station_id})\n"
-            )
+            logger.warning(f"cannot get instrument response, {tr.id} ignored. ({station_id})")
+            logger.debug(f"Error message: {err}")
+            # print(
+            #     f"{err}\n[WARN] failed to evaluate instrument response, {tr.id} ignored. ({station_id})\n"
+            # )
             traces_to_remove.append(tr)
             continue
         # print(resp.get_paz())
@@ -419,12 +465,14 @@ for network, station, location, channel in nslc_filtered:
         paz = resp.get_paz()
         nz = sum([1 if z == 0 else 0 for z in paz.zeros])
         tr.stats.num_zero_zeros = nz
-        print(f"num. of zero zeros = {nz}")
+        logger.info(f"num. of zero zeros = {nz}")
+        # print(f"num. of zero zeros = {nz}")
 
     for tr in traces_to_remove:
         st.remove(tr)
     if len(st) == 0:
-        print(f"[WARN] no trace left, station ignored. ({station_id})\n")
+        logger.warning(f"[WARN] no trace left, station ignored. ({station_id})")
+        # print(f"[WARN] no trace left, station ignored. ({station_id})\n")
         continue
 
     # determine common response frequency band for all components
@@ -442,18 +490,25 @@ for network, station, location, channel in nslc_filtered:
             if "response_corner_frequency" in tr.stats
         ]
     )
-    print(
-        f"[INFO] response corner frequency = [{resp_lc}, {resp_hc}] for {station_id}\n"
-    )
+    logger.info(f"response corner frequency = [{resp_lc}, {resp_hc}] for {station_id}")
+    # print(
+    #     f"[INFO] response corner frequency = [{resp_lc}, {resp_hc}] for {station_id}\n"
+    # )
     if resp_lc > config_max_resp_lc:
-        print(
-            f"[WARN] response lower corner frequency > {config_max_resp_lc} Hz, station ignored. ({station_id})\n"
+        logger.warning(
+            f"response lower corner frequency > {config_max_resp_lc} Hz, station ignored. ({station_id})"
         )
+        # print(
+        #     f"[WARN] response lower corner frequency > {config_max_resp_lc} Hz, station ignored. ({station_id})\n"
+        # )
         continue
     if resp_hc < config_min_resp_hc:
-        print(
-            f"[WARN] response higher corner frequency < {config_min_resp_hc} Hz, station ignored. ({station_id})\n"
+        logger.warning(
+            f"response higher corner frequency < {config_min_resp_hc} Hz, station ignored. ({station_id})"
         )
+        # print(
+        #     f"[WARN] response higher corner frequency < {config_min_resp_hc} Hz, station ignored. ({station_id})\n"
+        # )
         continue
 
     # # butter-worth filter pass/stop band
@@ -536,9 +591,11 @@ for network, station, location, channel in nslc_filtered:
                 freqs, output=config_output_type
             )
         except Exception as err:
-            print(
-                f"{err}\n[WARN] failed to evaluate instrument response, {tr.id} ignored. ({station_id})\n"
-            )
+            logger.warning(f"[WARN] failed to evaluate instrument response, {tr.id} ignored. ({station_id})\n")
+            logger.debug(f"Error message: {err}")
+            # print(
+            #     f"{err}\n[WARN] failed to evaluate instrument response, {tr.id} ignored. ({station_id})\n"
+            # )
             traces_to_remove.append(tr)
             continue
         inds = (freqs != 0) & (abs(output_resp) > 0)
@@ -559,7 +616,10 @@ for network, station, location, channel in nslc_filtered:
     for tr in traces_to_remove:
         st.remove(tr)
     if len(st) == 0:
-        print(f"[WARN] no trace left, station ignored. ({station_id})\n")
+        logger.warning(
+            f"no trace left, station ignored. ({station_id})"
+        )
+        # print(f"[WARN] no trace left, station ignored. ({station_id})\n")
         continue
 
     # st.taper(0.5, max_length=config_taper_width)
@@ -572,16 +632,22 @@ for network, station, location, channel in nslc_filtered:
 
     # check if Z component exists
     if len(st.select(component="Z")) != 1:
-        print(f"[WARN] no Z component, station ignored. ({station_id})\n")
+        logger.warning(
+            f"no Z component, station ignored. ({station_id})"
+        )
+        # print(f"[WARN] no Z component, station ignored. ({station_id})\n")
         continue
 
     # check if the dip angle of Z component is -90.0
     tr = st.select(component="Z")[0]
     dip = tr.stats.metadata["dip"]
     if dip != -90.0:  # FIXME what about 90.0?
-        print(
-            f"[WARN] Z component's dip angle ({dip}) != -90, station ignored. ({station_id})\n"
+        logger.warning(
+            f"Z component's dip angle ({dip}) != -90, station ignored. ({station_id})"
         )
+        # print(
+        #     f"[WARN] Z component's dip angle ({dip}) != -90, station ignored. ({station_id})\n"
+        # )
         continue
 
     # check horizontal orientation codes: either 1,2 or E,N
@@ -592,9 +658,12 @@ for network, station, location, channel in nslc_filtered:
             "E",
             "N",
         }:
-            print(
-                f"[WARN] horizontal components ({horizontal_orientations}) != (1,2) or (N,E), ignored. ({station_id})\n"
+            logger.warning(
+                f"horizontal components ({horizontal_orientations}) != (1,2) or (N,E), ignored. ({station_id})"
             )
+            # print(
+            #     f"[WARN] horizontal components ({horizontal_orientations}) != (1,2) or (N,E), ignored. ({station_id})\n"
+            # )
             for orientation in horizontal_orientations:
                 for tr in st.select(component=orientation):
                     traces_to_remove.append(tr)
@@ -613,15 +682,21 @@ for network, station, location, channel in nslc_filtered:
                 dip1, dip2 = tr1.stats.metadata["dip"], tr2.stats.metadata["dip"]
                 az1, az2 = tr1.stats.metadata["azimuth"], tr2.stats.metadata["azimuth"]
                 if dip1 != 0 or dip2 != 0:
-                    print(
-                        f"[WARN] horizontal components' dip angles ({dip1}, {dip2}) != 0, ignored. ({station_id})\n"
+                    logger.warning(
+                        f"horizontal components' dip angles ({dip1}, {dip2}) != 0, station ignored. ({station_id})"
                     )
+                    # print(
+                    #     f"[WARN] horizontal components' dip angles ({dip1}, {dip2}) != 0, ignored. ({station_id})\n"
+                    # )
                     traces_to_remove += [tr1, tr2]
                 # if abs((az1 - az2)%180 / 90 - 1) > 1e-5:
                 if abs((az1 - az2) % 360) < 10:
-                    print(
-                        f"[WARN] horizontal components' azimuth angles ({az1}, {az2}) are close to parallel, ignored. ({station_id})\n"
+                    logger.warning(
+                        f"horizontal components' azimuth angles ({az1}, {az2}) are close to parallel, station ignored. ({station_id})"
                     )
+                    # print(
+                    #     f"[WARN] horizontal components' azimuth angles ({az1}, {az2}) are close to parallel, ignored. ({station_id})\n"
+                    # )
                     traces_to_remove += [tr1, tr2]
     for tr in traces_to_remove:
         if tr in st:
@@ -629,16 +704,25 @@ for network, station, location, channel in nslc_filtered:
 
     # check if no trace left
     if len(st) == 0:
-        print(f"[WARN] no trace left, station ignored. ({station_id})\n")
+        logger.warning(
+            f"no trace left, station ignored. ({station_id})"
+        )
+        # print(f"[WARN] no trace left, station ignored. ({station_id})\n")
         continue
 
     if config["enforce_3comp"] and len(st) != 3:
-        print(f"[WARN] not exactly 3 components, station ignored. ({station_id})\n")
+        logger.warning(
+            f"not exactly 3 components, station ignored. ({station_id})"
+        )
+        # print(f"[WARN] not exactly 3 components, station ignored. ({station_id})\n")
         continue
 
     station_name = f"{network}_{station}"
     if station_name in groot:
-        print(f"[WARN] {station_name} alreay exists, overwrite. ({station_id})\n")
+        logger.warning(
+            f"{station_name} alreay exists, station ignored. ({station_id})"
+        )
+        # print(f"[WARN] {station_name} alreay exists, overwrite. ({station_id})\n")
         h5f.remove_node(groot, station_name)
     gsta = h5f.create_group(groot, station_name)
     gsta._v_attrs["network"] = st[0].stats.network
@@ -705,5 +789,6 @@ for network, station, location, channel in nslc_filtered:
 h5f.close()
 inv_used.write(out_channel_file, format="stationtxt")
 
-print("==================================\n")
-print(f"[INFO] END: {datetime.datetime.now()}")
+# print("==================================\n")
+# print(f"[INFO] END: {datetime.datetime.now()}")
+logger.info("END <<<<<<<<<<<<<<<<<<<<<")

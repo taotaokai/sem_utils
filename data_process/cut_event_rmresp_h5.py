@@ -146,6 +146,8 @@ if not isinstance(time_after_origin, list):
         time_after_origin,
     ]
 
+assert(config_output_type in ["VEL", "DISP"])
+
 # for merging traces
 # misalignment_threshold = config['misalignment_threshold']
 
@@ -471,8 +473,12 @@ for network, station, location, channel in nslc_filtered:
 
     highpass_N = config_highpass_min_order
     max_nzeros = max([tr.stats.num_zero_zeros for tr in st])
-    if max_nzeros > config_highpass_min_order:
-        highpass_N = max_nzeros
+    min_highpass_N = max_nzeros # minimum number of zeros required for highpass filter
+    # add one more order for displacement output since PAZ is from velocity response 
+    if config_output_type == "DISP":
+        min_highpass_N = min_highpass_N + 1
+    if min_highpass_N > config_highpass_min_order:
+        highpass_N = min_highpass_N
         msg = f"number of zero zeros {max_nzeros} > {config_highpass_min_order=}, use {highpass_N} instead. ({station_id})"
         warnings.warn(msg)
 

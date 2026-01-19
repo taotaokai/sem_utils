@@ -649,7 +649,15 @@ for network, station, location, channel in nslc_filtered:
     gsta._v_attrs["depth"] = float(st[0].stats.metadata["local_depth"])
     gsta._v_attrs["first_arrival"] = first_arrival_time
 
-    assert all([tr.stats.starttime == resample_starttime for tr in st])
+    # #DEBUG
+    # print(f"{resample_starttime._ns=} ")
+    # for tr in st:
+    #     print(f"{tr.stats.starttime._ns=} ")
+    # FIXME trace.interpolate internally represent time as float(ns/1e9) which results in a loss of precision
+    #       so the following assertion may fail
+    # assert all([tr.stats.starttime == resample_starttime for tr in st])
+    new_starttime = st[0].stats.starttime
+    assert all([tr.stats.starttime == new_starttime for tr in st])
     assert all([tr.stats.npts == resample_npts for tr in st])
     assert all([tr.stats.sampling_rate == config_sampling_rate for tr in st])
 
@@ -677,7 +685,7 @@ for network, station, location, channel in nslc_filtered:
     ]
     ca.attrs["channels"] = np.array(channels, dtype=dtype)
     ca.attrs["starttime"] = (
-        resample_starttime  # st[0].stats.starttime.strftime('%Y-%m-%dT%H:%M:%S.%f') # microseconds precision
+        new_starttime  # st[0].stats.starttime.strftime('%Y-%m-%dT%H:%M:%S.%f') # microseconds precision
     )
     ca.attrs["sampling_rate"] = config_sampling_rate
     ca.attrs["npts"] = resample_npts

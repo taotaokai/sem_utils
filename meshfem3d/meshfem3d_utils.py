@@ -10,7 +10,7 @@ from meshfem3d_constants import *
 
 import numba
 
-from mpi4py import MPI
+# from mpi4py import MPI
 
 # ///////////////////////////////////////////////
 # constants.h
@@ -1194,7 +1194,7 @@ def sem_mesh_interp_points(
 
 
 def sem_mesh_interp_mesh(
-    mpi_comm: MPI.Comm,
+    mpi_comm,
     iproc_target,
     mesh_dir_target,
     model_dir_target,

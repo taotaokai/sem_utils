@@ -3,7 +3,7 @@
 import sys
 
 import numpy as np
-from meshfem3d import read_gll_file
+from meshfem3d_utils import read_gll_file
                
 #====== user input
 procnum_begin = int(sys.argv[1])

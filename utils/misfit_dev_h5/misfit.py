@@ -2157,12 +2157,33 @@ class Misfit(object):
                 ca.attrs["origin_time"] = event_t0
         h5f.close()
 
-    def setup_windows(self):
+    def setup_windows(self, window_yaml=None):
         """ """
         h5f = pt.open_file(self.h5_path, "r+")
 
         config = h5f.root._v_attrs["config"]
-        window_cfg = config["window"]
+
+        window_cfg = None
+        if window_yaml is not None:
+            try:
+                with open(window_yaml, "r") as file:
+                    data = yaml.safe_load(file)
+                window_cfg = data["window"]
+            except Exception as e:
+                msg = f"failed to read in {window_yaml} (ERROR: {e})"
+                warnings.warn(msg)
+
+        if window_cfg is not None:
+            if "window" in config:
+                msg = f"root._v_attrs[window] exists in {h5f.filename}, overwrite!"
+                warnings.warn(msg)    
+            config["window"] = window_cfg
+        elif "window" in config:
+            window_cfg = config["window"]
+        else:
+            msg = "failed to get window configuration"
+            raise AssertionError(msg)
+
         win_taper = config["window_taper"]
         win_ids = set([w["id"] for w in window_cfg])
         if len(win_ids) != len(window_cfg):

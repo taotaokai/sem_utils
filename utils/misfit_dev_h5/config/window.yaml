@@ -1,0 +1,65 @@
+window: [
+  #====== P window: from first P arrival to first S arrival [tb, te]
+  # tb = min_ttp + min(twin)
+  # te = max(min_ttp + max(twin), min_tts + dts)
+  {'id':'Pwin_Z_40-100sec','type':'Pwin','phase':'P','cmp':'Z','twin':[-60,100],'dts':-40,'bp':[4,0.01,0.025],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'Pwin_Z_20-50sec', 'type':'Pwin','phase':'P','cmp':'Z','twin':[-40,50], 'dts':-20,'bp':[4,0.02,0.05], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'Pwin_Z_10-25sec', 'type':'Pwin','phase':'P','cmp':'Z','twin':[-30,40], 'dts':-10,'bp':[4,0.04,0.10], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'Pwin_R_40-100sec','type':'Pwin','phase':'P','cmp':'R','twin':[-60,100],'dts':-40,'bp':[4,0.01,0.025],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'Pwin_R_20-50sec', 'type':'Pwin','phase':'P','cmp':'R','twin':[-40,50], 'dts':-20,'bp':[4,0.02,0.05], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'Pwin_R_10-25sec', 'type':'Pwin','phase':'P','cmp':'R','twin':[-30,40], 'dts':-10,'bp':[4,0.04,0.10], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+
+  #====== S window: from first S arrival to the beginning of surface waves [tb, te]
+  # tb = min_tts + min(twin)
+  # te = max(min_tts + max(twin), gcarc * minslw)
+  {'id':'Swin_Z_40-100sec','type':'Swin','phase':'S','cmp':'Z','twin':[-60,100],'minslw':25,'bp':[4,0.01,0.025],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'Swin_Z_20-50sec', 'type':'Swin','phase':'S','cmp':'Z','twin':[-40,50], 'minslw':25,'bp':[4,0.02,0.05], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'Swin_Z_10-25sec', 'type':'Swin','phase':'S','cmp':'Z','twin':[-30,40], 'minslw':30,'bp':[4,0.04,0.10], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'Swin_R_40-100sec','type':'Swin','phase':'S','cmp':'R','twin':[-60,100],'minslw':25,'bp':[4,0.01,0.025],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'Swin_R_20-50sec', 'type':'Swin','phase':'S','cmp':'R','twin':[-40,50], 'minslw':25,'bp':[4,0.02,0.05], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'Swin_R_10-25sec', 'type':'Swin','phase':'S','cmp':'R','twin':[-30,40], 'minslw':30,'bp':[4,0.04,0.10], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'Swin_T_40-100sec','type':'Swin','phase':'S','cmp':'T','twin':[-60,100],'minslw':20,'bp':[4,0.01,0.025],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'Swin_T_20-50sec', 'type':'Swin','phase':'S','cmp':'T','twin':[-40,50], 'minslw':20,'bp':[4,0.02,0.05], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'Swin_T_10-25sec', 'type':'Swin','phase':'S','cmp':'T','twin':[-30,40], 'minslw':25,'bp':[4,0.04,0.10], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+
+  #------ Body waves
+  # time window: twin = [b, e], 
+  #              window start = min(arrival times) + b, 
+  #              window end = max(arrival times) + e
+  # butterworth bandpass filter: bp = [order, freqmin(Hz), freqmax(Hz)]
+  # event depth range: evdp = [depmin, depmax] in km
+  # epidistance range: gcarc = [distmin, distmax] in degrees
+
+  # P arrivals
+  {'id':'p,P,pP,sP_Z_40-100sec','type':'body','phase':'p,P,pP,sP','cmp':'Z','twin':[-100,120],'bp':[4,0.01,0.025],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'p,P,pP,sP_Z_20-50sec', 'type':'body','phase':'p,P,pP,sP','cmp':'Z','twin':[-40,60],  'bp':[4,0.02,0.05], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'p,P,pP,sP_Z_10-25sec', 'type':'body','phase':'p,P,pP,sP','cmp':'Z','twin':[-30,60],  'bp':[4,0.04,0.10], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'p,P,pP,sP_R_40-100sec','type':'body','phase':'p,P,pP,sP','cmp':'R','twin':[-100,120],'bp':[4,0.01,0.025],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'p,P,pP,sP_R_20-50sec', 'type':'body','phase':'p,P,pP,sP','cmp':'R','twin':[-40,60],  'bp':[4,0.02,0.05], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'p,P,pP,sP_R_10-25sec', 'type':'body','phase':'p,P,pP,sP','cmp':'R','twin':[-30,60],  'bp':[4,0.05,0.10], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+
+  # S arrivals
+  {'id':'s,S,sS,pS_Z_40-100sec','type':'body','phase':'s,S,sS,pS','cmp':'Z','twin':[-100,120],'bp':[4,0.01,0.025],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'s,S,sS,pS_Z_20-50sec', 'type':'body','phase':'s,S,sS,pS','cmp':'Z','twin':[-40,60],  'bp':[4,0.02,0.05], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'s,S,sS,pS_Z_10-25sec', 'type':'body','phase':'s,S,sS,pS','cmp':'Z','twin':[-30,50],  'bp':[4,0.04,0.10], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'s,S,sS,pS_R_40-100sec','type':'body','phase':'s,S,sS,pS','cmp':'R','twin':[-100,120],'bp':[4,0.01,0.025],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'s,S,sS,pS_R_20-50sec', 'type':'body','phase':'s,S,sS,pS','cmp':'R','twin':[-40,60],  'bp':[4,0.02,0.05], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'s,S,sS,pS_R_10-25sec', 'type':'body','phase':'s,S,sS,pS','cmp':'R','twin':[-30,50],  'bp':[4,0.05,0.10], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'s,S,sS,pS_T_40-100sec','type':'body','phase':'s,S,sS,pS','cmp':'T','twin':[-100,120],'bp':[4,0.01,0.025],'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'s,S,sS,pS_T_20-50sec', 'type':'body','phase':'s,S,sS,pS','cmp':'T','twin':[-40,60],  'bp':[4,0.02,0.05], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+  {'id':'s,S,sS,pS_T_10-25sec', 'type':'body','phase':'s,S,sS,pS','cmp':'T','twin':[-30,50],  'bp':[4,0.05,0.10], 'evdp':[0,1000],'gcarc':[0,180],'weight':1},
+
+  #------ Surface waves
+  # slowness window: swin = [smin(s/deg), smax(s/deg), min_length]
+  #                  window start, end = smin * gcarc, smax * gcarc
+  #                  the window is expanded to at least min_length long
+  {'id':'Surf_Z_40-100sec','type':'surf','phase':'surf','cmp':'Z','swin':[15,45,600],'bp':[4,0.01,0.025],'evdp':[0,200],'gcarc':[0,180],'weight':1},
+  {'id':'Surf_Z_20-50sec', 'type':'surf','phase':'surf','cmp':'Z','swin':[20,50,600],'bp':[4,0.02,0.05], 'evdp':[0,200],'gcarc':[0,180],'weight':1},
+  {'id':'Surf_Z_10-25sec', 'type':'surf','phase':'surf','cmp':'Z','swin':[20,50,600],'bp':[4,0.04,0.10], 'evdp':[0,200],'gcarc':[0,180],'weight':1},
+  {'id':'Surf_R_40-100sec','type':'surf','phase':'surf','cmp':'R','swin':[15,45,600],'bp':[4,0.01,0.025],'evdp':[0,200],'gcarc':[0,180],'weight':1},
+  {'id':'Surf_R_20-50sec', 'type':'surf','phase':'surf','cmp':'R','swin':[20,50,600],'bp':[4,0.02,0.05], 'evdp':[0,200],'gcarc':[0,180],'weight':1},
+  {'id':'Surf_R_10-25sec', 'type':'surf','phase':'surf','cmp':'R','swin':[20,50,600],'bp':[4,0.04,0.10], 'evdp':[0,200],'gcarc':[0,180],'weight':1},
+  {'id':'Surf_T_40-100sec','type':'surf','phase':'surf','cmp':'T','swin':[15,35,600],'bp':[4,0.01,0.025],'evdp':[0,200],'gcarc':[0,180],'weight':1},
+  {'id':'Surf_T_20-50sec', 'type':'surf','phase':'surf','cmp':'T','swin':[25,45,600],'bp':[4,0.02,0.05], 'evdp':[0,200],'gcarc':[0,180],'weight':1},
+  {'id':'Surf_T_10-25sec', 'type':'surf','phase':'surf','cmp':'T','swin':[30,50,600],'bp':[4,0.04,0.10], 'evdp':[0,200],'gcarc':[0,180],'weight':1},
+]

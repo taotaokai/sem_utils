@@ -111,7 +111,7 @@ do
   window_yaml=${SEM_misfit_par_dir}/${event_id}_window.yaml
   if [ -f "${window_yaml}" ]; then
     echo "------ use: $(readlink -f $window_yaml)"
-    cp ${window_yaml} $event_dir/DATA/window.yaml
+    cp -L ${window_yaml} $event_dir/DATA/window.yaml
   fi
 
   # create batch scripts

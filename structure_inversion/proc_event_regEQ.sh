@@ -107,6 +107,12 @@ do
   # cp $misfit_par_dir/${event_id}_misfit.yaml $event_dir/DATA/misfit.yaml
   cp $SEM_misfit_par_dir/misfit.yaml $event_dir/DATA/misfit.yaml
 
+  window_yaml=${SEM_misfit_par_dir}/${event_id}_window.yaml
+  if [ -f "${window_yaml}" ]; then
+    echo ------ source: $(readlink -f $window_yaml)
+    cp ${window_yaml} $event_dir/DATA/window.yaml
+  fi
+
   # create slurm jobs
   $SEM_utils_dir/structure_inversion/make_slurm_jobs_for_event_regEQ.sh $control_file $event_id
 

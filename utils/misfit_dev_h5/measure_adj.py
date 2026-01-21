@@ -18,6 +18,7 @@ parser.add_argument("out_adj_dir"   )  # "adj"
 parser.add_argument("--cmt_in_ECEF", action="store_true")
 parser.add_argument("--syn_is_grn", action="store_true")
 parser.add_argument("--nproc", type=int, default=10)
+parser.add_argument("--window_yaml", default=None)
 
 args = parser.parse_args()
 
@@ -40,7 +41,7 @@ if __name__ == "__main__":
     print(f"======= [{datetime.now()}] read_syn_sac", flush=True)
     misfit.read_syn_sac(args.syn_sac_dir, is_grn=args.syn_is_grn)
     print(f"======= [{datetime.now()}] setup_windows", flush=True)
-    misfit.setup_windows()
+    misfit.setup_windows(window_yaml=args.window_yaml)
     print(f"======= [{datetime.now()}] measure_adj", flush=True)
     # misfit.measure_adj()
     nproc = args.nproc - 1

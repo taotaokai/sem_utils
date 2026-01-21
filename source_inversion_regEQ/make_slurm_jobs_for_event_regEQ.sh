@@ -184,7 +184,8 @@ $SEM_python_exec $SEM_utils_dir/misfit/measure_adj.py \\
   $event_dir/SEM \\
   --nproc=\$SLURM_NPROCS \\
   --cmt_in_ECEF \\
-  --syn_is_grn
+  --syn_is_grn \\
+  --window_yaml $event_dir/DATA/window.yaml
 
 if [ \$? -ne 0 ]
 then

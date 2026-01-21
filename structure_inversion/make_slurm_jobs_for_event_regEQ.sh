@@ -174,7 +174,8 @@ $SEM_python_exec $SEM_utils_dir/misfit/measure_adj.py \\
   $event_dir/output_forward/sac \\
   $event_dir/SEM \\
   --nproc=\${SLURM_NTASKS} \\
-  --cmt_in_ECEF
+  --cmt_in_ECEF \\
+  --window_yaml $event_dir/DATA/window.yaml
 
 if [ \$? -ne 0 ]
 then

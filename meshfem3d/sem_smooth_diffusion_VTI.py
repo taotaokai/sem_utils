@@ -11,7 +11,6 @@ import argparse
 
 import numpy as np
 import numba
-from scipy.io import FortranFile
 from mpi4py import MPI
 import pyproj
 
@@ -83,9 +82,6 @@ vertical_length = args.vertical_length
 dt = 1.0 / nt
 
 # ====== smooth each target mesh slice
-if mpi_rank == 0:
-    print(args)
-
 if mpi_size != nproc:
     raise Exception(f"{mpi_size=} must euqal {nproc=}!")
 

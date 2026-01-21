@@ -287,7 +287,7 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_repa
   --type ${SEM_parameterization_type}
 
 # check if simulation finished successfully
-n=\$(ls -1 \$out_dir/kernel/GLL/*.bin | wc -l)
+n=\$(ls -1 \$out_dir/*.bin | wc -l)
 n0=\$(( ${SEM_nproc_total} * 6 )) # 6: number of kernel files for each process (alpha,beta,phi,xi,eta,rho)
 if [ "\$n" -ne "\$n0" ]; then
   echo "====== kernel process job FAILED: $event_id"

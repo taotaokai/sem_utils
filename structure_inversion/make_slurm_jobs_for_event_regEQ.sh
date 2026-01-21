@@ -254,12 +254,6 @@ mv $event_dir/DATABASES_MPI/*_kernel.bin $event_dir/\$out_dir/kernel/
 # mv $event_dir/DATABASES_MPI/*reg1_cijkl_kernel.bin $event_dir/\$out_dir/kernel/
 # mv $event_dir/DATABASES_MPI/*reg1_rho_kernel.bin $event_dir/\$out_dir/kernel/
 
-# remove forward saved frames adn adjoint source files to save disk space
-chmod u+w $event_dir/forward_saved_frames
-rm -rf $event_dir/forward_saved_frames
-rm -rf $event_dir/SEM/*.adj
-
-
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
@@ -292,7 +286,18 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_repa
   \${out_dir} \\
   --type ${SEM_parameterization_type}
 
-# rm -rf \${kernel_dir} # remove kernel directory to save disk space
+# check if simulation finished successfully
+n=$(ls -1 \$out_dir/kernel/GLL/*.bin | wc -l)
+n0=$(( ${SEM_nproc_total} * 6 )) # 6: number of kernel files for each process (alpha,beta,phi,xi,eta,rho)
+if [ "$n" -ne "$n0" ]; then
+  echo "====== kernel process job FAILED: $event_id"
+  exit 1
+fi
+# remove forward saved frames adn adjoint source files to save disk space
+chmod u+w $event_dir/forward_saved_frames
+rm -rf $event_dir/forward_saved_frames
+rm -rf $event_dir/SEM/*.adj
+rm -rf \${kernel_dir} # remove kernel directory to save disk space
 
 echo ====== create source/receiver mask
 

@@ -3676,6 +3676,7 @@ class Misfit(object):
                 nwin_bin = 0
                 while bin_idx0 < nwin:
                     winfo, g_sta = windows[bin_idx0]
+                    bin_idx0 += 1 # index of next window
                     if not winfo["valid"]:
                         msg = f"invalid window: {winfo}, skip"
                         warnings.warn(msg)
@@ -3697,15 +3698,15 @@ class Misfit(object):
                         continue
                     if plot_CCmax and win_ccmax < np.min(plot_CCmax):
                         continue
-                    # put window into current bin or start a new bin
+                    # put window into current bin or leave it for the next bin
                     if az <= azmax and (
                         not plot_max_ntrace_per_bin
                         or nwin_bin <= plot_max_ntrace_per_bin
                     ):
-                        windows_bin.append(windows[bin_idx0])
+                        windows_bin.append((winfo, g_sta))
                         nwin_bin = nwin_bin + 1
-                        bin_idx0 += 1  # next window
                     else:
+                        bin_idx0 -= 1
                         break
 
                 # skip empty azimuthal_bin
@@ -3969,6 +3970,8 @@ class Misfit(object):
                     stnm = f"{net}_{sta}"
                     first_arrtime = attrs["first_arrtime"]
                     dist_degree = attrs["dist_degree"]
+
+                    print(f"plotting {stnm}")
 
                     obs = g_sta[obs_tag]
                     syn = g_sta[syn_tag]

@@ -123,7 +123,6 @@ def main():
 
     if rank_world == 0:
         print(args)
-        sys.stdout.flush()
 
     comm_group, my_group, num_groups = create_mpi_groups(args.nproc_per_slice)
 

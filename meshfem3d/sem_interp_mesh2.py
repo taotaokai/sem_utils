@@ -74,7 +74,6 @@ parser.add_argument(
 args = parser.parse_args()
 if rank_world == 0:
     print(args)
-    sys.stdout.flush()
 
 nproc_source = args.nproc_source
 mesh_dir_source = args.mesh_dir_source

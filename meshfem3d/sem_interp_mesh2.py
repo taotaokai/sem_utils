@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """create horizontal slice of SEM model at a given depth"""
 import sys
+
 # import warnings
 import time
 import argparse
@@ -10,6 +11,7 @@ import numpy as np
 from scipy.io import FortranFile
 from scipy.interpolate import interpn
 from mpi4py import MPI
+
 # import numba
 
 # from meshfem3d_constants import NGLLX, NGLLY, NGLLZ, GAUSSALPHA, GAUSSBETA
@@ -48,7 +50,10 @@ parser.add_argument("mesh_dir_target", help="mesh dir for interpolate")
 parser.add_argument("model_dir_target", help="output model dir")
 
 parser.add_argument(
-    "model_tags", nargs="+", help="model tags to interpolate (e.g. vsv vsh)"
+    "--model_tags",
+    nargs="+",
+    default=["vp", "vs"],
+    help="model tags to interpolate (e.g. vsv vsh)",
 )
 parser.add_argument(
     "--method",
@@ -104,7 +109,7 @@ rank_group = comm_group.Get_rank()
 if comm_group != MPI.COMM_NULL:
 
     for iproc_target in range(my_group, nproc_target, num_groups):
-        
+
         if rank_group == 0:
             tic = time.time()
 

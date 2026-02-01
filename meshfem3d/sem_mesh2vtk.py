@@ -11,7 +11,9 @@ from meshfem3d_utils import sem_mesh_read, read_gll_file, NGLLX, NGLLY, NGLLZ
 # ====== user input
 parser = argparse.ArgumentParser(description="Make sem mesh vtk file")
 parser.add_argument("nproc", type=int, help="total number of slices")
-parser.add_argument("mesh_dir", type=str, help="DATABSAES_MPI/")
+parser.add_argument(
+    "mesh_dir", type=str, help="{mesh_dir}/proc******_{region}_solver_data.bin"
+)
 parser.add_argument("vtk_file", type=str, help="output .vtk file name")
 parser.add_argument(
     "--slice_list",
@@ -20,8 +22,23 @@ parser.add_argument(
     default=None,
     help="list of slices to convert to vtk",
 )
-parser.add_argument("--model_dir", default=None, type=str, help="e.g. DATABSAES_MPI/")
-parser.add_argument("--model_tag", default=None, type=str, help="e.g. vsv")
+parser.add_argument(
+    "--region",
+    default="reg1",
+    help="proc******_{region}_*.bin",
+)
+parser.add_argument(
+    "--model_dir",
+    default=None,
+    type=str,
+    help="e.g. {model_dir}/proc****_{region}_{model_tag}.bin",
+)
+parser.add_argument(
+    "--model_tag",
+    default=None,
+    type=str,
+    help="e.g. {model_dir}/proc****_{region}_{model_tag}.bin",
+)
 args = parser.parse_args()
 print(args)
 
@@ -43,14 +60,14 @@ cell_num_total = 0
 
 # indices of the HEX points in GLL element
 corner_inds = [
-         0  + NGLLX * (      0 + NGLLY * (      0)),  
-   NGLLX-1  + NGLLX * (      0 + NGLLY * (      0)),  
-   NGLLX-1  + NGLLX * (NGLLY-1 + NGLLY * (      0)),  
-         0  + NGLLX * (NGLLY-1 + NGLLY * (      0)),  
-         0  + NGLLX * (      0 + NGLLY * (NGLLZ-1)),  
-   NGLLX-1  + NGLLX * (      0 + NGLLY * (NGLLZ-1)),  
-   NGLLX-1  + NGLLX * (NGLLY-1 + NGLLY * (NGLLZ-1)),  
-         0  + NGLLX * (NGLLY-1 + NGLLY * (NGLLZ-1)),  
+    0 + NGLLX * (0 + NGLLY * (0)),
+    NGLLX - 1 + NGLLX * (0 + NGLLY * (0)),
+    NGLLX - 1 + NGLLX * (NGLLY - 1 + NGLLY * (0)),
+    0 + NGLLX * (NGLLY - 1 + NGLLY * (0)),
+    0 + NGLLX * (0 + NGLLY * (NGLLZ - 1)),
+    NGLLX - 1 + NGLLX * (0 + NGLLY * (NGLLZ - 1)),
+    NGLLX - 1 + NGLLX * (NGLLY - 1 + NGLLY * (NGLLZ - 1)),
+    0 + NGLLX * (NGLLY - 1 + NGLLY * (NGLLZ - 1)),
 ]
 
 # for iproc in range(args.procnum_begin, args.procnum_end + 1):
@@ -58,13 +75,19 @@ for iproc in slice_list:
 
     print("# iproc = ", iproc)
 
-    prname = f"proc{iproc:06d}_reg1"
+    prname = f"proc{iproc:06d}_{args.region}"
     mesh_file = os.path.join(args.mesh_dir, f"{prname}_solver_data.bin")
     mesh_data = sem_mesh_read(mesh_file)
 
     gll_dims = mesh_data["gll_dims"]
     if with_point_data:
-        model_gll = read_gll_file(args.model_dir, args.model_tag, iproc, shape=gll_dims)
+        model_gll = read_gll_file(
+            args.model_dir,
+            args.model_tag,
+            iproc,
+            region_code=args.region,
+            shape=gll_dims,
+        )
 
     # vtk point/cell data
     nspec = mesh_data["nspec"]

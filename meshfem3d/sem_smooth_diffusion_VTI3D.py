@@ -339,7 +339,7 @@ if mpi_rank == 0:
     # print(f"{du_glob=}, {du_glob.dtype=}")
 
 # write out smoothed model files
-write_gll_file(out_dir, model_name, mpi_rank, u[ibool])
+write_gll_file(out_dir, model_name, mpi_rank, u[ibool], overwrite=True)
 
 if mpi_rank == 0:
     elapsed_time = time.time() - tic

@@ -2351,6 +2351,10 @@ class Misfit(object):
                         tpad = 0.5 * (minlen - (te - tb))
                         tb -= tpad
                         te += tpad
+                elif win_type == "full":
+                    twin, max_slowness = win["twin"], win["maxslw"]
+                    tb = min_ttp + min(twin)
+                    te = max(min_ttp + max(twin), gcarc * max_slowness)
                 else:
                     msg = f"unknown window type: {win_type}, skip"
                     warnings.warn(msg)

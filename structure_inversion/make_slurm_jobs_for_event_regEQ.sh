@@ -154,6 +154,8 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
+export OPENBLAS_NUM_THREADS=1
+
 cd $event_dir
 
 chmod u+w -R $misfit_dir
@@ -525,6 +527,8 @@ done
 echo
 echo "grid search [\$(date -Is)]"
 echo
+
+export OPENBLAS_NUM_THREADS=1
 
 $SEM_python_exec $SEM_utils_dir/misfit/grid_search_structure.py \\
   $db_file \\

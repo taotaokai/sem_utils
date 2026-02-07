@@ -164,6 +164,8 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date)]"
 echo
 
+export OPENBLAS_NUM_THREADS=1
+
 cd $event_dir
 
 chmod u+w -R $misfit_dir
@@ -433,6 +435,8 @@ done
 echo
 echo "GRID SEARCH OF SOURCE MODEL [\$(date)]"
 echo
+
+export OPENBLAS_NUM_THREADS=1
 
 # grid search of source model
 $SEM_python_exec $SEM_utils_dir/misfit/grid_search_source.py \\

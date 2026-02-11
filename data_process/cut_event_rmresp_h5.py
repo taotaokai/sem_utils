@@ -104,23 +104,24 @@ log_file = args.log_file
 # Create a custom logger
 logger = logging.getLogger("cut_event_rmresph5")  # Use __name__ for best practices
 logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d_%H:%M:%S"
+)
 # Create handlers
 console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
 if args.quiet:
     console_handler.setLevel(logging.ERROR)
 else:
     console_handler.setLevel(logging.INFO)
+# Add handlers to the logger
+logger.addHandler(console_handler)
+
 if log_file:
     file_handler = logging.FileHandler(log_file, mode="w")
+    file_handler.setFormatter(formatter)
     file_handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d_%H:%M:%S"
-)
-console_handler.setFormatter(formatter)
-file_handler.setFormatter(formatter)
-# Add handlers to the logger
-logger.addHandler(file_handler)
-logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
 
 # print("==================================\n")
 # print(f"START: {datetime.datetime.now()}\n")

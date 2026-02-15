@@ -41,7 +41,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--with_ispec_is_tiso",
-    action="store_ture",
+    action="store_true",
     help="output ispec_is_tiso for each element",
 )
 args = parser.parse_args()

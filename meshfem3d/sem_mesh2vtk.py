@@ -39,6 +39,11 @@ parser.add_argument(
     type=str,
     help="e.g. {model_dir}/proc****_{region}_{model_tag}.bin",
 )
+parser.add_argument(
+    "--with_ispec_is_tiso",
+    action="store_ture"
+    help="output ispec_is_tiso for each element",
+)
 args = parser.parse_args()
 print(args)
 
@@ -57,6 +62,8 @@ if with_point_data:
     point_data_total = np.zeros((0), dtype=np.float32)
 point_num_total = 0
 cell_num_total = 0
+if args.with_ispec_is_tiso:
+    cell_data_total = np.zeros((0), dtype=np.uint8)
 
 # indices of the HEX points in GLL element
 corner_inds = [
@@ -134,9 +141,13 @@ for iproc in slice_list:
     cell_topo_total = np.vstack((cell_topo_total, cell_topo[0:cell_num, :]))
     if with_point_data:
         point_data_total = np.hstack((point_data_total, point_data[0:point_num]))
+    if args.with_ispec_is_tiso:
+        cell_data_total = np.hstack((cell_data_total, mesh_data["ispec_is_tiso"]))
 
 # write out vtk
 grid = pv.UnstructuredGrid({pv.CellType.HEXAHEDRON: cell_topo_total}, point_xyz_total)
 if with_point_data:
     grid.point_data[args.model_tag] = point_data_total
+if args.with_ispec_is_tiso:
+    grid.cell_data["ispec_is_tiso"] = cell_data_total
 grid.save(args.vtk_file)

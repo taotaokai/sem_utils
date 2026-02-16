@@ -282,12 +282,13 @@ out_dir=${event_dir}/kernel/GLL
 mkdir -p \$out_dir
 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_reparameterization.py \\
-  ${SEM_nproc_total} \\
-  ${SEM_reference_model_dir} \\
-  ${SEM_iter_dir}/model_initial \\
-  \${kernel_dir} \\
-  \${out_dir} \\
-  --type ${SEM_parameterization_type}
+  --nproc ${SEM_nproc_total} \\
+  --reference_dir ${SEM_reference_model_dir} \\
+  --model_dir ${SEM_iter_dir}/model_initial \\
+  --kernel_dir \${kernel_dir} \\
+  --out_dir \${out_dir} \\
+  --type ${SEM_parameterization_type} \\
+  --mesh_dir \${mesh_dir}
 
 # check if simulation finished successfully
 n=\$(ls -1 \$out_dir/*.bin | wc -l)
@@ -350,7 +351,7 @@ echo
 EOF
 
 
-#====== kernel clippling   
+#====== kernel clipping   
 cat <<EOF > $threshold_job
 #!/bin/bash
 #SBATCH -J ${event_id}.threshold
@@ -372,12 +373,13 @@ out_dir=${event_dir}/kernel/GLL
 mkdir -p \$out_dir
 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_reparameterization.py \\
-  ${SEM_nproc_total} \\
-  ${SEM_reference_model_dir} \\
-  ${SEM_iter_dir}/model_initial \\
-  \${kernel_dir} \\
-  \${out_dir} \\
-  --type ${SEM_parameterization_type}
+  --nproc ${SEM_nproc_total} \\
+  --reference_dir ${SEM_reference_model_dir} \\
+  --model_dir ${SEM_iter_dir}/model_initial \\
+  --kernel_dir \${kernel_dir} \\
+  --out_dir \${out_dir} \\
+  --type ${SEM_parameterization_type} \\
+  --mesh_dir \${mesh_dir}
 
 # rm -rf \${kernel_dir} # remove kernel directory to save disk space
 

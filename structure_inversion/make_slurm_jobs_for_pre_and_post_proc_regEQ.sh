@@ -287,6 +287,8 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
+mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
+
 #====== model perturbation for each group
 
 group_names=(${SEM_perturb_group_names[@]})
@@ -314,37 +316,17 @@ do
     # --model_min_values ${SEM_model_min_values[@]} \\
     # --model_max_values ${SEM_model_max_values[@]}
 
+  # convert from alpha,beta,xi,phi to vpv,vph,vsv,vsh
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
+    --nproc ${SEM_nproc_total} \\
+    --reference_dir ${SEM_reference_model_dir} \\
+    --model_dir \$out_dir \\
+    --out_dir \$out_dir \\
+    --reverse \\
+    --type ${SEM_parameterization_type} \\
+    --overwrite_ok \\
+    --mesh_dir \${mesh_dir}
 done
-
-#   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb.py \\
-#     ${SEM_nproc_total} \\
-#     $SEM_iter_dir/model_initial \\
-#     $SEM_iter_dir/dmodel \\
-#     \$out_dir \\
-#     --model_tags \${perturb_model_tag_groups[\$i]//,/ } \\
-#     --dmodel_tags \${perturb_dmodel_tag_groups[\$i]//,/ } \\
-#     --min_values \${perturb_min_values[\$i]//,/ } \\
-#     --max_values \${perturb_max_values[\$i]//,/ } \\
-#     --scale 1.0 \\
-#     --method "absolute"
-# 
-# done
-
-#====== convert model from alpha,beta,xi,phi to vpv,vph,vsv,vsh
-
-# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_alpha_beta_phi_xi_to_vph_vpv_vsv_vsh.py \\
-#   ${SEM_nproc_total} \\
-#   ${SEM_reference_model_dir} \\
-#   \$out_dir \\
-#   \$out_dir
-
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
-  ${SEM_nproc_total} \\
-  ${SEM_reference_model_dir} \\
-  \$out_dir \\
-  \$out_dir \\
-  --reverse \\
-  --type ${SEM_parameterization_type}
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
@@ -425,6 +407,8 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
+mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
+
 echo ====== collect grid search results from all events
 
 out_dir=${SEM_iter_dir}/line_search
@@ -451,14 +435,6 @@ mkdir -p $SEM_iter_dir/model_updated
 # copy initial model in case some model parameters are not inverted, e.g., qmu, rho 
 cp -L $SEM_iter_dir/model_initial/*.bin $SEM_iter_dir/model_updated/
 chmod -R u+w $SEM_iter_dir/model_updated
-
-# for model_names in ${SEM_perturb_model_groups[@]}
-# do
-#   for tag in \${model_names//,/ }
-#   do
-#     rm $SEM_iter_dir/model_updated/*_\${tag}.bin
-#   done
-# done
 
 group_names=(${SEM_perturb_group_names[@]})
 model_groups=(${SEM_perturb_model_groups[@]})
@@ -488,53 +464,17 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb_groups.
   --model_max_values ${SEM_model_max_values[@]} \\
   --overwrite_ok
 
-
-# ngroup=\${#perturb_group_names[@]}
-# 
-# for ((i=0; i<\$ngroup; i++))
-# do
-# 
-#   dm_tag=\${perturb_group_names[\$i]} 
-# 
-#   opt_dm_scale=\$(grep \$dm_tag \${out_dir}/grid_search.txt | awk '{print \$NF}')
-# 
-#   echo "# apply model update for [\${dm_tag}] with step length [\${opt_dm_scale}]"
-# 
-#   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb.py \\
-#     ${SEM_nproc_total} \\
-#     $SEM_iter_dir/model_initial \\
-#     $SEM_iter_dir/dmodel \\
-#     $SEM_iter_dir/model_updated \\
-#     --model_tags \${perturb_model_tag_groups[\$i]//,/ } \\
-#     --dmodel_tags \${perturb_dmodel_tag_groups[\$i]//,/ } \\
-#     --min_values \${perturb_min_values[\$i]//,/ } \\
-#     --max_values \${perturb_max_values[\$i]//,/ } \\
-#     --scale \$opt_dm_scale \\
-#     --method "absolute"
-# 
-# done
-
-# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_alpha_beta_phi_xi_to_vph_vpv_vsv_vsh.py \\
-#   ${SEM_nproc_total} \\
-#   ${SEM_reference_model_dir} \\
-#   $SEM_iter_dir/model_updated \\
-#   $SEM_iter_dir/model_updated \\
-#   $model_update_min_alpha $model_update_max_alpha \\
-#   $model_update_min_beta  $model_update_max_beta  \\
-#   $model_update_min_phi   $model_update_max_phi   \\
-#   $model_update_min_xi    $model_update_max_xi    \\
-#   $model_update_min_eta   $model_update_max_eta
-
 echo ====== convert back to vph,vpv,vsv,vsh
 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
-  ${SEM_nproc_total} \\
-  ${SEM_reference_model_dir} \\
-  $SEM_iter_dir/model_updated \\
-  $SEM_iter_dir/model_updated \\
+  --nproc ${SEM_nproc_total} \\
+  --reference_dir ${SEM_reference_model_dir} \\
+  --model_dir $SEM_iter_dir/model_updated \\
+  --out_dir $SEM_iter_dir/model_updated \\
   --reverse \\
   --type ${SEM_parameterization_type} \\
-  --overwrite_ok
+  --overwrite_ok \\
+  --mesh_dir \${mesh_dir} 
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
@@ -553,6 +493,8 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
+mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
+
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_random_perturb.py \\
   ${SEM_nproc_total} \\
   ${SEM_iter_dir}/model_initial \\
@@ -563,12 +505,14 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_random_pert
 
 # convert back to vpv,vph,vsv,vsh
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
-  ${SEM_nproc_total} \\
-  ${SEM_reference_model_dir} \\
-  $SEM_iter_dir/model_perturb_random \\
-  $SEM_iter_dir/model_perturb_random \\
+  --nproc ${SEM_nproc_total} \\
+  --reference_dir ${SEM_reference_model_dir} \\
+  --model_dir $SEM_iter_dir/model_perturb_random \\
+  --out_dir $SEM_iter_dir/model_perturb_random \\
   --reverse \\
-  --type ${SEM_parameterization_type}
+  --type ${SEM_parameterization_type} \\
+  --overwrite_ok \\
+  --mesh_dir \${mesh_dir}
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"

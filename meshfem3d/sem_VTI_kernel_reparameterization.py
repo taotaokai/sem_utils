@@ -73,7 +73,7 @@ def process_kernel_for_alpha_beta_phi_xi(
     gll_dims = None
     ispec_is_iso = None
     if mesh_dir is not None:
-        mesh_file = os.path.join(mesh_dir, f"{iproc:06d}_reg1_solver_data.bin")
+        mesh_file = os.path.join(mesh_dir, f"proc{iproc:06d}_reg1_solver_data.bin")
         mesh = sem_mesh_read(mesh_file)
         gll_dims = mesh["gll_dims"]
         ispec_is_iso = ~(mesh["ispec_is_tiso"].astype(bool))
@@ -136,7 +136,7 @@ def process_kernel_for_beta_kappa_phi_xi(
     gll_dims = None
     ispec_is_iso = None
     if mesh_dir is not None:
-        mesh_file = os.path.join(mesh_dir, f"{iproc:06d}_reg1_solver_data.bin")
+        mesh_file = os.path.join(mesh_dir, f"proc{iproc:06d}_reg1_solver_data.bin")
         mesh = sem_mesh_read(mesh_file)
         gll_dims = mesh["gll_dims"]
         ispec_is_iso = ~(mesh["ispec_is_tiso"].astype(bool))

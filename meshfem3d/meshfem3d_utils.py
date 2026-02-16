@@ -1222,7 +1222,7 @@ def sem_mesh_interp_mesh(
 
     # read in target SEM mesh
     # mesh_file = "%s/proc%06d_reg1_solver_data.bin" % (mesh_dir_target, iproc_target)
-    mesh_file = os.path.join(mesh_dir_target, f"{iproc_target:06d}_reg1_solver_data.bin")
+    mesh_file = os.path.join(mesh_dir_target, f"proc{iproc_target:06d}_reg1_solver_data.bin")
     mesh_data_target = sem_mesh_read(mesh_file)
     # nspec_target = mesh_data_target["nspec"]
     ibool_target = mesh_data_target["ibool"]

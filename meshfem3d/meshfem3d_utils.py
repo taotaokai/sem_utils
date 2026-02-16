@@ -305,15 +305,15 @@ def sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
     vs = (1.0 + beta) * vs0
 
     # Extract specific components
-    K_C11 = cijkl_kernel[:, 0]  # dChi/dC11
-    K_C12 = cijkl_kernel[:, 1]  # dChi/dC12
-    K_C13 = cijkl_kernel[:, 2]  # dChi/dC13
-    K_C22 = cijkl_kernel[:, 6]  # dChi/dC22
-    K_C23 = cijkl_kernel[:, 7]  # dChi/dC23
-    K_C33 = cijkl_kernel[:, 11]  # dChi/dC33
-    K_C44 = cijkl_kernel[:, 15]  # dChi/dC44
-    K_C55 = cijkl_kernel[:, 18]  # dChi/dC55
-    K_C66 = cijkl_kernel[:, 20]  # dChi/dC66
+    K_C11 = cijkl_kernel[..., 0]  # dChi/dC11
+    K_C12 = cijkl_kernel[..., 1]  # dChi/dC12
+    K_C13 = cijkl_kernel[..., 2]  # dChi/dC13
+    K_C22 = cijkl_kernel[..., 6]  # dChi/dC22
+    K_C23 = cijkl_kernel[..., 7]  # dChi/dC23
+    K_C33 = cijkl_kernel[..., 11]  # dChi/dC33
+    K_C44 = cijkl_kernel[..., 15]  # dChi/dC44
+    K_C55 = cijkl_kernel[..., 18]  # dChi/dC55
+    K_C66 = cijkl_kernel[..., 20]  # dChi/dC66
 
     # Convert to relative velocity using chain rule: dChi/dA = dChi/dCij * dCij/dA
     K_alpha = (
@@ -453,15 +453,15 @@ def sem_VTI_kernel_cijkl_rho_to_beta_kappa_phi_xi_eta_rho(
     vp = kappa * vs
 
     # Extract specific components
-    K_C11 = cijkl_kernel[:, 0]  # dChi/dC11,  C11 = rho * vph**2
-    K_C12 = cijkl_kernel[:, 1]  # dChi/dC12,  C12 = C11 - 2 * C66
-    K_C13 = cijkl_kernel[:, 2]  # dChi/dC13,  C13 = eta * (C11 - 2 * C44)
-    K_C22 = cijkl_kernel[:, 6]  # dChi/dC22,  C22 = C11
-    K_C23 = cijkl_kernel[:, 7]  # dChi/dC23,  C23 = C13
-    K_C33 = cijkl_kernel[:, 11]  # dChi/dC33, C33 = rho * vpv**2
-    K_C44 = cijkl_kernel[:, 15]  # dChi/dC44, C44 = rho * vsv**2
-    K_C55 = cijkl_kernel[:, 18]  # dChi/dC55, C55 = C44
-    K_C66 = cijkl_kernel[:, 20]  # dChi/dC66, C66 = rho * vsh**2
+    K_C11 = cijkl_kernel[..., 0]  # dChi/dC11,  C11 = rho * vph**2
+    K_C12 = cijkl_kernel[..., 1]  # dChi/dC12,  C12 = C11 - 2 * C66
+    K_C13 = cijkl_kernel[..., 2]  # dChi/dC13,  C13 = eta * (C11 - 2 * C44)
+    K_C22 = cijkl_kernel[..., 6]  # dChi/dC22,  C22 = C11
+    K_C23 = cijkl_kernel[..., 7]  # dChi/dC23,  C23 = C13
+    K_C33 = cijkl_kernel[..., 11]  # dChi/dC33, C33 = rho * vpv**2
+    K_C44 = cijkl_kernel[..., 15]  # dChi/dC44, C44 = rho * vsv**2
+    K_C55 = cijkl_kernel[..., 18]  # dChi/dC55, C55 = C44
+    K_C66 = cijkl_kernel[..., 20]  # dChi/dC66, C66 = rho * vsh**2
 
     # Convert to relative velocity using chain rule: dChi/dA = dChi/dCij * dCij/dA
 
@@ -1221,7 +1221,8 @@ def sem_mesh_interp_mesh(
     nmodel = len(model_tags)
 
     # read in target SEM mesh
-    mesh_file = "%s/proc%06d_reg1_solver_data.bin" % (mesh_dir_target, iproc_target)
+    # mesh_file = "%s/proc%06d_reg1_solver_data.bin" % (mesh_dir_target, iproc_target)
+    mesh_file = os.path.join(mesh_dir_target, f"{iproc_target:06d}_reg1_solver_data.bin")
     mesh_data_target = sem_mesh_read(mesh_file)
     # nspec_target = mesh_data_target["nspec"]
     ibool_target = mesh_data_target["ibool"]

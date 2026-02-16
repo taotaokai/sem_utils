@@ -5,6 +5,7 @@ import os
 from mpi4py import MPI
 
 from meshfem3d_utils import (
+    sem_mesh_read,
     read_gll_file,
     write_gll_file,
     sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho,
@@ -27,20 +28,28 @@ def parse_arguments():
     parser = argparse.ArgumentParser(
         description="Convert cijkl and rho kernels to TISO (transversely isotropic) kernels"
     )
-
-    parser.add_argument("nproc", type=int, help="number of mesh slices")
     parser.add_argument(
-        "reference_dir", help="directory with reference model proc*_reg1_[vp,vs].bin"
+        "--nproc", type=int, required=True, help="number of mesh slices"
     )
     parser.add_argument(
-        "model_dir", help="directory with proc*_reg1_[alpha,beta,phi,xi,eta,rho].bin"
+        "--reference_dir",
+        required=True,
+        help="directory with reference isotropy model proc*_reg1_[vp,vs].bin",
     )
     parser.add_argument(
-        "kernel_dir", help="directory with proc*_reg1_[cijkl,rho]_kernel.bin"
+        "--model_dir",
+        required=True,
+        help="directory with proc*_reg1_[vpv,vph,vsv,vsh].bin",
     )
     parser.add_argument(
-        "out_dir",
-        help="output dir for proc*_reg1_[alpha,beta,phi,xi,eta,rho]_kernel.bin",
+        "--kernel_dir",
+        required=True,
+        help="directory with proc*_reg1_[cijkl,rho]_kernel.bin",
+    )
+    parser.add_argument(
+        "--out_dir",
+        required=True,
+        help="output dir for proc*_reg1_[alpha,beta,phi,xi,vp,vs].bin",
     )
     parser.add_argument(
         "--type",
@@ -48,36 +57,65 @@ def parse_arguments():
         default="alpha_beta_phi_xi",
         help="type of parameterization",
     )
+    parser.add_argument(
+        "--mesh_dir", default=None, help="mesh directory of proc*_reg1_solver_data.bin"
+    )
 
     return parser.parse_args()
 
 
 def process_kernel_for_alpha_beta_phi_xi(
-    iproc, reference_dir, model_dir, kernel_dir, out_dir
+    iproc, reference_dir, model_dir, kernel_dir, out_dir, mesh_dir=None
 ):  # , mask=None):
     """Process kernel data for a single processor slice."""
 
+    # read mesh
+    gll_dims = None
+    ispec_is_iso = None
+    if mesh_dir is not None:
+        mesh_file = os.path.join(mesh_dir, f"{iproc:06d}_reg1_solver_data.bin")
+        mesh = sem_mesh_read(mesh_file)
+        gll_dims = mesh["gll_dims"]
+        ispec_is_iso = ~(mesh["ispec_is_tiso"].astype(bool))
+
     # Read cijkl,rho kernel
-    cijkl_kernel = read_gll_file(kernel_dir, "cijkl_kernel", iproc).reshape((-1, 21))
-    rho_kernel = read_gll_file(kernel_dir, "rho_kernel", iproc)
+    kernel_dims = (-1, 21)
+    if gll_dims:
+        kernel_dims = gll_dims + (21,)
+    cijkl_kernel = read_gll_file(
+        kernel_dir, "cijkl_kernel", iproc, shape=kernel_dims
+    )
+    rho_kernel = read_gll_file(kernel_dir, "rho_kernel", iproc, shape=gll_dims)
 
     # Read reference velocity models (km/s)
-    vp0 = read_gll_file(reference_dir, "vp", iproc)
-    vs0 = read_gll_file(reference_dir, "vs", iproc)
+    vp0 = read_gll_file(reference_dir, "vp", iproc, shape=gll_dims)
+    vs0 = read_gll_file(reference_dir, "vs", iproc, shape=gll_dims)
 
     # read models (velocities in km/s, density in g/cm^3)
-    alpha = read_gll_file(model_dir, "alpha", iproc)
-    beta = read_gll_file(model_dir, "beta", iproc)
-    phi = read_gll_file(model_dir, "phi", iproc)
-    xi = read_gll_file(model_dir, "xi", iproc)
-    eta = read_gll_file(model_dir, "eta", iproc)
-    rho = read_gll_file(model_dir, "rho", iproc)
+    alpha = read_gll_file(model_dir, "alpha", iproc, shape=gll_dims)
+    beta = read_gll_file(model_dir, "beta", iproc, shape=gll_dims)
+    phi = read_gll_file(model_dir, "phi", iproc, shape=gll_dims)
+    xi = read_gll_file(model_dir, "xi", iproc, shape=gll_dims)
+    eta = read_gll_file(model_dir, "eta", iproc, shape=gll_dims)
+    rho = read_gll_file(model_dir, "rho", iproc, shape=gll_dims)
+
+    # enforce isotropic elements
+    if mesh_dir:
+        phi[ispec_is_iso, ...] = 0.0
+        xi[ispec_is_iso, ...] = 0.0
+        eta[ispec_is_iso, ...] = 1.0
 
     K_alpha, K_beta, K_phi, K_xi, K_eta, K_rho = (
         sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
             cijkl_kernel, rho_kernel, alpha, beta, phi, xi, eta, rho, vp0, vs0
         )
     )
+
+    # isotropic elements have zero values for phi, xi, eta
+    if mesh_dir:
+        K_phi[ispec_is_iso, ...] = 0.0
+        K_xi[ispec_is_iso, ...] = 0.0
+        K_eta[ispec_is_iso, ...] = 0.0
 
     # Write each kernel to a separate file
     write_gll_file(out_dir, "alpha_kernel", iproc, K_alpha)
@@ -90,30 +128,54 @@ def process_kernel_for_alpha_beta_phi_xi(
 
 
 def process_kernel_for_beta_kappa_phi_xi(
-    iproc, reference_dir, model_dir, kernel_dir, out_dir
+    iproc, reference_dir, model_dir, kernel_dir, out_dir, mesh_dir=None
 ):  # , mask=None):
     """Process kernel data for a single processor slice."""
 
+    # read mesh
+    gll_dims = None
+    ispec_is_iso = None
+    if mesh_dir is not None:
+        mesh_file = os.path.join(mesh_dir, f"{iproc:06d}_reg1_solver_data.bin")
+        mesh = sem_mesh_read(mesh_file)
+        gll_dims = mesh["gll_dims"]
+        ispec_is_iso = ~(mesh["ispec_is_tiso"].astype(bool))
+
     # Read cijkl,rho kernel
-    cijkl_kernel = read_gll_file(kernel_dir, "cijkl_kernel", iproc).reshape((-1, 21))
-    rho_kernel = read_gll_file(kernel_dir, "rho_kernel", iproc)
+    kernel_dims = (-1, 21)
+    if gll_dims:
+        kernel_dims = gll_dims + (21,)
+    cijkl_kernel = read_gll_file(kernel_dir, "cijkl_kernel", iproc, shape=kernel_dims)
+    rho_kernel = read_gll_file(kernel_dir, "rho_kernel", iproc, shape=gll_dims)
 
     # Read reference velocity models (km/s)
-    vs0 = read_gll_file(reference_dir, "vs", iproc)
+    vs0 = read_gll_file(reference_dir, "vs", iproc, shape=gll_dims)
 
     # read models (velocities in km/s, density in g/cm^3)
-    beta = read_gll_file(model_dir, "beta", iproc)
-    kappa = read_gll_file(model_dir, "kappa", iproc)
-    phi = read_gll_file(model_dir, "phi", iproc)
-    xi = read_gll_file(model_dir, "xi", iproc)
-    eta = read_gll_file(model_dir, "eta", iproc)
-    rho = read_gll_file(model_dir, "rho", iproc)
+    beta = read_gll_file(model_dir, "beta", iproc, shape=gll_dims)
+    kappa = read_gll_file(model_dir, "kappa", iproc, shape=gll_dims)
+    phi = read_gll_file(model_dir, "phi", iproc, shape=gll_dims)
+    xi = read_gll_file(model_dir, "xi", iproc, shape=gll_dims)
+    eta = read_gll_file(model_dir, "eta", iproc, shape=gll_dims)
+    rho = read_gll_file(model_dir, "rho", iproc, shape=gll_dims)
+
+    # enforce isotropic elements
+    if mesh_dir:
+        phi[ispec_is_iso, ...] = 0.0
+        xi[ispec_is_iso, ...] = 0.0
+        eta[ispec_is_iso, ...] = 1.0
 
     K_beta, K_kappa, K_phi, K_xi, K_eta, K_rho = (
         sem_VTI_kernel_cijkl_rho_to_beta_kappa_phi_xi_eta_rho(
             cijkl_kernel, rho_kernel, beta, kappa, phi, xi, eta, rho, vs0
         )
     )
+
+    # isotropic elements have zero values for phi, xi, eta
+    if mesh_dir:
+        K_phi[ispec_is_iso, ...] = 0.0
+        K_xi[ispec_is_iso, ...] = 0.0
+        K_eta[ispec_is_iso, ...] = 0.0
 
     # Write each kernel to a separate file
     write_gll_file(out_dir, "beta_kernel", iproc, K_beta)
@@ -145,6 +207,7 @@ def main():
                     args.model_dir,
                     args.kernel_dir,
                     args.out_dir,
+                    mesh_dir=args.mesh_dir,
                     # mask=mask_gll,
                 )
             elif args.type == "beta_kappa_phi_xi":
@@ -154,6 +217,7 @@ def main():
                     args.model_dir,
                     args.kernel_dir,
                     args.out_dir,
+                    mesh_dir=args.mesh_dir,
                     # mask=mask_gll,
                 )
         except Exception as e:

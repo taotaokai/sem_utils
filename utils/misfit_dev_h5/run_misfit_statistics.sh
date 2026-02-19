@@ -1,6 +1,6 @@
 #!/bin/bash
 
-work_dir=${1:?[arg] work_dir, e.g. ./}.
+work_dir=${1:?[arg] work_dir, e.g. ./}
 inv_type=${2:?[arg] inv_type, e.g. source}
 stage_num=${3:?[arg] stage_num, e.g. 0}
 max_niter=${4:?[arg] max_niter, e.g. 0}
@@ -19,7 +19,7 @@ do
     if [ ! -f $misfit_dir/misfit.h5 ]; then
       continue
     fi
-    echo python sem_utils/misfit/misfit_statistics.py \
+    echo python sem_utils/misfit/make_misfit_statistics.py \
       $misfit_dir/misfit.h5 \
       $misfit_dir/misfit.csv \
       --stage $stage_num --iter $iter_num --type $inv_type

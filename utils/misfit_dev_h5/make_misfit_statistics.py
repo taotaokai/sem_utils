@@ -18,6 +18,16 @@ with pt.open_file(args.misfit_h5file, "r") as h5f:
         raise Exception(msg)
     tbl = h5f.get_node("/window")
 
+    if "/source" not in h5f:
+        msg = '"/source" not existing, run read_cmtsolution first!'
+        raise KeyError(msg)
+    tbl_src = h5f.get_node("/source")
+    if tbl_src.nrows == 0:
+        msg = "no source information"
+        raise Exception(msg)
+    event = tbl_src[0]
+    evnm = event["id"].decode()
+
     stats = []
     for win_id in sorted(set(tbl.cols.id)):
         windows = tbl.read_where(f"id == {win_id}")
@@ -32,10 +42,11 @@ with pt.open_file(args.misfit_h5file, "r") as h5f:
         data['type'] = args.type
         data['stage'] = args.stage
         data['iter'] = args.iter
-        data['id'] = win_id.decode()
+        data['window'] = win_id.decode()
         data["weight_sum"] = weight_sum
         data["wcc0_sum"] = wcc0_sum
         data["wcc0_avg"] = wcc0_avg
+        data["event"] = evnm
 
         # print(net, sta, win_id, nwin, np.mean(cc0))
         stats.append(data)

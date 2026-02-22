@@ -233,7 +233,9 @@ def convert_model_for_alpha_beta_phi_xi(
         write_gll_file(out_dir, "vs", iproc, vs, overwrite=overwrite_ok)
 
     else:
-        vpv, vph, vsv, vsh, eta = read_vpv_vph_vsv_vsh_eta(iproc, model_dir)
+        vpv, vph, vsv, vsh, eta = read_vpv_vph_vsv_vsh_eta(
+            iproc, model_dir, shape=gll_dims
+        )
 
         alpha, beta, phi, xi, vp, vs = (
             sem_VTI_model_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(
@@ -268,7 +270,6 @@ def main():
 
     # Process each processor slice
     for iproc in range(mpi_rank, args.nproc, mpi_size):
-
         try:
             if args.type == "alpha_beta_phi_xi":
                 convert_model_for_alpha_beta_phi_xi(

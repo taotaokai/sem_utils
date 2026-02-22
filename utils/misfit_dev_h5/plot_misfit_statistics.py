@@ -71,7 +71,7 @@ legend_data = []
 for win, group in df.groupby('window'):
     y = group["wcc0_sum"].tolist()
     x = [xticks[v] for v in group['index']]
-    line, = ax.plot(x, y, "-o")
+    line, = ax.plot(x, y, "-s")
     legend_data.append((y[-1], win, line.get_color()))
 
 # Adjust legend positions to avoid overlap
@@ -85,7 +85,7 @@ adjusted_y = adjust_min_gap(y_values, min_gap)
 # Draw connector lines and add legend labels
 for i, (original_y, win, color) in enumerate(legend_data):
     ax.plot([max_x, max_x+0.1], [original_y, adjusted_y[i]], clip_on=False, color=color, linewidth=1.0)
-    ax.text(max_x+0.1, adjusted_y[i], f" {win}", color=color, fontsize=text_fontsize)
+    ax.text(max_x+0.1, adjusted_y[i], f" {win}", color=color, fontsize=text_fontsize, va="center", clip_on=False)
 
 # Configure plot appearance
 ax.set_ylabel("sum(weight*cc0)")

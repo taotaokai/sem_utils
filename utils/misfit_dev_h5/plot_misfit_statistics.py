@@ -42,6 +42,7 @@ def adjust_min_gap(arr, min_gap):
 parser = argparse.ArgumentParser()
 parser.add_argument("--event_name", required=True, help="Name of the event for plot title")
 parser.add_argument("--csv_list", required=True, help="File containing list of CSV files to process")
+parser.add_argument("--out_fig", required=True, help="Output figure")
 args = parser.parse_args()
 
 # Read list of CSV files
@@ -93,4 +94,4 @@ ax.set_xticklabels(indices)
 ax.set_xlim([0, max_x])
 ax.grid()
 ax.set_title(args.event_name)
-plt.show()
+plt.savefig(args.out_fig)

@@ -538,6 +538,33 @@ def sem_VTI_kernel_cijkl_rho_to_beta_kappa_phi_xi_eta_rho(
 
 
 # ==================================================#
+def read_sem_parfile(parfile):
+    """
+    读取SEM参数文件并解析为字典格式
+
+    该函数使用pandas读取以"="分隔的参数文件，忽略注释行，
+    将键值对转换为字典格式返回。
+
+    Args:
+        parfile (str): 参数文件路径
+
+    Returns:
+        dict: 包含参数键值对的字典，键为参数名，值为对应的参数值
+    """
+    import pandas as pd
+
+    # 使用pandas读取参数文件，按"="分割键值对
+    sem_params = pd.read_csv(
+        parfile,
+        delimiter=r"\s*=\s*",
+        header=None,
+        comment="#",
+        names=["key", "value"],
+        dtype=dict(key=object, value=object),
+        index_col=["key"],
+        engine="python",
+    ).to_dict()["value"]
+    return sem_params
 
 
 def geodetic_lat2geocentric_lat(geodetic_lat, f=EARTH_FLATTENING_SEM):
@@ -591,6 +618,44 @@ def sem_latlon2xieta(lat_center, lon_center, gamma_rot, lat_test, lon_test):
     angle_eta = np.rad2deg(np.arctan2(l_eta, l_r))
 
     return angle_xi, angle_eta
+
+
+def sem_xieta2vec(
+    central_lat: float,
+    central_lon: float,
+    rotation_angle: float,
+    xi: np.ndarray,
+    eta: np.ndarray,
+):
+    assert xi.shape == eta.shape
+
+    # mesh center
+    lat0 = np.deg2rad(central_lat)
+    lon0 = np.deg2rad(central_lon)
+
+    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0)
+    phi = lon0
+
+    v0_r = np.array(
+        [np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)]
+    )
+    v0_e = np.array([-np.sin(phi), np.cos(phi), 0])
+    v0_n = np.array(
+        [-np.cos(theta) * np.cos(phi), -np.cos(theta) * np.sin(phi), np.sin(theta)]
+    )
+
+    # rotate (v_east, v_north) thourgh v_radial by gamma_rot to (v_xi, v_eta)
+    gamma = np.deg2rad(rotation_angle)
+    v0_xi = np.cos(gamma) * v0_e + np.sin(gamma) * v0_n
+    v0_eta = -np.sin(gamma) * v0_e + np.cos(gamma) * v0_n
+
+    l_xi = np.tan(np.deg2rad(xi))
+    l_eta = np.tan(np.deg2rad(eta))
+    v = v0_xi * l_xi[..., None] + v0_eta * l_eta[..., None] + v0_r
+    v = v / np.sum(v**2, axis=-1, keepdims=True) ** 0.5  # normalize
+
+    return v
+    # return ecef2latlon_zeroalt(v[..., 0], v[..., 1], v[..., 2])
 
 
 def rotmat_enu_to_ecef(lon, lat):
@@ -1222,7 +1287,9 @@ def sem_mesh_interp_mesh(
 
     # read in target SEM mesh
     # mesh_file = "%s/proc%06d_reg1_solver_data.bin" % (mesh_dir_target, iproc_target)
-    mesh_file = os.path.join(mesh_dir_target, f"proc{iproc_target:06d}_reg1_solver_data.bin")
+    mesh_file = os.path.join(
+        mesh_dir_target, f"proc{iproc_target:06d}_reg1_solver_data.bin"
+    )
     mesh_data_target = sem_mesh_read(mesh_file)
     # nspec_target = mesh_data_target["nspec"]
     ibool_target = mesh_data_target["ibool"]
@@ -1576,7 +1643,6 @@ def laplacian_iso(
     out_glob = np.zeros(u_glob.shape, dtype=dtype)
 
     for e in range(nspec):
-
         # sl = u_glob[ibool[e, :, :, :]]
         for k in range(ngllz):
             for j in range(nglly):
@@ -1710,7 +1776,6 @@ def laplacian_iso3D(
     out_glob = np.zeros(u_glob.shape, dtype=dtype)
 
     for e in range(nspec):
-
         # sl = u_glob[ibool[e, :, :, :]]
         for k in range(ngllz):
             for j in range(nglly):
@@ -1849,7 +1914,6 @@ def laplacian_ani3D(
     out_glob = np.zeros(u_glob.shape, dtype=dtype)
 
     for e in range(nspec):
-
         # sl = u_glob[ibool[e, :, :, :]]
         for k in range(ngllz):
             for j in range(nglly):

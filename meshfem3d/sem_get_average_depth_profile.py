@@ -148,8 +148,8 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
 
     # define sampling grids
     # number of blocks along xi/eta
-    nxi = max(1, mesh_width_xi // grid_spacing)
-    neta = max(1, mesh_width_eta // grid_spacing)
+    nxi = max(1, int(np.ceil(mesh_width_xi // grid_spacing)))
+    neta = max(1, int(np.ceil(mesh_width_eta // grid_spacing)))
     # block edges along xi/eta
     xi = np.linspace(-mesh_width_xi / 2.0, mesh_width_xi / 2.0, nxi + 1)
     eta = np.linspace(-mesh_width_eta / 2.0, mesh_width_eta / 2.0, neta + 1)
@@ -168,7 +168,7 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
     )
 
     # create 3-D grid by adding depth grids
-    nz = max(2, np.ceil(abs(max_depth - min_depth) / depth_interval) + 1)
+    nz = max(2, int(np.ceil(abs(max_depth - min_depth) / depth_interval) + 1))
     depths = np.linspace(min_depth, max_depth, nz)  # km -> meters
 
     grd3_lat, grd3_lon, grd3_dep, grd3_xi, grd3_eta = np.zeros((nz, neta, nxi))

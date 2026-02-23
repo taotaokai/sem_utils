@@ -138,13 +138,13 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
 
     # read SEM parameters
     sem_params = read_sem_parfile(sem_parfile)
-    mesh_nproc_xi = sem_params["NPROC_XI"]
-    mesh_nproc_eta = sem_params["NPROC_ETA"]
-    mesh_central_lat = sem_params["CENTER_LATITUDE_IN_DEGREES"]
-    mesh_central_lon = sem_params["CENTER_LONGITUDE_IN_DEGREES"]
-    mesh_width_xi = sem_params["ANGULAR_WIDTH_XI_IN_DEGREES"]
-    mesh_width_eta = sem_params["ANGULAR_WIDTH_ETA_IN_DEGREES"]
-    mesh_gamma_rot = sem_params["GAMMA_ROTATION_AZIMUTH"]
+    mesh_nproc_xi = int(sem_params["NPROC_XI"])
+    mesh_nproc_eta = int(sem_params["NPROC_ETA"])
+    mesh_central_lat = float(sem_params["CENTER_LATITUDE_IN_DEGREES"])
+    mesh_central_lon = float(sem_params["CENTER_LONGITUDE_IN_DEGREES"])
+    mesh_width_xi = float(sem_params["ANGULAR_WIDTH_XI_IN_DEGREES"])
+    mesh_width_eta = float(sem_params["ANGULAR_WIDTH_ETA_IN_DEGREES"])
+    mesh_gamma_rot = float(sem_params["GAMMA_ROTATION_AZIMUTH"])
 
     # define sampling grids
     # number of blocks along xi/eta

@@ -185,7 +185,7 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
 
     # get ECEF coordinates
     gps2ecef = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:4978")
-    grd3_x, grd3_y, grd3_z = gps2ecef.transform(grd3_lat, grd2_lon, R_EARTH - grd3_dep)
+    grd3_x, grd3_y, grd3_z = gps2ecef.transform(grd3_lat, grd3_lon, R_EARTH - grd3_dep)
 
     # interpolate models
     npts = grd3_x.size

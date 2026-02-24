@@ -213,11 +213,11 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
         data[tag] = interp_model[..., i].flatten()
     data["status"] = final_status.flatten()
 
-    # for tag in data:
-    #     print(tag, data[tag].shape)
-
     df = pd.DataFrame.from_dict(data)
     df.to_csv(out_csv)
+    # get mean 1-D profile
+    df_mean = df[df["status"] == 1].groupby("depth_km")[model_names].mean()
+    df_mean.to_csv(out_csv.replace(".csv", "_mean.csv"))
 
 
 if __name__ == "__main__":

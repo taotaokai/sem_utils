@@ -74,7 +74,7 @@ print(args)
 lat0 = np.deg2rad(args.center_lat)
 lon0 = np.deg2rad(args.center_lon)
 
-theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0)
+theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0, radian=True)
 phi = lon0
 
 v0_r = np.array(
@@ -150,9 +150,9 @@ for eta in grid_eta:
 
     r = v0_eta * np.sin(eta) + v0_r * np.cos(eta)
     r = r / sum(r**2) ** 0.5
-    lat, lon = ecef2latlon_zeroalt(r[0], r[1], r[2])
+    lat, lon = ecef2latlon_zeroalt(r[0], r[1], r[2], radian=True)
 
-    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat)
+    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat, radian=True)
     phi = lon
     e = np.array([-np.sin(phi), np.cos(phi), 0])
     n = np.array(
@@ -180,9 +180,9 @@ for xi in grid_xi:
 
     r = v0_xi * np.sin(xi) + v0_r * np.cos(xi)
     r = r / sum(r**2) ** 0.5
-    lat, lon = ecef2latlon_zeroalt(r[0], r[1], r[2])
+    lat, lon = ecef2latlon_zeroalt(r[0], r[1], r[2], radian=True)
 
-    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat)
+    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat, radian=True)
     phi = lon
     e = np.array([-np.sin(phi), np.cos(phi), 0])
     n = np.array(

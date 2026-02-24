@@ -51,7 +51,7 @@ for i, params in xsection_params.iterrows():
     angle_xi = np.deg2rad(params["width_xi"]) 
     angle_eta = np.deg2rad(params["width_eta"]) 
 
-    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat)
+    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat, radian=True)
     phi = lon
     ve = np.array([-np.sin(phi), np.cos(phi), 0])
     vn = np.array(

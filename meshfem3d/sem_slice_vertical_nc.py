@@ -93,7 +93,7 @@ for i, params in xsection_params.iterrows():
     min_theta = np.deg2rad(params["min_theta"])
     max_theta = np.deg2rad(params["max_theta"])
 
-    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat)
+    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat, radian=True)
     phi = lon
     ve = np.array([-np.sin(phi), np.cos(phi), 0])
     vn = np.array(

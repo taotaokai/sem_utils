@@ -13,7 +13,7 @@ def vector2latlon_deg(v):
     # factor = 1.0 / (1 - f)**2
     # lat = np.arctan(factor * np.tan(latc))
     lat, lon = ecef2latlon_zeroalt(v[0], v[1], v[2])
-    return np.rad2deg(lat), np.rad2deg(lon)
+    return lat, lon
 
 # def geodetic_lat2geocentric_lat(geodetic_lat):
 #     f = 1/299.8
@@ -49,7 +49,7 @@ gamma_rot = float(mesh_gamma_rot.lower().replace('d', 'e'))
 lat0 = np.deg2rad(lat_center)
 lon0 = np.deg2rad(lon_center)
 
-theta = 0.5*np.pi - geodetic_lat2geocentric_lat(lat0)
+theta = 0.5*np.pi - geodetic_lat2geocentric_lat(lat0, radian=True)
 print(lat0, theta)
 phi = lon0
 

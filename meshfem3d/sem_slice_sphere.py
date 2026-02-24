@@ -129,7 +129,7 @@ def create_horizontal_xsection_grids(
     gamma = np.deg2rad(rotation_angle)
 
     # Convert geographic to geocentric coordinates
-    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0)
+    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0, radian=True)
     phi = lon0
 
     # Unit vectors in spherical coordinate system
@@ -180,8 +180,6 @@ def create_horizontal_xsection_grids(
         alt2 = (
             -1 * np.ones_like(lat2) * depth * 1000.0
         )  # depth to negative ellipsoidal height
-        lat2 = np.rad2deg(lat2)
-        lon2 = np.rad2deg(lon2)
 
         xx, yy, zz = gps2ecef.transform(lat2, lon2, alt2)
         xyz = np.zeros_like(v)

@@ -137,7 +137,7 @@ def create_vertical_xsection_grids(
     angles = np.deg2rad(angles)
 
     # Convert geographic to geocentric coordinates
-    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0)
+    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0, radian=True)
     phi = lon0
 
     # Unit vectors in spherical coordinate system

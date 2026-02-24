@@ -567,9 +567,13 @@ def read_sem_parfile(parfile):
     return sem_params
 
 
-def geodetic_lat2geocentric_lat(geodetic_lat, f=EARTH_FLATTENING_SEM):
+def geodetic_lat2geocentric_lat(geodetic_lat, f=EARTH_FLATTENING_SEM, radian=False):
+    if not radian:
+        geodetic_lat = np.deg2rad(geodetic_lat)
     factor = (1 - f) ** 2
     gencentric_lat = np.arctan(factor * np.tan(geodetic_lat))
+    if not radian:
+        gencentric_lat = np.rad2deg(gencentric_lat)
     return gencentric_lat
 
 
@@ -588,7 +592,7 @@ def sem_latlon2xieta(lat_center, lon_center, gamma_rot, lat_test, lon_test):
     lat0 = np.deg2rad(lat_center)
     lon0 = np.deg2rad(lon_center)
     # assume zero altitude from the reference ellipsoid
-    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0)
+    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0, radian=True)
     phi = lon0
     # radial/easting/northing direction at (lat_center, lon_center)
     v0_r = np.array(
@@ -608,7 +612,7 @@ def sem_latlon2xieta(lat_center, lon_center, gamma_rot, lat_test, lon_test):
     # conver test point to (xi, eta)
     lat1 = np.deg2rad(lat_test)
     lon1 = np.deg2rad(lon_test)
-    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat1)
+    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat1, radian=True)
     phi = lon1
     v1 = np.array(
         [np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)]
@@ -636,7 +640,7 @@ def sem_xieta2vec(
     lat0 = np.deg2rad(central_lat)
     lon0 = np.deg2rad(central_lon)
 
-    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0)
+    theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat0, radian=True)
     phi = lon0
 
     v0_r = np.array(

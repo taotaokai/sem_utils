@@ -210,7 +210,7 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
     data["lon"] = grd3_lon.flatten()
     data["depth_km"] = grd3_dep.flatten()
     for i, tag in enumerate(model_names):
-        data[tag] = interp_model[:, i].flatten()
+        data[tag] = interp_model[..., i].flatten()
     data["status"] = final_status.flatten()
 
     # for tag in data:

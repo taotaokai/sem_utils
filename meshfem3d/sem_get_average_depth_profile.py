@@ -171,12 +171,17 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
     nz = max(2, int(np.ceil(abs(max_depth - min_depth) / depth_interval) + 1))
     depths = np.linspace(min_depth, max_depth, nz)  # km -> meters
 
-    grd3_lat, grd3_lon, grd3_dep, grd3_xi, grd3_eta = np.zeros((nz, neta, nxi))
+    grd3_lat = np.zeros((nz, neta, nxi))
+    grd3_lon = np.zeros((nz, neta, nxi))
+    grd3_dep = np.zeros((nz, neta, nxi))
+    grd3_xi = np.zeros((nz, neta, nxi))
+    grd3_eta = np.zeros((nz, neta, nxi))
+
+    grd3_xi[:] = grd2_xi
+    grd3_eta[:] = grd2_eta
     grd3_lat[:] = grd2_lat
     grd3_lon[:] = grd2_lon
     grd3_dep[:] = depths[:, None, None]
-    grd3_xi[:] = grd2_xi
-    grd3_eta[:] = grd2_eta
 
     # get ECEF coordinates
     gps2ecef = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:4978")

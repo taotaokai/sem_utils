@@ -185,7 +185,7 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
 
     # get ECEF coordinates
     gps2ecef = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:4978")
-    grd3_x, grd3_y, grd3_z = gps2ecef.transform(grd3_lat, grd3_lon, R_EARTH - grd3_dep)
+    grd3_x, grd3_y, grd3_z = gps2ecef.transform(grd3_lat, grd3_lon, R_EARTH - grd3_dep * 1000.0)
 
     # interpolate models
     npts = grd3_x.size
@@ -211,6 +211,9 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
     for i, tag in enumerate(model_names):
         data[tag] = interp_model[:, i].flatten()
     data["status"] = final_status.flatten()
+
+    print(data)
+
     df = pd.DataFrame.from_dict(data)
     df.to_csv(out_csv)
 

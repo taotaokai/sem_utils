@@ -573,10 +573,13 @@ def geodetic_lat2geocentric_lat(geodetic_lat, f=EARTH_FLATTENING_SEM):
     return gencentric_lat
 
 
-def ecef2latlon_zeroalt(x, y, z, f=EARTH_FLATTENING_SEM):
+def ecef2latlon_zeroalt(x, y, z, f=EARTH_FLATTENING_SEM, radian=False):
     """get lat/lon where ECEF vector intercepts the reference ellipsoid"""
     lat = np.arctan2(z, (x**2 + y**2) ** 0.5 * (1 - f) ** 2)
     lon = np.arctan2(y, x)
+    if not radian:
+        lat = np.rad2deg(lat)
+        lon = np.rad2deg(lon)
     return lat, lon
 
 

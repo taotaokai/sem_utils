@@ -193,6 +193,7 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
     interp_points[:, 0] = grd3_x.flatten()
     interp_points[:, 1] = grd3_y.flatten()
     interp_points[:, 2] = grd3_z.flatten()
+    interp_points /= R_EARTH # non-dimensionalize for SEM mesh
 
     nproc_tot = mesh_nproc_xi * mesh_nproc_eta
     interp_model, final_status, final_misloc, final_misratio = sem_mesh_interp_points(

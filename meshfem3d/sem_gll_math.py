@@ -44,6 +44,11 @@ def parse_arguments():
         help="tag for output GLL file as proc*_reg1_[out_tag].bin",
     )
     parser.add_argument(
+        "--only_print",
+        action="store_true",
+        help="only print out results",
+    )
+    parser.add_argument(
         "--overwrite_ok",
         action="store_true",
         help="allow overwrites existing file",
@@ -89,10 +94,9 @@ def main():
             )
         )
 
-        if args.out_dir is not None:
-            out_tag = args.out_tag if args.out_tag is not None else model_tags[0]
+        if not args.only_print:
             write_gll_file(
-                args.out_dir, out_tag, iproc, out_gll, overwrite=args.overwrite_ok
+                args.out_dir, args.out_tag, iproc, out_gll, overwrite=args.overwrite_ok
             )
 
 

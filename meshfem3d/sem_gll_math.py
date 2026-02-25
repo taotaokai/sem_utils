@@ -17,26 +17,30 @@ def parse_arguments():
     parser = argparse.ArgumentParser(
         description="Evaluate GLL models by math expression"
     )
-    parser.add_argument("nproc", type=int, help="number of model slices")
+    parser.add_argument(
+        "--nproc", type=int, required=True, help="number of model slices"
+    )
     parser.add_argument(
         "--model_dirs",
         nargs="+",
-        default=["."],
+        required=True,
         help="directories of model gll files, proc*_reg1_[model_tag].bin",
     )
     parser.add_argument(
         "--model_tags",
         nargs="+",
-        default=["vp"],
+        required=True,
         help="model tags, e.g. rho vp",
     )
     parser.add_argument(
-        "--math_expr", default="v[0]", help="math expression, e.g v[0] * v[1]"
+        "--math_expr",
+        required=True,
+        help="math expression, e.g v[0] * v[1]",
     )
-    parser.add_argument("--out_dir", default=None, help="output directory for results")
+    parser.add_argument("--out_dir", required=True, help="output directory for results")
     parser.add_argument(
         "--out_tag",
-        default=None,
+        required=True,
         help="tag for output GLL file as proc*_reg1_[out_tag].bin",
     )
     parser.add_argument(
@@ -87,7 +91,9 @@ def main():
 
         if args.out_dir is not None:
             out_tag = args.out_tag if args.out_tag is not None else model_tags[0]
-            write_gll_file(args.out_dir, out_tag, iproc, out_gll, overwrite=args.overwrite_ok)
+            write_gll_file(
+                args.out_dir, out_tag, iproc, out_gll, overwrite=args.overwrite_ok
+            )
 
 
 if __name__ == "__main__":

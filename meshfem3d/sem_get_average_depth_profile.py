@@ -3,6 +3,7 @@
 """create horizontal slice of SEM model at a given depth"""
 
 import argparse
+import os
 
 import pandas as pd
 import numpy as np
@@ -217,7 +218,9 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
     df.to_csv(out_csv)
     # get mean 1-D profile
     df_mean = df[df["status"] == 1].groupby("depth_km")[model_names].mean()
-    df_mean.to_csv(out_csv.replace(".csv", "_mean.csv"))
+
+    root, ext = os.path.splitext(out_csv)
+    df_mean.to_csv(root +  "_mean.csv")
 
 
 if __name__ == "__main__":

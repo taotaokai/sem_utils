@@ -6,16 +6,14 @@ ECEF x,y,z coordinates
 
 """
 import sys
-import time
 
 import numpy as np
 from scipy.io import FortranFile
-from scipy.spatial import cKDTree
 
 #from mpi4py import MPI
 
+from meshfem3d_constants import R_EARTH_KM
 from meshfem3d_utils import sem_mesh_read, sem_mesh_get_vol_gll
-from meshfem3d_constants import *
 
 from smooth_gauss_cap import smooth_gauss_cap 
 

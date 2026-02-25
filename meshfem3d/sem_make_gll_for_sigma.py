@@ -14,7 +14,7 @@ from scipy.io import FortranFile
 import pyproj
 
 from meshfem3d_utils import sem_mesh_read
-from meshfem3d_constants import NGLLX,NGLLY,NGLLZ,R_EARTH
+from meshfem3d_constants import R_EARTH
 
 #====== parameters
 nproc = int(sys.argv[1])

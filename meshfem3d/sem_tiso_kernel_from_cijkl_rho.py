@@ -5,9 +5,7 @@ import os
 import numpy as np
 from scipy.io import FortranFile
 from mpi4py import MPI
-import numba
 
-from meshfem3d_constants import R_EARTH_KM
 from meshfem3d_utils import sem_mesh_read
 
 # MPI initialization

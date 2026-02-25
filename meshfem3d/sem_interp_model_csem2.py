@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import os, sys
+import os
 import argparse
 
 import numpy as np
 from scipy.io import FortranFile
-from scipy.interpolate import interp1d, interpn, RegularGridInterpolator
+from scipy.interpolate import RegularGridInterpolator
 
 from netCDF4 import Dataset
 import pyproj

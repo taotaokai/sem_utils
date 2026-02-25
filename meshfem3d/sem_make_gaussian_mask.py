@@ -4,7 +4,6 @@ import time
 import argparse
 import numpy as np
 from scipy.io import FortranFile
-import numba
 from mpi4py import MPI
 
 from meshfem3d_constants import R_EARTH_KM

@@ -18,8 +18,9 @@ from meshfem3d_utils import (
     sem_mesh_get_vol_gll,
     sem_mesh_read,
     read_gll_file,
-    R_EARTH,
 )
+
+from meshfem3d_constants import R_EARTH
 
 
 def parse_arguments():

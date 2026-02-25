@@ -1,15 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """create horizontal slice of SEM model at a given depth"""
-import sys
-import time
 import argparse
 
 import numpy as np
 from scipy.io import FortranFile
 import numba
 
-from meshfem3d_utils import sem_mesh_read, R_EARTH_KM
+from meshfem3d_utils import sem_mesh_read
+from meshfem3d_constants import R_EARTH_KM
 
 # ======
 parser = argparse.ArgumentParser()

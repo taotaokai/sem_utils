@@ -6,9 +6,8 @@ import sys
 
 import numpy as np
 from scipy.io import FortranFile
-from scipy.interpolate import interp1d, interpn
+from scipy.interpolate import interpn
 
-from netCDF4 import Dataset
 import pyproj
 
 from meshfem3d_constants import R_EARTH

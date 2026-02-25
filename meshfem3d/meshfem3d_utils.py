@@ -6,7 +6,22 @@ import warnings
 import numpy as np
 from scipy.io import FortranFile
 
-from meshfem3d_constants import *
+from meshfem3d_constants import (
+    EARTH_FLATTENING_SEM,
+    NGLLX,
+    NGLLY,
+    NGLLZ,
+    MIDX,
+    MIDY,
+    MIDZ,
+    GAUSSALPHA,
+    GAUSSBETA,
+    MESH_ARRAY_LIST,
+    MESH_MPI_ARRAY_LIST,
+    BOUNDARY_ARRAY_LIST,
+    ANCHOR_NODES,
+    ANCHOR_GLL_INDEX,
+)
 
 import numba
 
@@ -216,7 +231,7 @@ def write_gll_file(
     filename = os.path.join(gll_dir, f"proc{iproc:06d}_{region_code}_{gll_tag}.bin")
 
     if os.path.exists(filename):
-        if overwrite == False:
+        if not overwrite:
             raise FileExistsError(f"File exists: {filename}, not overwriting")
         else:
             warnings.warn(f"File exists: {filename}, overwriting...")

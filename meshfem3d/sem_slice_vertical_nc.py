@@ -1,4 +1,3 @@
-import sys
 import pandas as pd
 import numpy as np
 import pyvista as pv
@@ -8,7 +7,7 @@ import pyproj
 import argparse
 import xarray as xr
 from netCDF4 import Dataset
-from scipy.interpolate import interp1d, interpn, RegularGridInterpolator
+from scipy.interpolate import RegularGridInterpolator
 
 from meshfem3d_utils import geodetic_lat2geocentric_lat
 from meshfem3d_constants import R_EARTH

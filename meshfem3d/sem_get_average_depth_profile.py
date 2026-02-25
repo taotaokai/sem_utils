@@ -217,7 +217,7 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
     df = pd.DataFrame.from_dict(data)
     df.to_csv(out_csv)
     # get mean 1-D profile
-    df_mean = df[df["status"] == 1].groupby("depth_km")[model_names].mean()
+    df_mean = df[df["status"] != -1].groupby("depth_km")[model_names].mean()
 
     root, ext = os.path.splitext(out_csv)
     df_mean.to_csv(root +  "_mean.csv")

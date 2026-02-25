@@ -156,7 +156,6 @@ def process_mesh_slice(
                 out_dir,
                 param_name,
                 iproc,
-                param_name,
                 model_interp[ibool],
                 overwrite=True,
             )

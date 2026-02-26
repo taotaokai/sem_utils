@@ -240,26 +240,36 @@ def write_gll_file(
         f.write_record(np.array(data, dtype=dtype))
 
 
+def sem_VTI_model_vpv_vph_vsv_vsh_to_vp0_vs0(vpv, vph, vsv, vsh, vp0, vs0):
+    """Get isotropic vp and vs from VTI model vpv,vph,vsv,vsh
+    vp = sqrt((vpv**2 + vph**2) / 2)
+    vs = sqrt((vsv**2 + vsh**2) / 2)
+    """
+    vp0 = ((vpv**2 + vph**2) / 2) ** 0.5
+    vs0 = ((vsv**2 + vsh**2) / 2) ** 0.5
+    return vp0, vs0
+
+
 def sem_VTI_model_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
     alpha, beta, phi, xi, vp0, vs0, output_iso=False
 ):
     """Re-parameterize TISO model from vpv,vph,vsv,vsh to alpha, beta, phi, xi
     vp0 and vs0 are the reference isotropic P- and S-wave velocities
 
-    vp**2 = (vpv**2 + 4 * vph**2) / 5
-    vs**2 = (2 * vsv**2 + vsh**2) / 3
+    vp**2 = (vpv**2 + vph**2) / 2
+    vs**2 = (vsv**2 + vsh**2) / 2
 
-    phi = (vph**2 - vpv**2) / vp**2
-    xi = (vsh**2 - vsv**2) / vs**2
+    phi = (vph**2 - vpv**2) / (2 * vp**2)
+    xi = (vsh**2 - vsv**2) / (2 * vs**2)
     vp = vp0 * (1.0 + alpha)
     vs = vs0 * (1.0 + beta)
     """
     vp = vp0 * (1.0 + alpha)
     vs = vs0 * (1.0 + beta)
-    vpv = vp * np.sqrt(1.0 - 4.0 / 5.0 * phi)
-    vph = vp * np.sqrt(1.0 + 1.0 / 5.0 * phi)
-    vsv = vs * np.sqrt(1.0 - 1.0 / 3.0 * xi)
-    vsh = vs * np.sqrt(1.0 + 2.0 / 3.0 * xi)
+    vpv = vp * np.sqrt(1.0 - phi)
+    vph = vp * np.sqrt(1.0 + phi)
+    vsv = vs * np.sqrt(1.0 - xi)
+    vsh = vs * np.sqrt(1.0 + xi)
 
     if output_iso:
         # also output isotropic vp,vs
@@ -274,20 +284,21 @@ def sem_VTI_model_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(
     """Re-parameterize VTI model from alpha,beta,phi,xi to vpv,vph,vsv,vsh
     vp0 and vs0 are the reference isotropic P- and S-wave velocities
 
-    vp = sqrt((vpv**2 + 4 * vph**2) / 5)
-    vs = sqrt((2 * vsv**2 + vsh**2) / 3)
+    vp = sqrt((vpv**2 + vph**2) / 2)
+    vs = sqrt((vsv**2 + vsh**2) / 2)
 
-    phi = (vph**2 - vpv**2) / vp**2
-    xi = (vsh**2 - vsv**2) / vs**2
+    phi = (vph**2 - vpv**2) / (2 * vp**2)
+    xi = (vsh**2 - vsv**2) / (2 * vs**2)
+
     vp = vp0 * (1.0 + alpha)
     vs = vs0 * (1.0 + beta)
     """
-    vp = ((vpv**2 + 4 * vph**2) / 5) ** 0.5
-    vs = ((2 * vsv**2 + vsh**2) / 3) ** 0.5
+    vp = ((vpv**2 + vph**2) / 2) ** 0.5
+    vs = ((vsv**2 + vsh**2) / 2) ** 0.5
     alpha = vp / vp0 - 1.0
     beta = vs / vs0 - 1.0
-    phi = (vph**2 - vpv**2) / vp**2
-    xi = (vsh**2 - vsv**2) / vs**2
+    phi = 0.5 * (vph**2 - vpv**2) / vp**2
+    xi = 0.5 * (vsh**2 - vsv**2) / vs**2
 
     if output_iso:
         return alpha, beta, phi, xi, vp, vs
@@ -331,11 +342,19 @@ def sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
     K_C66 = cijkl_kernel[..., 20]  # dChi/dC66
 
     # Convert to relative velocity using chain rule: dChi/dA = dChi/dCij * dCij/dA
+
+    # C11 = C22 = rho * ((1 + alpha)*vp0)**2 * (1 + phi)
+    # C12 = C11 - 2 * C66
+    # C33 = rho * ((1 + alpha)*vp0)**2 * (1 - phi)
+    # C13 = C23 = eta * (C11 - 2 * C44)
+    # C44 = C55 = rho * ((1 + beta)*vs0)**2 * (1 - xi)
+    # C66 = rho * ((1 + beta)*vs0)**2 * (1 + xi)
+    
     K_alpha = (
         (
-            (K_C11 + K_C22 + K_C12) * (1.0 + 1.0 / 5.0 * phi)
-            + K_C33 * (1.0 - 4.0 / 5.0 * phi)
-            + (K_C13 + K_C23) * (1.0 + 1.0 / 5.0 * phi) * eta
+            (K_C11 + K_C22 + K_C12) * (1.0 + phi)
+            + K_C33 * (1.0 - phi)
+            + (K_C13 + K_C23) * (1.0 + phi) * eta
         )
         * 2.0
         * rho
@@ -345,10 +364,10 @@ def sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
 
     K_beta = (
         (
-            K_C12 * (-2.0 * (1.0 + 2.0 / 3.0 * xi))
-            + (K_C13 + K_C23) * (-2.0 * eta * (1.0 - 1.0 / 3.0 * xi))
-            + (K_C44 + K_C55) * (1.0 - 1.0 / 3.0 * xi)
-            + K_C66 * (1.0 + 2.0 / 3.0 * xi)
+            K_C12 * (-2.0 * (1.0 + xi))
+            + (K_C13 + K_C23) * (-2.0 * eta * (1.0 - xi))
+            + (K_C44 + K_C55) * (1.0 - xi)
+            + K_C66 * (1.0 + xi)
         )
         * 2.0
         * rho
@@ -356,11 +375,10 @@ def sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
         * (1 + beta)
     )
 
-    K_phi = (
-        (
-            (K_C11 + K_C22 + K_C12) * 1.0 / 5.0
-            + K_C33 * (-4.0 / 5.0)
-            + (K_C13 + K_C23) * 1.0 / 5.0 * eta
+    K_phi = ( (
+            (K_C11 + K_C22 + K_C12)
+            - K_C33
+            + (K_C13 + K_C23) * eta
         )
         * vp**2
         * rho
@@ -368,10 +386,10 @@ def sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
 
     K_xi = (
         (
-            (K_C44 + K_C55) * (-1.0 / 3.0)
-            + K_C66 * (2.0 / 3.0)
-            + K_C12 * (-4.0 / 3.0)
-            + (K_C13 + K_C23) * (2.0 / 3.0 * eta)
+            -1.0 * (K_C44 + K_C55)
+            + K_C66
+            - 2.0 * K_C12
+            + (K_C13 + K_C23) * (2.0 * eta)
         )
         * vs**2
         * rho
@@ -384,7 +402,7 @@ def sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
         + (K_C11 + K_C22) * vph**2
         + K_C33 * vpv**2
         + K_C12 * (vph**2 - 2 * vsh**2)
-        + (K_C13 + K_C23) * eta * (vph**2 - vsv**2)
+        + (K_C13 + K_C23) * eta * (vph**2 - 2 * vsv**2)
         + (K_C44 + K_C55) * vsv**2
         + K_C66 * vsh**2
     )
@@ -398,20 +416,20 @@ def sem_VTI_model_vpv_vph_vsv_vsh_to_beta_kappa_phi_xi(
     """Re-parameterize VTI model from vpv,vph,vsv,vsh to beta,kappa,phi,xi
     vs0 is the reference isotropic shear velocity
 
-    vp = sqrt((vpv**2 + 4 * vph**2) / 5)
-    vs = sqrt((2 * vsv**2 + vsh**2) / 3)
+    vp = sqrt((vpv**2 + vph**2) / 2)
+    vs = sqrt((vsv**2 + vsh**2) / 2)
 
     beta = vs / vs0 - 1
     kappa = vp / vs
-    phi = (vph**2 - vpv**2) / vp**2
-    xi = (vsh**2 - vsv**2) / vs**2
+    phi = (vph**2 - vpv**2) / vp**2 / 2
+    xi = (vsh**2 - vsv**2) / vs**2 / 2
     """
-    vp = ((vpv**2 + 4 * vph**2) / 5) ** 0.5
-    vs = ((2 * vsv**2 + vsh**2) / 3) ** 0.5
+    vp = ((vpv**2 + vph**2) / 2) ** 0.5
+    vs = ((vsv**2 + vsh**2) / 2) ** 0.5
     beta = vs / vs0 - 1.0
     kappa = vp / vs
-    phi = (vph**2 - vpv**2) / vp**2
-    xi = (vsh**2 - vsv**2) / vs**2
+    phi = (vph**2 - vpv**2) / vp**2 / 2
+    xi = (vsh**2 - vsv**2) / vs**2 / 2
 
     if output_iso:
         return beta, kappa, phi, xi, vp, vs
@@ -428,17 +446,17 @@ def sem_VTI_model_beta_kappa_phi_xi_to_vpv_vph_vsv_vsh(
     vs = (1 + beta) * vs0
     vp = kappa * vs
 
-    vpv = vp * np.sqrt(1.0 - 4.0 / 5.0 * phi)
-    vph = vp * np.sqrt(1.0 + 1.0 / 5.0 * phi)
-    vsv = vs * np.sqrt(1.0 - 1.0 / 3.0 * xi)
-    vsh = vs * np.sqrt(1.0 + 2.0 / 3.0 * xi)
+    vpv = vp * np.sqrt(1.0 - phi)
+    vph = vp * np.sqrt(1.0 + phi)
+    vsv = vs * np.sqrt(1.0 - xi)
+    vsh = vs * np.sqrt(1.0 + xi)
     """
     vs = vs0 * (1.0 + beta)
     vp = kappa * vs
-    vpv = vp * np.sqrt(1.0 - 4.0 / 5.0 * phi)
-    vph = vp * np.sqrt(1.0 + 1.0 / 5.0 * phi)
-    vsv = vs * np.sqrt(1.0 - 1.0 / 3.0 * xi)
-    vsh = vs * np.sqrt(1.0 + 2.0 / 3.0 * xi)
+    vpv = vp * np.sqrt(1.0 - phi)
+    vph = vp * np.sqrt(1.0 + phi)
+    vsv = vs * np.sqrt(1.0 - xi)
+    vsh = vs * np.sqrt(1.0 + xi)
 
     if output_iso:
         return vpv, vph, vsv, vsh, vp, vs
@@ -493,14 +511,14 @@ def sem_VTI_kernel_cijkl_rho_to_beta_kappa_phi_xi_eta_rho(
         * (
             kappa**2
             * (
-                (K_C11 + K_C22 + K_C12) * (1.0 + 1.0 / 5.0 * phi)
-                + (K_C13 + K_C23) * (1.0 + 1.0 / 5.0 * phi) * eta
-                + K_C33 * (1.0 - 4.0 / 5.0 * phi)
+                (K_C11 + K_C22 + K_C12) * (1.0 + phi)
+                + (K_C13 + K_C23) * (1.0 + phi) * eta
+                + K_C33 * (1.0 - phi)
             )
-            + K_C12 * (-2.0 * (1.0 + 2.0 / 3.0 * xi))
-            + (K_C13 + K_C23) * (-2.0 * eta * (1.0 - 1.0 / 3.0 * xi))
-            + (K_C44 + K_C55) * (1.0 - 1.0 / 3.0 * xi)
-            + K_C66 * (1.0 + 2.0 / 3.0 * xi)
+            + K_C12 * (-2.0 * (1.0 + xi))
+            + (K_C13 + K_C23) * (-2.0 * eta * (1.0 - xi))
+            + (K_C44 + K_C55) * (1.0 - xi)
+            + K_C66 * (1.0 + xi)
         )
     )
 
@@ -510,17 +528,17 @@ def sem_VTI_kernel_cijkl_rho_to_beta_kappa_phi_xi_eta_rho(
         * 2.0
         * kappa
         * (
-            (K_C11 + K_C22 + K_C12) * (1.0 + 1.0 / 5.0 * phi)
-            + K_C33 * (1.0 - 4.0 / 5.0 * phi)
-            + (K_C13 + K_C23) * (1.0 + 1.0 / 5.0 * phi) * eta
+            (K_C11 + K_C22 + K_C12) * (1.0 + phi)
+            + K_C33 * (1.0 - phi)
+            + (K_C13 + K_C23) * (1.0 + phi) * eta
         )
     )
 
     K_phi = (
         (
-            (K_C11 + K_C22 + K_C12) * 1.0 / 5.0
-            + K_C33 * (-4.0 / 5.0)
-            + (K_C13 + K_C23) * 1.0 / 5.0 * eta
+            (K_C11 + K_C22 + K_C12)
+            - K_C33
+            + (K_C13 + K_C23) * eta
         )
         * vp**2
         * rho
@@ -528,10 +546,10 @@ def sem_VTI_kernel_cijkl_rho_to_beta_kappa_phi_xi_eta_rho(
 
     K_xi = (
         (
-            (K_C44 + K_C55) * (-1.0 / 3.0)
-            + K_C66 * (2.0 / 3.0)
-            + K_C12 * (-2.0 * 2.0 / 3.0)
-            + (K_C13 + K_C23) * (-2.0 * eta * (-1.0 / 3.0))
+            -1 * (K_C44 + K_C55)
+            + K_C66
+            - 2.0 * K_C12
+            + (K_C13 + K_C23) * 2.0 * eta
         )
         * vs**2
         * rho
@@ -544,7 +562,7 @@ def sem_VTI_kernel_cijkl_rho_to_beta_kappa_phi_xi_eta_rho(
         + (K_C11 + K_C22) * vph**2
         + K_C33 * vpv**2
         + K_C12 * (vph**2 - 2 * vsh**2)
-        + (K_C13 + K_C23) * eta * (vph**2 - vsv**2)
+        + (K_C13 + K_C23) * eta * (vph**2 - 2 * vsv**2)
         + (K_C44 + K_C55) * vsv**2
         + K_C66 * vsh**2
     )

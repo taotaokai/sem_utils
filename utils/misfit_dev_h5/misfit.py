@@ -4262,11 +4262,12 @@ class Misfit(object):
             solver_fs = 1.0 / solver_dt
             solver_te = solver_tb + (solver_nt - 1) * solver_dt
 
-            npad_left = npad_right = 0
-            if solver_tb < data_tb:
-                npad_left = int((data_tb - solver_tb) * data_fs) + 1
-            if solver_te > data_te:
-                npad_right = int((solver_te - data_te) * data_fs) + 1
+            # npad_left = npad_right = 0
+            # if solver_tb < data_tb:
+            npad_left = int(max(0, data_tb - solver_tb) * data_fs) + 1 
+            #NOTE +1 to work out the rounding error in epoch time conversion in UTCDateTime 
+            # if solver_te > data_te:
+            npad_right = int(max(0, solver_te - data_te) * data_fs) + 1
 
             solver_t0 = solver_tb - event_t0
             solver_times = (
@@ -4293,13 +4294,18 @@ class Misfit(object):
                 if solver_fs < data_fs:
                     msg = f"solver_fs ({solver_fs}) < data_fs ({data_fs})"
                     warnings.warn(msg)
-                tr.interpolate(
-                    starttime=solver_tb,
-                    sampling_rate=solver_fs,
-                    npts=solver_nt,
-                    method="lanczos",
-                    a=20,
-                )
+
+                try:
+                    tr.interpolate(
+                        starttime=solver_tb,
+                        sampling_rate=solver_fs,
+                        npts=solver_nt,
+                        method="lanczos",
+                        a=20,
+                    )
+                except Exception as e:
+                    msg = f"{tr} interp_t0 = {solver_tb}, fs={solver_fs}, npts={solver_nt} (Error: {e})"
+                    raise Exception(msg)
 
                 # tr.write(out_file + ".1.sac", format="sac")
 

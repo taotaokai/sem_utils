@@ -3517,7 +3517,8 @@ class Misfit(object):
             plot_max_ntrace_per_bin = int(max_ntrace_per_bin)
             if plot_max_ntrace_per_bin < 1:
                 plot_max_ntrace_per_bin = None
-        except:
+        except Exception as e:
+            warnings.warn(e)
             plot_max_ntrace_per_bin = None
         plot_window_id = win_id
         plot_SNR = np.array(min_SNR)
@@ -3900,7 +3901,7 @@ class Misfit(object):
                 ax.add_collection(b)
 
                 # create axis for seismograms
-                ax_origin = [0.42, 0.06]
+                ax_origin = [0.4, 0.06]
                 ax_size = [0.4, 0.88]
                 # ax_size = [0.3, 0.90]
                 ax_1comp = fig.add_axes(ax_origin + ax_size)
@@ -3972,7 +3973,7 @@ class Misfit(object):
                     net = attrs["network"]
                     sta = attrs["station"]
                     stnm = f"{net}_{sta}"
-                    first_arrtime = attrs["first_arrtime"]
+                    # first_arrtime = attrs["first_arrtime"]
                     dist_degree = attrs["dist_degree"]
 
                     print(f"plotting {stnm}")
@@ -3980,9 +3981,9 @@ class Misfit(object):
                     obs = g_sta[obs_tag]
                     syn = g_sta[syn_tag]
 
-                    sta_attrs = {
-                        k: g_sta._v_attrs[k] for k in g_sta._v_attrs._f_list("user")
-                    }
+                    # sta_attrs = {
+                    #     k: g_sta._v_attrs[k] for k in g_sta._v_attrs._f_list("user")
+                    # }
                     obs_attrs = {k: obs.attrs[k] for k in obs.attrs._f_list("user")}
                     syn_attrs = {k: syn.attrs[k] for k in syn.attrs._f_list("user")}
                     try:
@@ -4093,7 +4094,7 @@ class Misfit(object):
                     # win_idx = (times > win_starttime) & (times < win_endtime)
                     win_tshift = win["cc_time_shift"]
 
-                    win_weight = win["weight"]
+                    # win_weight = win["weight"]
                     win_SNR = win["SNR"]
 
                     # plot seismograms
@@ -4168,10 +4169,11 @@ class Misfit(object):
                     #  ax.text(max(plot_time), dist_degree, ' %.1f' % (window['weight']),
                     #      verticalalignment='center', fontsize=7)
                     ##annotate station names
-                    str_annot = "%s.%s(%.2f,%.1f,%.1f,%.1f)" % (
+                    str_annot = "%s.%s(%.2f,%.2f,%.1f,%.1f,%.1f)" % (
                         net,
                         sta,
                         win["cc0"],
+                        win["cc_max"],
                         win["cc_time_shift"],
                         win["SNR"],
                         win["weight"],
@@ -4186,7 +4188,7 @@ class Misfit(object):
                     )
                     # ax_1comp.text(160, dist_degree, str_annot,
                     #    verticalalignment='center', fontsize=7)
-
+                ax_1comp.text(max(plot_time), plot_ymax, "net,sta(cc0,ccmax,dt,SNR,weight)", fontsize=7,)
                 # -- set axes limits and lables, annotation
                 ax_1comp.set_xlim(min(plot_time), max(plot_time))
                 # ax_1comp.set_xlim(80,160)

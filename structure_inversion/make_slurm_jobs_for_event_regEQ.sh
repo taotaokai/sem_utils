@@ -273,6 +273,24 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
+kernel_dir=${event_dir}/output_kernel/kernel
+
+echo ====== check if simulation finished successfully
+
+n=\$(ls -1 \$kernel_dir/proc*_cijkl_kernel.bin | wc -l)
+if [ "\$n" -ne "${SEM_nproc_total}" ]; then
+  echo "number of \$kernel_dir/proc*_cijkl_kernel.bin files not equal to ${SEM_nproc_total}"
+  echo "====== kernel process job FAILED: $event_id"
+  exit 1
+fi
+
+n=\$(ls -1 \$kernel_dir/proc*_rho_kernel.bin | wc -l)
+if [ "\$n" -ne "${SEM_nproc_total}" ]; then
+  echo "number of \$kernel_dir/proc*_rho_kernel.bin files not equal to ${SEM_nproc_total}"
+  echo "====== kernel process job FAILED: $event_id"
+  exit 1
+fi
+
 echo ====== convert cijkl kernel to VTI kernel
 
 mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
@@ -290,13 +308,14 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_repa
   --type ${SEM_parameterization_type} \\
   --mesh_dir \${mesh_dir}
 
-# check if simulation finished successfully
+# check if all files are created successfully
 n=\$(ls -1 \$out_dir/*.bin | wc -l)
 n0=\$(( ${SEM_nproc_total} * 6 )) # 6: number of kernel files for each process (alpha,beta,phi,xi,eta,rho)
 if [ "\$n" -ne "\$n0" ]; then
   echo "====== kernel process job FAILED: $event_id"
   exit 1
 fi
+
 # remove forward saved frames adn adjoint source files to save disk space
 chmod u+w $event_dir/forward_saved_frames
 rm -rf $event_dir/forward_saved_frames

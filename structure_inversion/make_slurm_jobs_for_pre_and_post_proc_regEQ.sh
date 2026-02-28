@@ -162,7 +162,7 @@ kernel_name=\${model_names[\${SLURM_ARRAY_TASK_ID}]}${SEM_kernel_tag}
 mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
 
 
-echo "====== threshold kernel"
+echo "====== gradient clippling"
 
 kernel_dir=${SEM_iter_dir}/kernel_sum/GLL
 out_dir=${SEM_iter_dir}/kernel_sum/GLL_threshold
@@ -182,7 +182,7 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_histogram.p
   --use_zdv
 
 
-echo "====== smooth kernel"
+echo "====== gradient smoothing"
 
 kernel_dir=${SEM_iter_dir}/kernel_sum/GLL_threshold
 out_dir=${SEM_iter_dir}/kernel_sum/GLL_threshold_smooth

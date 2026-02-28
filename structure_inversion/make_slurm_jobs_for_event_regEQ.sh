@@ -27,7 +27,9 @@ mkdir -p $slurm_dir
 forward_job=$slurm_dir/forward.job
 misfit_job=$slurm_dir/misfit.job
 kernel_job=$slurm_dir/kernel.job
-process_job=$slurm_dir/process.job
+# process_job=$slurm_dir/process.job
+reparam_job=$slurm_dir/reparam.job
+mask_job=$slurm_dir/mask.job
 threshold_job=$slurm_dir/threshold.job
 plot_job=$slurm_dir/plot.job
 #hess_job=$slurm_dir/hess.job
@@ -262,20 +264,21 @@ echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 EOF
 
-#====== kernel processing
-cat <<EOF > $process_job
+
+#====== reduce cijkl,rho kernel to VTI parameters
+cat <<EOF > $reparam_job
 #!/bin/bash
 #SBATCH -J ${event_id}.process
-#SBATCH -o $process_job.o%j
+#SBATCH -o $reparam_job.o%j
 #SBATCH ${SLURM_args_kernel_process}
 
 echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-kernel_dir=${event_dir}/output_kernel/kernel
-
 echo ====== check if simulation finished successfully
+
+kernel_dir=${event_dir}/output_kernel/kernel
 
 n=\$(ls -1 \$kernel_dir/proc*_cijkl_kernel.bin | wc -l)
 if [ "\$n" -ne "${SEM_nproc_total}" ]; then
@@ -321,6 +324,23 @@ chmod u+w $event_dir/forward_saved_frames
 rm -rf $event_dir/forward_saved_frames
 rm -rf $event_dir/SEM/*.adj
 rm -rf \${kernel_dir} # remove kernel directory to save disk space
+
+echo
+echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
+EOF
+
+
+#====== mask source/receiver 
+cat <<EOF > $mask_job
+#!/bin/bash
+#SBATCH -J ${event_id}.process
+#SBATCH -o $mask_job.o%j
+#SBATCH ${SLURM_args_kernel_process}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
 
 echo ====== create source/receiver mask
 
@@ -368,6 +388,114 @@ echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 EOF
+
+
+# #====== kernel processing
+# cat <<EOF > $process_job
+# #!/bin/bash
+# #SBATCH -J ${event_id}.process
+# #SBATCH -o $process_job.o%j
+# #SBATCH ${SLURM_args_kernel_process}
+# 
+# echo
+# echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+# echo
+# 
+# kernel_dir=${event_dir}/output_kernel/kernel
+# 
+# echo ====== check if simulation finished successfully
+# 
+# n=\$(ls -1 \$kernel_dir/proc*_cijkl_kernel.bin | wc -l)
+# if [ "\$n" -ne "${SEM_nproc_total}" ]; then
+#   echo "number of \$kernel_dir/proc*_cijkl_kernel.bin files not equal to ${SEM_nproc_total}"
+#   echo "====== kernel process job FAILED: $event_id"
+#   exit 1
+# fi
+# 
+# n=\$(ls -1 \$kernel_dir/proc*_rho_kernel.bin | wc -l)
+# if [ "\$n" -ne "${SEM_nproc_total}" ]; then
+#   echo "number of \$kernel_dir/proc*_rho_kernel.bin files not equal to ${SEM_nproc_total}"
+#   echo "====== kernel process job FAILED: $event_id"
+#   exit 1
+# fi
+# 
+# echo ====== convert cijkl kernel to VTI kernel
+# 
+# mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
+# kernel_dir=${event_dir}/output_kernel/kernel
+# out_dir=${event_dir}/kernel/GLL
+# [ -d \${out_dir} ] && rm -rf \${out_dir}
+# mkdir -p \$out_dir
+# 
+# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_reparameterization.py \\
+#   --nproc ${SEM_nproc_total} \\
+#   --reference_dir ${SEM_reference_model_dir} \\
+#   --model_dir ${SEM_iter_dir}/model_initial \\
+#   --kernel_dir \${kernel_dir} \\
+#   --out_dir \${out_dir} \\
+#   --type ${SEM_parameterization_type} \\
+#   --mesh_dir \${mesh_dir}
+# 
+# # check if all files are created successfully
+# n=\$(ls -1 \$out_dir/*.bin | wc -l)
+# n0=\$(( ${SEM_nproc_total} * 6 )) # 6: number of kernel files for each process (alpha,beta,phi,xi,eta,rho)
+# if [ "\$n" -ne "\$n0" ]; then
+#   echo "====== kernel process job FAILED: $event_id"
+#   exit 1
+# fi
+# 
+# # remove forward saved frames adn adjoint source files to save disk space
+# chmod u+w $event_dir/forward_saved_frames
+# rm -rf $event_dir/forward_saved_frames
+# rm -rf $event_dir/SEM/*.adj
+# rm -rf \${kernel_dir} # remove kernel directory to save disk space
+# 
+# echo ====== create source/receiver mask
+# 
+# mesh_dir=${SEM_iter_dir}/mesh
+# out_dir=${event_dir}/kernel/mask
+# [ -d \${out_dir} ] && rm -rf \${out_dir}
+# mkdir -p \$out_dir
+# 
+# echo "x,y,z,sigma_km" > \${out_dir}/mask.lst
+# 
+# awk 'NR==6{print \$1 "," \$2 "," \$3 "," a}' a="$SEM_kernel_mask_source_sigma_km" \\
+#   ${event_dir}/output_kernel/source.vtk \\
+#   >> \${out_dir}/mask.lst
+# 
+# awk 'NR>=6&&NF==3{print \$1 "," \$2 "," \$3 "," a}' a=$SEM_kernel_mask_receiver_sigma_km \\
+#   ${event_dir}/output_kernel/receiver.vtk \\
+#   >> \${out_dir}/mask.lst
+# 
+# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_make_gaussian_mask.py \\
+#   ${SEM_nproc_total} \\
+#   \${mesh_dir}/DATABASES_MPI \\
+#   \${out_dir}/mask.lst \\
+#   \${out_dir}
+# 
+# echo ====== mask kernels
+# 
+# out_dir=${event_dir}/kernel/GLL_mask
+# [ -d \${out_dir} ] && rm -rf \${out_dir}
+# mkdir -p \$out_dir
+# 
+# for model in ${SEM_model_names[@]}
+# do
+#   tag=\${model}${SEM_kernel_tag}
+#   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_math.py \\
+#     --nproc ${SEM_nproc_total} \\
+#     --model_dirs ${event_dir}/kernel/GLL  ${event_dir}/kernel/mask \\
+#     --model_tags \${tag} mask \\
+#     --math_expr "v[0]*v[1]" \\
+#     --out_dir \${out_dir} \\
+#     --out_tag \${tag} \\
+#     --overwrite_ok
+# done
+# 
+# echo
+# echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+# echo
+# EOF
 
 
 #====== kernel clipping   

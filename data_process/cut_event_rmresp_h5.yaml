@@ -1,5 +1,5 @@
-stations_path: 'sample_data/stations/' # station xml files, net.sta.xml
-SDS_root: 'sample_data/SDS/'
+stations_path: 'stationxml/' # station xml files, net.sta.xml
+SDS_root: 'SDS/'
 
 enforce_3comp: False # True: either Z12 or ZNE, False: either Z or Z12 or ZNE
 
@@ -27,7 +27,7 @@ resample:
 
 remove_response:
   output_type: VEL #VEL # either DISP, VEL, ACC, DEF
-  output_unit: meter #m/s # meter, m/s
+  output_unit: m/s #m/s # meter, m/s
   # to determine response passband: [resp_lc, resp_hc]
   ref_resp_type: VEL # type of response to determine corner freqs 
   ref_freq: 1 # Hz, reference frequency

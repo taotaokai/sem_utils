@@ -268,7 +268,7 @@ EOF
 #====== reduce cijkl,rho kernel to VTI parameters
 cat <<EOF > $reparam_job
 #!/bin/bash
-#SBATCH -J ${event_id}.process
+#SBATCH -J ${event_id}.reparam
 #SBATCH -o $reparam_job.o%j
 #SBATCH ${SLURM_args_kernel_process}
 
@@ -334,7 +334,7 @@ EOF
 #====== mask source/receiver 
 cat <<EOF > $mask_job
 #!/bin/bash
-#SBATCH -J ${event_id}.process
+#SBATCH -J ${event_id}.mask
 #SBATCH -o $mask_job.o%j
 #SBATCH ${SLURM_args_kernel_process}
 
@@ -498,65 +498,65 @@ EOF
 # EOF
 
 
-#====== kernel clipping   
-cat <<EOF > $threshold_job
-#!/bin/bash
-#SBATCH -J ${event_id}.threshold
-#SBATCH -o $threshold_job.o%j
-#SBATCH ${SLURM_args_kernel_threshold}
-
-echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
-echo
-
-echo
-echo ====== convert cijkl kernel to VTI kernel
-echo
-
-mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
-kernel_dir=${event_dir}/output_kernel/kernel
-out_dir=${event_dir}/kernel/GLL
-[ -d \${out_dir} ] && rm -rf \${out_dir}
-mkdir -p \$out_dir
-
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_reparameterization.py \\
-  --nproc ${SEM_nproc_total} \\
-  --reference_dir ${SEM_reference_model_dir} \\
-  --model_dir ${SEM_iter_dir}/model_initial \\
-  --kernel_dir \${kernel_dir} \\
-  --out_dir \${out_dir} \\
-  --type ${SEM_parameterization_type} \\
-  --mesh_dir \${mesh_dir}
-
-# rm -rf \${kernel_dir} # remove kernel directory to save disk space
-
-echo
-echo ====== apply threshold
-echo
-
-kernel_dir=${event_dir}/kernel/GLL
-out_dir=${event_dir}/kernel/GLL_threshold
-[ -d \${out_dir} ] && rm -rf \${out_dir}
-mkdir -p \$out_dir
-
-for model_name in ${SEM_model_names[@]}
-do
-  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_histogram.py  \\
-    ${SEM_nproc_total} \\
-    \${mesh_dir} \\
-    \${kernel_dir} \\
-    \${model_name}${SEM_kernel_tag} \\
-    --nbin ${SEM_histogram_nbin} \\
-    --exponential_base ${SEM_histogram_exponential_base} \\
-    --out_hist \${out_dir}/histogram_\${model_name}.txt \\
-    --cdf_threshold ${SEM_cdf_threshold} \\
-    --out_dir \${out_dir} 
-done
-
-echo
-echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
-echo
-EOF
+# #====== kernel clipping   
+# cat <<EOF > $threshold_job
+# #!/bin/bash
+# #SBATCH -J ${event_id}.threshold
+# #SBATCH -o $threshold_job.o%j
+# #SBATCH ${SLURM_args_kernel_threshold}
+# 
+# echo
+# echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+# echo
+# 
+# echo
+# echo ====== convert cijkl kernel to VTI kernel
+# echo
+# 
+# mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
+# kernel_dir=${event_dir}/output_kernel/kernel
+# out_dir=${event_dir}/kernel/GLL
+# [ -d \${out_dir} ] && rm -rf \${out_dir}
+# mkdir -p \$out_dir
+# 
+# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_reparameterization.py \\
+#   --nproc ${SEM_nproc_total} \\
+#   --reference_dir ${SEM_reference_model_dir} \\
+#   --model_dir ${SEM_iter_dir}/model_initial \\
+#   --kernel_dir \${kernel_dir} \\
+#   --out_dir \${out_dir} \\
+#   --type ${SEM_parameterization_type} \\
+#   --mesh_dir \${mesh_dir}
+# 
+# # rm -rf \${kernel_dir} # remove kernel directory to save disk space
+# 
+# echo
+# echo ====== apply threshold
+# echo
+# 
+# kernel_dir=${event_dir}/kernel/GLL
+# out_dir=${event_dir}/kernel/GLL_threshold
+# [ -d \${out_dir} ] && rm -rf \${out_dir}
+# mkdir -p \$out_dir
+# 
+# for model_name in ${SEM_model_names[@]}
+# do
+#   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_histogram.py  \\
+#     ${SEM_nproc_total} \\
+#     \${mesh_dir} \\
+#     \${kernel_dir} \\
+#     \${model_name}${SEM_kernel_tag} \\
+#     --nbin ${SEM_histogram_nbin} \\
+#     --exponential_base ${SEM_histogram_exponential_base} \\
+#     --out_hist \${out_dir}/histogram_\${model_name}.txt \\
+#     --cdf_threshold ${SEM_cdf_threshold} \\
+#     --out_dir \${out_dir} 
+# done
+# 
+# echo
+# echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+# echo
+# EOF
 
 
 #====== plot misfit and waveforms

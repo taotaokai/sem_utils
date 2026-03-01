@@ -162,24 +162,24 @@ kernel_name=\${model_names[\${SLURM_ARRAY_TASK_ID}]}${SEM_kernel_tag}
 mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
 
 
-echo "====== gradient clippling"
-
-kernel_dir=${SEM_iter_dir}/kernel_sum/GLL
-out_dir=${SEM_iter_dir}/kernel_sum/GLL_threshold
-[ -d \${out_dir} ] && rm -rf \${out_dir}
-mkdir -p \$out_dir
-
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_histogram.py  \\
-  ${SEM_nproc_total} \\
-  \${mesh_dir} \\
-  \${kernel_dir} \\
-  \${kernel_name} \\
-  --nbin ${SEM_histogram_nbin} \\
-  --exponential_base ${SEM_histogram_exponential_base} \\
-  --out_hist \${out_dir}/histogram_\${kernel_name}.txt \\
-  --cdf_threshold ${SEM_cdf_threshold} \\
-  --out_dir \${out_dir} \\
-  --use_zdv
+# echo "====== gradient clippling"
+# 
+# kernel_dir=${SEM_iter_dir}/kernel_sum/GLL
+# out_dir=${SEM_iter_dir}/kernel_sum/GLL_threshold
+# [ -d \${out_dir} ] && rm -rf \${out_dir}
+# mkdir -p \$out_dir
+# 
+# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_histogram.py  \\
+#   ${SEM_nproc_total} \\
+#   \${mesh_dir} \\
+#   \${kernel_dir} \\
+#   \${kernel_name} \\
+#   --nbin ${SEM_histogram_nbin} \\
+#   --exponential_base ${SEM_histogram_exponential_base} \\
+#   --out_hist \${out_dir}/histogram_\${kernel_name}.txt \\
+#   --cdf_threshold ${SEM_cdf_threshold} \\
+#   --out_dir \${out_dir} \\
+#   --use_zdv
 
 
 echo "====== gradient smoothing"
@@ -199,15 +199,30 @@ mkdir -p \$out_dir
 #   \${out_dir} \\
 #   --max_tolerance=1e-5
 
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_VTI.py \\
+# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_VTI.py \\
+#   ${SEM_nproc_total} \\
+#   \${mesh_dir} \\
+#   \${kernel_dir} \\
+#   \${kernel_name} \\
+#   \${out_dir} \\
+#   --horizontal_length ${SEM_kernel_smooth_horizontal_length_km} \\
+#   --vertical_length ${SEM_kernel_smooth_vertical_length_km} \\
+#   --nstep ${SEM_kernel_smooth_diffusion_niter} \\
+#   --max_tolerance=1e-3
+
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_VTI3D.py \\
   ${SEM_nproc_total} \\
   \${mesh_dir} \\
   \${kernel_dir} \\
   \${kernel_name} \\
+  ${SEM_kernel_smooth_reference_dir} \\
+  ${SEM_kernel_smooth_reference_tag} \\
+  ${SEM_kernel_smooth_reference_scale} \\
   \${out_dir} \\
-  --horizontal_length ${SEM_kernel_smooth_horizontal_length_km} \\
-  --vertical_length ${SEM_kernel_smooth_vertical_length_km} \\
+  --horizontal_scale ${SEM_kernel_smooth_horizontal_scale} \\
+  --vertical_scale ${SEM_kernel_smooth_vertical_scale} \\
   --nstep ${SEM_kernel_smooth_diffusion_niter} \\
+  --max_iter 50 \\
   --max_tolerance=1e-3
 
 echo

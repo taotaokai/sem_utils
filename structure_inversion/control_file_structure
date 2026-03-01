@@ -185,7 +185,7 @@ SEM_dmodel_tag="_dmodel" # search direction
 
 #====== kernel preconditioning
 
-# mask around source and receiver points
+#--- mask around source and receiver points
 # for each event e: 
 #   Ke = dChi_e/dm
 #   Me: masks around source and receiver points
@@ -198,16 +198,21 @@ SEM_dmodel_tag="_dmodel" # search direction
 SEM_kernel_mask_source_sigma_km=50
 SEM_kernel_mask_receiver_sigma_km=10
 
-# clipping 
-SEM_histogram_nbin=100
-SEM_histogram_exponential_base=0.9
-SEM_cdf_threshold=0.9999
+#--- clipping 
+# SEM_histogram_nbin=100
+# SEM_histogram_exponential_base=0.9
+# SEM_cdf_threshold=0.9999
 
-# smoothing
+#--- smoothing
 SEM_kernel_smooth_diffusion_niter=50 # iteration steps for diffusion based smoothing 
-SEM_kernel_smooth_iso_FWHM_km=10 # full width at half maximum (FWHM) of Gaussian kernel in km
-SEM_kernel_smooth_horizontal_length_km=30 # horizontal smoothing length as FWHM
-SEM_kernel_smooth_vertical_length_km=15 # vertical smoothing length as FWHM
+# SEM_kernel_smooth_iso_FWHM_km=10 # full width at half maximum (FWHM) of Gaussian kernel in km
+# SEM_kernel_smooth_horizontal_length_km=30 # horizontal smoothing length as FWHM
+# SEM_kernel_smooth_vertical_length_km=15 # vertical smoothing length as FWHM
+SEM_kernel_smooth_reference_dir=${SEM_base_dir}/mesh_initial/GLL_smooth_length # in km
+SEM_kernel_smooth_reference_tag=sigma # sigma = {ref_dir}/proc*_{tag}.bin
+SEM_kernel_smooth_reference_scale=1  # ref_length = sigma * ref_scale
+SEM_kernel_smooth_horizontal_scale=2  # horizontal smoothing length = ref_length * horizontal_scale 
+SEM_kernel_smooth_vertical_scale=1 # vertical smoothing length = ref_length * vertical_scale 
 
 #TODO: different somothing length for different parameter classes (e.g. larger for vp, smaller for vs?)
 

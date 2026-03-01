@@ -280,6 +280,7 @@ def solve_cg(u):
     # x = np.zeros_like(b)
     iter = 0
     threshold = rsold * max_tolerance
+    pAp = 0.0
     while rsold > threshold:
         if iter > max_iter:
             print(

@@ -37,10 +37,10 @@ def parse_arguments():
         required=True,
         help="math expression, e.g v[0] * v[1]",
     )
-    parser.add_argument("--out_dir", required=True, help="output directory for results")
+    parser.add_argument("--out_dir", default=None, help="output directory for results")
     parser.add_argument(
         "--out_tag",
-        required=True,
+        default=None,
         help="tag for output GLL file as proc*_reg1_[out_tag].bin",
     )
     parser.add_argument(
@@ -95,6 +95,8 @@ def main():
         )
 
         if not args.only_print:
+            assert args.out_dir is not None
+            assert args.out_tag is not None
             write_gll_file(
                 args.out_dir, args.out_tag, iproc, out_gll, overwrite=args.overwrite_ok
             )

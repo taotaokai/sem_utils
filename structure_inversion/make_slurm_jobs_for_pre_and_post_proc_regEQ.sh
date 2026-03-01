@@ -24,7 +24,7 @@ mkdir -p $slurm_dir
 mesh_job=$slurm_dir/mesh.job
 
 kernel_sum_job=$slurm_dir/kernel_sum.job
-kernel_precond_job=$slurm_dir/kernel_precond.job
+kernel_smooth_job=$slurm_dir/kernel_smooth.job
 
 dmodel_job=$slurm_dir/dmodel.job
 model_perturb_job=$slurm_dir/model_perturb.job
@@ -143,11 +143,11 @@ echo
 
 EOF
 
-#====== kernel_precond
-cat <<EOF > $kernel_precond_job
+#====== kernel_smooth
+cat <<EOF > $kernel_smooth_job
 #!/bin/bash
-#SBATCH -J kernel_precond
-#SBATCH -o ${kernel_precond_job}.o%A_%a
+#SBATCH -J kernel_smooth
+#SBATCH -o ${kernel_smooth_job}.o%A_%a
 #SBATCH --array 0-$(( ${#SEM_model_names[@]} - 1 ))
 #SBATCH ${SLURM_args_kernel_precond}
 
@@ -182,10 +182,10 @@ mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
 #   --use_zdv
 
 
-echo "====== gradient smoothing"
+echo "====== kernel smoothing"
 
-kernel_dir=${SEM_iter_dir}/kernel_sum/GLL_threshold
-out_dir=${SEM_iter_dir}/kernel_sum/GLL_threshold_smooth
+kernel_dir=${SEM_iter_dir}/kernel_sum/GLL
+out_dir=${SEM_iter_dir}/kernel_sum/GLL_smooth
 [ -d \${out_dir} ] && rm -rf \${out_dir}
 mkdir -p \$out_dir
 

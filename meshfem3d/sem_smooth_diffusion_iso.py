@@ -44,8 +44,10 @@ from meshfem3d_utils import (
     laplacian_iso,
     assemble_MPI_scalar,
     get_gll_weights,
+    write_gll_file,
 )
 
+DEBUG = True
 
 # ====== parameters
 parser = argparse.ArgumentParser()
@@ -166,6 +168,12 @@ assemble_MPI_scalar(
 )
 
 u_glob = u_dv_glob / dv_glob
+
+if DEBUG:
+    out_file = "%s/proc%06d_reg1_%s.bin" % (out_dir, mpi_rank, model_name)
+    write_gll_file(out_dir, "dv", mpi_rank, dv_glob[ibool])
+    write_gll_file(out_dir, f"{model_name}_in", mpi_rank, u_glob[ibool])
+
 
 comm.Barrier()
 

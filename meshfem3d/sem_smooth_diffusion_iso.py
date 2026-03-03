@@ -92,6 +92,7 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+print(args)
 
 nproc = args.nproc
 mesh_dir = args.mesh_dir  # <mesh_dir>/proc******_solver_data[_mpi].bin
@@ -288,9 +289,6 @@ if mpi_rank == 0:
 
 u = u_glob
 for it in range(nt):
-    # ku = Kx(u)
-    # mu = Mx(u)
-    u = solve_cg(u)
     max_u = comm.reduce(max(u), op=MPI.MAX, root=0)
     min_u = comm.reduce(min(u), op=MPI.MIN, root=0)
     if mpi_rank == 0:
@@ -298,6 +296,7 @@ for it in range(nt):
         # print(f"{it=}, {max(abs(mu))=}, {max(abs(ku))=}, {max(abs(b))=}, {max(abs(u))=}, {elapsed_time=}")
         print(f"{it=}, {min_u=}, {max_u=}, {elapsed_time=}")
         sys.stdout.flush()
+    u = solve_cg(u)
 
 comm.Barrier()
 

@@ -100,11 +100,11 @@ parser.add_argument(
 #     action="store_true",
 #     help="clip negative model values to zero during iteration",
 # )
-parser.add_argument(
-    "--use_absolute_value",
-    action="store_true",
-    help="use absolute model values during iteration",
-)
+# parser.add_argument(
+#     "--use_absolute_value",
+#     action="store_true",
+#     help="use absolute model values during iteration",
+# )
 
 args = parser.parse_args()
 if mpi_rank == 0:
@@ -308,8 +308,8 @@ if mpi_rank == 0:
 
 u = u_glob
 
-if args.use_absolute_value:
-    u = np.abs(u)
+# if args.use_absolute_value:
+#     u = np.abs(u)
 
 for it, dt in enumerate(time_steps): 
     max_u = comm.reduce(max(u), op=MPI.MAX, root=0)
@@ -321,8 +321,8 @@ for it, dt in enumerate(time_steps):
     u = solve_cg(u, dt)
     # if args.non_negative:
     #     u = np.maximum(u, 0.0)
-    if args.use_absolute_value:
-        u = np.abs(u)
+    # if args.use_absolute_value:
+    #     u = np.abs(u)
 
 comm.Barrier()
 

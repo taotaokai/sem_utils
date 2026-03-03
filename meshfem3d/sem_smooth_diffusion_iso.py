@@ -97,7 +97,8 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-print(args)
+if mpi_rank == 0:
+    print(args)
 
 nproc = args.nproc
 mesh_dir = args.mesh_dir  # <mesh_dir>/proc******_solver_data[_mpi].bin
@@ -301,7 +302,7 @@ for it, dt in enumerate(time_steps):
     min_u = comm.reduce(min(u), op=MPI.MIN, root=0)
     if mpi_rank == 0:
         elapsed_time = time.time() - tic
-        print(f"{it=}, {dt=}, {min_u=}, {max_u=}, {elapsed_time=}")
+        print(f"{it=:04d}, {dt=:.4e}, {min_u=:.4e}, {max_u=:.4e}, {elapsed_time=:.2f}")
         sys.stdout.flush()
     u = solve_cg(u, dt)
 

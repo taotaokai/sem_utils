@@ -5,7 +5,7 @@ import argparse
 import numpy as np
 from mpi4py import MPI
 
-from meshfem3d_utils import read_gll_file, write_gll_file
+from meshfem3d_utils import sem_mesh_read, read_gll_file, write_gll_file
 
 # MPI initialization
 mpi_comm = MPI.COMM_WORLD
@@ -19,13 +19,22 @@ def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Perturb model")
 
-    parser.add_argument("nproc", type=int, help="number of model slices")
     parser.add_argument(
-        "model_dir",
+        "--nproc", required=True, type=int, help="number of model slices"
+    )
+    parser.add_argument(
+        "--mesh_dir",
+        required=True,
+        help="Directory containing mesh files (proc*_reg1_solver_data.bin)",
+    )
+    parser.add_argument(
+        "--model_dir",
+        required=True,
         help="Directory containing input model GLL files (proc*_reg1_[model_tag].bin)",
     )
     parser.add_argument(
-        "out_dir",
+        "--out_dir",
+        required=True,
         help="Directory for output perturbed model files (proc*_reg1_[model_tag].bin)",
     )
     parser.add_argument(
@@ -52,18 +61,23 @@ def parse_arguments():
 
 
 def apply_perturbation(
+    nglob: int,
+    ibool: np.ndarray,
     model_gll: np.ndarray,
     amplitude: float,
     method: str,
 ) -> np.ndarray:
     """Apply perturbation based on specified type."""
-    dm_gll = np.random.uniform(-amplitude, amplitude, model_gll.shape)
+    # dm has same value at boundary points shared among elements
+    dm_glob = np.random.uniform(-amplitude, amplitude, nglob)
+    # dm is NOT continuse across elements
+    # dm_gll = np.random.uniform(-amplitude, amplitude, model_gll.shape)
     if method == "absolute":
-        model_out = model_gll + dm_gll
+        model_out = model_gll + dm_glob[ibool]
     elif method == "relative":
-        model_out = model_gll * (1.0 + dm_gll)
+        model_out = model_gll * (1.0 + dm_glob[ibool])
     elif method == "exponential":
-        model_out = model_gll * np.exp(dm_gll)
+        model_out = model_gll * np.exp(dm_glob[ibool])
     else:
         raise ValueError(f"Invalid perturbation method: {method}")
     return model_out
@@ -71,6 +85,7 @@ def apply_perturbation(
 
 def process(
     nproc: int,
+    mesh_dir: str,
     model_dir: str,
     out_dir: str,
     model_tags: list,
@@ -89,9 +104,13 @@ def process(
     """
 
     for iproc in range(mpi_rank, nproc, mpi_size):
+        mesh_file = "%s/proc%06d_reg1_solver_data.bin" % (mesh_dir, iproc)
+        mesh = sem_mesh_read(mesh_file)
+        nglob = mesh["nglob"]
+        ibool = mesh["ibool"]
         for tag, amp in zip(model_tags, amplitudes):
             model_gll = read_gll_file(model_dir, tag, iproc)
-            out_gll = apply_perturbation(model_gll, amp, method)
+            out_gll = apply_perturbation(nglob, ibool, model_gll, amp, method)
             write_gll_file(out_dir, tag, iproc, out_gll)
 
 
@@ -115,6 +134,7 @@ def main():
     try:
         process(
             args.nproc,
+            args.mesh_dir,
             args.model_dir,
             args.out_dir,
             args.model_tags,

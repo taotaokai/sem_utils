@@ -47,7 +47,6 @@ from meshfem3d_utils import (
     write_gll_file,
 )
 
-DEBUG = True
 
 # ====== parameters
 parser = argparse.ArgumentParser()
@@ -78,6 +77,11 @@ parser.add_argument(
     type=float,
     default=1e-5,
     help="relative residual to stop iteration",
+)
+parser.add_argument(
+    "--debug",
+    action="store_true",
+    help="output immediate results for debugging",
 )
 
 args = parser.parse_args()
@@ -169,7 +173,7 @@ assemble_MPI_scalar(
 
 u_glob = u_dv_glob / dv_glob
 
-if DEBUG:
+if args.debug:
     out_file = "%s/proc%06d_reg1_%s.bin" % (out_dir, mpi_rank, model_name)
     write_gll_file(out_dir, "dv", mpi_rank, dv_glob[ibool])
     write_gll_file(out_dir, f"{model_name}_in", mpi_rank, u_glob[ibool])
@@ -229,6 +233,7 @@ def solve_cg(u):
     # x = np.zeros_like(b)
     iter = 0
     threshold = rsold * max_tolerance
+    pAp = 0.0
     while rsold > threshold:
         if iter > max_iter:
             print(

@@ -511,9 +511,10 @@ echo
 mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_random_perturb.py \\
-  ${SEM_nproc_total} \\
-  ${SEM_iter_dir}/model_initial \\
-  ${SEM_iter_dir}/model_perturb_random \\
+  --nproc ${SEM_nproc_total} \\
+  --mesh_dir \${mesh_dir} \\
+  --model_dir ${SEM_iter_dir}/model_initial \\
+  --out_dir ${SEM_iter_dir}/model_perturb_random \\
   --model_tags ${SEM_model_names[@]} \\
   --amplitudes ${SEM_hessian_perturb_amplitude} \\
   --method "absolute"

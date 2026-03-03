@@ -108,8 +108,9 @@ def process(
         mesh = sem_mesh_read(mesh_file)
         nglob = mesh["nglob"]
         ibool = mesh["ibool"]
+        gll_dims = mesh["gll_dims"]
         for tag, amp in zip(model_tags, amplitudes):
-            model_gll = read_gll_file(model_dir, tag, iproc)
+            model_gll = read_gll_file(model_dir, tag, iproc, shape=gll_dims)
             out_gll = apply_perturbation(nglob, ibool, model_gll, amp, method)
             write_gll_file(out_dir, tag, iproc, out_gll, overwrite=True)
 

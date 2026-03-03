@@ -111,7 +111,7 @@ def process(
         for tag, amp in zip(model_tags, amplitudes):
             model_gll = read_gll_file(model_dir, tag, iproc)
             out_gll = apply_perturbation(nglob, ibool, model_gll, amp, method)
-            write_gll_file(out_dir, tag, iproc, out_gll)
+            write_gll_file(out_dir, tag, iproc, out_gll, overwrite=True)
 
 
 def main():

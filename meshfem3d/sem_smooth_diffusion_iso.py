@@ -79,6 +79,13 @@ parser.add_argument(
     help="relative residual to stop iteration",
 )
 parser.add_argument(
+    "--method",
+    type=str,
+    choices=["backward_euler", "crank_nicolson"],
+    default="backward_euler",
+    help="time integration method",
+)
+parser.add_argument(
     "--debug",
     action="store_true",
     help="output immediate results for debugging",
@@ -184,11 +191,15 @@ comm.Barrier()
 # GLL points weights
 zgll, wgll, dlag_dzgll = get_gll_weights()
 
-# trapzoidal method
+#--- Crank-Nicolson method
 # M * (u_{n+1} - u_n) = dt * K * (u_{n+1} + u_n) / 2
 # (M - dt/2 * K) * u_{n+1} = (M + dt/2 * K) * u_n
 # (1 - dt/2 * M^{-1} * K) * u_{n+1} = (1 + dt/2 * M^{-1} * K) * u_n
 
+#--- backward Euler
+# M * (u_{n+1} - u_n) = dt * K * u_{n+1}
+# (M - dt * K) * u_{n+1} = M * u_n
+# (1 - dt * M^{-1} * K) * u_{n+1} = u_n
 
 def Kx(x_glob):
     kx_glob = laplacian_iso(
@@ -223,9 +234,20 @@ def Kx(x_glob):
 
 def solve_cg(u):
     def Ax(x_glob):
-        return x_glob - 0.5 * dt * Kx(x_glob) / dv_glob
+        if args.method == "backward_euler":
+            return x_glob - dt * Kx(x_glob) / dv_glob
+        elif args.method == "crank_nicolson":
+            return x_glob - 0.5 * dt * Kx(x_glob) / dv_glob
+        else:
+            raise ValueError(f"{args.method=} is not supported")
 
-    b = u + 0.5 * dt * Kx(u) / dv_glob
+    if args.method == "backward_euler":
+        b = u
+    elif args.method == "crank_nicolson":
+        b = u + 0.5 * dt * Kx(u) / dv_glob
+    else:
+        raise ValueError(f"{args.method=} is not supported")
+
     x = u.copy()
     r = b - Ax(x)
     p = r.copy()
@@ -269,24 +291,15 @@ for it in range(nt):
     # ku = Kx(u)
     # mu = Mx(u)
     u = solve_cg(u)
-    maxamp_u = comm.reduce(max(abs(u)), op=MPI.MAX, root=0)
+    max_u = comm.reduce(max(u), op=MPI.MAX, root=0)
+    min_u = comm.reduce(min(u), op=MPI.MIN, root=0)
     if mpi_rank == 0:
         elapsed_time = time.time() - tic
         # print(f"{it=}, {max(abs(mu))=}, {max(abs(ku))=}, {max(abs(b))=}, {max(abs(u))=}, {elapsed_time=}")
-        print(f"{it=}, max(abs(u))={maxamp_u}, {elapsed_time=}")
+        print(f"{it=}, {min_u=}, {max_u=}, {elapsed_time=}")
         sys.stdout.flush()
 
 comm.Barrier()
-
-# # forward Euler
-# # M * (u_{n+1} - u_n) = dt * K * u_n
-# # u_{n+1} = u_n + dt * M^{-1} * K * u_n
-# for it in range(nt):
-#     u_glob += dt * Kx(u_glob) / dv_glob
-#     if mpi_rank == 0:
-#         elapsed_time = time.time() - tic
-#         print(f"{it=}, {max(abs(u_glob))=}, {elapsed_time=}")
-#         sys.stdout.flush()
 
 if mpi_rank == 0:
     elapsed_time = time.time() - tic

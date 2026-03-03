@@ -30,8 +30,6 @@ import argparse
 
 import numpy as np
 
-from scipy.io import FortranFile
-
 from mpi4py import MPI
 
 from meshfem3d_constants import R_EARTH_KM
@@ -40,13 +38,17 @@ from meshfem3d_utils import (
     sem_mesh_read,
     sem_mesh_get_vol_gll,
     sem_mesh_mpi_read,
+    read_gll_file,
+    write_gll_file,
     gll2glob,
     laplacian_iso,
     assemble_MPI_scalar,
     get_gll_weights,
-    write_gll_file,
 )
 
+comm = MPI.COMM_WORLD
+mpi_size = comm.Get_size()
+mpi_rank = comm.Get_rank()
 
 # ====== parameters
 parser = argparse.ArgumentParser()
@@ -67,6 +69,9 @@ parser.add_argument(
 parser.add_argument("out_dir")  # num of processes
 parser.add_argument(
     "--nstep", type=int, default=100, help="number of time steps between [0, 1]"
+)
+parser.add_argument(
+    "--ratio", type=float, default=1.0, help="ratio of last time step to first time step"
 )
 # control parameters for CG solver
 parser.add_argument(
@@ -104,9 +109,27 @@ out_dir = args.out_dir
 max_iter = args.max_iter
 max_tolerance = args.max_tolerance
 
-# time range [0, 1]
-dt = 1.0 / nt
+# arithmetically increasing time step length
+#
+# dt[0] = a
+# dt[1] = a + h
+# dt[2] = a + 2*h
+# ...
+# dt[N-1] = a + (N-1)*h
+#
+# s.t. 
+#  sum(dt[i], i=0, N-1) = 1
+#  dt[0] = gamma * dt[N-1]
+#
+# h = 2 / (N * (N - 1)) * (1 - gamma) / (1 + gamma)
+# a = 2 * gamma / (1 + gamma) / N
+gamma = args.ratio
+assert gamma > 0 and gamma <= 1
+h = 2 / (nt * (nt - 1)) * (1 - gamma) / (1 + gamma)
+a = 2 * gamma / (1 + gamma) / nt
+time_steps = a + np.arange(nt) * h
 
+# smoothing length
 smooth_length /= R_EARTH_KM  # non-dimensionalize as in SEM
 # smooth_length is defined as the full width at half maximum (FWHM) of Gaussian function
 # smooth_length = FWHM = 2*sqrt(2*log2(2)) * sigma
@@ -116,10 +139,6 @@ sigma = smooth_length / (2 * np.sqrt(2 * np.log(2)))
 kappa = 0.5 * sigma**2
 
 # ====== smooth each target mesh slice
-comm = MPI.COMM_WORLD
-mpi_size = comm.Get_size()
-mpi_rank = comm.Get_rank()
-
 if mpi_size != nproc:
     raise Exception(f"{mpi_size=} must euqal {nproc=}!")
 
@@ -133,23 +152,18 @@ mesh = sem_mesh_read(mesh_file)
 mesh_file = "%s/proc%06d_reg1_solver_data_mpi.bin" % (mesh_dir, mpi_rank)
 mesh_mpi = sem_mesh_mpi_read(mesh_file)
 
-nspec = mesh["nspec"]
 nglob = mesh["nglob"]
-gll_dims = mesh["gll_dims"]
 ibool = mesh["ibool"]
+gll_dims = mesh["gll_dims"]
 
-model_file = "%s/proc%06d_reg1_%s.bin" % (model_dir, mpi_rank, model_name)
-with FortranFile(model_file, "r") as f:
-    model_gll = np.reshape(f.read_ints(dtype="f4"), gll_dims)
+model_gll = read_gll_file(model_dir, model_name, mpi_rank, shape=gll_dims)
 
-# print(f'{mpi_rank=}, {mesh_mpi["my_neighbors"]=}')
-
-comm.Barrier()
 if mpi_rank == 0:
     elapsed_time = time.time() - tic
     print(f"====== finish reading mesh/model, {elapsed_time=}")
     sys.stdout.flush()
 
+# get volume averaged value on global nodes
 dv_gll = sem_mesh_get_vol_gll(mesh)
 dv_glob = gll2glob(
     dv_gll,
@@ -186,21 +200,20 @@ if args.debug:
     write_gll_file(out_dir, "dv", mpi_rank, dv_glob[ibool])
     write_gll_file(out_dir, f"{model_name}_in", mpi_rank, u_glob[ibool])
 
-
 comm.Barrier()
 
 # GLL points weights
 zgll, wgll, dlag_dzgll = get_gll_weights()
 
-#--- Crank-Nicolson method
-# M * (u_{n+1} - u_n) = dt * K * (u_{n+1} + u_n) / 2
-# (M - dt/2 * K) * u_{n+1} = (M + dt/2 * K) * u_n
-# (1 - dt/2 * M^{-1} * K) * u_{n+1} = (1 + dt/2 * M^{-1} * K) * u_n
-
-#--- backward Euler
-# M * (u_{n+1} - u_n) = dt * K * u_{n+1}
-# (M - dt * K) * u_{n+1} = M * u_n
-# (1 - dt * M^{-1} * K) * u_{n+1} = u_n
+#--- time integration method
+# 1. Crank-Nicolson
+#   M * (u_{n+1} - u_n) = dt * K * (u_{n+1} + u_n) / 2
+#   (M - dt/2 * K) * u_{n+1} = (M + dt/2 * K) * u_n
+#   (1 - dt/2 * M^{-1} * K) * u_{n+1} = (1 + dt/2 * M^{-1} * K) * u_n
+# 2.  backward Euler
+#   M * (u_{n+1} - u_n) = dt * K * u_{n+1}
+#   (M - dt * K) * u_{n+1} = M * u_n
+#   (1 - dt * M^{-1} * K) * u_{n+1} = u_n
 
 def Kx(x_glob):
     kx_glob = laplacian_iso(
@@ -233,7 +246,8 @@ def Kx(x_glob):
     return kx_glob
 
 
-def solve_cg(u):
+# solve for each time step
+def solve_cg(u, dt):
     def Ax(x_glob):
         if args.method == "backward_euler":
             return x_glob - dt * Kx(x_glob) / dv_glob
@@ -264,8 +278,6 @@ def solve_cg(u):
                 f"unconvergence might occur, consider increase number of steps! {nt=}"
             )
             break
-        # print(f"{mpi_rank=}, {rsold=}")
-        # for i in range(100):
         Ap = Ax(p)
         pAp = comm.allreduce(sum(p * Ap), op=MPI.SUM)
         alpha = rsold / pAp
@@ -275,10 +287,6 @@ def solve_cg(u):
         p = r + (rsnew / rsold) * p
         rsold = rsnew
         iter += 1
-        # if mpi_rank == 0:
-        #     i += 1
-        #     print(f"{i=}, {rsold=}, {pAp=}")
-        #     sys.stdout.flush()
     return x
 
 
@@ -288,32 +296,26 @@ if mpi_rank == 0:
     sys.stdout.flush()
 
 u = u_glob
-for it in range(nt):
+for it, dt in enumerate(time_steps): 
     max_u = comm.reduce(max(u), op=MPI.MAX, root=0)
     min_u = comm.reduce(min(u), op=MPI.MIN, root=0)
     if mpi_rank == 0:
         elapsed_time = time.time() - tic
-        # print(f"{it=}, {max(abs(mu))=}, {max(abs(ku))=}, {max(abs(b))=}, {max(abs(u))=}, {elapsed_time=}")
-        print(f"{it=}, {min_u=}, {max_u=}, {elapsed_time=}")
+        print(f"{it=}, {dt=}, {min_u=}, {max_u=}, {elapsed_time=}")
         sys.stdout.flush()
-    u = solve_cg(u)
+    u = solve_cg(u, dt)
 
 comm.Barrier()
 
 if mpi_rank == 0:
     elapsed_time = time.time() - tic
     print(f"====== after smoothing, {elapsed_time=}")
-    # print(f"{du_glob=}, {du_glob.dtype=}")
 
 # write out smoothed model files
-out_file = "%s/proc%06d_reg1_%s.bin" % (out_dir, mpi_rank, model_name)
-with FortranFile(out_file, "w") as f:
-    # f.write_record(np.array(u_glob[ibool], dtype="f4"))
-    f.write_record(np.array(u[ibool], dtype="f4"))
+write_gll_file(out_dir, model_name, mpi_rank, u[ibool], overwrite=True)
 
 if mpi_rank == 0:
     elapsed_time = time.time() - tic
     print(f"====== finish writing out smoothed model files, {elapsed_time=}")
-    # print(f"{du_glob=}, {du_glob.dtype=}")
 
 comm.Barrier()

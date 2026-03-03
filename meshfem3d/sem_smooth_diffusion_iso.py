@@ -95,11 +95,11 @@ parser.add_argument(
     action="store_true",
     help="output immediate results for debugging",
 )
-parser.add_argument(
-    "--non-negative",
-    action="store_true",
-    help="clip negative model values to zero during iteration",
-)
+# parser.add_argument(
+#     "--non-negative",
+#     action="store_true",
+#     help="clip negative model values to zero during iteration",
+# )
 
 args = parser.parse_args()
 if mpi_rank == 0:
@@ -310,8 +310,8 @@ for it, dt in enumerate(time_steps):
         print(f"{it=:04d}, {dt=:.4e}, {min_u=:.4e}, {max_u=:.4e}, {elapsed_time=:.2f}")
         sys.stdout.flush()
     u = solve_cg(u, dt)
-    if args.non_negative:
-        u = np.maximum(u, 0.0)
+    # if args.non_negative:
+    #     u = np.maximum(u, 0.0)
 
 comm.Barrier()
 

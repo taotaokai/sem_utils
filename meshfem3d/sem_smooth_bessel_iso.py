@@ -223,10 +223,13 @@ def solve_cg(u):
     threshold = rsold * max_tolerance
     pAp = 0.0
     while rsold > threshold:
+        max_v = comm.reduce(max(x), op=MPI.MAX, root=0)
+        min_v = comm.reduce(min(x), op=MPI.MIN, root=0)
+        if mpi_rank == 0:
+            print(f"{iter=}, {max_v=}, {min_v=}, {rsold=}")
         if iter > max_iter:
             print(
                 f"{mpi_rank=}: stop iteration at {max_iter=}, {rsold=}, {pAp=}. "
-                f"unconvergence might occur, consider increase number of steps! {nt=}"
             )
             break
         # print(f"{mpi_rank=}, {rsold=}")

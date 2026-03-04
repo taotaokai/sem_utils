@@ -67,13 +67,13 @@ SEM_source_dir=${SEM_base_dir}/stage00_source
 # model dir at iter00
 SEM_starting_model_dir=${SEM_base_dir}/mesh_initial/GLL_initial
 
-# reference model  
-SEM_reference_model_dir=${SEM_base_dir}/mesh_initial/GLL_REF
+# reference isotropic model
+SEM_reference_model_dir=${SEM_base_dir}/mesh_initial/GLL_REF # proc*_reg1_[vp|vs].bin
 
 # misfit par 
 SEM_misfit_par_dir=${SEM_base_dir}/misfit_par
 
-# approximated inverse Hessian diagonals 
+# approximated inverse Hessian diagonals
 SEM_invhess_dir=${SEM_stage_dir}/inverse_hess/GLL # proc*_reg1_[alpha|beta|...]_invhess.bin
 
 #====== Data directories
@@ -92,7 +92,7 @@ SEM_data_dir=${SEM_base_dir}/events # data_dir/<gcmtID>/STATIONS, channel.txt. C
 
 # stage directory 
 SEM_stage_num=$(echo "$SEM_stage_num" | awk '{printf "%02d", $1}')
-SEM_stage_dir=${SEM_base_dir}/stage${SEM_stage_num}.${SEM_stage_tag}
+SEM_stage_dir=${SEM_base_dir}/stage${SEM_stage_num}_${SEM_stage_tag}
 
 # iteration directory
 SEM_iter_num=$(echo "$SEM_iter_num" | awk '{printf "%02d", $1}')
@@ -214,7 +214,7 @@ SEM_kernel_smooth_reference_scale=1  # ref_length = sigma * ref_scale
 SEM_kernel_smooth_horizontal_scale=2  # horizontal smoothing length = ref_length * horizontal_scale 
 SEM_kernel_smooth_vertical_scale=1 # vertical smoothing length = ref_length * vertical_scale 
 
-#TODO: different somothing length for different parameter classes (e.g. larger for vp, smaller for vs?)
+#TODO: different smoothing length for different parameter classes (e.g. larger for vp, smaller for vs?)
 
 #====== model search direction (dm)
 # conjugate gradient

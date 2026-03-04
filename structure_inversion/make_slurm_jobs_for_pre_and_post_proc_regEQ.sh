@@ -195,10 +195,10 @@ do
   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_math.py \\
     --nproc ${SEM_nproc_total} \\
     --model_dirs \${in_dir} \${hess_dir} \\
-    --model_tags \${model_name}{$SEM_kernel_tag} \${model_name}_invhess \\
+    --model_tags \${model_name}${SEM_kernel_tag} \${model_name}_invhess \\
     --math_expr "v[0] * v[1]" \\
     --out_dir \${out_dir} \\
-    --out_tag \${model_name}{$SEM_kernel_tag} \\
+    --out_tag \${model_name}${SEM_kernel_tag} \\
     --overwrite_ok
 done
 

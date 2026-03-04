@@ -61,7 +61,7 @@ SEM_stage_num=0
 SEM_iter_num=0
 
 # source dir
-# use SEM_source_dir/iter??/events/<gcmtID>/misfit/CMTSOLUTION.updated
+# use the last cmt file from SEM_source_dir/iter??/CMTSOLUTION_updated/<gcmtID>.cmt
 SEM_source_dir=${SEM_base_dir}/stage00_source  
 
 # model dir at iter00
@@ -72,9 +72,6 @@ SEM_reference_model_dir=${SEM_base_dir}/mesh_initial/GLL_REF # proc*_reg1_[vp|vs
 
 # misfit par 
 SEM_misfit_par_dir=${SEM_base_dir}/misfit_par
-
-# approximated inverse Hessian diagonals
-SEM_invhess_dir=${SEM_stage_dir}/inverse_hess/GLL # proc*_reg1_[alpha|beta|...]_invhess.bin
 
 #====== Data directories
 
@@ -204,7 +201,6 @@ SEM_kernel_mask_receiver_sigma_km=10
 # SEM_cdf_threshold=0.9999
 
 #--- smoothing
-SEM_kernel_smooth_diffusion_niter=50 # iteration steps for diffusion based smoothing 
 # SEM_kernel_smooth_iso_FWHM_km=10 # full width at half maximum (FWHM) of Gaussian kernel in km
 # SEM_kernel_smooth_horizontal_length_km=30 # horizontal smoothing length as FWHM
 # SEM_kernel_smooth_vertical_length_km=15 # vertical smoothing length as FWHM
@@ -213,8 +209,13 @@ SEM_kernel_smooth_reference_tag=sigma # sigma = {ref_dir}/proc*_{tag}.bin
 SEM_kernel_smooth_reference_scale=1  # ref_length = sigma * ref_scale
 SEM_kernel_smooth_horizontal_scale=2  # horizontal smoothing length = ref_length * horizontal_scale 
 SEM_kernel_smooth_vertical_scale=1 # vertical smoothing length = ref_length * vertical_scale 
+SEM_kernel_smooth_diffusion_niter=100 # iteration steps for diffusion based smoothing 
 
 #TODO: different smoothing length for different parameter classes (e.g. larger for vp, smaller for vs?)
+
+#--- spatial balancing
+# approximated inverse Hessian diagonals
+SEM_invhess_dir=${SEM_stage_dir}/inverse_hess/GLL # proc*_reg1_[alpha|beta|...]_invhess.bin
 
 #====== model search direction (dm)
 # conjugate gradient

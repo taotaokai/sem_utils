@@ -17,12 +17,18 @@ def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Perturb model")
 
-    parser.add_argument("--nproc", type=int, required=True, help="number of model slices")
     parser.add_argument(
-        "--in_dir", required=True, help="directory of input GLL files, proc*_reg1_[in_tag].bin"
+        "--nproc", type=int, required=True, help="number of model slices"
     )
     parser.add_argument(
-        "--out_dir", required=True, help="output dir for scaled GLL files, proc*_reg1_[out_tag].bin"
+        "--in_dir",
+        required=True,
+        help="directory of input GLL files, proc*_reg1_[in_tag].bin",
+    )
+    parser.add_argument(
+        "--out_dir",
+        required=True,
+        help="output dir for scaled GLL files, proc*_reg1_[out_tag].bin",
     )
     parser.add_argument(
         "--models",
@@ -69,7 +75,13 @@ def process(nproc, model_names, in_dir, in_tag, out_dir, out_tag, scaled_amplitu
     for iproc in range(mpi_rank, nproc, mpi_size):
         for model_name in model_names:
             model_gll = read_gll_file(in_dir, model_name + in_tag, iproc)
-            write_gll_file(out_dir, model_name + out_tag, iproc, scale_factor * model_gll)
+            write_gll_file(
+                out_dir,
+                model_name + out_tag,
+                iproc,
+                scale_factor * model_gll,
+                overwrite=True,
+            )
 
 
 def main():

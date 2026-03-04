@@ -67,6 +67,13 @@ parser.add_argument(
     default=1e-5,
     help="relative residual to stop iteration",
 )
+parser.add_argument(
+    "--method",
+    type=str,
+    choices=["backward_euler", "crank_nicolson"],
+    default="backward_euler",
+    help="time integration method",
+)
 
 args = parser.parse_args()
 if mpi_rank == 0:
@@ -90,9 +97,6 @@ vertical_scale = args.vertical_scale
 dt = 1.0 / nt
 
 # ====== smooth each target mesh slice
-if mpi_rank == 0:
-    print(args)
-
 if mpi_size != nproc:
     raise Exception(f"{mpi_size=} must euqal {nproc=}!")
 
@@ -110,11 +114,14 @@ nglob = mesh["nglob"]
 ibool = mesh["ibool"]
 gll_dims = mesh["gll_dims"]
 
+model_gll = read_gll_file(model_dir, model_name, mpi_rank, shape=gll_dims)
+
 if mpi_rank == 0:
     elapsed_time = time.time() - tic
     print(f"====== finish reading mesh/model, {elapsed_time=}")
     sys.stdout.flush()
 
+# get volume averaged value on global nodes
 dv_gll = sem_mesh_get_vol_gll(mesh)
 dv_glob = gll2glob(dv_gll, nglob, ibool)
 assemble_MPI_scalar(
@@ -126,8 +133,6 @@ assemble_MPI_scalar(
     mesh_mpi["my_neighbors"],
 )
 
-# read model and get volume averaged value on global nodes
-model_gll = read_gll_file(model_dir, model_name, mpi_rank, shape=gll_dims)
 u_dv_glob = gll2glob(model_gll * dv_gll, nglob, ibool)
 assemble_MPI_scalar(
     u_dv_glob,
@@ -226,11 +231,16 @@ comm.Barrier()
 # GLL points weights
 zgll, wgll, dlag_dzgll = get_gll_weights()
 
-# trapezoidal method
-# M * (u_{n+1} - u_n) = dt * K * (u_{n+1} + u_n) / 2
-# (M - dt/2 * K) * u_{n+1} = (M + dt/2 * K) * u_n
-# (1 - dt/2 * M^{-1} * K) * u_{n+1} = (1 + dt/2 * M^{-1} * K) * u_n
-
+#--- time integration method
+#
+# 1. Crank-Nicolson method
+#   M * (u_{n+1} - u_n) = dt * K * (u_{n+1} + u_n) / 2
+#   (M - dt/2 * K) * u_{n+1} = (M + dt/2 * K) * u_n
+#   (1 - dt/2 * M^{-1} * K) * u_{n+1} = (1 + dt/2 * M^{-1} * K) * u_n
+# 2.  backward Euler
+#   M * (u_{n+1} - u_n) = dt * K * u_{n+1}
+#   (M - dt * K) * u_{n+1} = M * u_n
+#   (1 - dt * M^{-1} * K) * u_{n+1} = u_n
 
 def Kx(x_glob):
     kx_glob = laplacian_ani3D(
@@ -269,10 +279,24 @@ def Kx(x_glob):
 
 
 def solve_cg(u):
+    #def Ax(x_glob):
+    #    return x_glob - 0.5 * dt * Kx(x_glob) / dv_glob
+    #b = u + 0.5 * dt * Kx(u) / dv_glob
     def Ax(x_glob):
-        return x_glob - 0.5 * dt * Kx(x_glob) / dv_glob
+        if args.method == "backward_euler":
+            return x_glob - dt * Kx(x_glob) / dv_glob
+        elif args.method == "crank_nicolson":
+            return x_glob - 0.5 * dt * Kx(x_glob) / dv_glob
+        else:
+            raise ValueError(f"{args.method=} is not supported")
 
-    b = u + 0.5 * dt * Kx(u) / dv_glob
+    if args.method == "backward_euler":
+        b = u
+    elif args.method == "crank_nicolson":
+        b = u + 0.5 * dt * Kx(u) / dv_glob
+    else:
+        raise ValueError(f"{args.method=} is not supported")
+
     x = u.copy()
     r = b - Ax(x)
     p = r.copy()
@@ -298,12 +322,7 @@ def solve_cg(u):
         p = r + (rsnew / rsold) * p
         rsold = rsnew
         iter += 1
-        # if mpi_rank == 0:
-        #     i += 1
-        #     print(f"{i=}, {rsold=}, {pAp=}")
-        #     sys.stdout.flush()
     return x, iter
-
 
 if mpi_rank == 0:
     elapsed_time = time.time() - tic
@@ -312,32 +331,20 @@ if mpi_rank == 0:
 
 u = u_glob
 for it in range(nt):
-    # ku = Kx(u)
-    # mu = Mx(u)
     u, iter = solve_cg(u)
-    maxamp_u = comm.reduce(max(abs(u)), op=MPI.MAX, root=0)
+    min_u = comm.reduce(max(u), op=MPI.MAX, root=0)
+    max_u = comm.reduce(min(u), op=MPI.MIN, root=0)
     if mpi_rank == 0:
         elapsed_time = time.time() - tic
         # print(f"{it=}, {max(abs(mu))=}, {max(abs(ku))=}, {max(abs(b))=}, {max(abs(u))=}, {elapsed_time=}")
-        print(f"{it=}, max(abs(u))={maxamp_u}, {iter=}, {elapsed_time=}")
+        print(f"{it=}, {min_u=},{max_u=}, {iter=}, {elapsed_time=}")
         sys.stdout.flush()
 
 comm.Barrier()
 
-# # forward Euler
-# # M * (u_{n+1} - u_n) = dt * K * u_n
-# # u_{n+1} = u_n + dt * M^{-1} * K * u_n
-# for it in range(nt):
-#     u_glob += dt * Kx(u_glob) / dv_glob
-#     if mpi_rank == 0:
-#         elapsed_time = time.time() - tic
-#         print(f"{it=}, {max(abs(u_glob))=}, {elapsed_time=}")
-#         sys.stdout.flush()
-
 if mpi_rank == 0:
     elapsed_time = time.time() - tic
     print(f"====== after smoothing, {elapsed_time=}")
-    # print(f"{du_glob=}, {du_glob.dtype=}")
 
 # write out smoothed model files
 write_gll_file(out_dir, model_name, mpi_rank, u[ibool], overwrite=True)
@@ -345,6 +352,5 @@ write_gll_file(out_dir, model_name, mpi_rank, u[ibool], overwrite=True)
 if mpi_rank == 0:
     elapsed_time = time.time() - tic
     print(f"====== finish writing out smoothed model files, {elapsed_time=}")
-    # print(f"{du_glob=}, {du_glob.dtype=}")
 
 comm.Barrier()

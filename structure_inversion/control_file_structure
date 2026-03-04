@@ -56,30 +56,33 @@
 SEM_base_dir=$(readlink -f .)
 
 # current stage and iteration number
-SEM_stage_tag=structure_dcu
+SEM_stage_tag=structure
 SEM_stage_num=0
 SEM_iter_num=0
 
 # source dir
 # use SEM_source_dir/iter??/events/<gcmtID>/misfit/CMTSOLUTION.updated
-SEM_source_dir=${SEM_base_dir}/stage00.source_dcu  
+SEM_source_dir=${SEM_base_dir}/stage00_source  
 
 # model dir at iter00
-SEM_starting_model_dir=${SEM_base_dir}/mesh_dcu/EU60_interp/GLL_smooth_10km
+SEM_starting_model_dir=${SEM_base_dir}/mesh_initial/GLL_initial
 
-# model reference 
-SEM_reference_model_dir=${SEM_base_dir}/mesh_dcu/Model_1D/DATABASES_MPI
+# reference model  
+SEM_reference_model_dir=${SEM_base_dir}/mesh_initial/GLL_REF
 
 # misfit par 
 SEM_misfit_par_dir=${SEM_base_dir}/misfit_par
 
+# approximated inverse Hessian diagonals 
+SEM_invhess_dir=${SEM_stage_dir}/inverse_hess/GLL # proc*_reg1_[alpha|beta|...]_invhess.bin
+
 #====== Data directories
 
 # specfem3d par files
-SEM_config_dir=${SEM_base_dir}/sem_config_dcu  # sem_config/: DATA/Par_file, setup/constants.h.in
+SEM_config_dir=${SEM_base_dir}/sem_config  # sem_config/: DATA/Par_file, setup/constants.h.in
 
 # specfem3d executables
-SEM_build_dir=${SEM_base_dir}/build_dcu # build/bin/xmeshfem3D,xspecfem3D
+SEM_build_dir=${SEM_base_dir}/build # build/bin/xmeshfem3D,xspecfem3D
 
 # shell scripts
 SEM_utils_dir=${SEM_base_dir}/sem_utils  # sem_utils/: misfit/, structure_inversion/
@@ -110,9 +113,6 @@ SEM_prev_iter_dir=${SEM_stage_dir}/iter${SEM_prev_iter_mum}
 
 # mesh_REF dir
 #mesh_REF_dir=$base_dir/mesh_REF.stage09.iter16.polyfit_um.linfit_mtz.vp_vs_voigt
-
-# preconditioner
-#precond_dir=${iter_dir}/preconditioner # proc*_reg1_inv_hess_diag.bin
 
 #====== slurm jobs
 

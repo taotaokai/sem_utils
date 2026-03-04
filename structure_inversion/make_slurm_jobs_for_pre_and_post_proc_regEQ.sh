@@ -25,6 +25,7 @@ mesh_job=$slurm_dir/mesh.job
 
 kernel_sum_job=$slurm_dir/kernel_sum.job
 kernel_smooth_job=$slurm_dir/kernel_smooth.job
+kernel_balance_job=$slurm_dir/kernel_balance.job
 
 dmodel_job=$slurm_dir/dmodel.job
 model_perturb_job=$slurm_dir/model_perturb.job
@@ -95,7 +96,7 @@ echo
 
 echo "====== sum up all event kernels"
 
-out_dir=${SEM_iter_dir}/kernel_sum/GLL
+out_dir=${SEM_iter_dir}/kernel/GLL_sum
 [ -d \${out_dir} ] && rm -rf \${out_dir}
 mkdir -p \$out_dir
 
@@ -112,24 +113,6 @@ do
     \${out_dir} \\
     --ncomp=1
 done
-
-# awk 'NF&&\$1!~/#/{printf "%s/events/%s/output_kernel/kernel\\n", a,\$1}' \\
-#   a="$SEM_iter_dir" $event_list > \\
-#   \${kernel_dir}/event_kernel_dir.list
-# 
-# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_sum.py \\
-#   ${SEM_nproc_total} \\
-#   \${kernel_dir}/event_kernel_dir.list \\
-#   cijkl_kernel \\
-#   \${kernel_dir} \\
-#   --mask_tag=mask --ncomp=21
-# 
-# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_sum.py \\
-#   ${SEM_nproc_total} \\
-#   \${kernel_dir}/event_kernel_dir.list \\
-#   rho_kernel \\
-#   \${kernel_dir} \\
-#   --mask_tag=mask --ncomp=1
 
 # delete event kernel directories to save disk space
 # for event_kernel_dir in \$(cat \${kernel_dir}/event_kernel_dir.list)
@@ -161,54 +144,12 @@ kernel_name=\${model_names[\${SLURM_ARRAY_TASK_ID}]}${SEM_kernel_tag}
 
 mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
 
-
-# echo "====== gradient clippling"
-# 
-# kernel_dir=${SEM_iter_dir}/kernel_sum/GLL
-# out_dir=${SEM_iter_dir}/kernel_sum/GLL_threshold
-# [ -d \${out_dir} ] && rm -rf \${out_dir}
-# mkdir -p \$out_dir
-# 
-# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_histogram.py  \\
-#   ${SEM_nproc_total} \\
-#   \${mesh_dir} \\
-#   \${kernel_dir} \\
-#   \${kernel_name} \\
-#   --nbin ${SEM_histogram_nbin} \\
-#   --exponential_base ${SEM_histogram_exponential_base} \\
-#   --out_hist \${out_dir}/histogram_\${kernel_name}.txt \\
-#   --cdf_threshold ${SEM_cdf_threshold} \\
-#   --out_dir \${out_dir} \\
-#   --use_zdv
-
-
 echo "====== kernel smoothing"
 
-kernel_dir=${SEM_iter_dir}/kernel_sum/GLL
-out_dir=${SEM_iter_dir}/kernel_sum/GLL_smooth
+kernel_dir=${SEM_iter_dir}/kernel/GLL_sum
+out_dir=${SEM_iter_dir}/kernel/GLL_sum_smooth
 [ -d \${out_dir} ] && rm -rf \${out_dir}
 mkdir -p \$out_dir
-
-# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_iso.py \\
-#   ${SEM_nproc_total} \\
-#   \${mesh_dir}/DATABASES_MPI \\
-#   \${kernel_dir} \\
-#   \${kernel_name} \\
-#   ${SEM_kernel_smooth_iso_FWHM_km} \\
-#   ${SEM_kernel_smooth_diffusion_niter} \\
-#   \${out_dir} \\
-#   --max_tolerance=1e-5
-
-# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_VTI.py \\
-#   ${SEM_nproc_total} \\
-#   \${mesh_dir} \\
-#   \${kernel_dir} \\
-#   \${kernel_name} \\
-#   \${out_dir} \\
-#   --horizontal_length ${SEM_kernel_smooth_horizontal_length_km} \\
-#   --vertical_length ${SEM_kernel_smooth_vertical_length_km} \\
-#   --nstep ${SEM_kernel_smooth_diffusion_niter} \\
-#   --max_tolerance=1e-3
 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_VTI3D.py \\
   ${SEM_nproc_total} \\
@@ -231,7 +172,41 @@ echo
 
 EOF
 
-#TODO scale kernel_precond ?
+
+#====== kernel_balance
+cat <<EOF > $kernel_balance_job
+#!/bin/bash
+#SBATCH -J kernel_balance
+#SBATCH -o ${kernel_balance_job}.o%j
+#SBATCH ${SLURM_args_kernel_precond}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
+
+hess_dir=${SEM_invhess_dir}
+in_dir=${SEM_iter_dir}/kernel/GLL_sum_smooth
+out_dir=${SEM_iter_dir}/kernel/GLL_sum_smooth_balance
+[ -d \${out_dir} ] && rm -rf \${out_dir}
+mkdir -p \$out_dir
+
+for model_name in ${SEM_model_names[@]}
+do
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_math.py \\
+    --nproc ${SEM_nproc_total} \\
+    --model_dirs \${in_dir} \${hess_dir} \\
+    --model_tags \${model_name}{$SEM_kernel_tag} \${model_name}_invhess \\
+    --math_expr "v[0] * v[1]" \\
+    --out_dir \${out_dir} \\
+    --out_tag \${model_name}{$SEM_kernel_tag} \\
+    --overwrite_ok
+done
+
+echo
+echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
+
+EOF
 
 
 #====== search direction
@@ -257,7 +232,7 @@ then
   # first iteration use scaled gradient as search direction
   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_scale2.py \\
     --nproc ${SEM_nproc_total} \\
-    --in_dir ${SEM_iter_dir}/kernel_sum/GLL_threshold_smooth \\
+    --in_dir ${SEM_iter_dir}/kernel/GLL_sum_smooth_balance \\
     --out_dir \${out_dir} \\
     --models ${SEM_model_names[@]} \\
     --in_tag ${SEM_kernel_tag} \\
@@ -272,9 +247,9 @@ else
     ${SEM_iter_dir}/mesh/DATABASES_MPI \\
     ${SEM_prev_iter_dir}/model_initial \\
     ${SEM_iter_dir}/model_initial \\
-    ${SEM_prev_iter_dir}/kernel_sum/GLL \\
-    ${SEM_iter_dir}/kernel_sum/GLL \\
-    ${SEM_iter_dir}/kernel_sum/GLL_threshold_smooth \\
+    ${SEM_prev_iter_dir}/kernel/GLL_sum \\
+    ${SEM_iter_dir}/kernel/GLL_sum \\
+    ${SEM_iter_dir}/kernel/GLL_sum_smooth_balance \\
     \${out_dir} \\
     --models ${SEM_model_names[@]} \\
     --kernel_tag ${SEM_kernel_tag} \\

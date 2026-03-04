@@ -66,7 +66,7 @@ def process(nproc, model_names, in_dir, in_tag, out_dir, out_tag, scaled_amplitu
             model_gll = read_gll_file(in_dir, model_name + in_tag, iproc)
             max_amp = max(max_amp, np.max(np.abs(model_gll)))
     max_amp = mpi_comm.allreduce(max_amp, op=MPI.MAX)
-    if mpi_comm == 0:
+    if mpi_rank == 0:
         print(f"Maximum amplitude: {max_amp}")
 
     scale_factor = scaled_amplitude / max_amp

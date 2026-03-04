@@ -256,9 +256,9 @@ then
 
   # first iteration use scaled gradient as search direction
   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_scale2.py \\
-    ${SEM_nproc_total} \\
-    ${SEM_iter_dir}/kernel_sum/GLL_threshold_smooth \\
-    \${out_dir} \\
+    --nproc ${SEM_nproc_total} \\
+    --in_dir ${SEM_iter_dir}/kernel_sum/GLL_threshold_smooth \\
+    --out_dir \${out_dir} \\
     --models ${SEM_model_names[@]} \\
     --in_tag ${SEM_kernel_tag} \\
     --out_tag ${SEM_dmodel_tag} \\

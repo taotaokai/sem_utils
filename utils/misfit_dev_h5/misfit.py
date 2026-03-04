@@ -477,7 +477,7 @@ def _extract_obs_syn_ENZ(
     no_Hchan = False
     if len(obs_Hchan) == 0:
         # msg = f"{stnm} has no horizontal channels"
-        msg = f"no horizontal channels"
+        msg = "no horizontal channels"
         warnings.warn(msg)
         no_Hchan = True
     else:
@@ -485,8 +485,8 @@ def _extract_obs_syn_ENZ(
     assert len(syn_channels) == 3
 
     # data_tb = obs.attrs["starttime"]
-    data_fs = obs_attrs["sampling_rate"]
-    data_dt = 1.0 / data_fs
+    # data_fs = obs_attrs["sampling_rate"]
+    # data_dt = 1.0 / data_fs
     data_nt = obs_attrs["npts"]
     # data_te = data_tb + (data_nt - 1) * data_dt
     # data_times = np.arange(data_nt, dtype=float) * data_dt
@@ -2268,13 +2268,13 @@ class Misfit(object):
             p_arrivals = taup_model.get_travel_times(
                 source_depth_in_km=evdp_km,
                 distance_in_degree=gcarc,
-                phase_list=["p", "P"],
+                phase_list=["p", "P", "Pdiff", "PKIKP"],
             )
             min_ttp = min([arr.time for arr in p_arrivals])
             s_arrivals = taup_model.get_travel_times(
                 source_depth_in_km=evdp_km,
                 distance_in_degree=gcarc,
-                phase_list=["s", "S"],
+                phase_list=["s", "S", "Sdiff", "SKIKS"],
             )
             min_tts = min([arr.time for arr in s_arrivals])
 
@@ -3716,7 +3716,7 @@ class Misfit(object):
 
                 # skip empty azimuthal_bin
                 if nwin_bin == 0:
-                    msg = f"No traces in the azimuthal bin [{bin_azmin}, {bin_azmax}], skip"
+                    msg = f"No traces in the azimuthal bin [{azmin}, {azmax}], skip"
                     warnings.warn(msg)
                     continue
 

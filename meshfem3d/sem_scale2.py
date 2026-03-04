@@ -17,12 +17,12 @@ def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Perturb model")
 
-    parser.add_argument("nproc", type=int, help="number of model slices")
+    parser.add_argument("--nproc", type=int, required=True, help="number of model slices")
     parser.add_argument(
-        "in_dir", help="directory of input GLL files, proc*_reg1_[in_tag].bin"
+        "--in_dir", required=True, help="directory of input GLL files, proc*_reg1_[in_tag].bin"
     )
     parser.add_argument(
-        "out_dir", help="output dir for scaled GLL files, proc*_reg1_[out_tag].bin"
+        "--out_dir", required=True, help="output dir for scaled GLL files, proc*_reg1_[out_tag].bin"
     )
     parser.add_argument(
         "--models",

@@ -58,7 +58,6 @@ def parse_arguments():
         default=["vsv"],
         help="Model parameter names to extract",
     )
-    parser.add_argument("--nc_file", default="slices.nc", help="output NETCDF file")
     parser.add_argument(
         "-r",
         "--r_range",
@@ -83,6 +82,11 @@ def parse_arguments():
         default="linear",
         choices=["gll", "linear"],
         help="Interpolation method (gll or linear)",
+    )
+    parser.add_argument(
+        "--save_profiles",
+        action="store_true",
+        help="flag for saving profiles",
     )
     parser.add_argument(
         "--profile_interval",
@@ -198,6 +202,7 @@ def create_vtk_output(
     out_dir,
     label="",
     scale_factor=1.0,
+    save_profiles=False,
     angle_interval=10,
     ref_values=None,
     norm_amplitudes=None,
@@ -229,50 +234,51 @@ def create_vtk_output(
     # fn_root, _ = os.path.splitext(out_file)
 
     # blocks = pv.MultiBlock()
-    for i, tag in enumerate(model_names):
-        model = model_interp[:, :, i]
+    if save_profiles:
+        for i, tag in enumerate(model_names):
+            model = model_interp[:, :, i]
 
-        mesh_xsection.point_data[tag] = model.flatten().astype(np.float32)
-        profiles = []
+            mesh_xsection.point_data[tag] = model.flatten().astype(np.float32)
+            profiles = []
 
-        # Calculate scaling for profile visualization
-        if ref_values is None:
-            profile_ref_val = np.nanmean(model)
-        else:
-            profile_ref_val = ref_values[i]
-        if norm_amplitudes is None:
-            profile_norm_amp = np.nanmax(np.abs(model - profile_ref_val))
-        else:
-            profile_norm_amp = norm_amplitudes[i]
-        print(f"{tag}: ref_val={profile_ref_val}, norm_amp={profile_norm_amp}")
+            # Calculate scaling for profile visualization
+            if ref_values is None:
+                profile_ref_val = np.nanmean(model)
+            else:
+                profile_ref_val = ref_values[i]
+            if norm_amplitudes is None:
+                profile_norm_amp = np.nanmax(np.abs(model - profile_ref_val))
+            else:
+                profile_norm_amp = norm_amplitudes[i]
+            print(f"{tag}: ref_val={profile_ref_val}, norm_amp={profile_norm_amp}")
 
-        if profile_norm_amp != 0:
-            scale = scale_factor * profile_interval / profile_norm_amp
-        else:
-            scale = scale_factor
+            if profile_norm_amp != 0:
+                scale = scale_factor * profile_interval / profile_norm_amp
+            else:
+                scale = scale_factor
 
-        # Plot 1-D radial profiles
-        for itheta in range(0, na, angle_interval):
-            m0 = model[itheta, :]
-            mask = np.isnan(m0)
-            if np.all(mask):  # skip profile of all nan's
-                continue
+            # Plot 1-D radial profiles
+            for itheta in range(0, na, angle_interval):
+                m0 = model[itheta, :]
+                mask = np.isnan(m0)
+                if np.all(mask):  # skip profile of all nan's
+                    continue
 
-            m = model[itheta, :] - profile_ref_val
-            p = points[itheta, :, :]
-            t = tangents[itheta, :]
-            x = p + scale * m[:, None] * t[None, :]
+                m = model[itheta, :] - profile_ref_val
+                p = points[itheta, :, :]
+                t = tangents[itheta, :]
+                x = p + scale * m[:, None] * t[None, :]
 
-            # Perturbed profile line
-            line1 = pv.lines_from_points(x)
-            # Original profile line
-            line2 = pv.lines_from_points(p)
-            # line2.point_data[tag] = m0
+                # Perturbed profile line
+                line1 = pv.lines_from_points(x)
+                # Original profile line
+                line2 = pv.lines_from_points(p)
+                # line2.point_data[tag] = m0
 
-            profiles.extend([line1, line2])
-        mesh_profile = pv.merge(profiles)
-        out_file = os.path.join(out_dir, f"{tag}_profile_{label}.vtk")
-        mesh_profile.save(out_file)
+                profiles.extend([line1, line2])
+            mesh_profile = pv.merge(profiles)
+            out_file = os.path.join(out_dir, f"{tag}_profile_{label}.vtk")
+            mesh_profile.save(out_file)
 
     out_file = os.path.join(out_dir, f"vslice_{label}.vtk")
     mesh_xsection.save(out_file)
@@ -403,6 +409,7 @@ def main():
                 radius,
                 args.out_dir,
                 label=f"{islice:04d}",
+                save_profiles=args.save_profiles,
                 angle_interval=args.profile_interval,
                 ref_values=profile_ref_val,
                 norm_amplitudes=profile_norm_amp,

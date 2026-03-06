@@ -18,8 +18,8 @@ import xarray as xr
 import pyvista as pv
 import mpi4py.MPI as MPI
 
+from meshfem3d_constants import R_EARTH_KM
 from meshfem3d_utils import (
-    R_EARTH_KM,
     geodetic_lat2geocentric_lat,
     sem_mesh_interp_points,
 )

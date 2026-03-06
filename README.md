@@ -204,7 +204,10 @@ flowchart LR
       enf[forward] --> enm[misfit] --> enk[kernel]
     end
 
-    e1k --> ks[sum kernel \n preconditioning \n non-linear CG \n search directions]
+    e1k --> ks[sum kernel
+    preconditioning
+    non-linear CG
+    search directions]
     edk --> ks
     enk --> ks
     

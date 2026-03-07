@@ -272,10 +272,11 @@ def create_vtk_output(
                 # Perturbed profile line
                 line1 = pv.lines_from_points(x)
                 # Original profile line
-                line2 = pv.lines_from_points(p)
+                # line2 = pv.lines_from_points(p)
                 # line2.point_data[tag] = m0
 
-                profiles.extend([line1, line2])
+                # profiles.extend([line1, line2])
+                profiles.extend([line1, ])
             mesh_profile = pv.merge(profiles)
             out_file = os.path.join(out_dir, f"{tag}_profile_{label}.vtk")
             mesh_profile.save(out_file)

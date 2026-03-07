@@ -342,6 +342,7 @@ class Source(pt.IsDescription):
     #   mt <- mt + step_mt * dmt
     #   t0 <- t0 + step_t0
     #   tau <- tau + step_tau
+    mw = pt.Float64Col(pos=19)
 
 
 def _get_obs_ENZ(g_sta, obs_tag):
@@ -1371,9 +1372,12 @@ class Misfit(object):
             # harvard cmt use dyn*cm, change to N*m
             mt_rtp = mt * 1.0e-7
             mt_xyz = np.dot(np.dot(a, mt_rtp), np.transpose(a))
+        # get moment magnitude Mw
+        m0 = (sum(mt_xyz**2) / 2.0)**0.5 # scalar moment
+        mw = (np.log10(m0) - 9.05) / 1.5 # definition by Kanamori
 
         with pt.open_file(self.h5_path, "r+") as h5f:
-            src_path = f"/source"
+            src_path = "/source"
             if src_path in h5f:
                 h5f.remove_node(src_path)
             tbl_src = h5f.create_table("/", "source", Source)
@@ -1384,6 +1388,7 @@ class Misfit(object):
             src_row["t0"] = t0.isoformat()
             src_row["tau"] = tau
             src_row["xs"] = [x, y, z]
+            src_row["mw"] = mw
             src_row["mt"] = mt_xyz
             src_row["mt_rtp"] = mt_rtp
             src_row["latitude"] = lat
@@ -3581,6 +3586,7 @@ class Misfit(object):
         Mrp = mt[0][2]
         Mtp = mt[1][2]
         focmec = [Mrr, Mtt, Mpp, Mrt, Mrp, Mtp]
+        evmw = event["mw"]
 
         # get windows
         cmpnm_select = ["Z", "R", "T"]
@@ -3730,8 +3736,8 @@ class Misfit(object):
 
                 # fig = plt.figure(figsize=(8.5, 11)) # US letter
                 fig = plt.figure(figsize=(8.27, 11.69))  # A4
-                str_title = "{:s} ({:s} az:{:04.1f}~{:04.1f} dep:{:.1f})".format(
-                    evnm, plot_window_id, bin_azmin, bin_azmax, evdp
+                str_title = "{:s} ({:s} az:{:04.1f}~{:04.1f} {:.1f}km Mw{:.1f})".format(
+                    evnm, plot_window_id, bin_azmin, bin_azmax, evdp, evmw
                 )
                 if title_prefix:
                     str_title = "{:s} {:s}".format(title_prefix, str_title)

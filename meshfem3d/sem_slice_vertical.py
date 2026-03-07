@@ -232,13 +232,12 @@ def create_vtk_output(
     profile_interval = np.deg2rad(dangle) * max_radius
 
     # fn_root, _ = os.path.splitext(out_file)
-
     # blocks = pv.MultiBlock()
-    if save_profiles:
-        for i, tag in enumerate(model_names):
-            model = model_interp[:, :, i]
+    for i, tag in enumerate(model_names):
+        model = model_interp[:, :, i]
+        mesh_xsection.point_data[tag] = model.flatten().astype(np.float32)
 
-            mesh_xsection.point_data[tag] = model.flatten().astype(np.float32)
+        if save_profiles:
             profiles = []
 
             # Calculate scaling for profile visualization

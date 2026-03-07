@@ -1373,7 +1373,7 @@ class Misfit(object):
             mt_rtp = mt * 1.0e-7
             mt_xyz = np.dot(np.dot(a, mt_rtp), np.transpose(a))
         # get moment magnitude Mw
-        m0 = (sum(mt_xyz**2) / 2.0)**0.5 # scalar moment
+        m0 = (np.sum(mt_xyz**2) / 2.0)**0.5 # scalar moment
         mw = (np.log10(m0) - 9.05) / 1.5 # definition by Kanamori
 
         with pt.open_file(self.h5_path, "r+") as h5f:

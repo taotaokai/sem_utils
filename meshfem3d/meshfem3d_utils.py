@@ -1298,14 +1298,15 @@ def sem_mesh_interp_points(
     return interp_model, final_status, final_misloc, final_misratio
 
 
-def sem_mesh_interp_mesh(
+def sem_mesh_interp_single_slice(
     mpi_comm,
     iproc_target,
     mesh_dir_target,
-    model_dir_target,
+    model_dir_target, # provide old values for points not contained in the source mesh
     nproc_source,
     mesh_dir_source,
     model_dir_source,
+    out_dir,
     model_tags,
     method="linear",
     output_misloc=False,
@@ -1335,6 +1336,15 @@ def sem_mesh_interp_mesh(
     ibool_target = mesh_data_target["ibool"]
     idoubling_target = mesh_data_target["idoubling"]
     xyz_glob_target = mesh_data_target["xyz_glob"]
+
+    # # read in original model for the target mesh
+    # gll_dims = mesh_data_target["gll_dims"]
+    # old_model_gll = np.zeros(gll_dims + (nmodel,))
+    # for imodel in range(nmodel):
+    #     model_tag = model_tags[imodel]
+    #     old_model_gll[..., imodel] = read_gll_file(
+    #         model_dir_target, model_tag, iproc_target, shape=gll_dims
+    #     )
 
     # # merge regions if required
     # idx_merge = np.zeros(nspec_target, dtype="bool")
@@ -1407,6 +1417,19 @@ def sem_mesh_interp_mesh(
                 misloc_glob = None
                 misratio_glob = None
 
+        # gather interplation status 
+        if mpi_rank == 0:
+            recv_counts = np.array(npts_counts, dtype=int)
+            recv_displs = np.array(begin_indices, dtype=int)
+        mpi_datatype = dtlib.from_numpy_dtype(status_part.dtype)
+        mpi_comm.Gatherv(
+            status_part,
+            [status_glob, recv_counts, recv_displs, mpi_datatype],
+            root=0,
+        )
+        if mpi_rank == 0:
+            status_gll[reg_element_mask, ...] = status_glob[reg_indices]
+
         # gather model_part into model_glob
         recv_counts, recv_displs = None, None
         if mpi_rank == 0:
@@ -1420,15 +1443,6 @@ def sem_mesh_interp_mesh(
             model_gll[reg_element_mask, ...] = model_glob[reg_indices, :]
 
         if output_misloc:
-            if mpi_rank == 0:
-                recv_counts = np.array(npts_counts, dtype=int)
-                recv_displs = np.array(begin_indices, dtype=int)
-            mpi_datatype = dtlib.from_numpy_dtype(status_part.dtype)
-            mpi_comm.Gatherv(
-                status_part,
-                [status_glob, recv_counts, recv_displs, mpi_datatype],
-                root=0,
-            )
             mpi_datatype = dtlib.from_numpy_dtype(misloc_part.dtype)
             mpi_comm.Gatherv(
                 misloc_part,
@@ -1442,22 +1456,31 @@ def sem_mesh_interp_mesh(
                 root=0,
             )
             if mpi_rank == 0:
-                status_gll[reg_element_mask, ...] = status_glob[reg_indices]
+                # status_gll[reg_element_mask, ...] = status_glob[reg_indices]
                 misloc_gll[reg_element_mask, ...] = misloc_glob[reg_indices]
                 misratio_gll[reg_element_mask, ...] = misratio_glob[reg_indices]
 
     if mpi_rank == 0:
+        # mask for points not interpolated in the source mesh region
+        mask = status_gll == -1
         # save interpolated model
         for imodel in range(nmodel):
             model_tag = model_tags[imodel]
+
+            # use old model values for points that are not in the source mesh region
+            old_model_gll = read_gll_file(
+                model_dir_target, model_tag, iproc_target, shape=mesh_data_target["gll_dims"]
+            )
+            model_gll[mask, imodel] = old_model_gll[mask]
+            
             write_gll_file(
-                model_dir_target, model_tag, iproc_target, model_gll[..., imodel]
+                out_dir, model_tag, iproc_target, model_gll[..., imodel]
             )
         # save misloc, status
         if output_misloc:
-            write_gll_file(model_dir_target, "status", iproc_target, status_gll)
-            write_gll_file(model_dir_target, "misloc", iproc_target, misloc_gll)
-            write_gll_file(model_dir_target, "misratio", iproc_target, misratio_gll)
+            write_gll_file(out_dir, "status", iproc_target, status_gll)
+            write_gll_file(out_dir, "misloc", iproc_target, misloc_gll)
+            write_gll_file(out_dir, "misratio", iproc_target, misratio_gll)
 
 
 def sem_boundary_mesh_read(mesh_file):

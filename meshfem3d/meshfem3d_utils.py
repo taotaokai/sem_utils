@@ -1392,8 +1392,6 @@ def sem_mesh_interp_single_slice(
             method=method,
         )
         
-        print(f"DEBUG: {mpi_rank=}, {iproc_target=} after sem_mesh_interp_points")
-
         # --- gather results
         if mpi_rank == 0:
             begin_indices = mpi_comm.gather(part_ind0, root=0)
@@ -1404,26 +1402,28 @@ def sem_mesh_interp_single_slice(
         else:
             mpi_comm.gather(npts_part, root=0)
 
-        # model_glob
+        # receive buffer
+        status_glob, model_glob = None, None
         if mpi_rank == 0:
             status_glob = np.zeros(npts_glob, dtype=int)
             model_glob = np.zeros((npts_glob, nmodel))
-        else:
-            status_glob = None
-            model_glob = None
-
         if output_misloc:
+            misloc_glob, misratio_glob = None, None
             if mpi_rank == 0:
-                # status_glob = np.zeros(npts_glob, dtype=int)
                 misloc_glob = np.zeros(npts_glob)
                 misratio_glob = np.zeros(npts_glob)
-            else:
-                # status_glob = None
-                misloc_glob = None
-                misratio_glob = None
         
-        #--- gather results
+        # gather model_part into model_glob
         recv_counts, recv_displs = None, None
+        if mpi_rank == 0:
+            recv_counts = np.array(npts_counts, dtype=int) * nmodel
+            recv_displs = np.array(begin_indices, dtype=int) * nmodel
+        mpi_datatype = dtlib.from_numpy_dtype(model_part.dtype)
+        mpi_comm.Gatherv(
+            model_part, [model_glob, recv_counts, recv_displs, mpi_datatype], root=0
+        )
+        if mpi_rank == 0:
+            model_gll[reg_element_mask, ...] = model_glob[reg_indices, :]
 
         # gather interplation status 
         if mpi_rank == 0:
@@ -1438,21 +1438,7 @@ def sem_mesh_interp_single_slice(
         if mpi_rank == 0:
             status_gll[reg_element_mask, ...] = status_glob[reg_indices]
 
-        print(f"DEBUG: {mpi_rank=}, {iproc_target=}, after gather status")
-
-        # gather model_part into model_glob
-        if mpi_rank == 0:
-            recv_counts = np.array(npts_counts, dtype=int) * nmodel
-            recv_displs = np.array(begin_indices, dtype=int) * nmodel
-        mpi_datatype = dtlib.from_numpy_dtype(model_part.dtype)
-        mpi_comm.Gatherv(
-            model_part, [model_glob, recv_counts, recv_displs, mpi_datatype], root=0
-        )
-        if mpi_rank == 0:
-            model_gll[reg_element_mask, ...] = model_glob[reg_indices, :]
-
-        print(f"DEBUG: {mpi_rank=}, {iproc_target=} after gather model")
-
+        # gather misloc
         if output_misloc:
             mpi_datatype = dtlib.from_numpy_dtype(misloc_part.dtype)
             mpi_comm.Gatherv(
@@ -1467,7 +1453,6 @@ def sem_mesh_interp_single_slice(
                 root=0,
             )
             if mpi_rank == 0:
-                # status_gll[reg_element_mask, ...] = status_glob[reg_indices]
                 misloc_gll[reg_element_mask, ...] = misloc_glob[reg_indices]
                 misratio_gll[reg_element_mask, ...] = misratio_glob[reg_indices]
 

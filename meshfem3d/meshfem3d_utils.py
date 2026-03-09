@@ -1391,6 +1391,8 @@ def sem_mesh_interp_single_slice(
             idoubling=idoubling,
             method=method,
         )
+        
+        print(f"DEBUG: {mpi_rank=}, {iproc_target=} after sem_mesh_interp_points")
 
         # --- gather results
         if mpi_rank == 0:
@@ -1436,6 +1438,8 @@ def sem_mesh_interp_single_slice(
         if mpi_rank == 0:
             status_gll[reg_element_mask, ...] = status_glob[reg_indices]
 
+        print(f"DEBUG: {mpi_rank=}, {iproc_target=}, after gather status")
+
         # gather model_part into model_glob
         if mpi_rank == 0:
             recv_counts = np.array(npts_counts, dtype=int) * nmodel
@@ -1446,6 +1450,8 @@ def sem_mesh_interp_single_slice(
         )
         if mpi_rank == 0:
             model_gll[reg_element_mask, ...] = model_glob[reg_indices, :]
+
+        print(f"DEBUG: {mpi_rank=}, {iproc_target=} after gather model")
 
         if output_misloc:
             mpi_datatype = dtlib.from_numpy_dtype(misloc_part.dtype)

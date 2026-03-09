@@ -1404,19 +1404,21 @@ def sem_mesh_interp_single_slice(
 
         # model_glob
         if mpi_rank == 0:
+            status_glob = np.zeros(npts_glob, dtype=int)
             model_glob = np.zeros((npts_glob, nmodel))
         else:
+            status_glob = None
             model_glob = None
+
         if output_misloc:
             if mpi_rank == 0:
-                status_glob = np.zeros(npts_glob, dtype=int)
+                # status_glob = np.zeros(npts_glob, dtype=int)
                 misloc_glob = np.zeros(npts_glob)
                 misratio_glob = np.zeros(npts_glob)
             else:
-                status_glob = None
+                # status_glob = None
                 misloc_glob = None
                 misratio_glob = None
-
         
         #--- gather results
         recv_counts, recv_displs = None, None

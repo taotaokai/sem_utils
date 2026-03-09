@@ -1417,6 +1417,10 @@ def sem_mesh_interp_single_slice(
                 misloc_glob = None
                 misratio_glob = None
 
+        
+        #--- gather results
+        recv_counts, recv_displs = None, None
+
         # gather interplation status 
         if mpi_rank == 0:
             recv_counts = np.array(npts_counts, dtype=int)
@@ -1431,7 +1435,6 @@ def sem_mesh_interp_single_slice(
             status_gll[reg_element_mask, ...] = status_glob[reg_indices]
 
         # gather model_part into model_glob
-        recv_counts, recv_displs = None, None
         if mpi_rank == 0:
             recv_counts = np.array(npts_counts, dtype=int) * nmodel
             recv_displs = np.array(begin_indices, dtype=int) * nmodel

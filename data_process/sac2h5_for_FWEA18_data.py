@@ -225,16 +225,19 @@ def process_station_traces(
     # if pad_before > 0:
     #     pad_npts = int(pad_before * resample_fs)
     #     pad_time = pad_npts / resample_fs
+    resample_endtime = resample_starttime + (resample_npts - 1) / resample_fs
 
     # Process each trace: filter and resample
     for tr in st:
-        if tr.stats.starttime > resample_starttime:
-            pad_npts = (
-                int((tr.stats.starttime - resample_starttime) * tr.stats.sampling_rate)
-                + 5
-            )
-            tr.data = np.pad(tr.data, (pad_npts, 0), mode="edge")
-            tr.stats.starttime -= pad_npts / tr.stats.sampling_rate
+        npad = int((tr.stats.starttime - resample_starttime) * tr.stats.sampling_rate)
+        npad_before = max(5, npad) # add extra padding to ensure interpolation within the old time range
+
+        npad = int((resample_endtime - tr.stats.endtime) * tr.stats.sampling_rate)
+        npad_after = max(5, npad)
+
+        tr.data = np.pad(tr.data, (npad_before, npad_after), mode="edge")
+        tr.stats.starttime = tr.stats.starttime - npad_before / tr.stats.sampling_rate
+
         apply_filter(tr, low_pass_freq, low_pass_order, high_pass_freq, high_pass_order)
         interpolate_trace(tr, resample_fs, resample_starttime, resample_npts)
 

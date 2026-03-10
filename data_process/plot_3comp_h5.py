@@ -528,6 +528,9 @@ def plot_seismogram_3comp(
 
             # plot seismograms
             amp_Z = np.max(np.abs(data_Z[plot_idx]))
+            if amp_Z == 0:
+                warnings.warn(f'{sta["name"]}: amp_Z == 0, change to 1')
+                amp_Z = 1.0
             noise_Z = np.max(np.abs(data_Z[noise_idx]))
             # amp_RT = 0
             # noise_RT = 0
@@ -539,9 +542,9 @@ def plot_seismogram_3comp(
                 if amp_R == 0:
                     warnings.warn(f'{sta["name"]}: amp_R == 0, change to 1')
                     amp_R = 1.0
-                if amp_Z == 0:
-                    warnings.warn(f'{sta["name"]}: amp_Z == 0, change to 1')
-                    amp_Z = 1.0
+                if amp_T == 0:
+                    warnings.warn(f'{sta["name"]}: amp_T == 0, change to 1')
+                    amp_T = 1.0
             # data_max_amp = (amp2_Z + amp2_RT)**0.5
 
             if noise_Z == 0:

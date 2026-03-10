@@ -230,7 +230,8 @@ def process_station_traces(
     # Process each trace: filter and resample
     for tr in st:
         npad = int((tr.stats.starttime - resample_starttime) * tr.stats.sampling_rate)
-        npad_before = max(5, npad) # add extra padding to ensure interpolation within the old time range
+        # add extra padding to ensure interpolation within the old time range
+        npad_before = max(5, npad)
 
         npad = int((resample_endtime - tr.stats.endtime) * tr.stats.sampling_rate)
         npad_after = max(5, npad)

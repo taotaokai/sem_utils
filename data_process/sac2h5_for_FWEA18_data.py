@@ -217,8 +217,8 @@ def process_station_traces(
             return None
 
     # Determine common time window for resampling
-    max_starttime = min(tr.stats.starttime for tr in st)
-    min_endtime = max(tr.stats.endtime for tr in st)
+    max_starttime = max(tr.stats.starttime for tr in st)
+    min_endtime = min(tr.stats.endtime for tr in st)
     resample_starttime = max_starttime
     resample_npts = int((min_endtime - resample_starttime) * resample_fs)
     # pad_npts, pad_time = 0, 0.0
@@ -240,7 +240,12 @@ def process_station_traces(
         tr.stats.starttime = tr.stats.starttime - npad_before / tr.stats.sampling_rate
 
         apply_filter(tr, low_pass_freq, low_pass_order, high_pass_freq, high_pass_order)
-        interpolate_trace(tr, resample_fs, resample_starttime, resample_npts)
+        try:
+            interpolate_trace(tr, resample_fs, resample_starttime, resample_npts)
+        except Exception as e:
+            print(f"Error interpolating trace {tr}")
+            print(f"DEBUG: {resample_starttime=} {resample_npts=} {resample_fs=} {resample_endtime=}")
+            raise e
 
     return st
 

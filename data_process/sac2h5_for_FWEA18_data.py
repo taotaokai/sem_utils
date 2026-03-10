@@ -324,38 +324,39 @@ def sac2h5(
             groot._v_attrs["event"] = event_data
 
         channel_data = load_channel_data(channel_file)
+        channel_data['band_inst'] = channel_data['cha'].str.extract(r'^(..)') # band & instrument code
 
-        for key, channels in channel_data.groupby(["net", "sta", "loc"]):
-            net, sta, loc = key
+        for key, channels in channel_data.groupby(["net", "sta", "loc", "band_inst"]):
+            net, sta, loc, _ = key
 
             print(f"[INFO] processing {net}.{sta}.{loc}")
 
             lats = channels["lat"].astype(float).unique()
             if len(lats) > 1:
-                raise ValueError(
-                    f"[ERROR] multiple latitudes for {net}.{sta}.{loc}: {lats}"
-                )
+                msg = f"multiple latitudes for {net}.{sta}.{loc}: {lats}, skip"
+                warnings.warn(msg)
+                continue
             stla = lats[0]
 
             lons = channels["lon"].astype(float).unique()
             if len(lons) > 1:
-                raise ValueError(
-                    f"[ERROR] multiple longitudes for {net}.{sta}.{loc}: {lons}"
-                )
+                msg = f"[ERROR] multiple longitudes for {net}.{sta}.{loc}: {lons}, skip"
+                warnings.warn(msg)
+                continue
             stlo = lons[0]
 
             elevs = channels["elevation"].astype(float).unique()
             if len(elevs) > 1:
-                raise ValueError(
-                    f"[ERROR] multiple elevations for {net}.{sta}.{loc}: {elevs}"
-                )
+                msg = f"[ERROR] multiple elevations for {net}.{sta}.{loc}: {elevs}, skip"
+                warnings.warn(msg)
+                continue
             stel = elevs[0]
 
             depths = channels["depth"].astype(float).unique()
             if len(depths) > 1:
-                raise ValueError(
-                    f"[ERROR] multiple depths for {net}.{sta}.{loc}: {depths}"
-                )
+                msg = f"[ERROR] multiple depths for {net}.{sta}.{loc}: {depths}, skip"
+                warnings.warn(msg)
+                continue
             stdp = depths[0]
 
             # Process all traces for this station

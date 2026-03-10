@@ -327,34 +327,34 @@ def sac2h5(
         channel_data['band_inst'] = channel_data['cha'].str.extract(r'^(..)') # band & instrument code
 
         for key, channels in channel_data.groupby(["net", "sta", "loc", "band_inst"]):
-            net, sta, loc, _ = key
+            net, sta, loc, band_inst = key
 
             print(f"[INFO] processing {net}.{sta}.{loc}")
 
             lats = channels["lat"].astype(float).unique()
             if len(lats) > 1:
-                msg = f"multiple latitudes for {net}.{sta}.{loc}: {lats}, skip"
+                msg = f"multiple latitudes for {net}.{sta}.{loc}.{band_inst}: {lats}, skip"
                 warnings.warn(msg)
                 continue
             stla = lats[0]
 
             lons = channels["lon"].astype(float).unique()
             if len(lons) > 1:
-                msg = f"[ERROR] multiple longitudes for {net}.{sta}.{loc}: {lons}, skip"
+                msg = f"multiple longitudes for {net}.{sta}.{loc}.{band_inst}: {lons}, skip"
                 warnings.warn(msg)
                 continue
             stlo = lons[0]
 
             elevs = channels["elevation"].astype(float).unique()
             if len(elevs) > 1:
-                msg = f"[ERROR] multiple elevations for {net}.{sta}.{loc}: {elevs}, skip"
+                msg = f"multiple elevations for {net}.{sta}.{loc}.{band_inst}: {elevs}, skip"
                 warnings.warn(msg)
                 continue
             stel = elevs[0]
 
             depths = channels["depth"].astype(float).unique()
             if len(depths) > 1:
-                msg = f"[ERROR] multiple depths for {net}.{sta}.{loc}: {depths}, skip"
+                msg = f"multiple depths for {net}.{sta}.{loc}.{band_inst}: {depths}, skip"
                 warnings.warn(msg)
                 continue
             stdp = depths[0]

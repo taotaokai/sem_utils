@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import sys
-import os
 import warnings
-import re
 import argparse
 
 #
@@ -12,12 +10,11 @@ import scipy.signal as signal
 import tables
 
 #
-from obspy import UTCDateTime, read, Trace, geodetics, read_events
+from obspy import UTCDateTime, geodetics, read_events
 from obspy.taup import TauPyModel
 from obspy.imaging.beachball import beach
 
 #
-from matplotlib import colors, ticker, cm
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
@@ -216,7 +213,7 @@ def plot_seismogram_3comp(
         # h5data = None
         reduced_time = dist_degree * reduce_rayp
         plot_t1 = event_origin.time + min(time_limit) + reduced_time
-        plot_t2 = event_origin.time + max(time_limit) + reduced_time
+        # plot_t2 = event_origin.time + max(time_limit) + reduced_time
         # for arr in net_sta_grp:
         #     tb = UTCDateTime(arr._v_attrs['starttime'])
         #     te = UTCDateTime(arr._v_attrs['endtime'])
@@ -247,7 +244,7 @@ def plot_seismogram_3comp(
         return
 
     # ----- traveltime curve
-    print(f"[INFO] calculate traveltime curve")
+    print("[INFO] calculate traveltime curve")
     taup_model = TauPyModel(model="ak135")
     max_dist = max([sta["dist_degree"] for sta in stations])
     dist_ttcurve = np.arange(0.0, max_dist + 2, 1.0)
@@ -294,7 +291,7 @@ def plot_seismogram_3comp(
         noise_twin_end = sta["first_arrival"] + max(noise_twin)
 
         if (noise_twin_end - data_t0) < noise_min_length:
-            msg = f'[WARN] not enough record length for noise, {data_t0 - noise_twin_end =} < {noise_min_length=}, skip {sta["name"]}'
+            msg = f'[WARN] not enough record length for noise, {noise_twin_end - data_t0=} < {noise_min_length=}, skip {sta["name"]}'
             warnings.warn(msg)
             # print(f'[INFO] {data_starttime=}, {event_origin.time=}')
             to_remove.append(sta)
@@ -346,14 +343,14 @@ def plot_seismogram_3comp(
 
         # ---- create figure
         # fig = plt.figure(figsize=(8.5, 11)) # US letter
-        fig = plt.figure(figsize=(8.27, 11.69))  # A4
-        str_title = f"{event_name} {evmag_type}{evmag} (az=[{azmin:05.1f}, {azmax:05.1f}], freq={freq_limit}, SNR>{min_SNR})"
-        fig.text(0.5, 0.98, str_title, size="x-large", horizontalalignment="center")
+        fig = plt.figure(figsize=(15, 8.5))  # A4
+        str_title = f"{event_name}\n\n{evmag_type}{evmag}, {evdp}km\n\naz=[{azmin:05.1f}, {azmax:05.1f}]deg\n\nfreq={freq_limit}\nSNR>{min_SNR}"
+        fig.text(0.01, 0.98, str_title, size="x-large", horizontalalignment="left", verticalalignment="top")
         # ---- plot station/event map
-        ax_height = 0.25
-        ax_width = ax_height * mapWidth / mapHeight
+        ax_width = 0.3
+        ax_height = ax_width * mapHeight / mapWidth
         ax_size = [ax_width, ax_height]
-        ax_origin = [0.5 - ax_width / 2, 0.75]
+        ax_origin = [-0.03, 0.5 - ax_height/2]
         ax_map = fig.add_axes(ax_origin + ax_size)
         # ax_bm = Basemap(projection='poly', resolution='l', area_thresh=1000.,
         #     llcrnrlat=min_lat, llcrnrlon=min_lon,
@@ -395,8 +392,8 @@ def plot_seismogram_3comp(
         # -- create axis for seismograms
         ax_RTZ = []
         for i in range(3):
-            ax_origin = [0.06 + 0.29 * i, 0.05]
-            ax_size = [0.285, 0.70]
+            ax_origin = [0.25 + 0.235 * i, 0.06]
+            ax_size = [0.23, 0.9]
             ax_RTZ.append(fig.add_axes(ax_origin + ax_size))
 
         # -- plot traveltime curves
@@ -449,7 +446,7 @@ def plot_seismogram_3comp(
             data_sampling_rate = h5data._v_attrs["sampling_rate"]
             data_npts = h5data._v_attrs["npts"]
             data_orientation = h5data._v_attrs["channels"]
-            data_endtime = data_starttime + (data_npts - 1) / data_sampling_rate
+            # data_endtime = data_starttime + (data_npts - 1) / data_sampling_rate
 
             ind_zcomp = []
             ind_hcomp = []
@@ -532,13 +529,19 @@ def plot_seismogram_3comp(
             # plot seismograms
             amp_Z = np.max(np.abs(data_Z[plot_idx]))
             noise_Z = np.max(np.abs(data_Z[noise_idx]))
-            amp_RT = 0
-            noise_RT = 0
+            # amp_RT = 0
+            # noise_RT = 0
             if data_RT is not None:
                 amp_R = np.max(np.abs(data_RT[0, plot_idx]))
                 noise_R = np.max(np.abs(data_RT[0, noise_idx]))
                 amp_T = np.max(np.abs(data_RT[1, plot_idx]))
                 noise_T = np.max(np.abs(data_RT[1, noise_idx]))
+                if amp_R == 0:
+                    warnings.warn(f'{sta["name"]}: amp_R == 0, change to 1')
+                    amp_R = 1.0
+                if amp_Z == 0:
+                    warnings.warn(f'{sta["name"]}: amp_Z == 0, change to 1')
+                    amp_Z = 1.0
             # data_max_amp = (amp2_Z + amp2_RT)**0.5
 
             if noise_Z == 0:
@@ -550,7 +553,7 @@ def plot_seismogram_3comp(
                 t_plot,
                 plot_dy * data_Z[plot_idx] / amp_Z + dist_degree,
                 "k-",
-                linewidth=0.2,
+                linewidth=0.1,
             )
             h_text = ax.text(
                 max(time_limit),
@@ -578,7 +581,7 @@ def plot_seismogram_3comp(
                     t_plot,
                     plot_dy * data_RT[0, plot_idx] / amp_R + dist_degree,
                     "k-",
-                    linewidth=0.2,
+                    linewidth=0.1,
                 )
                 if noise_R == 0:
                     snr_R = np.inf
@@ -607,7 +610,7 @@ def plot_seismogram_3comp(
                     t_plot,
                     plot_dy * data_RT[1, plot_idx] / amp_T + dist_degree,
                     "k-",
-                    linewidth=0.2,
+                    linewidth=0.1,
                 )
                 if noise_T == 0:
                     snr_T = np.inf
@@ -678,7 +681,7 @@ if __name__ == "__main__":
         time_limit=args.time_limit,
         freq_limit=args.freq_limit,
         dist_limit=args.dist_limit,
-        min_SNR=5,
+        min_SNR=args.min_SNR,
         noise_twin=args.noise_twin,
         noise_min_length=args.noise_min_length,
     )

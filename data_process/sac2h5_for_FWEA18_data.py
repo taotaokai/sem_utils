@@ -383,7 +383,7 @@ def sac2h5(
             station_name = f"{net}_{sta}"
             if station_name in groot:
                 warnings.warn(f"[WARN] {station_name} already exists, overwriting.")
-                h5f.remove_node(groot, station_name)
+                h5f.remove_node(groot, station_name, recursive=True)
 
             gsta = h5f.create_group(groot, station_name)
             gsta._v_attrs["network"] = net

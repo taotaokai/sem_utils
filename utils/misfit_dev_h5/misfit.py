@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import sys
 import os
 import warnings
 
 # import os.path
-import re
-import datetime
 from collections import OrderedDict
 import multiprocessing
 import queue
@@ -43,10 +40,8 @@ import pyproj
 import matplotlib
 
 matplotlib.use("pdf")
-from matplotlib import colors, ticker, cm
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
-from mpl_toolkits.basemap import Basemap
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature

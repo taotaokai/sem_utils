@@ -102,7 +102,6 @@ cd $event_dir/DATA
 
 sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .true./" Par_file
-sed -i "/^SAVE_MESH_FILES/s/=.*/= .false./" Par_file
 
 # sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
 # for regional earthquake data
@@ -221,7 +220,6 @@ sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
 sed -i "/^ANISOTROPIC_KL/s/=.*/= .true./" Par_file
 sed -i "/^SAVE_TRANSVERSE_KL_ONLY/s/=.*/= .false./" Par_file
 sed -i "/^APPROXIMATE_HESS_KL/s/=.*/= .false./" Par_file
-sed -i "/^SAVE_MESH_FILES/s/=.*/= .false./" Par_file
 
 cp -f $event_dir/SEM/STATIONS_ADJOINT $event_dir/DATA/
 # rm -rf $event_dir/SEM

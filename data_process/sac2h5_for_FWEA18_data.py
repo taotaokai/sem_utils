@@ -329,7 +329,7 @@ def sac2h5(
         for key, channels in channel_data.groupby(["net", "sta", "loc", "band_inst"]):
             net, sta, loc, band_inst = key
 
-            print(f"[INFO] processing {net}.{sta}.{loc}")
+            print(f"[INFO] processing {net}.{sta}.{loc}.{band_inst}")
 
             lats = channels["lat"].astype(float).unique()
             if len(lats) > 1:

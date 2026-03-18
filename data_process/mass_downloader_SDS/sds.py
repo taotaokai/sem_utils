@@ -325,8 +325,7 @@ class Client(object):
             t += timedelta(days=1)
         year_doy.add((t_max.year, t_max.julday))
 
-        # full_paths = set()
-        full_paths = []
+        full_paths = set()
         for year, doy in year_doy:
             filename = self.FMTSTR.format(
                 network=network,

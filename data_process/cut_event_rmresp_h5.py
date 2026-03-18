@@ -448,27 +448,9 @@ for network, station, location, channel in nslc_filtered:
     #      default misalignment_threshold=0.01 should be fine
     # st.merge(-1, misalignment_threshold=misalignment_threshold)
 
-    # ignore traces with gaps or overlaps
-    orientation_codes = set(
-        [tr.stats.channel[-1] for tr in st]
-    )  # get unique orientation codes
-    for orientation in orientation_codes:
-        st1 = st.select(component=orientation)
-        if len(st1) != 1:
-            # print(f"{st1.__str__(extended=True)}")
-            # print(f"[WARN] gaps/overlaps found, {st1[0].id} ignored. ({station_id})\n")
-            logger.warning(f"gaps/overlaps found, {st1[0].id} ignored. ({station_id})")
-            logger.debug(f"{st1.__str__(extended=True)}")
-            for tr in st1:
-                st.remove(tr)
-    if len(st) == 0:
-        logger.warning(f"no trace left, station ignored. ({station_id})")
-        # print(f"[WARN] no trace left, station ignored. ({station_id})\n")
-        continue
-
     # check time coverage
     traces_to_remove = []
-    # [t0, t1]: minimum time range required
+    # [t0, t1]: minimum time span required
     t0 = first_arrival_time - min(time_before_first_arrival)
     t1 = event_origin.time + min(time_after_origin)
     for tr in st:
@@ -493,6 +475,26 @@ for network, station, location, channel in nslc_filtered:
             traces_to_remove.append(tr)
     for tr in traces_to_remove:
         st.remove(tr)
+    if len(st) == 0:
+        logger.warning(f"no trace left, station ignored. ({station_id})")
+        # print(f"[WARN] no trace left, station ignored. ({station_id})\n")
+        continue
+
+    # if there are multiple traces containing the minimum required time span, keep the longest one
+    orientation_codes = set(
+        [tr.stats.channel[-1] for tr in st]
+    )  # get unique orientation codes
+    for orientation in orientation_codes:
+        st1 = st.select(component=orientation)
+        if len(st1) > 1:
+            # print(f"{st1.__str__(extended=True)}")
+            # print(f"[WARN] gaps/overlaps found, {st1[0].id} ignored. ({station_id})\n")
+            logger.warning(f"{st1[0].id}: multiple traces covering time span {t0} -- {t1}")
+            logger.debug(f"{st1.__str__(extended=True)}")
+            lengths = [ (tr.stats.endtime - tr.stats.starttime, tr) for tr in st1]
+            sorted_lengths = sorted(lengths, key=lambda x: x[0], reverse=True)
+            for _, tr in sorted_lengths[1:]:
+                st.remove(tr)
     if len(st) == 0:
         logger.warning(f"no trace left, station ignored. ({station_id})")
         # print(f"[WARN] no trace left, station ignored. ({station_id})\n")

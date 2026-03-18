@@ -35,6 +35,7 @@ See https://www.seiscomp3.org/wiki/doc/applications/slarchive/SDS.
     GNU Lesser General Public License, Version 3
     (https://www.gnu.org/copyleft/lesser.html)
 """
+
 import glob
 import os
 import re
@@ -51,9 +52,13 @@ from obspy.io.mseed import ObsPyMSEEDFilesizeTooSmallError
 from obspy.io.mseed.util import get_record_information
 
 SDS_FMTSTR = os.path.join(
-    "{year}", "{network}", "{station}", "{channel}.{sds_type}",
-    "{network}.{station}.{location}.{channel}.{sds_type}.{year}.{doy:03d}")
-# to match placeholders e.g. '{name}' or '{name:format}' e.g. '{doy:03d}', {network!s} 
+    "{year}",
+    "{network}",
+    "{station}",
+    "{channel}.{sds_type}",
+    "{network}.{station}.{location}.{channel}.{sds_type}.{year}.{doy:03d}",
+)
+# to match placeholders e.g. '{name}' or '{name:format}' e.g. '{doy:03d}', {network!s}
 # and put 'name' into group
 FORMAT_STR_PLACEHOLDER_REGEX = r"{(\w+?)?([!:].*?)?}"
 
@@ -65,10 +70,18 @@ class Client(object):
     For details see the :meth:`~obspy.clients.filesystem.sds.Client.__init__()`
     method.
     """
+
     FMTSTR = SDS_FMTSTR
 
-    def __init__(self, sds_root, sds_type="D", format="MSEED",
-                 fileborder_seconds=30, fileborder_samples=5000, logger=None):
+    def __init__(
+        self,
+        sds_root,
+        sds_type="D",
+        format="MSEED",
+        fileborder_seconds=30,
+        fileborder_samples=5000,
+        logger=None,
+    ):
         """
         Initialize a SDS local filesystem client.
 
@@ -107,7 +120,7 @@ class Client(object):
             determining if previous/next day should be checked for data.
         """
         if not os.path.isdir(sds_root):
-            msg = ("SDS root is not a local directory: " + sds_root)
+            msg = "SDS root is not a local directory: " + sds_root
             raise IOError(msg)
         self.sds_root = sds_root
         self.sds_type = sds_type
@@ -123,12 +136,23 @@ class Client(object):
             ch.setLevel(logging.INFO)
             # Add formatter
             formatter = logging.Formatter(
-                    "[%(asctime)s] - %(name)s - %(levelname)s: %(message)s")
+                "[%(asctime)s] - %(name)s - %(levelname)s: %(message)s"
+            )
             ch.setFormatter(formatter)
             self.logger.addHandler(ch)
 
-    def get_waveforms(self, network, station, location, channel, starttime,
-                      endtime, merge=-1, sds_type=None, **kwargs):
+    def get_waveforms(
+        self,
+        network,
+        station,
+        location,
+        channel,
+        starttime,
+        endtime,
+        merge=-1,
+        sds_type=None,
+        **kwargs,
+    ):
         """
         Read data from a local SeisComP Data Structure (SDS) directory tree.
 
@@ -170,7 +194,7 @@ class Client(object):
         :rtype: :class:`~obspy.core.stream.Stream`
         """
         if starttime >= endtime:
-            msg = ("'endtime' must be after 'starttime'.")
+            msg = "'endtime' must be after 'starttime'."
             raise ValueError(msg)
         sds_type = sds_type or self.sds_type
 
@@ -178,17 +202,31 @@ class Client(object):
 
         st = Stream()
         full_paths = self._get_filenames(
-            network=network, station=station, location=location,
-            channel=channel, starttime=starttime, endtime=endtime,
-            sds_type=sds_type, check_exist=True)
+            network=network,
+            station=station,
+            location=location,
+            channel=channel,
+            starttime=starttime,
+            endtime=endtime,
+            sds_type=sds_type,
+            check_exist=True,
+        )
         for full_path in full_paths:
             try:
                 # for headonly read, no trim/merge operation is allowed
                 if kwargs.get("headonly", False):
-                    st += read(full_path, format=self.format, sourcename=seed_pattern, **kwargs)
+                    st += read(
+                        full_path, format=self.format, sourcename=seed_pattern, **kwargs
+                    )
                 else:
-                    st += read(full_path, format=self.format, starttime=starttime,
-                                endtime=endtime, sourcename=seed_pattern, **kwargs)
+                    st += read(
+                        full_path,
+                        format=self.format,
+                        starttime=starttime,
+                        endtime=endtime,
+                        sourcename=seed_pattern,
+                        **kwargs,
+                    )
             except ObsPyMSEEDFilesizeTooSmallError:
                 # just ignore small MSEED files, in use cases working with
                 # near-realtime data these are usually just being created right
@@ -196,14 +234,15 @@ class Client(object):
                 # midnight
                 continue
             except Exception as e:
-                msg = f'failed to read mseed file in SDS archive: {full_path} (Error: {e})'
+                msg = f"failed to read mseed file in SDS archive: {full_path} (Error: {e})"
                 self.logger.warning(msg)
                 continue
 
         # make sure we only have the desired data, just in case the file
         # contents do not match the expected SEED id
-        st = st.select(network=network, station=station, location=location,
-                       channel=channel)
+        st = st.select(
+            network=network, station=station, location=location, channel=channel
+        )
 
         # avoid trim/merge operations when we do a headonly read for
         # `_get_availability_percentage()`
@@ -233,8 +272,17 @@ class Client(object):
             st += self.get_waveforms(*bulk_string)
         return st
 
-    def _get_filenames(self, network, station, location, channel, starttime,
-                       endtime, sds_type=None, check_exist=False):
+    def _get_filenames(
+        self,
+        network,
+        station,
+        location,
+        channel,
+        starttime,
+        endtime,
+        sds_type=None,
+        check_exist=False,
+    ):
         """
         Get list of filenames for certain waveform and time span.
 
@@ -281,16 +329,21 @@ class Client(object):
         full_paths = []
         for year, doy in year_doy:
             filename = self.FMTSTR.format(
-                network=network, station=station, location=location,
-                channel=channel, year=year, doy=doy, sds_type=sds_type)
+                network=network,
+                station=station,
+                location=location,
+                channel=channel,
+                year=year,
+                doy=doy,
+                sds_type=sds_type,
+            )
             full_path = os.path.join(self.sds_root, filename)
             if (not check_exist) or (check_exist and os.path.isfile(full_path)):
                 full_paths.append(os.path.join(self.sds_root, filename))
 
         return full_paths
 
-    def _get_filename(self, network, station, location, channel, time,
-                      sds_type=None):
+    def _get_filename(self, network, station, location, channel, time, sds_type=None):
         """
         Get filename for certain waveform.
 
@@ -311,13 +364,19 @@ class Client(object):
         """
         sds_type = sds_type or self.sds_type
         filename = self.FMTSTR.format(
-            network=network, station=station, location=location,
-            channel=channel, year=time.year, doy=time.julday,
-            sds_type=sds_type)
+            network=network,
+            station=station,
+            location=location,
+            channel=channel,
+            year=time.year,
+            doy=time.julday,
+            sds_type=sds_type,
+        )
         return os.path.join(self.sds_root, filename)
 
-    def get_availability_percentage(self, network, station, location, channel,
-                                    starttime, endtime, sds_type=None):
+    def get_availability_percentage(
+        self, network, station, location, channel, starttime, endtime, sds_type=None
+    ):
         """
         Get percentage of available data.
 
@@ -341,24 +400,31 @@ class Client(object):
             , number of gaps and list of gaps.
         """
         if starttime >= endtime:
-            msg = ("'endtime' must be after 'starttime'.")
+            msg = "'endtime' must be after 'starttime'."
             raise ValueError(msg)
         sds_type = sds_type or self.sds_type
         with warnings.catch_warnings():
             warnings.filterwarnings(
-                "ignore", _headonly_warning_msg, UserWarning,
-                "obspy.core.stream")
-            st = self.get_waveforms(network, station, location, channel,
-                                    starttime, endtime, sds_type=sds_type,
-                                    headonly=True, _no_trim_or_merge=True)
+                "ignore", _headonly_warning_msg, UserWarning, "obspy.core.stream"
+            )
+            st = self.get_waveforms(
+                network,
+                station,
+                location,
+                channel,
+                starttime,
+                endtime,
+                sds_type=sds_type,
+                headonly=True,
+                _no_trim_or_merge=True,
+            )
         # even if the warning was silently caught and not shown it gets
         # registered in the __warningregistry__ and will not be shown
         # subsequently in a place were it's not caught
         # see https://bugs.python.org/issue4180
         # see e.g. http://blog.ionelmc.ro/2013/06/26/testing-python-warnings/
         try:
-            from obspy.core.stream import __warningregistry__ as \
-                stream_warningregistry
+            from obspy.core.stream import __warningregistry__ as stream_warningregistry
         except ImportError:
             # import error means no warning has been issued from
             # obspy.core.stream before, so nothing to do.
@@ -398,12 +464,15 @@ class Client(object):
             dt = min([tr.stats.delta for tr in st])
             b = starttime
             for w in existing_intervals:
-                if w[1] < starttime: continue
-                if w[0] > endtime: break
-                if w[0] > b+dt:
+                if w[1] < starttime:
+                    continue
+                if w[0] > endtime:
+                    break
+                if w[0] > b + dt:
                     gaps.append((b, min(w[0], endtime)))
                 b = w[1]
-                if b > endtime: break
+                if b > endtime:
+                    break
             if b < endtime:
                 gaps.append((b, endtime))
         else:
@@ -415,9 +484,16 @@ class Client(object):
 
         return (1 - (gap_sum / total_duration), gap_count, gaps)
 
-    def _get_current_endtime(self, network, station, location, channel,
-                             sds_type=None, stop_time=None,
-                             check_has_no_data=True):
+    def _get_current_endtime(
+        self,
+        network,
+        station,
+        location,
+        channel,
+        sds_type=None,
+        stop_time=None,
+        check_has_no_data=True,
+    ):
         """
         Get time of last sample for given stream.
 
@@ -452,8 +528,12 @@ class Client(object):
         seed_pattern = ".".join((network, station, location, channel))
 
         if check_has_no_data and not self.has_data(
-                network=network, station=station, location=location,
-                channel=channel, sds_type=sds_type):
+            network=network,
+            station=station,
+            location=location,
+            channel=channel,
+            sds_type=sds_type,
+        ):
             return None
 
         stop_time = stop_time or UTCDateTime(1950, 1, 1)
@@ -464,12 +544,21 @@ class Client(object):
             if time < stop_time:
                 return None
             filename = self._get_filename(
-                network=network, station=station, location=location,
-                channel=channel, time=time, sds_type=sds_type)
+                network=network,
+                station=station,
+                location=location,
+                channel=channel,
+                time=time,
+                sds_type=sds_type,
+            )
             if os.path.isfile(filename):
                 try:
-                    st = read(filename, format=self.format, headonly=True,
-                              sourcename=seed_pattern)
+                    st = read(
+                        filename,
+                        format=self.format,
+                        headonly=True,
+                        sourcename=seed_pattern,
+                    )
                 except ObsPyMSEEDFilesizeTooSmallError:
                     # just ignore small MSEED files, in use cases working with
                     # near-realtime data these are usually just being created
@@ -477,16 +566,28 @@ class Client(object):
                     # right after midnight
                     st = None
                 else:
-                    st = st.select(network=network, station=station,
-                                   location=location, channel=channel)
+                    st = st.select(
+                        network=network,
+                        station=station,
+                        location=location,
+                        channel=channel,
+                    )
                 if st:
                     break
             time -= 24 * 3600
 
         return max([tr.stats.endtime for tr in st])
 
-    def get_latency(self, network, station, location, channel,
-                    sds_type=None, stop_time=None, check_has_no_data=True):
+    def get_latency(
+        self,
+        network,
+        station,
+        location,
+        channel,
+        sds_type=None,
+        stop_time=None,
+        check_has_no_data=True,
+    ):
         """
         Get latency for given stream, i.e. difference of current time and
         latest available data for stream in SDS archive. ``None`` is returned
@@ -519,9 +620,14 @@ class Client(object):
             from current time backwards until ``stop_time``.
         """
         endtime = self._get_current_endtime(
-            network=network, station=station, location=location,
-            channel=channel, sds_type=sds_type, stop_time=stop_time,
-            check_has_no_data=check_has_no_data)
+            network=network,
+            station=station,
+            location=location,
+            channel=channel,
+            sds_type=sds_type,
+            stop_time=stop_time,
+            check_has_no_data=check_has_no_data,
+        )
 
         if endtime is None:
             return endtime
@@ -552,12 +658,18 @@ class Client(object):
 
         pattern = re.sub(
             FORMAT_STR_PLACEHOLDER_REGEX,
-            _wildcarded_except(["network", "station", "location", "channel",
-                                "sds_type"]),
-            self.FMTSTR)
+            _wildcarded_except(
+                ["network", "station", "location", "channel", "sds_type"]
+            ),
+            self.FMTSTR,
+        )
         pattern = pattern.format(
-            network=network, station=station, location=location,
-            channel=channel, sds_type=sds_type)
+            network=network,
+            station=station,
+            location=location,
+            channel=channel,
+            sds_type=sds_type,
+        )
         pattern = os.path.join(self.sds_root, pattern)
         if glob.glob(pattern):
             return True
@@ -591,16 +703,20 @@ class Client(object):
             pattern = re.sub(
                 FORMAT_STR_PLACEHOLDER_REGEX,
                 _wildcarded_except(["sds_type"]),
-                self.FMTSTR).format(sds_type=sds_type)
+                self.FMTSTR,
+            ).format(sds_type=sds_type)
             pattern = os.path.join(self.sds_root, pattern)
         else:
             pattern = self._get_filename("*", "*", "*", "*", datetime)
         all_files = glob.glob(pattern)
         # set up inverse regex to extract kwargs/values from full paths
         pattern_ = os.path.join(self.sds_root, self.FMTSTR)
-        group_map = {i: groups[0] for i, groups in
-                     enumerate(re.findall(FORMAT_STR_PLACEHOLDER_REGEX,
-                                          pattern_))}
+        group_map = {
+            i: groups[0]
+            for i, groups in enumerate(
+                re.findall(FORMAT_STR_PLACEHOLDER_REGEX, pattern_)
+            )
+        }
         for file_ in all_files:
             dict_ = _parse_path_to_dict(file_, pattern_, group_map)
             try:
@@ -610,8 +726,8 @@ class Client(object):
                 channel = dict_["channel"]
             except Exception as e:
                 msg = (
-                    "Failed to extract key from pattern '{}' in path "
-                    "'{}': {}").format(pattern_, file_, e)
+                    "Failed to extract key from pattern '{}' in path '{}': {}"
+                ).format(pattern_, file_, e)
                 self.logger.warning(msg)
                 continue
             result.add((network, station, location, channel))
@@ -636,16 +752,18 @@ class Client(object):
         # wildcarded pattern to match all files of interest
         fmtstr = os.path.dirname(self.FMTSTR)
         pattern = re.sub(
-            FORMAT_STR_PLACEHOLDER_REGEX,
-            _wildcarded_except(["sds_type"]),
-            fmtstr).format(sds_type=sds_type)
+            FORMAT_STR_PLACEHOLDER_REGEX, _wildcarded_except(["sds_type"]), fmtstr
+        ).format(sds_type=sds_type)
         pattern = os.path.join(self.sds_root, pattern)
         all_files = glob.glob(pattern)
         # set up inverse regex to extract kwargs/values from full paths
         pattern_ = os.path.join(self.sds_root, fmtstr)
-        group_map = {i: groups[0] for i, groups in
-                     enumerate(re.findall(FORMAT_STR_PLACEHOLDER_REGEX,
-                                          pattern_))}
+        group_map = {
+            i: groups[0]
+            for i, groups in enumerate(
+                re.findall(FORMAT_STR_PLACEHOLDER_REGEX, pattern_)
+            )
+        }
         for file_ in all_files:
             dict_ = _parse_path_to_dict(file_, pattern_, group_map)
             try:
@@ -655,8 +773,8 @@ class Client(object):
                 if isinstance(e, TypeError) and dict_ is not None:
                     raise
                 msg = (
-                    "Failed to extract key from pattern '{}' in path "
-                    "'{}': {}").format(pattern_, file_, e)
+                    "Failed to extract key from pattern '{}' in path '{}': {}"
+                ).format(pattern_, file_, e)
                 self.logger.warning(msg)
                 continue
             result.add((network, station))
@@ -678,7 +796,7 @@ class Client(object):
                         rec = fh.read(length)
                         mseed_records.append((info, rec))
                 except Exception as err:
-                    msg = f'failed to read {mseed_file}. (Error: {err})'
+                    msg = f"failed to read {mseed_file}. (Error: {err})"
                     self.logger.warning(msg)
             return mseed_records
 
@@ -689,22 +807,22 @@ class Client(object):
             mseed_records = _parse_mseed(mseed_file)
             for info, rec in mseed_records:
                 # strip().strip('\0'): remove whitespaces and null's
-                # otherwise, invalid file path containing null might occur 
-                net = info['network'].strip().strip('\0')
-                sta = info['station'].strip().strip('\0')
-                loc = info['location'].strip().strip('\0')
-                cha = info['channel'].strip().strip('\0')
-                starttime = info['starttime']
+                # otherwise, invalid file path containing null might occur
+                net = info["network"].strip().strip("\0")
+                sta = info["station"].strip().strip("\0")
+                loc = info["location"].strip().strip("\0")
+                cha = info["channel"].strip().strip("\0")
+                starttime = info["starttime"]
                 db_path = self._get_filename(net, sta, loc, cha, starttime, sds_type)
-                # only keep records with integer sampling rate? 
-                samp_rate = info['samp_rate']
+                # only keep records with integer sampling rate?
+                samp_rate = info["samp_rate"]
                 # integer_sr = round(samp_rate)
                 # decimal_sr = abs(samp_rate - integer_sr)
                 # if decimal_sr != 0:
                 #     msg = f'non-integer sampling rate: {db_path} {samp_rate}'
                 #     self.logger.warning(msg)
                 #     # continue
-                npts = info['npts']
+                npts = info["npts"]
                 if db_path not in msr_groups:
                     msr_groups[db_path] = [(starttime, samp_rate, npts, rec)]
                 else:
@@ -712,17 +830,17 @@ class Client(object):
             return msr_groups
 
         if not os.path.exists(mseed_file):
-            msg = f'{mseed_file} does not exit.'
+            msg = f"{mseed_file} does not exit."
             self.logger.warning(msg)
             return
         elif not os.path.isfile(mseed_file):
-            msg = f'{mseed_file} is not a file.'
+            msg = f"{mseed_file} is not a file."
             self.logger.warning(msg)
             return
         try:
-            st = read(mseed_file, format='MSEED', headonly=True)
+            read(mseed_file, format="MSEED", headonly=True)
         except Exception as err:
-            msg = f'{mseed_file} is not a mseed file. Error: {err})'
+            msg = f"{mseed_file} is not a mseed file. Error: {err})"
             self.logger.warning(msg)
             return
 
@@ -732,49 +850,57 @@ class Client(object):
             try:
                 os.makedirs(os.path.dirname(db_path), exist_ok=True)
             except Exception as e:
-                msg = f'os.makedirs failed on {db_path.encode()}'
+                msg = f"os.makedirs failed on {db_path.encode()} (ERROR: {e})"
                 self.logger.warning(msg)
                 continue
 
             dirname = os.path.dirname(db_path)
             filename = os.path.basename(db_path)
-            lock_path = os.path.join(dirname, f'.{filename}.lock')
+            lock_path = os.path.join(dirname, f".{filename}.lock")
             lock = FileLock(lock_path, timeout=timeout)
             try:
                 with lock:
                     db_records = []
                     if os.path.exists(db_path):
                         try:
-                            db_msr_groups = _group_msr_for_SDS(db_path, sds_type=sds_type)
+                            db_msr_groups = _group_msr_for_SDS(
+                                db_path, sds_type=sds_type
+                            )
                             if db_path in db_msr_groups:
-                                db_records = db_msr_groups[db_path] # should have only one group of mseed records
+                                db_records = db_msr_groups[
+                                    db_path
+                                ]  # should have only one group of mseed records
                         except Exception as e:
-                            msg = f'failed to read {db_path} (ERROR: {e})'
+                            msg = f"failed to read {db_path} (ERROR: {e})"
                             self.logger.warning(msg)
                             # os.remove(db_path)
                     db_records.extend(mseed_records)
 
                     # remove duplicated mseed record and update db file
                     updated_records = {}
-                    for starttime, samp_rate, npts, rec in sorted(db_records): #, key=lambda x: (x[0], x[1], x[2])):
+                    for starttime, samp_rate, npts, rec in sorted(
+                        db_records
+                    ):  # , key=lambda x: (x[0], x[1], x[2])):
                         k = (starttime.ns, samp_rate, npts)
                         if k not in updated_records:
-                            updated_records[k] = rec # mseed record bytes
+                            updated_records[k] = rec  # mseed record bytes
                         else:
                             if rec != updated_records[k]:
-                                msg = (f'overlap mseed record with different content between ' 
-                                       f'{db_path} and {mseed_file} at {starttime}')
+                                msg = (
+                                    f"overlap mseed record with different content between "
+                                    f"{db_path} and {mseed_file} at {starttime}"
+                                )
                                 self.logger.warning(msg)
                             # else:
                             #     warnings.warn(f'duplicated mseed record in {db_path} at {starttime}')
 
-                    mseed_bytes = b''
+                    mseed_bytes = b""
                     for k, v in sorted(updated_records.items()):
                         mseed_bytes += v
-                    with open(db_path, 'wb') as f:
+                    with open(db_path, "wb") as f:
                         f.write(mseed_bytes)
             except Timeout:
-                msg = f'cannot insert {mseed_file} since another process currently holds the lock of {db_path}'
+                msg = f"cannot insert {mseed_file} since another process currently holds the lock of {db_path}"
                 self.logger.warning(msg)
 
 
@@ -784,10 +910,12 @@ def _wildcarded_except(exclude=[]):
     replacing all format string place holders with ``*`` wildcards, except
     named fields as specified in ``exclude``.
     """
+
     def _wildcarded(match):
         if match.group(1) in exclude:
             return match.group(0)
         return "*"
+
     return _wildcarded
 
 
@@ -796,11 +924,11 @@ def _parse_path_to_dict(path, pattern, group_map):
     # in principle we should escape all special characters in Python regex:
     #    . ^ $ * + ? { } [ ] \ | ( )
     # and also only replace them if outside of format string placeholders..
-    regex = re.sub(r'([\.\\])', r'\\\1', pattern)
+    regex = re.sub(r"([\.\\])", r"\\\1", pattern)
     # replace each format string placeholder with a regex group, matching
     # alphanumerics. append end-of-line otherwise the last non-greedy match
     # doesn't catch anything if it's at the end of the regex
-    regex = re.sub(FORMAT_STR_PLACEHOLDER_REGEX, r'(\\w*?)', regex) + "$"
+    regex = re.sub(FORMAT_STR_PLACEHOLDER_REGEX, r"(\\w*?)", regex) + "$"
     match = re.match(regex, path)
     if match is None:
         return None
@@ -811,14 +939,15 @@ def _parse_path_to_dict(path, pattern, group_map):
             if result[key] != value:
                 msg = (
                     "Failed to parse path '{}': Mismatching information "
-                    "for key '{}' from pattern '{}'.").format(
-                        path, key, pattern)
+                    "for key '{}' from pattern '{}'."
+                ).format(path, key, pattern)
                 warnings.warn(msg)
                 return None
         result[key] = value
     return result
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import doctest
+
     doctest.testmod(exclude_empty=True)

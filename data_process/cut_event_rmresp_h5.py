@@ -1,13 +1,12 @@
-import sys
 import os
 import warnings
-import datetime
 import numpy as np
 import tables
 import scipy
 import yaml
 import argparse
 import logging
+from typing import List, Any
 
 from obspy import read_inventory, Inventory, read_events, geodetics
 from obspy.clients.filesystem.sds import Client
@@ -42,6 +41,41 @@ NOTE: time precision is microsecond
 
 _DEBUG = True
 _DEBUG = False
+
+def merge_intervals(intervals: List[List[Any]]) -> List[List[Any]]:
+    """
+    Calculates the union of a list of intervals by merging overlapping or adjacent ones.
+
+    Args:
+        intervals: A list of intervals, e.g., [[1, 3], [2, 6], [8, 10]].
+
+    Returns:
+        A new list of non-overlapping intervals representing the union.
+    """
+    if not intervals:
+        return []
+
+    # 1. Sort the intervals by their start time
+    sorted_intervals = sorted(intervals, key=lambda i: i[0])
+
+    # 2. Initialize the merged list with the first interval
+    merged = [sorted_intervals[0]]
+
+    # 3. Iterate through the rest of the sorted intervals
+    for start, end in sorted_intervals[1:]:
+        # Get the end time of the last merged interval
+        last_end = merged[-1][1]
+
+        # 4. Check for overlap or adjacency
+        if start <= last_end:
+            # Overlap/adjacency found, merge by updating the end time
+            # with the maximum of the current end or the new interval's end
+            merged[-1][1] = max(last_end, end)
+        else:
+            # No overlap, add the new interval to the merged list
+            merged.append([start, end])
+
+    return merged
 
 
 def _get_resp_corner_freq(freqs, resp_amp, ref_freq=None, threshold_dB=3):
@@ -212,10 +246,11 @@ client = Client(SDS_root)
 t0 = event_origin.time - max(time_before_first_arrival)
 t1 = event_origin.time + max(time_after_origin)
 
-# query all Z components
+# query all Z components for data availability
 #NOTE: set merge=False to avoid failure during merge, e.g. due to different sampling rate 
 #      see obspy/core/stream.py: 3162, trace.py: 740
-st = client.get_waveforms("*", "*", "*", config_zcomp_pattern, t0, t1, merge=False)
+#NOTE: set headonly=True to avoid reading data
+st = client.get_waveforms("*", "*", "*", config_zcomp_pattern, t0, t1, headonly=True, merge=False)
 
 stations = [(tr.stats.network, tr.stats.station) for tr in st]
 stations = sorted(set(stations))  # remove duplicates
@@ -256,11 +291,25 @@ for net, sta in stations:
             )
             # print(f"[WARN] fail to select inventory for {nslc} on {event_origin.time}")
             continue
-        duration = sum(
-            [tr.stats.endtime - tr.stats.starttime for tr in st1.select(*nslc)]
-        )
+        # calculate data coverage over required time window
+        wins = []
+        for tr in st1.select(*nslc):
+            b, e = tr.stats.starttime, tr.stats.endtime
+            win = [b, e]
+            # skip if outside time window
+            if e < t0 or b > t1:
+                continue
+            # cut begin/end to within time window
+            if b < t0:
+                win[0] = t0
+            if e > t1:
+                win[1] = t1
+            wins.append(win)
+        wins = merge_intervals(wins) # merge overlapping intervals
+        duration = sum([e - b for b, e in wins])
         coverage = duration / (t1 - t0)
         nslc_use.append((nslc, coverage))
+
     if nslc_use:
         nslc_use = sorted(nslc_use, key=lambda x: x[1])  # sort by data coverage
         nslc_filtered.append(

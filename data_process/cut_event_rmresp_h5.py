@@ -9,8 +9,9 @@ import logging
 from typing import List, Any
 
 from obspy import read_inventory, Inventory, read_events, geodetics
-from obspy.clients.filesystem.sds import Client
 from obspy.taup import TauPyModel
+
+from .mass_downloader_SDS.sds import Client
 
 
 """ data structure

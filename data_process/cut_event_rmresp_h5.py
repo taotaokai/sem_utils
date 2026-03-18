@@ -448,30 +448,16 @@ for network, station, location, channel in nslc_filtered:
     #      default misalignment_threshold=0.01 should be fine
     # st.merge(-1, misalignment_threshold=misalignment_threshold)
 
-    # check time coverage
+    # remove traces without enough time coverage
     traces_to_remove = []
     # [t0, t1]: minimum time span required
     t0 = first_arrival_time - min(time_before_first_arrival)
     t1 = event_origin.time + min(time_after_origin)
     for tr in st:
-        dt = tr.stats.delta
-        if tr.stats.starttime > t0:
+        if tr.stats.starttime > t0 or tr.stats.endtime < t1:
             logger.warning(
-                f"trace starttime {tr.stats.starttime} is later than required {t0}, {tr.id} ignored. ({station_id})"
+                f"remove trace {tr} not covering {t0} - {t1}"
             )
-            logger.debug(f"{tr}")
-            # print(
-            #     f"{tr}\n[WARN] trace starttime {tr.stats.starttime} is later than required {t0}, {tr.id} ignored. ({station_id})\n"
-            # )
-            traces_to_remove.append(tr)
-        elif tr.stats.endtime < t1:
-            logger.warning(
-                f"trace endtime {tr.stats.endtime} is earlier than required {t1}, {tr.id} ignored. ({station_id})"
-            )
-            logger.debug(f"{tr}")
-            # print(
-            #     f"{tr}\n[WARN] trace endtime {tr.stats.endtime} is earlier than required {t1}, {tr.id} ignored. ({station_id})\n"
-            # )
             traces_to_remove.append(tr)
     for tr in traces_to_remove:
         st.remove(tr)
@@ -499,6 +485,8 @@ for network, station, location, channel in nslc_filtered:
         logger.warning(f"no trace left, station ignored. ({station_id})")
         # print(f"[WARN] no trace left, station ignored. ({station_id})\n")
         continue
+
+    logger.info(f"traces remainning: {st}")
 
     # attach channel metadata and instrument response
     traces_to_remove = []

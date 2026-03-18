@@ -1,4 +1,6 @@
+import sys
 import os
+from pathlib import Path
 import warnings
 import numpy as np
 import tables
@@ -11,7 +13,12 @@ from typing import List, Any
 from obspy import read_inventory, Inventory, read_events, geodetics
 from obspy.taup import TauPyModel
 
-from .mass_downloader_SDS.sds import Client
+# Get the directory of the current script
+script_dir = Path(__file__).parent.absolute()
+# Add this directory to the sys.path
+sys.path.append(str(script_dir))
+
+from mass_downloader_SDS import sds #NOQA
 
 
 """ data structure
@@ -242,7 +249,7 @@ groot._v_attrs["location"] = {
 taup_model = TauPyModel(model="ak135")
 
 # SDS client
-client = Client(SDS_root)
+client = sds.Client(SDS_root)
 
 t0 = event_origin.time - max(time_before_first_arrival)
 t1 = event_origin.time + max(time_after_origin)

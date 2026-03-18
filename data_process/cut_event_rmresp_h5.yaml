@@ -42,7 +42,7 @@ remove_response:
   # instrument passband must cover [max_resp_lc, min_resp_hc]
   max_resp_lc: 0.05  # Hz, ensure enough low freq. content
   min_resp_hc: 1     # Hz, ensure enough high freq. content
-  # pre-filter applied to stablizing division of instrument response at frequencies close to zero
+  # pre-filter applied to stablize division of instrument response at frequencies close to zero
   filter: # butterworth
     type: 'highpass'
     min_order: 2  # minimum filter order, most broadband seismometers have 2 zero zeros in velocity response,

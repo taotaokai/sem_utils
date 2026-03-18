@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 from scipy.io import FortranFile
 
-from meshfem3d_constants import (
+from .meshfem3d_constants import (
     EARTH_FLATTENING_SEM,
     NGLLX,
     NGLLY,

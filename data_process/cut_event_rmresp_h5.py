@@ -213,7 +213,9 @@ t0 = event_origin.time - max(time_before_first_arrival)
 t1 = event_origin.time + max(time_after_origin)
 
 # query all Z components
-st = client.get_waveforms("*", "*", "*", config_zcomp_pattern, t0, t1)
+#NOTE: set merge=False to avoid failure during merge, e.g. due to different sampling rate 
+#      see obspy/core/stream.py: 3162, trace.py: 740
+st = client.get_waveforms("*", "*", "*", config_zcomp_pattern, t0, t1, merge=False)
 
 stations = [(tr.stats.network, tr.stats.station) for tr in st]
 stations = sorted(set(stations))  # remove duplicates

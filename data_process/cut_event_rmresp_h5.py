@@ -456,7 +456,7 @@ for network, station, location, channel in nslc_filtered:
     for tr in st:
         if tr.stats.starttime > t0 or tr.stats.endtime < t1:
             logger.warning(
-                f"remove trace {tr} not covering {t0} - {t1}"
+                f"remove trace ({tr}) not covering {t0} - {t1}"
             )
             traces_to_remove.append(tr)
     for tr in traces_to_remove:

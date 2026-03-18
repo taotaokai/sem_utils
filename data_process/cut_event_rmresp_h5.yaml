@@ -11,6 +11,12 @@ zcomp_pattern: "[BH]HZ" # for matching files of Z component
 # band_code_priority: ['H', 'B']
 # location_code_priority: ['', '00', '01', '*']
 
+map_constraint:
+  min_lat: 32 
+  max_lat: 45
+  min_lon: 20
+  max_lon: 50
+
 time_window:
   # specify the at least and at most time before first arrival
   before_first_arrival: [250, 500] # sec

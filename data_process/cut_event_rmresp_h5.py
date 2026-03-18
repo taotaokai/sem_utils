@@ -18,7 +18,7 @@ script_dir = Path(__file__).parent.absolute()
 # Add this directory to the sys.path
 sys.path.append(str(script_dir))
 
-from mass_downloader_SDS import sds #NOQA
+from mass_downloader_SDS import sds  # NOQA
 
 
 """ data structure
@@ -49,6 +49,7 @@ NOTE: time precision is microsecond
 
 _DEBUG = True
 _DEBUG = False
+
 
 def merge_intervals(intervals: List[List[Any]]) -> List[List[Any]]:
     """
@@ -255,10 +256,12 @@ t0 = event_origin.time - max(time_before_first_arrival)
 t1 = event_origin.time + max(time_after_origin)
 
 # query all Z components for data availability
-#NOTE: set merge=False to avoid failure during merge, e.g. due to different sampling rate 
+# NOTE: set merge=False to avoid failure during merge, e.g. due to different sampling rate
 #      see obspy/core/stream.py: 3162, trace.py: 740
-#NOTE: set headonly=True to avoid reading data
-st = client.get_waveforms("*", "*", "*", config_zcomp_pattern, t0, t1, headonly=True, merge=False)
+# NOTE: set headonly=True to avoid reading data
+st = client.get_waveforms(
+    "*", "*", "*", config_zcomp_pattern, t0, t1, headonly=True, merge=False
+)
 
 stations = [(tr.stats.network, tr.stats.station) for tr in st]
 stations = sorted(set(stations))  # remove duplicates
@@ -313,7 +316,7 @@ for net, sta in stations:
             if e > t1:
                 win[1] = t1
             wins.append(win)
-        wins = merge_intervals(wins) # merge overlapping intervals
+        wins = merge_intervals(wins)  # merge overlapping intervals
         duration = sum([e - b for b, e in wins])
         coverage = duration / (t1 - t0)
         nslc_use.append((nslc, coverage))
@@ -373,6 +376,24 @@ for network, station, location, channel in nslc_filtered:
         #     f"{err}\n[WARN] cannot find station metadata for {seed_id}, station ignored. ({station_id})\n"
         # )
         continue
+
+    if "map_constraint" in config:
+        sta_lat = station_coords["latitude"]
+        sta_lon = station_coords["longitude"]
+        min_lat = config["map_constraint"]["min_lat"]
+        max_lat = config["map_constraint"]["max_lat"]
+        min_lon = config["map_constraint"]["min_lon"]
+        max_lon = config["map_constraint"]["max_lon"]
+        if (
+            sta_lat < min_lat
+            or sta_lat > max_lat
+            or sta_lon < min_lon
+            or sta_lon > max_lon
+        ):
+            logger.warning(
+                f"station {seed_id} is outside map constraint, station ignored. ({station_id})"
+            )
+            continue
 
     # calculate event-station distance
     dist, az, baz = geodetics.gps2dist_azimuth(

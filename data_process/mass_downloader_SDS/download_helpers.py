@@ -352,7 +352,7 @@ class Station(_SlotsEqualityComparisionObject):
                 # logger.debug(f'prepare_mseed_download: gaps: {gaps}')
                 for b, e in gaps:
                     files = sds_client._get_filenames(self.network, self.station,
-                                                         channel.location, channel.channel, b, e)
+                                                      channel.location, channel.channel, b, e)
                     new_intervals.append(TimeInterval(b, e, files, STATUS.NEEDS_DOWNLOADING))
             logger.debug(f'{channel_id}: prepare_mseed_download - new_intervals - {new_intervals}')
             channel.intervals = new_intervals # replace with intervals not in SDS archive

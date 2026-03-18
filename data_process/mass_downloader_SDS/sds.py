@@ -209,7 +209,7 @@ class Client(object):
             starttime=starttime,
             endtime=endtime,
             sds_type=sds_type,
-            check_exist=True,
+            existed_only=True,
         )
         for full_path in full_paths:
             try:
@@ -281,7 +281,7 @@ class Client(object):
         starttime,
         endtime,
         sds_type=None,
-        check_exist=False,
+        existed_only=False,
     ):
         """
         Get list of filenames for certain waveform and time span.
@@ -301,8 +301,8 @@ class Client(object):
         :type sds_type: str
         :param sds_type: Override SDS data type identifier that was specified
             during client initialization.
-        :type check_exist: bool
-        :param check_exist: Check if file exists.
+        :type existed_only: bool
+        :param existed_only: only return files which are actually existed.
         :rtype: list[str]
         """
         sds_type = sds_type or self.sds_type
@@ -338,8 +338,10 @@ class Client(object):
                 sds_type=sds_type,
             )
             full_path = os.path.join(self.sds_root, filename)
-            if (not check_exist) or (check_exist and os.path.isfile(full_path)):
-                full_paths.append(os.path.join(self.sds_root, filename))
+            if existed_only:
+                full_paths = full_paths.union(glob.glob(full_path))
+            else:
+                full_paths = full_paths.union(full_path)
 
         return full_paths
 

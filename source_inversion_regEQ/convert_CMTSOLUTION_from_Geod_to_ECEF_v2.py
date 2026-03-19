@@ -278,8 +278,8 @@ def main():
     parser.add_argument("--cmt_file", help="Input CMTSOLUTION file")
     parser.add_argument("--out_file", help="Output CMTSOLUTION file in ECEF")
 
-    parser.add_argument("--cmt_file_list", help="list of input cmt files")
-    parser.add_argument("--out_file_list", help="list of converted cmt files in ECEF")
+    parser.add_argument("--cmt_list", help="list of input cmt files")
+    parser.add_argument("--out_list", help="list of converted cmt files in ECEF")
 
     parser.add_argument(
         "--topo_ncfile",
@@ -290,10 +290,10 @@ def main():
     args = parser.parse_args()
     logger.info(f"Arguments: {args}")
 
-    if args.cmt_file_list and args.out_file_list:
+    if args.cmt_list and args.out_list:
         try:
-            input_cmt_files = [line.strip() for line in open(args.cmt_file_list, 'r')]
-            output_cmt_files = [line.strip() for line in open(args.out_file_list, 'r')]
+            input_cmt_files = [line.strip() for line in open(args.cmt_list, 'r')]
+            output_cmt_files = [line.strip() for line in open(args.out_list, 'r')]
         except Exception as e:
             logger.warning("Error reading input/output CMTSOLUTION file lists")
             logger.warning(str(e))

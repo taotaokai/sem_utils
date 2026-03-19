@@ -17,7 +17,7 @@ import os
 import argparse
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
-from netCDF4 import Dataset
+import xarray as xr
 from obspy import UTCDateTime
 from pyproj import Transformer
 import logging
@@ -104,10 +104,10 @@ def load_topography(topo_ncfile):
         return None
 
     try:
-        topo_ds = Dataset(topo_ncfile, "r")
-        topo_heights = np.array(topo_ds.variables["z"])
-        topo_lons = np.array(topo_ds.variables["lon"])
-        topo_lats = np.array(topo_ds.variables["lat"])
+        topo_ds = xr.open_dataset(topo_ncfile, "r")
+        topo_heights = topo_ds["z"].values
+        topo_lons = topo_ds["lon"].values
+        topo_lats = topo_ds["lat"].values
         interpolator = RegularGridInterpolator((topo_lats, topo_lons), topo_heights)
         topo_ds.close()
         return interpolator
@@ -277,6 +277,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("cmt_file", help="Input CMTSOLUTION file")
     parser.add_argument("out_file", help="Output CMTSOLUTION file in ECEF")
+
+    parser.add_argument("cmt_file_list", help="list of input cmt files")
+    parser.add_argument("out_file_list", help="list of converted cmt files in ECEF")
+
     parser.add_argument(
         "--topo_ncfile",
         default=None,
@@ -286,9 +290,21 @@ def main():
     args = parser.parse_args()
     logger.info(f"Arguments: {args}")
 
-    # Validate input file
-    if not os.path.exists(args.cmt_file):
-        logger.error(f"Input CMTSOLUTION file not found: {args.cmt_file}")
+    if args.cmt_file_list and args.out_file_list:
+        try:
+            input_cmt_files = [line.strip() for line in open(args.cmt_file_list, 'r')]
+            output_cmt_files = [line.strip() for line in open(args.out_file_list, 'r')]
+        except Exception as e:
+            logger.warning("Error reading input/output CMTSOLUTION file lists")
+            logger.warning(str(e))
+        if len(input_cmt_files) != len(output_cmt_files):
+            logger.warning("Input/output CMTSOLUTION file lists have different length")
+            return 1
+    elif args.cmt_file and args.out_file:
+        input_cmt_files = [args.cmt_file]
+        output_cmt_files = [args.out_file]
+    else:
+        logger.warning("Please specify input/output CMTSOLUTION files")
         return 1
 
     # Load topography data if provided
@@ -296,56 +312,65 @@ def main():
     if args.topo_ncfile and not topo_interp:
         logger.warning("Failed to load topography data, continuing without it")
 
-    # Parse CMTSOLUTION file
-    try:
-        params = parse_cmt_file(args.cmt_file)
-    except Exception as e:
-        logger.error(f"Error parsing CMTSOLUTION file {args.cmt_file}: {e}")
-        return 1
+    # convert each CMTSOLUTION file
+    for input_cmt_file, output_cmt_file in zip(input_cmt_files, output_cmt_files):
 
-    # Calculate ECEF coordinates
-    try:
-        x, y, z = calculate_ecef_coordinates(
-            params["lat"], params["lon"], params["dep"], topo_interp
-        )
-    except Exception as e:
-        logger.error(f"Error calculating ECEF coordinates: {e}")
-        return 1
+        # Validate input file
+        if not os.path.exists(input_cmt_file):
+            logger.error(f"Input CMTSOLUTION file not found: {input_cmt_file}")
+            return 1
 
-    # Compute coordinate transformation matrix
-    try:
-        transformation_matrix = compute_coordinate_transformation(x, y, z)
-    except Exception as e:
-        logger.error(f"Error computing coordinate transformation: {e}")
-        return 1
+        # Parse CMTSOLUTION file
+        try:
+            params = parse_cmt_file(input_cmt_file)
+        except Exception as e:
+            logger.error(f"Error parsing CMTSOLUTION file {input_cmt_file}: {e}")
+            return 1
 
-    # Transform moment tensor
-    try:
-        mt_xyz = transform_moment_tensor(params["mt_rtp"], transformation_matrix)
-    except Exception as e:
-        logger.error(f"Error transforming moment tensor: {e}")
-        return 1
+        # Calculate ECEF coordinates
+        try:
+            x, y, z = calculate_ecef_coordinates(
+                params["lat"], params["lon"], params["dep"], topo_interp
+            )
+        except Exception as e:
+            logger.error(f"Error calculating ECEF coordinates: {e}")
+            return 1
 
-    # Calculate centroid time
-    try:
-        centroid_time = calculate_centroid_time(params)
-    except Exception as e:
-        logger.error(f"Error calculating centroid time: {e}")
-        return 1
+        # Compute coordinate transformation matrix
+        try:
+            transformation_matrix = compute_coordinate_transformation(x, y, z)
+        except Exception as e:
+            logger.error(f"Error computing coordinate transformation: {e}")
+            return 1
 
-    # Format header with centroid time
-    header_line = format_header_line(params, centroid_time)
+        # Transform moment tensor
+        try:
+            mt_xyz = transform_moment_tensor(params["mt_rtp"], transformation_matrix)
+        except Exception as e:
+            logger.error(f"Error transforming moment tensor: {e}")
+            return 1
 
-    # Write output file
-    try:
-        write_output_file(
-            args.out_file, header_line, params, x, y, z, mt_xyz, params["tau"]
-        )
-    except Exception as e:
-        logger.error(f"Error writing output file: {e}")
-        return 1
+        # Calculate centroid time
+        try:
+            centroid_time = calculate_centroid_time(params)
+        except Exception as e:
+            logger.error(f"Error calculating centroid time: {e}")
+            return 1
 
-    logger.info("Conversion completed successfully")
+        # Format header with centroid time
+        header_line = format_header_line(params, centroid_time)
+
+        # Write output file
+        try:
+            write_output_file(
+                output_cmt_file, header_line, params, x, y, z, mt_xyz, params["tau"]
+            )
+        except Exception as e:
+            logger.error(f"Error writing output file: {e}")
+            return 1
+
+        logger.info(f"Conversion completed successfully: {input_cmt_file} -> {output_cmt_file}")
+
     return 0
 
 

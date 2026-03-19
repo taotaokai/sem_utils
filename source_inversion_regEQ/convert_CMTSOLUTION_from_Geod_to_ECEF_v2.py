@@ -104,7 +104,7 @@ def load_topography(topo_ncfile):
         return None
 
     try:
-        topo_ds = xr.open_dataset(topo_ncfile, "r")
+        topo_ds = xr.open_dataset(topo_ncfile)
         topo_heights = topo_ds["z"].values
         topo_lons = topo_ds["lon"].values
         topo_lats = topo_ds["lat"].values

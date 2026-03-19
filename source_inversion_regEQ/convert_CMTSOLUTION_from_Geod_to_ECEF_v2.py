@@ -275,11 +275,11 @@ def write_output_file(out_file, header_line, params, x, y, z, mt_xyz, tau):
 def main():
     """Main function to convert CMTSOLUTION from geographic to ECEF coordinates."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("cmt_file", help="Input CMTSOLUTION file")
-    parser.add_argument("out_file", help="Output CMTSOLUTION file in ECEF")
+    parser.add_argument("--cmt_file", help="Input CMTSOLUTION file")
+    parser.add_argument("--out_file", help="Output CMTSOLUTION file in ECEF")
 
-    parser.add_argument("cmt_file_list", help="list of input cmt files")
-    parser.add_argument("out_file_list", help="list of converted cmt files in ECEF")
+    parser.add_argument("--cmt_file_list", help="list of input cmt files")
+    parser.add_argument("--out_file_list", help="list of converted cmt files in ECEF")
 
     parser.add_argument(
         "--topo_ncfile",

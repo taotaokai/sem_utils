@@ -12,10 +12,15 @@ zcomp_pattern: "[BH]HZ" # for matching files of Z component
 # location_code_priority: ['', '00', '01', '*']
 
 map_constraint:
+  type: 'rectangle'
   min_lat: 32 
   max_lat: 45
   min_lon: 20
   max_lon: 50
+  # type: 'circle'
+  # center_lat: 40.0
+  # center_lon: 40.0
+  # radius: 10  # degrees
 
 time_window:
   # specify the at least and at most time before first arrival

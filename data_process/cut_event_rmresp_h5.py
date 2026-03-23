@@ -51,6 +51,21 @@ _DEBUG = True
 _DEBUG = False
 
 
+def spheredist(lat0, lon0, lat1, lon1):
+    d2r = np.pi / 180.0
+    lat0, lon0 = lat0 * d2r, lon0 * d2r
+    lat1, lon1 = lat1 * d2r, lon1 * d2r
+    # v0 = [np.cos(lat0)*np.cos(lon0), np.cos(lat0)*np.sin(lon0), np.sin(lat0)]
+    # v1 = [np.cos(lat1)*np.cos(lon1), np.cos(lat1)*np.sin(lon1), np.sin(lat1)]
+    dist_degrees = np.rad2deg(
+        np.arccos(
+            np.sin(lat0) * np.sin(lat1)
+            + np.cos(lat0) * np.cos(lat1) * np.cos(lon1 - lon0)
+        )
+    )
+    return dist_degrees
+
+
 def merge_intervals(intervals: List[List[Any]]) -> List[List[Any]]:
     """
     Calculates the union of a list of intervals by merging overlapping or adjacent ones.
@@ -191,6 +206,23 @@ with open(config_yaml, "r") as file:
     config = yaml.safe_load(file)
 
 config_zcomp_pattern = config["zcomp_pattern"]
+
+def is_inside(lat, lon):
+    if "map_constraint" in config:
+        if config['map_constraint']['type'] == 'rectangle':
+            min_lat = config["map_constraint"]["min_lat"]
+            max_lat = config["map_constraint"]["max_lat"]
+            min_lon = config["map_constraint"]["min_lon"]
+            max_lon = config["map_constraint"]["max_lon"]
+            return min_lat <= lat <= max_lat and min_lon <= lon <= max_lon
+        elif config['map_constraint']['type'] == 'circle':
+            lat0 = config["map_constraint"]["center_lat"]
+            lon0 = config["map_constraint"]["center_lon"]
+            radius = config["map_constraint"]["radius"]
+            return spheredist(lat0, lon0, lat, lon) <= radius
+    else:
+        return True
+
 
 config_sampling_rate = config["resample"]["sampling_rate"]
 config_lowpass_N = config["resample"]["filter"]["N"]
@@ -377,23 +409,13 @@ for network, station, location, channel in nslc_filtered:
         # )
         continue
 
-    if "map_constraint" in config:
-        sta_lat = station_coords["latitude"]
-        sta_lon = station_coords["longitude"]
-        min_lat = config["map_constraint"]["min_lat"]
-        max_lat = config["map_constraint"]["max_lat"]
-        min_lon = config["map_constraint"]["min_lon"]
-        max_lon = config["map_constraint"]["max_lon"]
-        if (
-            sta_lat < min_lat
-            or sta_lat > max_lat
-            or sta_lon < min_lon
-            or sta_lon > max_lon
-        ):
-            logger.warning(
-                f"station {seed_id} is outside map constraint, station ignored. ({station_id})"
-            )
-            continue
+    sta_lat = station_coords["latitude"]
+    sta_lon = station_coords["longitude"]
+    if not is_inside(sta_lat, sta_lon):
+        logger.warning(
+            f"station {seed_id} is outside map constraint, station ignored. ({station_id})"
+        )
+        continue
 
     # calculate event-station distance
     dist, az, baz = geodetics.gps2dist_azimuth(
@@ -455,9 +477,7 @@ for network, station, location, channel in nslc_filtered:
     t1 = event_origin.time + min(time_after_origin)
     for tr in st:
         if tr.stats.starttime > t0 or tr.stats.endtime < t1:
-            logger.warning(
-                f"remove trace ({tr}) not covering {t0} - {t1}"
-            )
+            logger.warning(f"remove trace ({tr}) not covering {t0} - {t1}")
             traces_to_remove.append(tr)
     for tr in traces_to_remove:
         st.remove(tr)
@@ -475,9 +495,11 @@ for network, station, location, channel in nslc_filtered:
         if len(st1) > 1:
             # print(f"{st1.__str__(extended=True)}")
             # print(f"[WARN] gaps/overlaps found, {st1[0].id} ignored. ({station_id})\n")
-            logger.warning(f"{st1[0].id}: multiple traces covering time span {t0} -- {t1}")
+            logger.warning(
+                f"{st1[0].id}: multiple traces covering time span {t0} -- {t1}"
+            )
             logger.debug(f"{st1.__str__(extended=True)}")
-            lengths = [ (tr.stats.endtime - tr.stats.starttime, tr) for tr in st1]
+            lengths = [(tr.stats.endtime - tr.stats.starttime, tr) for tr in st1]
             sorted_lengths = sorted(lengths, key=lambda x: x[0], reverse=True)
             for _, tr in sorted_lengths[1:]:
                 st.remove(tr)

@@ -42,7 +42,7 @@ import re
 import warnings
 import logging
 from datetime import timedelta
-
+from typing import List, Any
 import numpy as np
 
 from obspy import Stream, read, UTCDateTime
@@ -61,6 +61,42 @@ SDS_FMTSTR = os.path.join(
 # to match placeholders e.g. '{name}' or '{name:format}' e.g. '{doy:03d}', {network!s}
 # and put 'name' into group
 FORMAT_STR_PLACEHOLDER_REGEX = r"{(\w+?)?([!:].*?)?}"
+
+
+def _merge_intervals(intervals: List[List[Any]]) -> List[List[Any]]:
+    """
+    Calculates the union of a list of intervals by merging overlapping or adjacent ones.
+
+    Args:
+        intervals: A list of intervals, e.g., [[1, 3], [2, 6], [8, 10]].
+
+    Returns:
+        A new list of non-overlapping intervals representing the union.
+    """
+    if not intervals:
+        return []
+
+    # 1. Sort the intervals by their start time
+    sorted_intervals = sorted(intervals, key=lambda i: i[0])
+
+    # 2. Initialize the merged list with the first interval
+    merged = [sorted_intervals[0]]
+
+    # 3. Iterate through the rest of the sorted intervals
+    for start, end in sorted_intervals[1:]:
+        # Get the end time of the last merged interval
+        last_end = merged[-1][1]
+
+        # 4. Check for overlap or adjacency
+        if start <= last_end:
+            # Overlap/adjacency found, merge by updating the end time
+            # with the maximum of the current end or the new interval's end
+            merged[-1][1] = max(last_end, end)
+        else:
+            # No overlap, add the new interval to the merged list
+            merged.append([start, end])
+
+    return merged
 
 
 class Client(object):
@@ -209,7 +245,7 @@ class Client(object):
             starttime=starttime,
             endtime=endtime,
             sds_type=sds_type,
-            existed_only=True,
+            exists_only=True,  # only return files actually exist
         )
         for full_path in full_paths:
             try:
@@ -281,7 +317,7 @@ class Client(object):
         starttime,
         endtime,
         sds_type=None,
-        existed_only=False,
+        exists_only=False,
     ):
         """
         Get list of filenames for certain waveform and time span.
@@ -301,8 +337,8 @@ class Client(object):
         :type sds_type: str
         :param sds_type: Override SDS data type identifier that was specified
             during client initialization.
-        :type existed_only: bool
-        :param existed_only: only return files which are actually existed.
+        :type exists_only: bool
+        :param exists_only: only return files which are actually existed.
         :rtype: list[str]
         """
         sds_type = sds_type or self.sds_type
@@ -337,10 +373,13 @@ class Client(object):
                 sds_type=sds_type,
             )
             full_path = os.path.join(self.sds_root, filename)
-            if existed_only:
-                full_paths = full_paths.union(glob.glob(full_path))
+            if exists_only:
+                # # NOTE use union because glob returns a list
+                # full_paths = full_paths.union(glob.glob(full_path))
+                if os.path.isfile(full_path):
+                    full_paths.add(full_path)
             else:
-                full_paths = full_paths.union(full_path)
+                full_paths.add(full_path)
 
         return full_paths
 
@@ -459,16 +498,26 @@ class Client(object):
         # return (1 - (gap_sum / total_duration), gap_count)
 
         gaps = []
+        intervals_exist = []
         if st:
-            existing_intervals = [(tr.stats.starttime, tr.stats.endtime) for tr in st]
-            existing_intervals = sorted(existing_intervals, key=lambda x: x[0])
+            record_intervals = [(tr.stats.starttime, tr.stats.endtime) for tr in st]
+            record_intervals = _merge_intervals(record_intervals)
             dt = min([tr.stats.delta for tr in st])
             b = starttime
-            for w in existing_intervals:
+            for w in record_intervals:
+                # skip non-overlapping record intervals
                 if w[1] < starttime:
                     continue
                 if w[0] > endtime:
                     break
+                # add intervals with record
+                if w[0] < starttime:
+                    intervals_exist.append((starttime, w[1]))
+                elif w[1] > endtime:
+                    intervals_exist.append((w[0], endtime))
+                else:
+                    intervals_exist.append(w)
+                # add gaps
                 if w[0] > b + dt:
                     gaps.append((b, min(w[0], endtime)))
                 b = w[1]
@@ -483,7 +532,7 @@ class Client(object):
         gap_sum = np.sum([w[1] - w[0] for w in gaps])
         total_duration = endtime - starttime
 
-        return (1 - (gap_sum / total_duration), gap_count, gaps)
+        return 1 - (gap_sum / total_duration), gap_count, gaps, intervals_exist
 
     def _get_current_endtime(
         self,
@@ -841,8 +890,9 @@ class Client(object):
         try:
             read(mseed_file, format="MSEED", headonly=True)
         except Exception as err:
-            msg = f"{mseed_file} is not a mseed file. Error: {err})"
+            msg = f"{mseed_file} is not a mseed file."
             self.logger.warning(msg)
+            self.logger.debug(err)
             return
 
         sds_type = sds_type or self.sds_type

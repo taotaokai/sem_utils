@@ -93,7 +93,7 @@ def download_mseed_bulk(client, client_name, chunks, logger):
             else:
                 logger.warning(f"Client {client_name} - downloaded file is not valid mseed file")
         except Exception as e:
-            logger.warning(f"Client {client_name} - Failed to downloaded ({e})")
+            logger.warning(f"Client {client_name} - Failed to download ({e})")
     return mseed_bytes
 
 

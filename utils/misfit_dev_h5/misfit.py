@@ -1408,7 +1408,7 @@ class Misfit(object):
         Write out CMTSOLUTION file
         """
         with pt.open_file(self.h5_path, "r") as h5f:
-            src_path = f"/source"
+            src_path = "/source"
             if src_path not in h5f:
                 msg = "no source information"
                 raise ValueError(msg)

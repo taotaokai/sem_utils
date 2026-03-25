@@ -92,6 +92,7 @@ for evt in events:
         # network="Z3", station="D159", location="00", channel="HHZ",
         # network="BQ", station="DREG", location="", channel="HHZ",
         # network="BQ", location="", # channel="HHZ",
+        channel="BH?,HH?",
         channel_priorities=["HH[ZNE12]", "BH[ZNE12]"],
         # location_priorities=["", "00", "10"]
         )

@@ -11,6 +11,7 @@ it understandable in the first place.
     GNU Lesser General Public License, Version 3
     (https://www.gnu.org/copyleft/lesser.html)
 """
+
 import collections
 import copy
 import fnmatch
@@ -25,6 +26,7 @@ import numpy as np
 from lxml.etree import XMLSyntaxError
 
 import obspy
+from obspy.clients.fdsn.client import Client
 from obspy.core.util import Enum
 
 from . import utils
@@ -34,9 +36,18 @@ from obspy.core.util.base import NamedTemporaryFile
 # from obspy.clients.filesystem import sds
 
 #: The current status of an entity.
-STATUS = Enum(["none", "needs_downloading", "downloaded", "ignore", "exists",
-               "download_failed", "download_rejected",
-               "download_partially_failed"])
+STATUS = Enum(
+    [
+        "none",
+        "needs_downloading",
+        "downloaded",
+        "ignore",
+        "exists",
+        "download_failed",
+        "download_rejected",
+        "download_partially_failed",
+    ]
+)
 
 
 class _SlotsEqualityComparisionObject(object):
@@ -44,13 +55,13 @@ class _SlotsEqualityComparisionObject(object):
     Helper object with an equality comparision method simply comparing all
     slotted attributes.
     """
+
     __slots__ = []
 
     def __eq__(self, other):
         if type(self) is not type(other):
             return False
-        return all([getattr(self, _i) == getattr(other, _i)
-                    for _i in self.__slots__])
+        return all([getattr(self, _i) == getattr(other, _i) for _i in self.__slots__])
 
 
 class Station(_SlotsEqualityComparisionObject):
@@ -75,13 +86,30 @@ class Station(_SlotsEqualityComparisionObject):
     :param stationxml_status: The current status of the station.
     :type stationxml_status: :py:attr:`~.STATUS`
     """
-    __slots__ = ["network", "station", "latitude", "longitude", "channels",
-                 "_stationxml_filename", "want_station_information",
-                 "miss_station_information", "have_station_information",
-                 "stationxml_status"]
 
-    def __init__(self, network, station, latitude, longitude, channels,
-                 stationxml_filename=None, stationxml_status=None):
+    __slots__ = [
+        "network",
+        "station",
+        "latitude",
+        "longitude",
+        "channels",
+        "_stationxml_filename",
+        "want_station_information",
+        "miss_station_information",
+        "have_station_information",
+        "stationxml_status",
+    ]
+
+    def __init__(
+        self,
+        network,
+        station,
+        latitude,
+        longitude,
+        channels,
+        stationxml_filename=None,
+        stationxml_status=None,
+    ):
         # Station attributes.
         self.network = network
         self.station = station
@@ -116,6 +144,18 @@ class Station(_SlotsEqualityComparisionObject):
         return False
 
     @property
+    def has_all_intervals_downloaded(self):
+        """
+        Returns true if all of the station's time intervals have status
+        "DOWNLOADED".
+        """
+        for chan in self.channels:
+            for ti in chan.intervals:
+                if ti.status != STATUS.DOWNLOADED:
+                    return False
+        return True
+
+    @property
     def has_existing_time_intervals(self):
         """
         Returns True if any of the station's time intervals already exist.
@@ -136,15 +176,21 @@ class Station(_SlotsEqualityComparisionObject):
                 if ti.status != STATUS.DOWNLOADED or not ti.filename:
                     continue
                 if os.path.exists(ti.filename):
-                    logger.info("Deleting MiniSEED file '%s'. Reason: %s" % (
-                        ti.filename, reason))
+                    logger.info(
+                        "Deleting MiniSEED file '%s'. Reason: %s"
+                        % (ti.filename, reason)
+                    )
                     utils.safe_delete(ti.filename)
 
-        if self.stationxml_status == STATUS.DOWNLOADED and \
-                self.stationxml_filename and \
-                os.path.exists(self.stationxml_filename):
-            logger.info("Deleting StationXMl file '%s'. Reason: %s" %
-                        (self.stationxml_filename, reason))
+        if (
+            self.stationxml_status == STATUS.DOWNLOADED
+            and self.stationxml_filename
+            and os.path.exists(self.stationxml_filename)
+        ):
+            logger.info(
+                "Deleting StationXMl file '%s'. Reason: %s"
+                % (self.stationxml_filename, reason)
+            )
             utils.safe_delete(self.stationxml_filename)
 
     @property
@@ -173,9 +219,11 @@ class Station(_SlotsEqualityComparisionObject):
         endtimes = []
         for channel in self.channels:
             s, e = channel.temporal_bounds
-            #KTAO: in case s,e is None
-            if s: starttimes.append(s)
-            if e: endtimes.append(e)
+            # KTAO: in case s,e is None
+            if s:
+                starttimes.append(s)
+            if e:
+                endtimes.append(e)
         return min(starttimes), max(endtimes)
 
     def __str__(self):
@@ -194,15 +242,29 @@ class Station(_SlotsEqualityComparisionObject):
             lat=self.latitude,
             lng=self.longitude,
             filename=self.stationxml_filename,
-            status="exists" if (self.stationxml_filename and os.path.exists(
-                self.stationxml_filename)) else "does not yet exist",
-            want=", ".join(["%s.%s" % (_i[0], _i[1]) for _i in
-                            self.want_station_information.keys()]),
-            has=", ".join(["%s.%s" % (_i[0], _i[1]) for _i in
-                          self.have_station_information.keys()]),
-            miss=", ".join(["%s.%s" % (_i[0], _i[1]) for _i in
-                           self.miss_station_information.keys()]),
-            channels=channels)
+            status="exists"
+            if (self.stationxml_filename and os.path.exists(self.stationxml_filename))
+            else "does not yet exist",
+            want=", ".join(
+                [
+                    "%s.%s" % (_i[0], _i[1])
+                    for _i in self.want_station_information.keys()
+                ]
+            ),
+            has=", ".join(
+                [
+                    "%s.%s" % (_i[0], _i[1])
+                    for _i in self.have_station_information.keys()
+                ]
+            ),
+            miss=", ".join(
+                [
+                    "%s.%s" % (_i[0], _i[1])
+                    for _i in self.miss_station_information.keys()
+                ]
+            ),
+            channels=channels,
+        )
 
     def prepare_stationxml_download(self, stationxml_storage, logger):
         """
@@ -217,8 +279,9 @@ class Station(_SlotsEqualityComparisionObject):
         for channel in self.channels:
             if channel.needs_station_file is False:
                 continue
-            self.want_station_information[
-                (channel.location, channel.channel)] = channel.temporal_bounds
+            self.want_station_information[(channel.location, channel.channel)] = (
+                channel.temporal_bounds
+            )
 
         # No channel has any data, thus nothing will happen.
         if not self.want_station_information:
@@ -229,9 +292,13 @@ class Station(_SlotsEqualityComparisionObject):
         # will be treated in the following.
         s, e = self.temporal_bounds
         storage = utils.get_stationxml_filename(
-            stationxml_storage, self.network, self.station,
+            stationxml_storage,
+            self.network,
+            self.station,
             list(self.want_station_information.keys()),
-            starttime=s, endtime=e)
+            starttime=s,
+            endtime=e,
+        )
 
         # The simplest case. The function returns a string. Now two things
         # can happen.
@@ -241,8 +308,9 @@ class Station(_SlotsEqualityComparisionObject):
             # 1. The file does not yet exist. Thus all channels must be
             # downloaded.
             if not os.path.exists(filename):
-                self.miss_station_information = \
-                    copy.deepcopy(self.want_station_information)
+                self.miss_station_information = copy.deepcopy(
+                    self.want_station_information
+                )
                 self.have_station_information = {}
                 self.stationxml_status = STATUS.NEEDS_DOWNLOADING
                 return
@@ -253,11 +321,14 @@ class Station(_SlotsEqualityComparisionObject):
                 info = utils.get_stationxml_contents(filename)
                 for c_id, times in self.want_station_information.items():
                     # Get the temporal range of information in the file.
-                    c_info = [_i for _i in info if
-                              _i.network == self.network and
-                              _i.station == self.station and
-                              _i.location == c_id[0] and
-                              _i.channel == c_id[1]]
+                    c_info = [
+                        _i
+                        for _i in info
+                        if _i.network == self.network
+                        and _i.station == self.station
+                        and _i.location == c_id[0]
+                        and _i.channel == c_id[1]
+                    ]
                     if not c_info:
                         break
                     starttime = min([_i.starttime for _i in c_info])
@@ -266,14 +337,16 @@ class Station(_SlotsEqualityComparisionObject):
                         break
                 # All good if no break is called.
                 else:
-                    self.have_station_information = \
-                        copy.deepcopy(self.want_station_information)
+                    self.have_station_information = copy.deepcopy(
+                        self.want_station_information
+                    )
                     self.miss_station_information = {}
                     self.stationxml_status = STATUS.EXISTS
                     return
                 # Otherwise everything will be downloaded.
-                self.miss_station_information = \
-                    copy.deepcopy(self.want_station_information)
+                self.miss_station_information = copy.deepcopy(
+                    self.want_station_information
+                )
                 self.have_station_information = {}
                 self.stationxml_status = STATUS.NEEDS_DOWNLOADING
                 return
@@ -294,16 +367,18 @@ class Station(_SlotsEqualityComparisionObject):
             for channel in missing_channels:
                 if channel not in channels_wanting_station_information:
                     continue
-                self.miss_station_information[channel] = \
+                self.miss_station_information[channel] = (
                     channels_wanting_station_information[channel]
+                )
 
             # Same thing but with the already available channels.
             self.have_station_information = {}
             for channel in available_channels:
                 if channel not in channels_wanting_station_information:
                     continue
-                self.have_station_information[channel] = \
+                self.have_station_information[channel] = (
                     channels_wanting_station_information[channel]
+                )
 
             self.stationxml_filename = storage["filename"]
 
@@ -315,20 +390,19 @@ class Station(_SlotsEqualityComparisionObject):
             if have_channels.union(miss_channels) != want_channels:
                 logger.warning(
                     "The custom `stationxml_storage` did not return "
-                    "information about channels %s" %
-                    str(want_channels.difference(have_channels.union(
-                        miss_channels))))
+                    "information about channels %s"
+                    % str(want_channels.difference(have_channels.union(miss_channels)))
+                )
 
             if self.miss_station_information:
                 self.stationxml_status = STATUS.NEEDS_DOWNLOADING
-            elif not self.miss_station_information and \
-                    self.have_station_information:
+            elif not self.miss_station_information and self.have_station_information:
                 self.stationxml_status = STATUS.EXISTS
             else:
                 self.stationxml_status = STATUS.IGNORE
 
     # def prepare_mseed_download(self, mseed_storage):
-    def prepare_mseed_download(self, sds_client, logger): # KTAO: add logger
+    def prepare_mseed_download(self, sds_client, logger):  # KTAO: add logger
         """
         Loop through all channels of the station and distribute filenames
         and the current status of the channel.
@@ -342,20 +416,50 @@ class Station(_SlotsEqualityComparisionObject):
         :param logger:
         """
         for channel in self.channels:
-            channel_id = f'{self.network}.{self.station}.{channel.location}.{channel.channel}'
-            logger.debug(f'{channel_id}: prepare_mseed_download - old_intervals - {channel.intervals}') #KTAO: add
-            new_intervals = [] # KTAO: only keep intervals not in the SDS archive
+            channel_id = (
+                f"{self.network}.{self.station}.{channel.location}.{channel.channel}"
+            )
+            logger.debug(
+                f"{channel_id}: prepare_mseed_download - old_intervals - {channel.intervals}"
+            )  # KTAO: add
+            new_intervals = []  # KTAO: only keep intervals not in the SDS archive
             for interval in channel.intervals:
-                _, _, gaps = sds_client.get_availability_percentage(self.network, self.station,
-                    channel.location, channel.channel, interval.start, interval.end)
-                # print(f'[DEBUG] prepare_mseed_download: ', gaps)
-                # logger.debug(f'prepare_mseed_download: gaps: {gaps}')
+                _, _, gaps, existing_intervals = sds_client.get_availability_percentage(
+                    self.network,
+                    self.station,
+                    channel.location,
+                    channel.channel,
+                    interval.start,
+                    interval.end,
+                )
                 for b, e in gaps:
-                    files = sds_client._get_filenames(self.network, self.station,
-                                                      channel.location, channel.channel, b, e)
-                    new_intervals.append(TimeInterval(b, e, files, STATUS.NEEDS_DOWNLOADING))
-            logger.debug(f'{channel_id}: prepare_mseed_download - new_intervals - {new_intervals}')
-            channel.intervals = new_intervals # replace with intervals not in SDS archive
+                    files = sds_client._get_filenames(
+                        self.network,
+                        self.station,
+                        channel.location,
+                        channel.channel,
+                        b,
+                        e,
+                    )
+                    new_intervals.append(
+                        TimeInterval(b, e, files, STATUS.NEEDS_DOWNLOADING)
+                    )
+                for b, e in existing_intervals:
+                    files = sds_client._get_filenames(
+                        self.network,
+                        self.station,
+                        channel.location,
+                        channel.channel,
+                        b,
+                        e,
+                    )
+                    new_intervals.append(TimeInterval(b, e, files, STATUS.EXISTS))
+            logger.debug(
+                f"{channel_id}: prepare_mseed_download - new_intervals - {new_intervals}"
+            )
+            channel.intervals = (
+                new_intervals  # replace with intervals not in SDS archive
+            )
 
     def sanitize_downloads(self, logger):
         """
@@ -368,30 +472,35 @@ class Station(_SlotsEqualityComparisionObject):
         data.
         """
         from obspy.io.mseed.util import get_start_and_end_time
+
         # All or nothing for each channel.
         for id in self.miss_station_information.keys():
-            logger.warning("Station information could not be downloaded for "
-                           "%s.%s.%s.%s. MiniSEED files outside of the "
-                           "station information period "
-                           "will be deleted!" % (
-                               self.network, self.station, id[0], id[1]))
-            channel = [_i for _i in self.channels if
-                       (_i.location, _i.channel) == id][0]
+            logger.warning(
+                "Station information could not be downloaded for "
+                "%s.%s.%s.%s. MiniSEED files outside of the "
+                "station information period "
+                "will be deleted!" % (self.network, self.station, id[0], id[1])
+            )
+            channel = [_i for _i in self.channels if (_i.location, _i.channel) == id][0]
             for time_interval in channel.intervals:
                 # Check that file exists before proceeding
-                if not time_interval.filename or \
-                        not os.path.isfile(time_interval.filename):
+                if not time_interval.filename or not os.path.isfile(
+                    time_interval.filename
+                ):
                     continue
                 # Check that the time_interval.start and end are correct!
-                time_interval.start, time_interval.end = \
-                    get_start_and_end_time(time_interval.filename)
+                time_interval.start, time_interval.end = get_start_and_end_time(
+                    time_interval.filename
+                )
                 # Only delete downloaded things!
                 if time_interval.status == STATUS.DOWNLOADED:
                     # Only delete if the station data are actually missing
                     # for this time
                     miss_start, miss_end = self.miss_station_information[id]
-                    if miss_start <= time_interval.start <= miss_end and \
-                       miss_start <= time_interval.end <= miss_end:
+                    if (
+                        miss_start <= time_interval.start <= miss_end
+                        and miss_start <= time_interval.end <= miss_end
+                    ):
                         utils.safe_delete(time_interval.filename)
                         time_interval.status = STATUS.DOWNLOAD_REJECTED
 
@@ -401,6 +510,7 @@ class Channel(_SlotsEqualityComparisionObject):
     Object representing a Channel. Each time interval should end up in one
     MiniSEED file.
     """
+
     __slots__ = ["location", "channel", "intervals"]
 
     def __init__(self, location, channel, intervals):
@@ -430,15 +540,19 @@ class Channel(_SlotsEqualityComparisionObject):
         """
         # KTAO: take care when intervals list is empty
         if self.intervals:
-            return (min([_i.start for _i in self.intervals]),
-                max([_i.end for _i in self.intervals]))
+            return (
+                min([_i.start for _i in self.intervals]),
+                max([_i.end for _i in self.intervals]),
+            )
         else:
             return (None, None)
 
     def __str__(self):
         return "Channel '{location}.{channel}':\n\t{intervals}".format(
-            location=self.location, channel=self.channel,
-            intervals="\n\t".join([str(i) for i in self.intervals]))
+            location=self.location,
+            channel=self.channel,
+            intervals="\n\t".join([str(i) for i in self.intervals]),
+        )
 
 
 class TimeInterval(_SlotsEqualityComparisionObject):
@@ -457,6 +571,7 @@ class TimeInterval(_SlotsEqualityComparisionObject):
     :param status: The status of the time interval.
     :param status: :py:attr:`~.STATUS`
     """
+
     __slots__ = ["start", "end", "filename", "status"]
 
     def __init__(self, start, end, filename=None, status=None):
@@ -466,15 +581,17 @@ class TimeInterval(_SlotsEqualityComparisionObject):
         self.status = status if status is not None else STATUS.NONE
 
     def __repr__(self):
-        return "TimeInterval(start={start}, end={end}, filename={filename}, " \
-               "status='{status}')".format(
-                   # start=repr(self.start),
-                   # end=repr(self.end),
-                   start=self.start.isoformat(),
-                   end=self.end.isoformat(),
-                   filename="'%s'" % self.filename
-                   if self.filename is not None else "None",
-                   status=str(self.status))
+        return (
+            "TimeInterval(start={start}, end={end}, filename={filename}, "
+            "status='{status}')".format(
+                # start=repr(self.start),
+                # end=repr(self.end),
+                start=self.start.isoformat(),
+                end=self.end.isoformat(),
+                filename="%s" % self.filename if self.filename is not None else "None",
+                status=str(self.status),
+            )
+        )
 
 
 class ClientDownloadHelper(object):
@@ -491,8 +608,17 @@ class ClientDownloadHelper(object):
     :param stationxml_storage: The StationXML storage settings.
     :param logger: An active logger instance.
     """
-    def __init__(self, client, client_name, restrictions, domain,
-                 mseed_storage, stationxml_storage, logger):
+
+    def __init__(
+        self,
+        client: Client,
+        client_name,
+        restrictions,
+        domain,
+        mseed_storage,
+        stationxml_storage,
+        logger,
+    ):
         self.client = client
         self.client_name = client_name
         self.restrictions = restrictions
@@ -503,9 +629,9 @@ class ClientDownloadHelper(object):
         self.stations = {}
         self.is_availability_reliable = None
         if not os.path.exists(mseed_storage):
-            raise ValueError(f'{mseed_storage} does not exist!')
+            raise ValueError(f"{mseed_storage} does not exist!")
         elif not os.path.isdir(mseed_storage):
-            raise ValueError(f'{mseed_storage} is not a directory!')
+            raise ValueError(f"{mseed_storage} is not a directory!")
         self.sds_client = sds.Client(self.mseed_storage, logger=logger)
 
     def __bool__(self):
@@ -515,18 +641,20 @@ class ClientDownloadHelper(object):
         avail_map = {
             None: "Unknown reliability of availability information",
             True: "Reliable availability information",
-            False: "Non-reliable availability information"
+            False: "Non-reliable availability information",
         }
         reliability = avail_map[self.is_availability_reliable]
         return (
             "ClientDownloadHelper object for client '{client}' ({url})\n"
             "-> {reliability}\n"
-            "-> Manages {station_count} stations.\n{stations}").format(
-                client=self.client_name,
-                url=self.client.base_url,
-                reliability=reliability,
-                station_count=len(self),
-                stations="\n".join([str(_i) for _i in self.stations.values()]))
+            "-> Manages {station_count} stations.\n{stations}"
+        ).format(
+            client=self.client_name,
+            url=self.client.base_url,
+            reliability=reliability,
+            station_count=len(self),
+            stations="\n".join([str(_i) for _i in self.stations.values()]),
+        )
 
     def __len__(self):
         return len(self.stations)
@@ -540,10 +668,11 @@ class ClientDownloadHelper(object):
         """
         for station in self.stations.values():
             # station.prepare_mseed_download(mseed_storage=self.mseed_storage, logger=self.logger)
-            station.prepare_mseed_download(sds_client=self.sds_client, logger=self.logger)
+            station.prepare_mseed_download(
+                sds_client=self.sds_client, logger=self.logger
+            )
 
-    def filter_stations_based_on_minimum_distance(
-            self, existing_client_dl_helpers):
+    def filter_stations_based_on_minimum_distance(self, existing_client_dl_helpers):
         """
         Removes stations until all stations have a certain minimum distance to
         each other.
@@ -579,23 +708,27 @@ class ClientDownloadHelper(object):
             # the minimum distance.
             kd_tree = utils.SphericalNearestNeighbour(stations)
             nns = kd_tree.query_pairs(
-                self.restrictions.minimum_interstation_distance_in_m)
+                self.restrictions.minimum_interstation_distance_in_m
+            )
 
             indexes_to_remove = []
             # Keep removing the station with the most pairs until no pairs are
             # left.
             while nns:
                 most_common = collections.Counter(
-                    itertools.chain.from_iterable(nns)).most_common()[0][0]
+                    itertools.chain.from_iterable(nns)
+                ).most_common()[0][0]
                 indexes_to_remove.append(most_common)
                 nns = list(filterfalse(lambda x: most_common in x, nns))
 
             # Remove these indices this results in a set of stations we wish to
             # keep.
-            new_remaining_stations = [_i[1] for _i in enumerate(stations)
-                                      if _i[0] not in indexes_to_remove]
-            new_rejected_stations = [_i[1] for _i in enumerate(stations)
-                                     if _i[0] in indexes_to_remove]
+            new_remaining_stations = [
+                _i[1] for _i in enumerate(stations) if _i[0] not in indexes_to_remove
+            ]
+            new_rejected_stations = [
+                _i[1] for _i in enumerate(stations) if _i[0] in indexes_to_remove
+            ]
 
             # Station objects are not hashable thus we have to go the long
             # route.
@@ -612,8 +745,7 @@ class ClientDownloadHelper(object):
         else:
             while stations:
                 # kd-tree with all existing_stations
-                existing_kd_tree = utils.SphericalNearestNeighbour(
-                    existing_stations)
+                existing_kd_tree = utils.SphericalNearestNeighbour(existing_stations)
                 # Now we have to get the distance to the closest existing
                 # station for all new stations.
                 distances = np.ma.array(existing_kd_tree.query(stations)[0])
@@ -624,13 +756,13 @@ class ClientDownloadHelper(object):
                 # Step one is to get rid of all stations that are closer
                 # than the minimum distance to any existing station.
                 remove = np.where(
-                    distances <
-                    self.restrictions.minimum_interstation_distance_in_m)[0]
+                    distances < self.restrictions.minimum_interstation_distance_in_m
+                )[0]
                 rejected_stations.extend([stations[_i] for _i in remove])
 
                 keep = np.where(
-                    distances >=
-                    self.restrictions.minimum_interstation_distance_in_m)[0]
+                    distances >= self.restrictions.minimum_interstation_distance_in_m
+                )[0]
                 distances.mask[remove] = True
 
                 if len(keep):
@@ -647,8 +779,9 @@ class ClientDownloadHelper(object):
         # Now actually delete the files and everything of the rejected
         # stations.
         for station in rejected_stations:
-            station.remove_files(logger=self.logger,
-                                 reason="Minimum distance filtering.")
+            station.remove_files(
+                logger=self.logger, reason="Minimum distance filtering."
+            )
         self.stations = {}
         for station in remaining_stations:
             self.stations[(station.network, station.station)] = station
@@ -665,8 +798,8 @@ class ClientDownloadHelper(object):
         """
         for station in self.stations.values():
             station.prepare_stationxml_download(
-                stationxml_storage=self.stationxml_storage,
-                logger=self.logger)
+                stationxml_storage=self.stationxml_storage, logger=self.logger
+            )
 
     def download_stationxml(self, threads=3):
         """
@@ -698,14 +831,25 @@ class ClientDownloadHelper(object):
                 s = self.restrictions.station_starttime
             if self.restrictions.station_endtime:
                 e = self.restrictions.station_endtime
-            bulk = [(station.network, station.station, channel.location,
-                     channel.channel, s, e) for channel in station.channels]
-            arguments.append((self.client, self.client_name, bulk,
-                              station.stationxml_filename))
+            bulk = [
+                (
+                    station.network,
+                    station.station,
+                    channel.location,
+                    channel.channel,
+                    s,
+                    e,
+                )
+                for channel in station.channels
+            ]
+            arguments.append(
+                (self.client, self.client_name, bulk, station.stationxml_filename)
+            )
 
         if not arguments:
-            self.logger.info("Client '%s' - No station information to "
-                             "download." % self.client_name)
+            self.logger.info(
+                "Client '%s' - No station information to download." % self.client_name
+            )
             return
 
         # Download it.
@@ -737,7 +881,8 @@ class ClientDownloadHelper(object):
             except XMLSyntaxError:
                 self.logger.info(
                     "Client '%s' - File %s is not an XML file - it will be "
-                    "deleted." % (self.client_name, filename))
+                    "deleted." % (self.client_name, filename)
+                )
                 utils.safe_delete(filename)
                 continue
 
@@ -747,11 +892,14 @@ class ClientDownloadHelper(object):
             # requested to be downloaded.
             for c_id, times in station.miss_station_information.items():
                 # Get the temporal range of information in the file.
-                c_info = [_i for _i in info if
-                          _i.network == station.network and
-                          _i.station == station.station and
-                          _i.location == c_id[0] and
-                          _i.channel == c_id[1]]
+                c_info = [
+                    _i
+                    for _i in info
+                    if _i.network == station.network
+                    and _i.station == station.station
+                    and _i.location == c_id[0]
+                    and _i.channel == c_id[1]
+                ]
                 if not c_info:
                     continue
                 starttime = min([_i.starttime for _i in c_info])
@@ -760,12 +908,10 @@ class ClientDownloadHelper(object):
                     # Cope with case that not full day of station info missing
                     if starttime < times[1]:
                         still_missing[c_id] = (times[0], starttime)
-                        station.have_station_information[c_id] = (starttime,
-                                                                  times[1])
+                        station.have_station_information[c_id] = (starttime, times[1])
                     elif endtime > times[0]:
                         still_missing[c_id] = (endtime, times[1])
-                        station.have_station_information[c_id] = (times[0],
-                                                                  endtime)
+                        station.have_station_information[c_id] = (times[0], endtime)
                     else:
                         still_missing[c_id] = times
                     continue
@@ -783,12 +929,17 @@ class ClientDownloadHelper(object):
             if station.stationxml_status == STATUS.NEEDS_DOWNLOADING:
                 station.stationxml_status = STATUS.DOWNLOAD_FAILED
 
-        self.logger.info("Client '%s' - Downloaded %i station files [%.1f MB] "
-                         "in %.1f seconds [%.2f KB/sec]." % (
-                             self.client_name, filecount,
-                             download_size / 1024.0 ** 2,
-                             e_time - s_time,
-                             (download_size / 1024.0) / (e_time - s_time)))
+        self.logger.info(
+            "Client '%s' - Downloaded %i station files [%.1f MB] "
+            "in %.1f seconds [%.2f KB/sec]."
+            % (
+                self.client_name,
+                filecount,
+                download_size / 1024.0**2,
+                e_time - s_time,
+                (download_size / 1024.0) / (e_time - s_time),
+            )
+        )
 
     def download_mseed(self, chunk_size_in_mb=25, threads_per_client=3):
         """
@@ -801,10 +952,25 @@ class ClientDownloadHelper(object):
         """
         # Estimate the download size to have equally sized chunks.
         channel_sampling_rate = {
-            "F": 5000, "G": 5000, "D": 1000, "C": 1000, "E": 250, "S": 80,
-            "H": 250, "B": 80, "M": 10, "L": 1, "V": 0.1, "U": 0.01,
-            "R": 0.001, "P": 0.0001, "T": 0.00001, "Q": 0.000001, "A": 5000,
-            "O": 5000}
+            "F": 5000,
+            "G": 5000,
+            "D": 1000,
+            "C": 1000,
+            "E": 250,
+            "S": 80,
+            "H": 250,
+            "B": 80,
+            "M": 10,
+            "L": 1,
+            "V": 0.1,
+            "U": 0.01,
+            "R": 0.001,
+            "P": 0.0001,
+            "T": 0.00001,
+            "Q": 0.000001,
+            "A": 5000,
+            "O": 5000,
+        }
 
         counter = collections.Counter()
 
@@ -828,8 +994,15 @@ class ClientDownloadHelper(object):
                     if interval.status != STATUS.NEEDS_DOWNLOADING:
                         continue
                     request = (
-                        sta.network, sta.station, cha.location, cha.channel,
-                        interval.start, interval.end, interval.filename, sr)
+                        sta.network,
+                        sta.station,
+                        cha.location,
+                        cha.channel,
+                        interval.start,
+                        interval.end,
+                        interval.filename,
+                        sr,
+                    )
                     requests.append(request)
 
         self.logger.debug(f"download_mseed: requests = {requests}")
@@ -846,8 +1019,8 @@ class ClientDownloadHelper(object):
             groups.append(curr_group)
             requests = [req for req in requests if req not in curr_group]
 
-        for i, group in enumerate(groups):
-            self.logger.debug(f"download_mseed: groups[{i}] = {group}")
+        # for i, group in enumerate(groups):
+        #     self.logger.debug(f"download_mseed: groups[{i}] = {group}")
 
         # KTAO: merge request groups into chunks
         chunks = []
@@ -864,23 +1037,22 @@ class ClientDownloadHelper(object):
                 duration = request[5] - request[4]
                 sr = request[7]
                 curr_chunk_mb += sr * duration * 4.0 / 3.0 / 1024.0 / 1024.0
-            if curr_chunk_mb >= chunk_size_in_mb or \
-                    len(curr_chunk) >= max_chunk_length:
+            if curr_chunk_mb >= chunk_size_in_mb or len(curr_chunk) >= max_chunk_length:
                 chunks.append(curr_chunk)
                 curr_chunk = []
                 curr_chunk_mb = 0
         if curr_chunk:
             chunks.append(curr_chunk)
 
-        for i, chunk in enumerate(chunks):
-            self.logger.debug(f"download_mseed: chunks[{i}] = {chunk}")
+        # for i, chunk in enumerate(chunks):
+        #     self.logger.debug(f"download_mseed: chunks[{i}] = {chunk}")
 
         keys = sorted(counter.keys())
         for key in keys:
             self.logger.info(
                 "Client '%s' - Status for %i time intervals/channels before "
-                "downloading: %s" % (self.client_name, counter[key],
-                                     key.upper()))
+                "downloading: %s" % (self.client_name, counter[key], key.upper())
+            )
 
         if not chunks:
             return
@@ -905,18 +1077,22 @@ class ClientDownloadHelper(object):
         #     return ret_val
 
         d_start = timeit.default_timer()
+
         def _star_download_mseed(args):
             return utils.download_mseed_bulk(*args, logger=self.logger)
-        mseed_bytes = b''
+
+        mseed_bytes = b""
         with ThreadPool(min(threads_per_client, len(chunks))) as pool:
-            for mseed in pool.map(_star_download_mseed,
-                                  [(self.client, self.client_name, chunk) for chunk in chunks]):
+            for mseed in pool.map(
+                _star_download_mseed,
+                [(self.client, self.client_name, chunk) for chunk in chunks],
+            ):
                 mseed_bytes += mseed
 
         # Save first to a temporary file, then merge the file into data archive files.
         with NamedTemporaryFile() as tf:
             mseed_file = tf.name
-            with open(mseed_file, 'wb') as f:
+            with open(mseed_file, "wb") as f:
                 f.write(mseed_bytes)
             # utils.insert_mseed_to_archive(mseed_bytes, self.mseed_storage, self.logger)
             # utils.insert_mseed_to_SDS_archive(mseed_file, self.mseed_storage, self.logger)
@@ -925,8 +1101,9 @@ class ClientDownloadHelper(object):
 
         d_end = timeit.default_timer()
 
-        self.logger.info("Client '%s' - Launching basic QC checks..." %
-                         self.client_name)
+        self.logger.info(
+            "Client '%s' - Launching basic QC checks..." % self.client_name
+        )
 
         # downloaded_bytes, discarded_bytes = self._check_downloaded_data()
         # total_bytes = downloaded_bytes + discarded_bytes
@@ -938,10 +1115,11 @@ class ClientDownloadHelper(object):
         #                   discarded_bytes / 1024.0 ** 2))
 
         downloaded_duration, gap_duration = self._check_downloaded_data()
-        self.logger.info("Client '%s' - Downloaded %.1f sec of data"
-                         ", %.1f sec failed to download. Total time: %.1f sec" %
-                         (self.client_name, downloaded_duration, gap_duration,
-                          d_end - d_start))
+        self.logger.info(
+            "Client '%s' - Downloaded %.1f sec of data"
+            ", %.1f sec failed to download. Total time: %.1f sec"
+            % (self.client_name, downloaded_duration, gap_duration, d_end - d_start)
+        )
 
         # Recount everything to be able to emit some nice statistics.
         counter = collections.Counter()
@@ -953,10 +1131,10 @@ class ClientDownloadHelper(object):
         for key in keys:
             self.logger.info(
                 "Client '%s' - Status for %i time intervals/channels after "
-                "downloading: %s" % (
-                    self.client_name, counter[key], key.upper()))
+                "downloading: %s" % (self.client_name, counter[key], key.upper())
+            )
 
-        self._remove_failed_and_ignored_stations()
+        # self._remove_failed_and_ignored_stations()
 
     def _remove_failed_and_ignored_stations(self):
         """
@@ -965,7 +1143,8 @@ class ClientDownloadHelper(object):
         """
         to_be_removed_keys = []
         for key, station in self.stations.items():
-            if station.has_existing_or_downloaded_time_intervals is True:
+            # if station.has_existing_or_downloaded_time_intervals is True:
+            if station.has_all_intervals_downloaded is True:
                 continue
             to_be_removed_keys.append(key)
         for key in to_be_removed_keys:
@@ -993,59 +1172,84 @@ class ClientDownloadHelper(object):
         for sta in self.stations.values():
             for cha in sta.channels:
                 for interval in cha.intervals:
-                    channel_id = f'{sta.network}.{sta.station}.{cha.location}.{cha.channel}'
+                    channel_id = (
+                        f"{sta.network}.{sta.station}.{cha.location}.{cha.channel}"
+                    )
                     # The status of the interval should not have changed if
                     # it did not require downloading in the first place.
                     if interval.status != STATUS.NEEDS_DOWNLOADING:
                         continue
 
-                    _, _, gaps = self.sds_client.get_availability_percentage(
-                        sta.network, sta.station, cha.location, cha.channel,
-                        interval.start, interval.end)
-                    gap_length = sum([e - b for b,e in gaps])
+                    _, _, gaps, _ = self.sds_client.get_availability_percentage(
+                        sta.network,
+                        sta.station,
+                        cha.location,
+                        cha.channel,
+                        interval.start,
+                        interval.end,
+                    )
+                    gap_length = sum([e - b for b, e in gaps])
                     interval_length = interval.end - interval.start
                     downloaded_length = interval_length - gap_length
-                    self.logger.info(f'{channel_id}: {interval} has gaps: {gaps}, gaps length: {gap_length}')
+                    downloaded_ratio = downloaded_length / interval_length
+                    if downloaded_ratio < self.restrictions.minimum_length:
+                        interval.status = STATUS.DOWNLOAD_PARTIALLY_FAILED
+                    else:
+                        interval.status = STATUS.DOWNLOADED
+                    self.logger.debug(
+                        f"{channel_id}: {interval} has gaps: {gaps}, gaps length: {gap_length}"
+                    )
 
                     total_downloaded_length += downloaded_length
                     total_gap_length += gap_length
-                    interval.status = STATUS.DOWNLOADED
 
         return total_downloaded_length, total_gap_length
 
     def _parse_miniseed_filenames(self, filenames, restrictions):
-        time_range = restrictions.minimum_length * (restrictions.endtime -
-                                                    restrictions.starttime)
+        time_range = restrictions.minimum_length * (
+            restrictions.endtime - restrictions.starttime
+        )
         channel_availability = []
         for filename in filenames:
             st = obspy.read(filename, format="MSEED", headonly=True)
             if restrictions.reject_channels_with_gaps and len(st) > 1:
-                self.logger.warning("Channel %s has gap or overlap. Will be "
-                                    "removed." % st[0].id)
+                self.logger.warning(
+                    "Channel %s has gap or overlap. Will be removed." % st[0].id
+                )
                 try:
                     os.remove(filename)
                 except OSError:
                     pass
                 continue
             elif len(st) == 0:
-                self.logger.error("MiniSEED file with no data detected. "
-                                  "Should not happen!")
+                self.logger.error(
+                    "MiniSEED file with no data detected. Should not happen!"
+                )
                 continue
             tr = st[0]
             duration = tr.stats.endtime - tr.stats.starttime
             if restrictions.minimum_length and duration < time_range:
-                self.logger.warning("Channel %s does not satisfy the minimum "
-                                    "length requirement. %.2f seconds instead "
-                                    "of the required %.2f seconds." % (
-                                        tr.id, duration, time_range))
+                self.logger.warning(
+                    "Channel %s does not satisfy the minimum "
+                    "length requirement. %.2f seconds instead "
+                    "of the required %.2f seconds." % (tr.id, duration, time_range)
+                )
                 try:
                     os.remove(filename)
                 except OSError:
                     pass
                 continue
-            channel_availability.append(utils.ChannelAvailability( tr.stats.network, tr.stats.station, tr.stats.location,
-                tr.stats.channel, tr.stats.starttime, tr.stats.endtime,
-                filename))
+            channel_availability.append(
+                utils.ChannelAvailability(
+                    tr.stats.network,
+                    tr.stats.station,
+                    tr.stats.location,
+                    tr.stats.channel,
+                    tr.stats.starttime,
+                    tr.stats.endtime,
+                    filename,
+                )
+            )
         return channel_availability
 
     def discard_stations(self, existing_client_dl_helpers):
@@ -1062,7 +1266,17 @@ class ClientDownloadHelper(object):
         """
         station_ids = []
         for helper in existing_client_dl_helpers:
-            station_ids.extend(helper.stations.keys())
+            for station_id, station in helper.stations.items():
+                bad_status = [
+                    interval.status
+                    for channel in station.channels
+                    for interval in channel.intervals
+                    if interval.status != STATUS.DOWNLOADED
+                    and interval.status != STATUS.EXISTS
+                ]
+                if not bad_status:
+                    station_ids.append(station_id)
+                    continue
 
         for station_id in station_ids:
             try:
@@ -1070,7 +1284,7 @@ class ClientDownloadHelper(object):
             except KeyError:
                 pass
 
-    def get_availability(self):
+    def get_availability(self, bulk=None):
         """
         Queries the current client for information on what stations are
         available given the spatial and temporal restrictions.
@@ -1092,7 +1306,7 @@ class ClientDownloadHelper(object):
             "starttime": self.restrictions.starttime,
             "endtime": self.restrictions.endtime,
             # Request at the channel level.
-            "level": "channel"
+            "level": "channel",
         }
         # Add the domain specific query parameters.
         arguments.update(self.domain.get_query_parameters())
@@ -1112,41 +1326,52 @@ class ClientDownloadHelper(object):
             self.is_availability_reliable = False
 
         if self.is_availability_reliable:
-            self.logger.info("Client '%s' - Requesting reliable "
-                             "availability." % self.client_name)
+            self.logger.info(
+                "Client '%s' - Requesting reliable availability." % self.client_name
+            )
         else:
             self.logger.info(
-                "Client '%s' - Requesting unreliable availability." %
-                self.client_name)
+                "Client '%s' - Requesting unreliable availability." % self.client_name
+            )
 
         try:
             start = time.time()
-            inv = self.client.get_stations(**arguments)
+            # inv = self.client.get_stations(**arguments)
+            if not bulk:
+                inv = self.client.get_stations(**arguments)
+            else:
+                inv = self.client.get_stations_bulk(bulk, level="channel")
             end = time.time()
         except utils.ERRORS as e:
             if "no data available" in str(e).lower():
                 self.logger.info(
-                    "Client '%s' - No data available for request." %
-                    self.client_name)
+                    "Client '%s' - No data available for request." % self.client_name
+                )
                 return
             self.logger.error(
                 "Client '{0}' - Failed getting availability: %s".format(
-                    self.client_name), str(e))
+                    self.client_name
+                ),
+                str(e),
+            )
             return
         # This sometimes fires if a service returns some random stuff which
         # is not a valid station file.
         except Exception as e:
             self.logger.error(
                 "Client '{0}' - Failed getting availability due to "
-                "unexpected exception: %s".format(self.client_name), str(e))
+                "unexpected exception: %s".format(self.client_name),
+                str(e),
+            )
             return
 
-        self.logger.info("Client '%s' - Successfully requested availability "
-                         "(%.2f seconds)" % (self.client_name, end - start))
+        self.logger.info(
+            "Client '%s' - Successfully requested availability "
+            "(%.2f seconds)" % (self.client_name, end - start)
+        )
 
         # Get the time intervals from the restrictions.
-        intervals = [TimeInterval(start=_i[0], end=_i[1])
-                     for _i in self.restrictions]
+        intervals = [TimeInterval(start=_i[0], end=_i[1]) for _i in self.restrictions]
 
         for network in inv:
             # Skip network if so desired.
@@ -1170,27 +1395,32 @@ class ClientDownloadHelper(object):
 
                 # If an inventory is given, only keep stations part of the
                 # inventory.
-                if self.restrictions.limit_stations_to_inventory is not None \
-                        and (network.code, station.code) not in \
-                        self.restrictions.limit_stations_to_inventory:
+                if (
+                    self.restrictions.limit_stations_to_inventory is not None
+                    and (network.code, station.code)
+                    not in self.restrictions.limit_stations_to_inventory
+                ):
                     continue
 
                 # Skip the station if it is not in the desired domain.
-                if needs_filtering is True and \
-                        not self.domain.is_in_domain(station.latitude,
-                                                     station.longitude):
+                if needs_filtering is True and not self.domain.is_in_domain(
+                    station.latitude, station.longitude
+                ):
                     continue
 
                 channels = []
                 for channel in station.channels:
                     # Remove channels that somehow slipped past the temporal
                     # constraints due to weird behaviour from the data center.
-                    if (channel.start_date > self.restrictions.endtime) or \
-                            (channel.end_date < self.restrictions.starttime):
+                    if (channel.start_date > self.restrictions.endtime) or (
+                        channel.end_date < self.restrictions.starttime
+                    ):
                         continue
                     new_channel = Channel(
-                        location=channel.location_code, channel=channel.code,
-                        intervals=copy.deepcopy(intervals))
+                        location=channel.location_code,
+                        channel=channel.code,
+                        intervals=copy.deepcopy(intervals),
+                    )
                     # Multiple channel epochs would result in duplicate
                     # channels which we don't want. Bit of a silly logic here
                     # to get rid of them.
@@ -1206,10 +1436,15 @@ class ClientDownloadHelper(object):
                         return x.location
 
                     for location, _channels in itertools.groupby(
-                            sorted(channels, key=get_loc), get_loc):
-                        filtered_channels.extend(utils.filter_channel_priority(
-                            list(_channels), key="channel",
-                            priorities=self.restrictions.channel_priorities))
+                        sorted(channels, key=get_loc), get_loc
+                    ):
+                        filtered_channels.extend(
+                            utils.filter_channel_priority(
+                                list(_channels),
+                                key="channel",
+                                priorities=self.restrictions.channel_priorities,
+                            )
+                        )
                     channels = filtered_channels
 
                 if self.restrictions.location is None:
@@ -1217,18 +1452,23 @@ class ClientDownloadHelper(object):
                     # priority list.
                     has_channels_before_filtering = bool(channels)
                     channels = utils.filter_channel_priority(
-                        channels, key="location",
-                        priorities=self.restrictions.location_priorities)
+                        channels,
+                        key="location",
+                        priorities=self.restrictions.location_priorities,
+                    )
                     # This has been a point of confusion for users so raise a
                     # warning in case this removed all channels and is still
                     # using the default settings.
-                    if not channels and has_channels_before_filtering and \
-                            self.restrictions._loc_prios_are_default_values:
+                    if (
+                        not channels
+                        and has_channels_before_filtering
+                        and self.restrictions._loc_prios_are_default_values
+                    ):
                         self.logger.warning(
                             "Client '%s' - No channel at station %s.%s has "
                             "been selected due to the `location_priorities` "
-                            "settings." % (self.client_name, network.code,
-                                           station.code))
+                            "settings." % (self.client_name, network.code, station.code)
+                        )
 
                 if not channels:
                     continue
@@ -1238,7 +1478,13 @@ class ClientDownloadHelper(object):
                     station=station.code,
                     latitude=station.latitude,
                     longitude=station.longitude,
-                    channels=channels)
-        self.logger.info("Client '%s' - Found %i stations (%i channels)." % (
-            self.client_name, len(self.stations),
-            sum([len(_i.channels) for _i in self.stations.values()])))
+                    channels=channels,
+                )
+        self.logger.info(
+            "Client '%s' - Found %i stations (%i channels)."
+            % (
+                self.client_name,
+                len(self.stations),
+                sum([len(_i.channels) for _i in self.stations.values()]),
+            )
+        )

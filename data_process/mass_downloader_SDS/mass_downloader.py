@@ -9,6 +9,7 @@ services in an automated fashion.
     GNU Lesser General Public License, Version 3
     (https://www.gnu.org/copyleft/lesser.html)
 """
+
 import collections
 import logging
 from multiprocessing.pool import ThreadPool
@@ -18,8 +19,11 @@ import warnings
 from obspy.clients.fdsn.header import URL_MAPPINGS, FDSNException
 from obspy.clients.fdsn.client import Client
 
+from obspy.clients.fdsn.mass_downloader import Domain, Restrictions
+
 from . import utils
 from .download_helpers import ClientDownloadHelper, STATUS
+from .federator_catalog import FederatorCatalog
 
 
 logger = logging.getLogger("obspy.clients.fdsn.mass_downloader")
@@ -29,6 +33,7 @@ class FDSNMassDownloaderException(FDSNException):
     """
     Base exception raised by the download helpers.
     """
+
     pass
 
 
@@ -50,7 +55,10 @@ class MassDownloader(object):
     :type providers: list[str] or :class:`~obspy.clients.fdsn.client.Client`
         instances
     """
-    def __init__(self, providers=None, debug=False, configure_logging=True, log_file=None):
+
+    def __init__(
+        self, providers=None, debug=False, configure_logging=True, log_file=None
+    ):
         if configure_logging:
             # clear existing handler from previous call
             logger.handlers.clear()
@@ -62,7 +70,8 @@ class MassDownloader(object):
             ch.setLevel(logging.INFO)
             # Add formatter
             formatter = logging.Formatter(
-                    "[%(asctime)s] - %(name)s - %(levelname)s: %(message)s")
+                "[%(asctime)s] - %(name)s - %(levelname)s: %(message)s"
+            )
             ch.setFormatter(formatter)
             logger.addHandler(ch)
             if log_file and os.path.isfile(log_file):
@@ -118,11 +127,18 @@ class MassDownloader(object):
 
         # Initialize all clients.
         self._initialized_clients = collections.OrderedDict()
-        self._initialize_clients()
+        # self._initialize_clients()
 
-    def download(self, domain, restrictions, mseed_storage,
-                 stationxml_storage, download_chunk_size_in_mb=20,
-                 threads_per_client=3, print_report=True):
+    def download(
+        self,
+        domain: Domain,
+        restrictions: Restrictions,
+        mseed_storage,
+        stationxml_storage,
+        download_chunk_size_in_mb=20,
+        threads_per_client=3,
+        print_report=True,
+    ):
         """
         Launch the actual data download.
 
@@ -147,6 +163,28 @@ class MassDownloader(object):
             per client.
         :type threads_per_client: int
         """
+        # query federator catalog
+        arguments = {
+            "network": restrictions.network,
+            "station": restrictions.station,
+            "location": restrictions.location,
+            "channel": restrictions.channel,
+            "starttime": restrictions.starttime,
+            "endtime": restrictions.endtime,
+        }
+        # Add the domain specific query parameters.
+        arguments.update(domain.get_query_parameters())
+
+        logger.info("Querying federator catalog for data")
+        logger.debug(f"{arguments=}")
+        fedcat = FederatorCatalog()
+        response = fedcat.query_fedcat(**arguments)
+        logger.debug(f"{response=}")
+
+        self.providers = [key for key in response]
+        # replace SED with ETH
+        self._initialize_clients()
+
         # The downloads from each client will be handled separately.
         # Nonetheless collect all in this dictionary.
         client_download_helpers = {}
@@ -158,26 +196,34 @@ class MassDownloader(object):
             # Log some information about preexisting data.
             station_count = 0
             for _c in client_download_helpers.values():
-                station_count += len([
-                    _i for _i in _c.stations.values() if
-                    (_i.stationxml_status == STATUS.EXISTS) or
-                    (_i.has_existing_or_downloaded_time_intervals)])
-            logger.info("Total acquired or preexisting stations: %i" %
-                        station_count)
+                station_count += len(
+                    [
+                        _i
+                        for _i in _c.stations.values()
+                        if (_i.stationxml_status == STATUS.EXISTS)
+                        or (_i.has_existing_or_downloaded_time_intervals)
+                    ]
+                )
+            logger.info("Total acquired or preexisting stations: %i" % station_count)
 
             # The client download helper object is responsible for the
             # downloads of a single FDSN endpoint.
             helper = ClientDownloadHelper(
-                client=client, client_name=client_name,
-                restrictions=restrictions, domain=domain,
+                client=client,
+                client_name=client_name,
+                restrictions=restrictions,
+                domain=domain,
                 mseed_storage=mseed_storage,
-                stationxml_storage=stationxml_storage, logger=logger)
-            existing_client_dl_helpers = list(
-                client_download_helpers.values())
+                stationxml_storage=stationxml_storage,
+                logger=logger,
+            )
+            existing_client_dl_helpers = list(client_download_helpers.values())
             client_download_helpers[client_name] = helper
 
             # Request the availability.
-            helper.get_availability()
+            bulk = response[client_name]["requests"]
+            logger.debug(f"Client {client_name} - {bulk=}")
+            helper.get_availability(bulk)
 
             # Continue if there is no data.
             if not helper:
@@ -187,13 +233,16 @@ class MassDownloader(object):
             # First filter stage. Remove stations based on the station id,
             # e.g. NETWORK.STATION. Remove all that already exist.
             helper.discard_stations(
-                existing_client_dl_helpers=existing_client_dl_helpers)
+                existing_client_dl_helpers=existing_client_dl_helpers
+            )
+            logger.debug(f"{helper}")
 
             # Continue if there is no data.
             if not helper:
-                logger.info("Client '%s' - No new data available after "
-                            "discarding already downloaded data." %
-                            client_name)
+                logger.info(
+                    "Client '%s' - No new data available after "
+                    "discarding already downloaded data." % client_name
+                )
                 continue
 
             # If the availability information is reliable, the filtering
@@ -208,13 +257,17 @@ class MassDownloader(object):
             #                     "inter-station distance." % client_name)
             #         continue
 
-            logger.info("Client '%s' - Will attempt to download data from %i "
-                        "stations." % (client_name, len(helper)))
+            logger.info(
+                "Client '%s' - Will attempt to download data from %i "
+                "stations." % (client_name, len(helper))
+            )
 
             # Download MiniSEED data.
             helper.prepare_mseed_download()
-            helper.download_mseed(chunk_size_in_mb=download_chunk_size_in_mb,
-                                  threads_per_client=threads_per_client)
+            helper.download_mseed(
+                chunk_size_in_mb=download_chunk_size_in_mb,
+                threads_per_client=threads_per_client,
+            )
 
             # Download StationXML data.
             helper.prepare_stationxml_download()
@@ -226,8 +279,7 @@ class MassDownloader(object):
             #     helper.sanitize_downloads()
 
             if not helper:
-                logger.info("Client '%s' - No data could be downloaded." %
-                            client_name)
+                logger.info("Client '%s' - No data could be downloaded." % client_name)
                 continue
 
             # Filter afterwards if availability information is not reliable.
@@ -290,15 +342,18 @@ class MassDownloader(object):
         #     logger.info("Downloaded %.1f MB in total." % (
         #         total_downloaded_filesize / 1024.0 ** 2))
 
-        return client_download_helpers
+        # return client_download_helpers
 
     def _initialize_clients(self):
         """
         Initialize all clients.
         """
-        logger.info("Initializing FDSN client(s) for %s." % ", ".join(
-            _i.base_url if hasattr(_i, "base_url") else _i
-            for _i in self.providers))
+        logger.info(
+            "Initializing FDSN client(s) for %s."
+            % ", ".join(
+                _i.base_url if hasattr(_i, "base_url") else _i for _i in self.providers
+            )
+        )
 
         def _get_client(client_name):
             # It might already be an initialized client - in that case just
@@ -314,16 +369,19 @@ class MassDownloader(object):
                         extra = " (timeout)"
                     else:
                         extra = ""
-                    logger.warning("Failed to initialize client '%s'.%s"
-                                % (client_name, extra))
+                    logger.warning(
+                        "Failed to initialize client '%s'.%s" % (client_name, extra)
+                    )
                     return client_name, None
 
-            services = sorted([_i for _i in client.services.keys()
-                               if not _i.startswith("available")])
+            services = sorted(
+                [_i for _i in client.services.keys() if not _i.startswith("available")]
+            )
             if "dataselect" not in services or "station" not in services:
-                logger.info("Cannot use client '%s' as it does not have "
-                            "'dataselect' and/or 'station' services."
-                            % name)
+                logger.info(
+                    "Cannot use client '%s' as it does not have "
+                    "'dataselect' and/or 'station' services." % name
+                )
                 return name, None
             return name, client
 
@@ -335,8 +393,10 @@ class MassDownloader(object):
             clients = p.map(_get_client, self.providers)
         p.close()
         for warning in w:
-            logger.debug("Warning during initialization of one of the "
-                         "clients: " + str(warning.message))
+            logger.debug(
+                "Warning during initialization of one of the "
+                "clients: " + str(warning.message)
+            )
 
         clients = {key: value for key, value in clients if value is not None}
 
@@ -349,11 +409,16 @@ class MassDownloader(object):
             name = client.base_url if hasattr(client, "base_url") else client
             self._initialized_clients[name] = clients[name]
 
-        logger.info("Successfully initialized %i client(s): %s."
-                    % (len(self._initialized_clients),
-                       ", ".join(self._initialized_clients.keys())))
+        logger.info(
+            "Successfully initialized %i client(s): %s."
+            % (
+                len(self._initialized_clients),
+                ", ".join(self._initialized_clients.keys()),
+            )
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import doctest
+
     doctest.testmod(exclude_empty=True)

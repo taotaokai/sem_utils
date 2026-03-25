@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 from scipy.io import FortranFile
 
-from .meshfem3d_constants import (
+from meshfem3d_constants import (
     EARTH_FLATTENING_SEM,
     NGLLX,
     NGLLY,
@@ -349,7 +349,7 @@ def sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
     # C13 = C23 = eta * (C11 - 2 * C44)
     # C44 = C55 = rho * ((1 + beta)*vs0)**2 * (1 - xi)
     # C66 = rho * ((1 + beta)*vs0)**2 * (1 + xi)
-    
+
     K_alpha = (
         (
             (K_C11 + K_C22 + K_C12) * (1.0 + phi)
@@ -1391,7 +1391,7 @@ def sem_mesh_interp_single_slice(
             idoubling=idoubling,
             method=method,
         )
-        
+
         # --- gather results
         if mpi_rank == 0:
             begin_indices = mpi_comm.gather(part_ind0, root=0)
@@ -1412,7 +1412,7 @@ def sem_mesh_interp_single_slice(
             if mpi_rank == 0:
                 misloc_glob = np.zeros(npts_glob)
                 misratio_glob = np.zeros(npts_glob)
-        
+
         # gather model_part into model_glob
         recv_counts, recv_displs = None, None
         if mpi_rank == 0:
@@ -1425,7 +1425,7 @@ def sem_mesh_interp_single_slice(
         if mpi_rank == 0:
             model_gll[reg_element_mask, ...] = model_glob[reg_indices, :]
 
-        # gather interplation status 
+        # gather interplation status
         if mpi_rank == 0:
             recv_counts = np.array(npts_counts, dtype=int)
             recv_displs = np.array(begin_indices, dtype=int)
@@ -1468,7 +1468,7 @@ def sem_mesh_interp_single_slice(
                 model_dir_target, model_tag, iproc_target, shape=mesh_data_target["gll_dims"]
             )
             model_gll[mask, imodel] = old_model_gll[mask]
-            
+
             write_gll_file(
                 out_dir, model_tag, iproc_target, model_gll[..., imodel]
             )

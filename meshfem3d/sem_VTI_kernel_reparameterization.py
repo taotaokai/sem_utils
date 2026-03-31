@@ -9,7 +9,7 @@ from meshfem3d_utils import (
     read_gll_file,
     write_gll_file,
     sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho,
-    sem_VTI_kernel_cijkl_rho_to_beta_kappa_phi_xi_eta_rho,
+    # sem_VTI_kernel_cijkl_rho_to_beta_kappa_phi_xi_eta_rho,
 )
 
 # MPI initialization
@@ -19,7 +19,7 @@ mpi_rank = comm_world.Get_rank()
 
 PARAMETERIZATION_TYPES = [
     "alpha_beta_phi_xi",
-    "beta_kappa_phi_xi",
+    # "beta_kappa_phi_xi",
 ]
 
 
@@ -87,7 +87,7 @@ def process_kernel_for_alpha_beta_phi_xi(
     )
     rho_kernel = read_gll_file(kernel_dir, "rho_kernel", iproc, shape=gll_dims)
 
-    # Read reference velocity models (km/s)
+    # Read reference isotropic velocity models (km/s)
     vp0 = read_gll_file(reference_dir, "vp", iproc, shape=gll_dims)
     vs0 = read_gll_file(reference_dir, "vs", iproc, shape=gll_dims)
 
@@ -99,7 +99,7 @@ def process_kernel_for_alpha_beta_phi_xi(
     eta = read_gll_file(model_dir, "eta", iproc, shape=gll_dims)
     rho = read_gll_file(model_dir, "rho", iproc, shape=gll_dims)
 
-    # enforce isotropic elements
+    # force phi,xi,eta to zero anisotropy for isotropic elements
     if mesh_dir:
         phi[ispec_is_iso, ...] = 0.0
         xi[ispec_is_iso, ...] = 0.0
@@ -111,7 +111,7 @@ def process_kernel_for_alpha_beta_phi_xi(
         )
     )
 
-    # isotropic elements have zero values for phi, xi, eta
+    # force phi, xi, eta kernels to zero for isotropic elements
     if mesh_dir:
         K_phi[ispec_is_iso, ...] = 0.0
         K_xi[ispec_is_iso, ...] = 0.0
@@ -127,64 +127,64 @@ def process_kernel_for_alpha_beta_phi_xi(
     write_gll_file(out_dir, "rho_kernel", iproc, K_rho)
 
 
-def process_kernel_for_beta_kappa_phi_xi(
-    iproc, reference_dir, model_dir, kernel_dir, out_dir, mesh_dir=None
-):  # , mask=None):
-    """Process kernel data for a single processor slice."""
-
-    # read mesh
-    gll_dims = None
-    ispec_is_iso = None
-    if mesh_dir is not None:
-        mesh_file = os.path.join(mesh_dir, f"proc{iproc:06d}_reg1_solver_data.bin")
-        mesh = sem_mesh_read(mesh_file)
-        gll_dims = mesh["gll_dims"]
-        ispec_is_iso = ~(mesh["ispec_is_tiso"].astype(bool))
-
-    # Read cijkl,rho kernel
-    kernel_dims = (-1, 21)
-    if gll_dims:
-        kernel_dims = gll_dims + (21,)
-    cijkl_kernel = read_gll_file(kernel_dir, "cijkl_kernel", iproc, shape=kernel_dims)
-    rho_kernel = read_gll_file(kernel_dir, "rho_kernel", iproc, shape=gll_dims)
-
-    # Read reference velocity models (km/s)
-    vs0 = read_gll_file(reference_dir, "vs", iproc, shape=gll_dims)
-
-    # read models (velocities in km/s, density in g/cm^3)
-    beta = read_gll_file(model_dir, "beta", iproc, shape=gll_dims)
-    kappa = read_gll_file(model_dir, "kappa", iproc, shape=gll_dims)
-    phi = read_gll_file(model_dir, "phi", iproc, shape=gll_dims)
-    xi = read_gll_file(model_dir, "xi", iproc, shape=gll_dims)
-    eta = read_gll_file(model_dir, "eta", iproc, shape=gll_dims)
-    rho = read_gll_file(model_dir, "rho", iproc, shape=gll_dims)
-
-    # enforce isotropic elements
-    if mesh_dir:
-        phi[ispec_is_iso, ...] = 0.0
-        xi[ispec_is_iso, ...] = 0.0
-        eta[ispec_is_iso, ...] = 1.0
-
-    K_beta, K_kappa, K_phi, K_xi, K_eta, K_rho = (
-        sem_VTI_kernel_cijkl_rho_to_beta_kappa_phi_xi_eta_rho(
-            cijkl_kernel, rho_kernel, beta, kappa, phi, xi, eta, rho, vs0
-        )
-    )
-
-    # isotropic elements have zero values for phi, xi, eta
-    if mesh_dir:
-        K_phi[ispec_is_iso, ...] = 0.0
-        K_xi[ispec_is_iso, ...] = 0.0
-        K_eta[ispec_is_iso, ...] = 0.0
-
-    # Write each kernel to a separate file
-    write_gll_file(out_dir, "beta_kernel", iproc, K_beta)
-    write_gll_file(out_dir, "kappa_kernel", iproc, K_kappa)
-    write_gll_file(out_dir, "phi_kernel", iproc, K_phi)
-    write_gll_file(out_dir, "xi_kernel", iproc, K_xi)
-    write_gll_file(out_dir, "eta_kernel", iproc, K_eta)
-    # NOTE maybe use rhonotprime to distinguish from original rho kernel?
-    write_gll_file(out_dir, "rho_kernel", iproc, K_rho)
+# def process_kernel_for_beta_kappa_phi_xi(
+#     iproc, reference_dir, model_dir, kernel_dir, out_dir, mesh_dir=None
+# ):  # , mask=None):
+#     """Process kernel data for a single processor slice."""
+# 
+#     # read mesh
+#     gll_dims = None
+#     ispec_is_iso = None
+#     if mesh_dir is not None:
+#         mesh_file = os.path.join(mesh_dir, f"proc{iproc:06d}_reg1_solver_data.bin")
+#         mesh = sem_mesh_read(mesh_file)
+#         gll_dims = mesh["gll_dims"]
+#         ispec_is_iso = ~(mesh["ispec_is_tiso"].astype(bool))
+# 
+#     # Read cijkl,rho kernel
+#     kernel_dims = (-1, 21)
+#     if gll_dims:
+#         kernel_dims = gll_dims + (21,)
+#     cijkl_kernel = read_gll_file(kernel_dir, "cijkl_kernel", iproc, shape=kernel_dims)
+#     rho_kernel = read_gll_file(kernel_dir, "rho_kernel", iproc, shape=gll_dims)
+# 
+#     # Read reference velocity models (km/s)
+#     vs0 = read_gll_file(reference_dir, "vs", iproc, shape=gll_dims)
+# 
+#     # read models (velocities in km/s, density in g/cm^3)
+#     beta = read_gll_file(model_dir, "beta", iproc, shape=gll_dims)
+#     kappa = read_gll_file(model_dir, "kappa", iproc, shape=gll_dims)
+#     phi = read_gll_file(model_dir, "phi", iproc, shape=gll_dims)
+#     xi = read_gll_file(model_dir, "xi", iproc, shape=gll_dims)
+#     eta = read_gll_file(model_dir, "eta", iproc, shape=gll_dims)
+#     rho = read_gll_file(model_dir, "rho", iproc, shape=gll_dims)
+# 
+#     # enforce isotropic elements
+#     if mesh_dir:
+#         phi[ispec_is_iso, ...] = 0.0
+#         xi[ispec_is_iso, ...] = 0.0
+#         eta[ispec_is_iso, ...] = 1.0
+# 
+#     K_beta, K_kappa, K_phi, K_xi, K_eta, K_rho = (
+#         sem_VTI_kernel_cijkl_rho_to_beta_kappa_phi_xi_eta_rho(
+#             cijkl_kernel, rho_kernel, beta, kappa, phi, xi, eta, rho, vs0
+#         )
+#     )
+# 
+#     # isotropic elements have zero values for phi, xi, eta
+#     if mesh_dir:
+#         K_phi[ispec_is_iso, ...] = 0.0
+#         K_xi[ispec_is_iso, ...] = 0.0
+#         K_eta[ispec_is_iso, ...] = 0.0
+# 
+#     # Write each kernel to a separate file
+#     write_gll_file(out_dir, "beta_kernel", iproc, K_beta)
+#     write_gll_file(out_dir, "kappa_kernel", iproc, K_kappa)
+#     write_gll_file(out_dir, "phi_kernel", iproc, K_phi)
+#     write_gll_file(out_dir, "xi_kernel", iproc, K_xi)
+#     write_gll_file(out_dir, "eta_kernel", iproc, K_eta)
+#     # NOTE maybe use rhonotprime to distinguish from original rho kernel?
+#     write_gll_file(out_dir, "rho_kernel", iproc, K_rho)
 
 
 def main():
@@ -210,16 +210,16 @@ def main():
                     mesh_dir=args.mesh_dir,
                     # mask=mask_gll,
                 )
-            elif args.type == "beta_kappa_phi_xi":
-                process_kernel_for_beta_kappa_phi_xi(
-                    iproc,
-                    args.reference_dir,
-                    args.model_dir,
-                    args.kernel_dir,
-                    args.out_dir,
-                    mesh_dir=args.mesh_dir,
-                    # mask=mask_gll,
-                )
+            # elif args.type == "beta_kappa_phi_xi":
+            #     process_kernel_for_beta_kappa_phi_xi(
+            #         iproc,
+            #         args.reference_dir,
+            #         args.model_dir,
+            #         args.kernel_dir,
+            #         args.out_dir,
+            #         mesh_dir=args.mesh_dir,
+            #         # mask=mask_gll,
+            #     )
         except Exception as e:
             print(f"Error processing iproc {iproc}: {e}")
             raise SystemExit(1)

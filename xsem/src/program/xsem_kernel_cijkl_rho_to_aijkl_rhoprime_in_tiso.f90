@@ -141,11 +141,11 @@ program xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso
 
     !--- get aijkl model, converted from tiso model files 
     aijkl = 0.0
-    ! A = vph**2
+    ! A = vph**2 * rho
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vph', gll1)
     aijkl(1,:,:,:,:) = gll1**2
     aijkl(7,:,:,:,:) = aijkl(1,:,:,:,:)
-    ! C = vpv**2
+    ! C = vpv**2 * rho
     call sem_io_read_gll_file_1(model_dir, iproc, iregion, 'vpv', gll1)
     aijkl(12,:,:,:,:) = gll1**2
     ! L = vsv**2 * rho; 
@@ -173,7 +173,7 @@ program xsem_kernel_cijkl_rho_to_aijkl_rhoprime_in_tiso
     ! rhoprime_kernel = rho_kernel + sum(cijkl_kernel*aijkl, over ijkl)
     ! note: in SEM the kernel includes the factor in reduction from ijkl to 21 indices  
     ! unit: s * km^(-3) * (kg/m^3)^(-1)
-    ! [aijkl*cijkl_kernel] = 10^-3 * (kg/m^3)^(-1)
+    ! [aijkl*cijkl_kernel] = s*km^(-3) * (g/cm^3)^(-1) = s*km^(-3) * 10^-3 * (kg/m^3)^(-1)
     rhoprime_kernel = rho_kernel + sum(aijkl*cijkl_kernel, dim=1)*1.0d-03
 
     print *, "cijkl_kernel: min/max=", minval(cijkl_kernel), maxval(cijkl_kernel)

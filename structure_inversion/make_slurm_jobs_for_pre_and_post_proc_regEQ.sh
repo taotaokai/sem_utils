@@ -24,8 +24,8 @@ mkdir -p $slurm_dir
 mesh_job=$slurm_dir/mesh.job
 
 kernel_sum_job=$slurm_dir/kernel_sum.job
-kernel_smooth_job=$slurm_dir/kernel_smooth.job
 kernel_balance_job=$slurm_dir/kernel_balance.job
+kernel_smooth_job=$slurm_dir/kernel_smooth.job
 
 dmodel_job=$slurm_dir/dmodel.job
 model_perturb_job=$slurm_dir/model_perturb.job
@@ -126,6 +126,43 @@ echo
 
 EOF
 
+
+#====== kernel_balance
+cat <<EOF > $kernel_balance_job
+#!/bin/bash
+#SBATCH -J kernel_balance
+#SBATCH -o ${kernel_balance_job}.o%j
+#SBATCH ${SLURM_args_kernel_precond}
+
+echo
+echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
+
+hess_dir=${SEM_invhess_dir}
+in_dir=${SEM_iter_dir}/kernel/GLL_sum
+out_dir=${SEM_iter_dir}/kernel/GLL_sum_balance
+[ -d \${out_dir} ] && rm -rf \${out_dir}
+mkdir -p \$out_dir
+
+for model_name in ${SEM_model_names[@]}
+do
+  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_math.py \\
+    --nproc ${SEM_nproc_total} \\
+    --model_dirs \${in_dir} \${hess_dir} \\
+    --model_tags \${model_name}${SEM_kernel_tag} \${model_name}_invhess \\
+    --math_expr "v[0] * v[1]" \\
+    --out_dir \${out_dir} \\
+    --out_tag \${model_name}${SEM_kernel_tag} \\
+    --overwrite_ok
+done
+
+echo
+echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+echo
+
+EOF
+
+
 #====== kernel_smooth
 cat <<EOF > $kernel_smooth_job
 #!/bin/bash
@@ -146,8 +183,8 @@ mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
 
 echo "====== kernel smoothing"
 
-kernel_dir=${SEM_iter_dir}/kernel/GLL_sum
-out_dir=${SEM_iter_dir}/kernel/GLL_sum_smooth
+kernel_dir=${SEM_iter_dir}/kernel/GLL_sum_balance
+out_dir=${SEM_iter_dir}/kernel/GLL_sum_balance_smooth
 [ -d \${out_dir} ] && rm -rf \${out_dir}
 mkdir -p \$out_dir
 
@@ -173,41 +210,6 @@ echo
 EOF
 
 
-#====== kernel_balance
-cat <<EOF > $kernel_balance_job
-#!/bin/bash
-#SBATCH -J kernel_balance
-#SBATCH -o ${kernel_balance_job}.o%j
-#SBATCH ${SLURM_args_kernel_precond}
-
-echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
-echo
-
-hess_dir=${SEM_invhess_dir}
-in_dir=${SEM_iter_dir}/kernel/GLL_sum_smooth
-out_dir=${SEM_iter_dir}/kernel/GLL_sum_smooth_balance
-[ -d \${out_dir} ] && rm -rf \${out_dir}
-mkdir -p \$out_dir
-
-for model_name in ${SEM_model_names[@]}
-do
-  ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_math.py \\
-    --nproc ${SEM_nproc_total} \\
-    --model_dirs \${in_dir} \${hess_dir} \\
-    --model_tags \${model_name}${SEM_kernel_tag} \${model_name}_invhess \\
-    --math_expr "v[0] * v[1]" \\
-    --out_dir \${out_dir} \\
-    --out_tag \${model_name}${SEM_kernel_tag} \\
-    --overwrite_ok
-done
-
-echo
-echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
-echo
-
-EOF
-
 
 #====== search direction
 cat <<EOF > $dmodel_job
@@ -232,7 +234,7 @@ then
   # first iteration use scaled gradient as search direction
   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_scale2.py \\
     --nproc ${SEM_nproc_total} \\
-    --in_dir ${SEM_iter_dir}/kernel/GLL_sum_smooth_balance \\
+    --in_dir ${SEM_iter_dir}/kernel/GLL_sum_balance_smooth \\
     --out_dir \${out_dir} \\
     --models ${SEM_model_names[@]} \\
     --in_tag ${SEM_kernel_tag} \\
@@ -249,7 +251,7 @@ else
     ${SEM_iter_dir}/model_initial \\
     ${SEM_prev_iter_dir}/kernel/GLL_sum \\
     ${SEM_iter_dir}/kernel/GLL_sum \\
-    ${SEM_iter_dir}/kernel/GLL_sum_smooth_balance \\
+    ${SEM_iter_dir}/kernel/GLL_sum_balance_smooth \\
     \${out_dir} \\
     --models ${SEM_model_names[@]} \\
     --kernel_tag ${SEM_kernel_tag} \\

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import time
 import argparse
 import numpy as np
 from mpi4py import MPI
@@ -34,6 +33,7 @@ def parse_arguments():
         default="gauss",
         help="model tag for output GLL file as proc*_reg1_[out_tag].bin",
     )
+    parser.add_argument("--overwrite_ok", action="store_true", help="allow overwrites existing file")
     return parser.parse_args()
 
 
@@ -101,7 +101,7 @@ def main():
         # toc = time.time() - tic
         # print("iproc=%d, time=%f" % (iproc, toc))
         ibool = mesh_data["ibool"]
-        write_gll_file(args.out_dir, args.out_tag, iproc, model[ibool])
+        write_gll_file(args.out_dir, args.out_tag, iproc, model[ibool], overwrite=args.overwrite_ok)
 
 
 if __name__ == "__main__":

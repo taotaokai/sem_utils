@@ -328,8 +328,11 @@ def main():
         print(args)
 
     # Create output directory if it doesn't exist
+    vtk_dir = os.path.join(args.out_dir, "vtk")
     if mpi_rank == 0:
         os.makedirs(args.out_dir, exist_ok=True)
+        if args.vtk:
+            os.makedirs(vtk_dir, exist_ok=True)
     mpi_comm.barrier()
 
     nmodel = len(args.model_names)
@@ -409,7 +412,7 @@ def main():
                 tangents,
                 angles,
                 radius,
-                args.out_dir,
+                vtk_dir,
                 label=f"{islice:04d}",
                 save_profiles=args.save_profiles,
                 angle_interval=args.profile_interval,

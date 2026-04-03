@@ -75,8 +75,6 @@ def parse_arguments():
         default=0.1,
         type=float,
     )
-    # parser.add_argument("--vtk", default="xsection.vtk", help="output VTK files")
-    # parser.add_argument("--nc", default="xsection.nc", help="output NETCDF file")
     parser.add_argument(
         "--depth_at_constant_radius",
         action="store_true",
@@ -90,6 +88,7 @@ def parse_arguments():
         choices=["gll", "linear"],
         help="Interpolation method (gll or linear)",
     )
+    parser.add_argument("--vtk", action="store_true", help="Output VTK files")
 
     return parser.parse_args()
 
@@ -265,8 +264,11 @@ def main():
         print(args)
 
     # Create output directory if it doesn't exist
+    vtk_dir = os.path.join(args.out_dir, "vtk")
     if mpi_rank == 0:
         os.makedirs(args.out_dir, exist_ok=True)
+        if args.vtk:
+            os.makedirs(vtk_dir, exist_ok=True)
     mpi_comm.barrier()
 
     nmodel = len(args.model_names)
@@ -322,8 +324,9 @@ def main():
         model_interp = model_interp.reshape((nxi, neta, nmodel))
 
         # Create VTK output if requested
-        out_vtk = os.path.join(args.out_dir, f"hslice_{islice:04d}.vtk")
-        create_vtk_output(args.model_names, model_interp, xyz, out_vtk, depth=depth_km)
+        if args.vtk:
+            vtk_file = os.path.join(vtk_dir, f"hslice_{islice:04d}.vtk")
+            create_vtk_output(args.model_names, model_interp, xyz, vtk_file, depth=depth_km)
 
         # Create netcdf output
         out_nc = os.path.join(args.out_dir, f"hslice_{islice:04d}.nc")

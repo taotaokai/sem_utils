@@ -468,6 +468,19 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_repar
   --overwrite_ok \\
   --mesh_dir \${mesh_dir} 
 
+echo ====== re-generate alpha,beta,phi,xi to ensure compatibility for isotropic elements
+
+${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
+  --nproc ${SEM_nproc_total} \\
+  --reference_dir ${SEM_reference_model_dir} \\
+  --model_dir $SEM_iter_dir/model_updated \\
+  --out_dir $SEM_iter_dir/model_updated \\
+  --reverse \\
+  --type ${SEM_parameterization_type} \\
+  --overwrite_ok \\
+  --mesh_dir \${mesh_dir} \\
+  --reverse
+
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo

@@ -69,8 +69,11 @@ legend_data = []
 
 # Plot data for each window
 for win, group in df.groupby('window'):
-    y = group["wcc0_sum"].tolist()
-    x = [xticks[v] for v in group['index']]
+    # y = group["wcc0_sum"].tolist()
+    # x = [xticks[v] for v in group['index']]
+    wcc = group.groupby("index")['wcc0_sum'].sum()  # sum over same index
+    y = wcc.tolist()
+    x = [xticks[v] for v in wcc.index]
     line, = ax.plot(x, y, "-s")
     legend_data.append((y[-1], win, line.get_color()))
 

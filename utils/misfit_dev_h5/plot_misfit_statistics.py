@@ -44,6 +44,8 @@ parser.add_argument("--fig_title", required=True, help="figure title, e.g. event
 parser.add_argument("--csv_list", required=True, help="File containing list of CSV files to process")
 parser.add_argument("--out_fig", required=True, help="Output figure")
 parser.add_argument("--out_csv", default=None, help="Output csv file")
+parser.add_argument("--fig_height", default=6, help="figure height")
+parser.add_argument("--fig_width", default=8, help="figure width")
 args = parser.parse_args()
 
 # Read list of CSV files
@@ -63,7 +65,7 @@ xticks = {v: i for i, v in enumerate(indices)}
 max_x = len(indices) - 1
 
 # Create the plot
-fig = plt.figure(figsize=[6, 8])
+fig = plt.figure(figsize=[args.fig_width, args.fig_height])
 ax = fig.add_axes([0.1, 0.1, 0.6, 0.8]) 
 ax_height = 0.8 * 8 # in inches
 legend_data = []

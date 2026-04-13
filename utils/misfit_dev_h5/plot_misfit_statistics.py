@@ -44,8 +44,8 @@ parser.add_argument("--fig_title", required=True, help="figure title, e.g. event
 parser.add_argument("--csv_list", required=True, help="File containing list of CSV files to process")
 parser.add_argument("--out_fig", required=True, help="Output figure")
 parser.add_argument("--out_csv", default=None, help="Output csv file")
-parser.add_argument("--fig_height", default=6, help="figure height")
-parser.add_argument("--fig_width", default=8, help="figure width")
+parser.add_argument("--fig_height", default=6, type=float, help="figure height")
+parser.add_argument("--fig_width", default=8, type=float, help="figure width")
 args = parser.parse_args()
 
 # Read list of CSV files

@@ -43,6 +43,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--fig_title", required=True, help="figure title, e.g. event name")
 parser.add_argument("--csv_list", required=True, help="File containing list of CSV files to process")
 parser.add_argument("--out_fig", required=True, help="Output figure")
+parser.add_argument("--out_csv", default=None, help="Output csv file")
 args = parser.parse_args()
 
 # Read list of CSV files
@@ -67,13 +68,22 @@ ax = fig.add_axes([0.1, 0.1, 0.6, 0.8])
 ax_height = 0.8 * 8 # in inches
 legend_data = []
 
+# Group by window and index, sum over the same (window, index)
+df = df.groupby(['window', 'index'])[['wcc0_sum', 'weight_sum']].sum()
+df['wcc0_avg'] = df['wcc0_sum'] / df['weight_sum']
+if args.out_csv:
+    df.to_csv(args.out_csv)
+
 # Plot data for each window
-for win, group in df.groupby('window'):
+# for win, group in df.groupby('window'):
+for win in df.index.get_level_values('window').unique():
+    df_sel = df.loc[win]
     # y = group["wcc0_sum"].tolist()
     # x = [xticks[v] for v in group['index']]
-    wcc = group.groupby("index")['wcc0_sum'].sum()  # sum over same index
-    y = wcc.tolist()
-    x = [xticks[v] for v in wcc.index]
+    # wcc = group.groupby("index")['wcc0_sum'].sum()  # sum over same index
+    # df_sel = df.sort_index()
+    y = df_sel['wcc0_sum'].tolist()
+    x = [xticks[v] for v in df_sel.index]
     line, = ax.plot(x, y, "-s")
     legend_data.append((y[-1], win, line.get_color()))
 

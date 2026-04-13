@@ -40,7 +40,7 @@ def adjust_min_gap(arr, min_gap):
 
 # Parse command line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("--event_name", required=True, help="Name of the event for plot title")
+parser.add_argument("--fig_title", required=True, help="figure title, e.g. event name")
 parser.add_argument("--csv_list", required=True, help="File containing list of CSV files to process")
 parser.add_argument("--out_fig", required=True, help="Output figure")
 args = parser.parse_args()

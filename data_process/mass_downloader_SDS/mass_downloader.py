@@ -179,11 +179,16 @@ class MassDownloader(object):
         logger.info("Querying federator catalog for data")
         logger.debug(f"{arguments=}")
         fedcat = FederatorCatalog()
-        response = fedcat.query_fedcat(**arguments, filename=out_fedcat)
+
+        # replace SED with ETH
+        dc_mappings = {'SED': 'ETH'}
+
+        response = fedcat.query_fedcat(**arguments, filename=out_fedcat, dc_mappings=dc_mappings)
         logger.debug(f"{response=}")
 
         self.providers = [key for key in response]
-        # replace SED with ETH
+        print(self.providers)
+
         self._initialize_clients()
 
         # The downloads from each client will be handled separately.
@@ -372,6 +377,11 @@ class MassDownloader(object):
                         extra = ""
                     logger.warning(
                         "Failed to initialize client '%s'.%s" % (client_name, extra)
+                    )
+                    return client_name, None
+                except Exception as e:
+                    logger.warning(
+                        "Failed to initialize client '%s' (%s)." % client_name, e
                     )
                     return client_name, None
 

@@ -8,7 +8,7 @@ class FederatorCatalog(FederatorRoutingClient):
     def __init__(self, *args, **kwargs):
         super(FederatorCatalog, self).__init__(*args, **kwargs)
 
-    def query_fedcat(self, bulk=[], filename=None, **kwargs):
+    def query_fedcat(self, bulk=[], filename=None, dc_mappings=None, **kwargs):
         """
         Get stations from multiple data centers.
 
@@ -52,11 +52,11 @@ class FederatorCatalog(FederatorRoutingClient):
             with open(filename, "w") as f:
                 f.write(data)
 
-        split = self._split_routing_response(data)
+        split = self._split_routing_response(data, dc_mappings=dc_mappings)
         return split
 
     @staticmethod
-    def _split_routing_response(data):
+    def _split_routing_response(data, dc_mappings=None):
         """
         Splits the routing responses per data center for the federator output.
 
@@ -74,6 +74,9 @@ class FederatorCatalog(FederatorRoutingClient):
             if line.startswith("DATACENTER"):
                 datacenter_info = line.split("=")[1]
                 current_key, url = datacenter_info.split(",")
+                # replace the datacenter name with the new one
+                if dc_mappings and current_key in dc_mappings:
+                    current_key = dc_mappings[current_key]
                 split[current_key] = {}
                 continue
             # Anything before the first data center can be ignored.

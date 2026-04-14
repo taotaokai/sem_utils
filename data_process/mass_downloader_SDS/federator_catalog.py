@@ -8,7 +8,7 @@ class FederatorCatalog(FederatorRoutingClient):
     def __init__(self, *args, **kwargs):
         super(FederatorCatalog, self).__init__(*args, **kwargs)
 
-    def query_fedcat(self, bulk=[], **kwargs):
+    def query_fedcat(self, bulk=[], filename=None, **kwargs):
         """
         Get stations from multiple data centers.
 
@@ -47,6 +47,11 @@ class FederatorCatalog(FederatorRoutingClient):
             self._url + "/query", data=bulk_str, content_type="text/plain"
         )
         data = r.content.decode() if hasattr(r.content, "decode") else r.content
+
+        if filename:
+            with open(filename, "w") as f:
+                f.write(data)
+
         split = self._split_routing_response(data)
         return split
 

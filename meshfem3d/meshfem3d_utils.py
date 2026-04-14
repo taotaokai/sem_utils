@@ -656,6 +656,9 @@ def sem_latlon2xieta(lat_center, lon_center, gamma_rot, lat_test, lon_test):
     l_eta = np.dot(v0_eta, v1)
     angle_xi = np.rad2deg(np.arctan2(l_xi, l_r))
     angle_eta = np.rad2deg(np.arctan2(l_eta, l_r))
+    if l_r < 0:
+        angle_xi = np.nan
+        angle_eta = np.nan 
 
     return angle_xi, angle_eta
 

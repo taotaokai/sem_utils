@@ -137,6 +137,7 @@ class MassDownloader(object):
         stationxml_storage,
         download_chunk_size_in_mb=20,
         threads_per_client=3,
+        out_fedcat=None,
         print_report=True,
     ):
         """
@@ -178,7 +179,7 @@ class MassDownloader(object):
         logger.info("Querying federator catalog for data")
         logger.debug(f"{arguments=}")
         fedcat = FederatorCatalog()
-        response = fedcat.query_fedcat(**arguments)
+        response = fedcat.query_fedcat(**arguments, filename=out_fedcat)
         logger.debug(f"{response=}")
 
         self.providers = [key for key in response]

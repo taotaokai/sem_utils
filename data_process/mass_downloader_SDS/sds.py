@@ -500,7 +500,7 @@ class Client(object):
         gaps = []
         intervals_exist = []
         if st:
-            record_intervals = [(tr.stats.starttime, tr.stats.endtime) for tr in st]
+            record_intervals = [[tr.stats.starttime, tr.stats.endtime] for tr in st]
             record_intervals = _merge_intervals(record_intervals)
             dt = min([tr.stats.delta for tr in st])
             b = starttime

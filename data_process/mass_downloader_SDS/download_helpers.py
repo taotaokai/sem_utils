@@ -26,6 +26,7 @@ import numpy as np
 from lxml.etree import XMLSyntaxError
 
 import obspy
+from obspy import UTCDateTime
 from obspy.clients.fdsn.client import Client
 from obspy.core.util import Enum
 
@@ -801,7 +802,7 @@ class ClientDownloadHelper(object):
                 stationxml_storage=self.stationxml_storage, logger=self.logger
             )
 
-    def download_stationxml(self, threads=3):
+    def download_stationxml(self, threads=1):
         """
         Actually download the StationXML files.
 
@@ -941,7 +942,7 @@ class ClientDownloadHelper(object):
             )
         )
 
-    def download_mseed(self, chunk_size_in_mb=25, threads_per_client=3):
+    def download_mseed(self, chunk_size_in_mb=25, threads_per_client=1):
         """
         Actually download MiniSEED data.
 
@@ -1027,7 +1028,7 @@ class ClientDownloadHelper(object):
         curr_chunk = []
         curr_chunk_mb = 0
         # Don't send more than 50 requests at once to not choke the servers.
-        max_chunk_length = 50
+        max_chunk_length = 200
         for group in groups:
             curr_chunk.extend(group)
             for request in group:
@@ -1480,6 +1481,159 @@ class ClientDownloadHelper(object):
                     longitude=station.longitude,
                     channels=channels,
                 )
+        self.logger.info(
+            "Client '%s' - Found %i stations (%i channels)."
+            % (
+                self.client_name,
+                len(self.stations),
+                sum([len(_i.channels) for _i in self.stations.values()]),
+            )
+        )
+
+    def add_channels(self, channels):
+        """
+        Queries the current client for information on what stations are
+        available given the spatial and temporal restrictions.
+        """
+        # Check if stations needs to be filtered after downloading or if the
+        # restrictions one can impose with the FDSN webservices queries are
+        # enough. This depends on the domain definition.
+        try:
+            self.domain.is_in_domain(0, 0)
+            needs_filtering = True
+        except NotImplementedError:
+            needs_filtering = False
+
+        # Get the time intervals from the restrictions.
+        intervals = [TimeInterval(start=_i[0], end=_i[1]) for _i in self.restrictions]
+
+        # filter stations
+        stations = {}
+        for data in channels:
+            net = data[0]
+            sta = data[1]
+            lat = data[4]
+            lon = data[5]
+
+            # Skip network if so desired.
+            skip_network = False
+            for pattern in self.restrictions.exclude_networks:
+                if fnmatch.fnmatch(net, pattern):
+                    skip_network = True
+                    break
+            if skip_network:
+                continue
+
+            # Skip station if so desired.
+            skip_station = False
+            for pattern in self.restrictions.exclude_stations:
+                if fnmatch.fnmatch(sta, pattern):
+                    skip_station = True
+                    break
+            if skip_station:
+                continue
+
+            # If an inventory is given, only keep stations part of the
+            # inventory.
+            if (
+                self.restrictions.limit_stations_to_inventory is not None
+                and (net, sta) not in self.restrictions.limit_stations_to_inventory
+            ):
+                continue
+
+            # Skip the station if it is not in the desired domain.
+            if needs_filtering is True and not self.domain.is_in_domain(lat, lon):
+                continue
+
+            key = (net, sta)
+            if key not in stations:
+                stations[key] = [data]
+            else:
+                stations[key].append(data)
+
+        # filter channels for each station
+        for data in stations.values():
+            channels = []
+            for channel in data:
+                net = channel[0]
+                sta = channel[1]
+                loc = channel[2]
+                cha = channel[3]
+                lat = float(channel[4])
+                lon = float(channel[5])
+                starttime = UTCDateTime(channel[15])
+                endtime = None
+                if channel[16]:
+                    endtime = UTCDateTime(channel[16])
+
+                # Remove channels that somehow slipped past the temporal
+                # constraints due to weird behaviour from the data center.
+                if (starttime > self.restrictions.endtime) or (
+                    endtime and endtime < self.restrictions.starttime
+                ):
+                    continue
+                new_channel = Channel(
+                    location=loc,
+                    channel=cha,
+                    intervals=copy.deepcopy(intervals),
+                )
+                # Multiple channel epochs would result in duplicate
+                # channels which we don't want. Bit of a silly logic here
+                # to get rid of them.
+                if new_channel not in channels:
+                    channels.append(new_channel)
+
+                # Group by locations and apply the channel priority filter to each.
+                filtered_channels = []
+
+                def get_loc(x):
+                    return x.location
+
+                for location, _channels in itertools.groupby(
+                    sorted(channels, key=get_loc), get_loc
+                ):
+                    filtered_channels.extend(
+                        utils.filter_channel_priority(
+                            list(_channels),
+                            key="channel",
+                            priorities=self.restrictions.channel_priorities,
+                        )
+                    )
+                channels = filtered_channels
+
+                # Filter to remove unwanted locations according to the
+                # priority list.
+                has_channels_before_filtering = bool(channels)
+                channels = utils.filter_channel_priority(
+                    channels,
+                    key="location",
+                    priorities=self.restrictions.location_priorities,
+                )
+                # This has been a point of confusion for users so raise a
+                # warning in case this removed all channels and is still
+                # using the default settings.
+                if (
+                    not channels
+                    and has_channels_before_filtering
+                    and self.restrictions._loc_prios_are_default_values
+                ):
+                    self.logger.warning(
+                        "Client '%s' - No channel at station %s.%s has "
+                        "been selected due to the `location_priorities` "
+                        "settings." % (self.client_name, net, sta)
+                    )
+
+            if not channels:
+                continue
+
+            self.stations[(net, sta)] = Station(
+                network=net,
+                station=sta,
+                latitude=lat,
+                longitude=lon,
+                channels=channels,
+            )
+
         self.logger.info(
             "Client '%s' - Found %i stations (%i channels)."
             % (

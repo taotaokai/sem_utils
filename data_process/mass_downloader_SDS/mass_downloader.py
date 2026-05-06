@@ -81,49 +81,50 @@ class MassDownloader(object):
                 logger.addHandler(fh)
 
         self.debug = debug
-        # If not given, use all providers ObsPy knows. They will be sorted
-        # alphabetically except that ORFEUS is second to last and IRIS last.
-        # The reason for this order is that smaller data centers can be
-        # expected to have more up-to-date meta information about their own
-        # data and thus should be prioritized when downloading data.
-        if providers is None:
-            providers = dict(URL_MAPPINGS.items())
-            _p = []
 
-            if "RASPISHAKE" in providers:
-                # exclude RASPISHAKE by default
-                del providers["RASPISHAKE"]
+        # # If not given, use all providers ObsPy knows. They will be sorted
+        # # alphabetically except that ORFEUS is second to last and IRIS last.
+        # # The reason for this order is that smaller data centers can be
+        # # expected to have more up-to-date meta information about their own
+        # # data and thus should be prioritized when downloading data.
+        # if providers is None:
+        #     providers = dict(URL_MAPPINGS.items())
+        #     _p = []
 
-            if "IRIS" in providers:
-                has_iris = True
-                del providers["IRIS"]
-            else:
-                has_iris = False
+        #     if "RASPISHAKE" in providers:
+        #         # exclude RASPISHAKE by default
+        #         del providers["RASPISHAKE"]
 
-            if "ODC" in providers:
-                providers["ORFEUS"] = providers["ODC"]
-                del providers["ODC"]
+        #     if "IRIS" in providers:
+        #         has_iris = True
+        #         del providers["IRIS"]
+        #     else:
+        #         has_iris = False
 
-            if "ORFEUS" in providers:
-                has_orfeus = True
-                del providers["ORFEUS"]
-            else:
-                has_orfeus = False
+        #     if "ODC" in providers:
+        #         providers["ORFEUS"] = providers["ODC"]
+        #         del providers["ODC"]
 
-            # leave out IRISPH5 which is for nodal experiments and might match
-            # insanely large datasets, depending on restrictions
-            if "IRISPH5" in providers:
-                del providers["IRISPH5"]
+        #     if "ORFEUS" in providers:
+        #         has_orfeus = True
+        #         del providers["ORFEUS"]
+        #     else:
+        #         has_orfeus = False
 
-            _p = sorted(providers)
-            if has_orfeus:
-                _p.append("ORFEUS")
-            if has_iris:
-                _p.append("IRIS")
+        #     # leave out IRISPH5 which is for nodal experiments and might match
+        #     # insanely large datasets, depending on restrictions
+        #     if "IRISPH5" in providers:
+        #         del providers["IRISPH5"]
 
-            providers = _p
+        #     _p = sorted(providers)
+        #     if has_orfeus:
+        #         _p.append("ORFEUS")
+        #     if has_iris:
+        #         _p.append("IRIS")
 
-        self.providers = tuple(providers)
+        #     providers = _p
+
+        self.providers = providers
 
         # Initialize all clients.
         self._initialized_clients = collections.OrderedDict()
@@ -135,8 +136,8 @@ class MassDownloader(object):
         restrictions: Restrictions,
         mseed_storage,
         stationxml_storage,
-        download_chunk_size_in_mb=20,
-        threads_per_client=3,
+        download_chunk_size_in_mb=200,
+        threads_per_client=1,
         out_fedcat=None,
         print_report=True,
     ):
@@ -181,13 +182,22 @@ class MassDownloader(object):
         fedcat = FederatorCatalog()
 
         # replace SED with ETH
-        dc_mappings = {'SED': 'ETH'}
+        dc_mappings = {"SED": "ETH"}
 
-        response = fedcat.query_fedcat(**arguments, filename=out_fedcat, dc_mappings=dc_mappings)
-        logger.debug(f"{response=}")
+        # response = fedcat.query_fedcat(**arguments, filename=out_fedcat, dc_mappings=dc_mappings)
+        fedcat_channels = fedcat.query_channels(
+            **arguments, filename=out_fedcat, dc_mappings=dc_mappings
+        )
+        logger.debug(f"{fedcat_channels=}")
 
-        self.providers = [key for key in response]
-        print(self.providers)
+        if self.providers is None:
+            self.providers = [key for key in fedcat_channels]
+
+        # filter to providers known to obspy?
+        # print(self.providers)
+
+        # bulk_all = [request for client in response.values() for request in client["requests"]]
+        # print(bulk_all)
 
         self._initialize_clients()
 
@@ -227,21 +237,26 @@ class MassDownloader(object):
             client_download_helpers[client_name] = helper
 
             # Request the availability.
-            bulk = response[client_name]["requests"]
-            logger.debug(f"Client {client_name} - {bulk=}")
-            helper.get_availability(bulk)
+            # bulk = response[client_name]["requests"]
+            # logger.debug(f"Client {client_name} - {bulk=}")
+            # helper.get_availability(bulk)
+
+            channels = fedcat_channels[client_name]["channels"]
+            helper.add_channels(channels)  # also filter channels by Restriction
 
             # Continue if there is no data.
             if not helper:
                 logger.info("Client '%s' - No data available." % client_name)
                 continue
 
+            # logger.debug(f"after add_channels:\n{helper}\n")
+
             # First filter stage. Remove stations based on the station id,
             # e.g. NETWORK.STATION. Remove all that already exist.
             helper.discard_stations(
                 existing_client_dl_helpers=existing_client_dl_helpers
             )
-            logger.debug(f"{helper}")
+            # logger.debug(f"after discard_stations:\n{helper}\n")
 
             # Continue if there is no data.
             if not helper:
@@ -263,6 +278,16 @@ class MassDownloader(object):
             #                     "inter-station distance." % client_name)
             #         continue
 
+            helper.filter_stations_based_on_minimum_distance(
+                existing_client_dl_helpers=existing_client_dl_helpers)
+            # Continue if there is no data left after the filtering.
+            if not helper:
+                logger.info("Client '%s' - No new data available after "
+                            "discarding based on the minimal "
+                            "inter-station distance." % client_name)
+                continue
+
+
             logger.info(
                 "Client '%s' - Will attempt to download data from %i "
                 "stations." % (client_name, len(helper))
@@ -276,8 +301,8 @@ class MassDownloader(object):
             )
 
             # Download StationXML data.
-            helper.prepare_stationxml_download()
-            helper.download_stationxml()
+            # helper.prepare_stationxml_download()
+            # helper.download_stationxml()
 
             # Sanitize the downloaded things if desired. Assures that all
             # waveform data also has the corresponding station information.

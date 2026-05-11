@@ -418,17 +418,12 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/structure_inversion/grid_sear
   --out_figure \${out_dir}/grid_search.pdf \\
   --out_txt \${out_dir}/grid_search.txt
 
-echo ====== apply model update
-
-out_dir=${SEM_iter_dir}/model_updated/GLL
-[ -d \${out_dir} ] && rm -rf \${out_dir}
-mkdir -p \${out_dir}
+echo ===== get optimal step length for each model search direction
 
 group_names=(${SEM_perturb_group_names[@]})
 model_groups=(${SEM_perturb_model_groups[@]})
 ngroup=\${#group_names[@]}
 
-# get optimal step length for each model search direction
 group_scales=()
 for ((i=0; i<\$ngroup; i++))
 do
@@ -437,6 +432,12 @@ do
   group_scales[\$i]=\$opt_dm_scale
   echo "# apply model update for [\${dm_tag}] with step length [\${opt_dm_scale}]"
 done
+
+echo ====== apply model update
+
+out_dir=${SEM_iter_dir}/model_updated/GLL
+[ -d \${out_dir} ] && rm -rf \${out_dir}
+mkdir -p \${out_dir}
 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb_groups.py \\
   ${SEM_nproc_total} \\
@@ -478,10 +479,6 @@ mkdir -p \$out_dir
 
 model_names=(${SEM_model_names[@]})
 model_name=\${model_names[\${SLURM_ARRAY_TASK_ID}]}
-
-# # copy initial model in case some model parameters are not inverted, e.g., qmu, rho 
-# cp -L $SEM_iter_dir/model_initial/*.bin \$out_dir
-# chmod -R u+w \$out_dir
 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_VTI3D.py \\
   ${SEM_nproc_total} \\

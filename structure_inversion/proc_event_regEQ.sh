@@ -42,7 +42,7 @@ then
 fi
 
 # link initial model dir
-initial_model_dir=${SEM_prev_iter_dir}/model_updated
+initial_model_dir=${SEM_prev_iter_dir}/model_updated/GLL_smooth_reparam
 if [ "$SEM_iter_num" -eq 0 ]
 then
   initial_model_dir=${SEM_starting_model_dir}

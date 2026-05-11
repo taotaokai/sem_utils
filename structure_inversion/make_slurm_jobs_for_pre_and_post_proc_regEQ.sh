@@ -420,15 +420,9 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/structure_inversion/grid_sear
 
 echo ====== apply model update
 
-if [ -d "$SEM_iter_dir/model_updated" ]
-then
-  rm -rf $SEM_iter_dir/model_updated
-fi
-mkdir -p $SEM_iter_dir/model_updated
-
-# # copy initial model in case some model parameters are not inverted, e.g., qmu, rho 
-# cp -L $SEM_iter_dir/model_initial/*.bin $SEM_iter_dir/model_updated/
-# chmod -R u+w $SEM_iter_dir/model_updated
+out_dir=${SEM_iter_dir}/model_updated/GLL
+[ -d \${out_dir} ] && rm -rf \${out_dir}
+mkdir -p \${out_dir}
 
 group_names=(${SEM_perturb_group_names[@]})
 model_groups=(${SEM_perturb_model_groups[@]})
@@ -448,7 +442,7 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb_groups.
   ${SEM_nproc_total} \\
   $SEM_iter_dir/model_initial \\
   $SEM_iter_dir/dmodel \\
-  $SEM_iter_dir/model_updated \\
+  \${out_dir} \\
   --model_groups \${model_groups[@]} \\
   --group_scales \${group_scales[@]} \\
   --dmodel_tag ${SEM_dmodel_tag} \\
@@ -465,7 +459,7 @@ EOF
 cat <<EOF > $model_smooth_job
 #!/bin/bash
 #SBATCH -J model_smooth
-#SBATCH -o ${model_smooth_job}.o%j
+#SBATCH -o ${model_smooth_job}.o%A_%a
 #SBATCH --array 0-$(( ${#SEM_model_names[@]} - 1 ))
 #SBATCH ${SLURM_args_kernel_precond}
 
@@ -476,19 +470,18 @@ echo
 echo ===== smooth model
 
 mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
+model_dir=${SEM_iter_dir}/model_updated/GLL
 
-model_dir=${SEM_iter_dir}/model_updated
-
-out_dir=${SEM_iter_dir}/model_updated_smooth
+out_dir=${SEM_iter_dir}/model_updated/GLL_smooth
 [ -d \${out_dir} ] && rm -rf \${out_dir}
 mkdir -p \$out_dir
 
 model_names=(${SEM_model_names[@]})
 model_name=\${model_names[\${SLURM_ARRAY_TASK_ID}]}
 
-# copy initial model in case some model parameters are not inverted, e.g., qmu, rho 
-cp -L $SEM_iter_dir/model_initial/*.bin \$out_dir
-chmod -R u+w \$out_dir
+# # copy initial model in case some model parameters are not inverted, e.g., qmu, rho 
+# cp -L $SEM_iter_dir/model_initial/*.bin \$out_dir
+# chmod -R u+w \$out_dir
 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_VTI3D.py \\
   ${SEM_nproc_total} \\
@@ -521,7 +514,12 @@ echo
 echo ===== smooth model
 
 mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
-model_dir=${SEM_iter_dir}/model_updated_smooth
+model_dir=${SEM_iter_dir}/model_updated/GLL_smooth
+out_dir=${SEM_iter_dir}/model_updated/GLL_smooth_reparam
+
+# copy initial model in case some model parameters are not inverted, e.g., qmu, rho 
+cp -L $SEM_iter_dir/model_initial/*.bin \$out_dir
+chmod -R u+w \$out_dir
 
 echo ====== convert back to vph,vpv,vsv,vsh
 
@@ -529,7 +527,7 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_repar
   --nproc ${SEM_nproc_total} \\
   --reference_dir ${SEM_reference_model_dir} \\
   --model_dir \$model_dir \\
-  --out_dir \$model_dir \\
+  --out_dir \$out_dir \\
   --reverse \\
   --type ${SEM_parameterization_type} \\
   --overwrite_ok \\
@@ -540,8 +538,8 @@ echo ====== re-generate alpha,beta,phi,xi to ensure compatibility for isotropic 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
   --nproc ${SEM_nproc_total} \\
   --reference_dir ${SEM_reference_model_dir} \\
-  --model_dir \$model_dir \\
-  --out_dir \$model_dir \\
+  --model_dir \$out_dir \\
+  --out_dir \$out_dir \\
   --reverse \\
   --type ${SEM_parameterization_type} \\
   --overwrite_ok \\

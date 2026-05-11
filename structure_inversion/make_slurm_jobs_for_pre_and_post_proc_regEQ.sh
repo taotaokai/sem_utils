@@ -310,7 +310,7 @@ do
     # --model_min_values ${SEM_model_min_values[@]} \\
     # --model_max_values ${SEM_model_max_values[@]}
 
-  # convert from alpha,beta,xi,phi to vpv,vph,vsv,vsh
+  # convert from alpha,beta,xi,phi,eta,drho to vpv,vph,vsv,vsh,eta,rho
   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
     --nproc ${SEM_nproc_total} \\
     --reference_dir ${SEM_reference_model_dir} \\
@@ -515,11 +515,7 @@ out_dir=${SEM_iter_dir}/model_updated/GLL_smooth_reparam
 [ -d \${out_dir} ] && rm -rf \${out_dir}
 mkdir -p \$out_dir
 
-# copy initial model in case some model parameters are not inverted, e.g., qmu, rho 
-cp -L $SEM_iter_dir/model_initial/*.bin \$out_dir
-chmod -R u+w \$out_dir
-
-echo ====== convert back to vph,vpv,vsv,vsh
+echo ====== convert back to vph,vpv,vsv,vsh,eta,rho
 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
   --nproc ${SEM_nproc_total} \\
@@ -531,18 +527,16 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_repar
   --overwrite_ok \\
   --mesh_dir \${mesh_dir} 
 
-echo ====== re-generate alpha,beta,phi,xi to ensure compatibility for isotropic elements
+echo ====== re-generate alpha,beta,phi,xi,eta,drho to ensure compatibility for isotropic elements
 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
   --nproc ${SEM_nproc_total} \\
   --reference_dir ${SEM_reference_model_dir} \\
   --model_dir \$out_dir \\
   --out_dir \$out_dir \\
-  --reverse \\
   --type ${SEM_parameterization_type} \\
   --overwrite_ok \\
   --mesh_dir \${mesh_dir} \\
-  --reverse
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"

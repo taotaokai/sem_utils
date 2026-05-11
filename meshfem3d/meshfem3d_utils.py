@@ -306,8 +306,8 @@ def sem_VTI_model_vpv_vph_vsv_vsh_to_alpha_beta_phi_xi(
         return alpha, beta, phi, xi
 
 
-def sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
-    cijkl_kernel, rho_kernel, alpha, beta, phi, xi, eta, rho, vp0, vs0
+def sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_drho(
+    cijkl_kernel, rho_kernel, alpha, beta, phi, xi, eta, drho, vp0, vs0, rho0
 ):
     # About the kernel dimension
     # base on specfem3D_glob/src/specfem3D/compute_kernels.F90:
@@ -317,8 +317,11 @@ def sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
     # ! final unit : [s km^(-3) GPa^(-1)]       ! for cijkl_kernel
     # ! final unit : [s km^(-3) (kg/m^3)^(-1)]  ! for rho_kernel
 
-    # rho: [g cm^(-3)], vp0,vs0: [km/s], rho*vp^2: [GPa]
+    # reference model: vp0, vs0, rho0
+    # current model: alpha, beta, phi, xi, eta, drho
 
+    # rho: [g cm^(-3)], vp0,vs0: [km/s], rho*vp^2: [GPa]
+    rho = rho0 * (1 + drho)
     rho_kernel = rho_kernel * 1.0e3  # convert to [s km^(-3) (g/cm^3)^(-1)]
 
     # convert to vph, vpv, vsh, vsv
@@ -397,7 +400,7 @@ def sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
 
     K_eta = (K_C13 + K_C23) * (vph**2 - 2.0 * vsv**2) * rho
 
-    K_rho = (
+    K_drho = rho0 * (
         rho_kernel
         + (K_C11 + K_C22) * vph**2
         + K_C33 * vpv**2
@@ -407,7 +410,7 @@ def sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
         + K_C66 * vsh**2
     )
 
-    return K_alpha, K_beta, K_phi, K_xi, K_eta, K_rho
+    return K_alpha, K_beta, K_phi, K_xi, K_eta, K_drho
 
 
 # def sem_VTI_model_vpv_vph_vsv_vsh_to_beta_kappa_phi_xi(

@@ -8,7 +8,7 @@ from meshfem3d_utils import (
     sem_mesh_read,
     read_gll_file,
     write_gll_file,
-    sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho,
+    sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_drho,
     # sem_VTI_kernel_cijkl_rho_to_beta_kappa_phi_xi_eta_rho,
 )
 
@@ -34,12 +34,12 @@ def parse_arguments():
     parser.add_argument(
         "--reference_dir",
         required=True,
-        help="directory with reference isotropy model proc*_reg1_[vp,vs].bin",
+        help="directory with reference isotropy model proc*_reg1_[vp,vs,rho].bin",
     )
     parser.add_argument(
         "--model_dir",
         required=True,
-        help="directory with proc*_reg1_[vpv,vph,vsv,vsh].bin",
+        help="directory with proc*_reg1_[alpha,beta,phi,xi,eta,drho].bin",
     )
     parser.add_argument(
         "--kernel_dir",
@@ -49,7 +49,7 @@ def parse_arguments():
     parser.add_argument(
         "--out_dir",
         required=True,
-        help="output dir for proc*_reg1_[alpha,beta,phi,xi,vp,vs].bin",
+        help="output dir for proc*_reg1_[alpha,beta,phi,xi,eta,drho]_kernel.bin",
     )
     parser.add_argument(
         "--type",
@@ -90,6 +90,7 @@ def process_kernel_for_alpha_beta_phi_xi(
     # Read reference isotropic velocity models (km/s)
     vp0 = read_gll_file(reference_dir, "vp", iproc, shape=gll_dims)
     vs0 = read_gll_file(reference_dir, "vs", iproc, shape=gll_dims)
+    rho0 = read_gll_file(reference_dir, "rho", iproc, shape=gll_dims)
 
     # read models (velocities in km/s, density in g/cm^3)
     alpha = read_gll_file(model_dir, "alpha", iproc, shape=gll_dims)
@@ -97,7 +98,7 @@ def process_kernel_for_alpha_beta_phi_xi(
     phi = read_gll_file(model_dir, "phi", iproc, shape=gll_dims)
     xi = read_gll_file(model_dir, "xi", iproc, shape=gll_dims)
     eta = read_gll_file(model_dir, "eta", iproc, shape=gll_dims)
-    rho = read_gll_file(model_dir, "rho", iproc, shape=gll_dims)
+    drho = read_gll_file(model_dir, "drho", iproc, shape=gll_dims)
 
     # force phi,xi,eta to zero anisotropy for isotropic elements
     if mesh_dir:
@@ -105,9 +106,9 @@ def process_kernel_for_alpha_beta_phi_xi(
         xi[ispec_is_iso, ...] = 0.0
         eta[ispec_is_iso, ...] = 1.0
 
-    K_alpha, K_beta, K_phi, K_xi, K_eta, K_rho = (
-        sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_rho(
-            cijkl_kernel, rho_kernel, alpha, beta, phi, xi, eta, rho, vp0, vs0
+    K_alpha, K_beta, K_phi, K_xi, K_eta, K_drho = (
+        sem_VTI_kernel_cijkl_rho_to_alpha_beta_phi_xi_eta_drho(
+            cijkl_kernel, rho_kernel, alpha, beta, phi, xi, eta, drho, vp0, vs0, rho0
         )
     )
 
@@ -124,7 +125,7 @@ def process_kernel_for_alpha_beta_phi_xi(
     write_gll_file(out_dir, "xi_kernel", iproc, K_xi)
     write_gll_file(out_dir, "eta_kernel", iproc, K_eta)
     # NOTE maybe use rhonotprime to distinguish from original rho kernel?
-    write_gll_file(out_dir, "rho_kernel", iproc, K_rho)
+    write_gll_file(out_dir, "drho_kernel", iproc, K_drho)
 
 
 # def process_kernel_for_beta_kappa_phi_xi(

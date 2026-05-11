@@ -28,7 +28,7 @@ PARAMETERIZATION_TYPES = [
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Re-parameterize VTI model from vpv,vph,vsv,vsh to alpha,beta,phi,xi or beta,kappa,phi,xi"
+        description="Re-parameterize VTI model from vpv,vph,vsv,vsh,eta,rho to alpha,beta,phi,xi,eta,drho"
     )
 
     parser.add_argument(
@@ -37,22 +37,22 @@ def parse_arguments():
     parser.add_argument(
         "--reference_dir",
         required=True,
-        help="directory with reference isotropy model proc*_reg1_[vp,vs].bin",
+        help="directory with reference isotropy model proc*_reg1_[vp,vs,rho].bin",
     )
     parser.add_argument(
         "--model_dir",
         required=True,
-        help="directory with proc*_reg1_[vpv,vph,vsv,vsh].bin",
+        help="directory with proc*_reg1_[vpv,vph,vsv,vsh,eta,rho].bin",
     )
     parser.add_argument(
         "--out_dir",
         required=True,
-        help="output dir for proc*_reg1_[alpha,beta,phi,xi,vp,vs].bin",
+        help="output dir for proc*_reg1_[alpha,beta,phi,xi,eta,drho,vp,vs].bin",
     )
     parser.add_argument(
         "--reverse",
         action="store_true",
-        help="flag to reverse conversion from beta,kappa,phi,xi to vpv,vph,vsv,vsh",
+        help="flag to reverse conversion from alpha,beta,phi,xi,eta,drho to vpv,vph,vsv,vsh,eta,rho",
     )
     parser.add_argument(
         "--type",
@@ -72,7 +72,7 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def read_vpv_vph_vsv_vsh_eta(iproc, model_dir, shape=None):
+def read_vpv_vph_vsv_vsh_eta_rho(iproc, model_dir, shape=None):
     """Read velocity models from a directory.
     note: velocities in km/s, density in g/cm^3
     """
@@ -81,8 +81,8 @@ def read_vpv_vph_vsv_vsh_eta(iproc, model_dir, shape=None):
     vsv = read_gll_file(model_dir, "vsv", iproc, shape=shape)
     vsh = read_gll_file(model_dir, "vsh", iproc, shape=shape)
     eta = read_gll_file(model_dir, "eta", iproc, shape=shape)
-    # rho = read_gll_file(model_dir, "rho", iproc)
-    return vpv, vph, vsv, vsh, eta  # , rho
+    rho = read_gll_file(model_dir, "rho", iproc, shape=shape)
+    return vpv, vph, vsv, vsh, eta, rho
 
 
 # def read_beta_kappa_phi_xi_eta(iproc, model_dir, shape=None):
@@ -97,16 +97,16 @@ def read_vpv_vph_vsv_vsh_eta(iproc, model_dir, shape=None):
 #     return beta, kappa, phi, xi, eta
 
 
-def read_alpha_beta_phi_xi_eta(iproc, model_dir, shape=None):
-    """Read velocity models from a directory.
-    note: velocities in km/s, density in g/cm^3
+def read_alpha_beta_phi_xi_eta_drho(iproc, model_dir, shape=None):
+    """Read non-dimensioinalized models.
     """
     alpha = read_gll_file(model_dir, "alpha", iproc, shape=shape)
     beta = read_gll_file(model_dir, "beta", iproc, shape=shape)
     phi = read_gll_file(model_dir, "phi", iproc, shape=shape)
     xi = read_gll_file(model_dir, "xi", iproc, shape=shape)
     eta = read_gll_file(model_dir, "eta", iproc, shape=shape)
-    return alpha, beta, phi, xi, eta
+    drho = read_gll_file(model_dir, "drho", iproc, shape=shape)
+    return alpha, beta, phi, xi, eta, drho
 
 
 # def convert_model_for_beta_kappa_phi_xi(
@@ -207,10 +207,11 @@ def convert_model_for_alpha_beta_phi_xi(
     # Read reference velocity models (km/s)
     vp0 = read_gll_file(reference_dir, "vp", iproc, shape=gll_dims)
     vs0 = read_gll_file(reference_dir, "vs", iproc, shape=gll_dims)
+    rho0 = read_gll_file(reference_dir, "rho", iproc, shape=gll_dims)
 
     # velocity models (velocities in km/s, density in g/cm^3)
     if reverse:
-        alpha, beta, phi, xi, eta = read_alpha_beta_phi_xi_eta(
+        alpha, beta, phi, xi, eta, drho = read_alpha_beta_phi_xi_eta_drho(
             iproc, model_dir, shape=gll_dims
         )
 
@@ -222,6 +223,7 @@ def convert_model_for_alpha_beta_phi_xi(
         vpv, vph, vsv, vsh, vp, vs = sem_VTI_model_alpha_beta_phi_xi_to_vpv_vph_vsv_vsh(
             alpha, beta, phi, xi, vp0, vs0, output_iso=True
         )
+        rho = rho0 * (1.0 + drho)
 
         # Write each model to a separate file
         write_gll_file(out_dir, "vpv", iproc, vpv, overwrite=overwrite_ok)
@@ -229,11 +231,12 @@ def convert_model_for_alpha_beta_phi_xi(
         write_gll_file(out_dir, "vsv", iproc, vsv, overwrite=overwrite_ok)
         write_gll_file(out_dir, "vsh", iproc, vsh, overwrite=overwrite_ok)
         write_gll_file(out_dir, "eta", iproc, eta, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "rho", iproc, rho, overwrite=overwrite_ok)
         write_gll_file(out_dir, "vp", iproc, vp, overwrite=overwrite_ok)
         write_gll_file(out_dir, "vs", iproc, vs, overwrite=overwrite_ok)
 
     else:
-        vpv, vph, vsv, vsh, eta = read_vpv_vph_vsv_vsh_eta(
+        vpv, vph, vsv, vsh, eta, rho = read_vpv_vph_vsv_vsh_eta_rho(
             iproc, model_dir, shape=gll_dims
         )
 
@@ -242,6 +245,7 @@ def convert_model_for_alpha_beta_phi_xi(
                 vpv, vph, vsv, vsh, vp0, vs0, output_iso=True
             )
         )
+        drho = rho / rho0 - 1.0
 
         if mesh_dir:
             phi[ispec_is_iso, ...] = 0.0
@@ -254,6 +258,7 @@ def convert_model_for_alpha_beta_phi_xi(
         write_gll_file(out_dir, "phi", iproc, phi, overwrite=overwrite_ok)
         write_gll_file(out_dir, "xi", iproc, xi, overwrite=overwrite_ok)
         write_gll_file(out_dir, "eta", iproc, eta, overwrite=overwrite_ok)
+        write_gll_file(out_dir, "drho", iproc, drho, overwrite=overwrite_ok)
         write_gll_file(out_dir, "vp", iproc, vp, overwrite=overwrite_ok)
         write_gll_file(out_dir, "vs", iproc, vs, overwrite=overwrite_ok)
 

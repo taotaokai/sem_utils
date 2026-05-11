@@ -162,14 +162,14 @@ SLURM_args_plot=${SLURM_args_misfit}
 #====== model parameterization
 SEM_parameterization_type="alpha_beta_phi_xi" # or beta_kappa_phi_xi
 
-SEM_model_names=(alpha beta phi xi eta) # rho) # model parameters
-# SEM_model_names=(beta kappa phi xi eta rho) # model parameters
+SEM_model_names=(alpha beta phi xi eta drho) # model parameters
+# SEM_model_names=(beta kappa phi xi eta drho) # model parameters
 
 # model a priori bounds
-SEM_model_min_values=(-0.15 -0.15 -0.1 -0.1 0.8)
-SEM_model_max_values=(0.15  0.15  0.1  0.1 1.2)
-# SEM_model_min_values=(-0.1 1.7 -0.1 -0.1 0.8)
-# SEM_model_max_values=(0.1  1.9  0.1  0.1 1.2)
+SEM_model_min_values=(-0.15 -0.15 -0.1 -0.1 -0.1)
+SEM_model_max_values=( 0.15  0.15  0.1  0.1  0.1)
+# SEM_model_min_values=(-0.1 1.7 -0.1 -0.1 -0.1)
+# SEM_model_max_values=(0.1  1.9  0.1  0.1  0.1)
 
 SEM_kernel_tag="_kernel" # gradient of model parameters
 SEM_dmodel_tag="_dmodel" # search direction
@@ -249,7 +249,7 @@ SEM_dmodel_scale=0.05
 
 # perturbations along different parameter groups
 SEM_perturb_group_names=("dm")  # only one group
-SEM_perturb_model_groups=("alpha,beta,phi,xi,eta,rho")
+SEM_perturb_model_groups=("alpha,beta,phi,xi,eta,drho")
 # SEM_perturb_model_tag_groups=("alpha,beta,phi,xi,eta") #,rho")
 # SEM_perturb_dmodel_tag_groups=("alpha_dmodel,beta_dmodel,phi_dmodel,xi_dmodel,eta_dmodel") #,rho_dmodel")
 # model values are clipped to the range [min,max]

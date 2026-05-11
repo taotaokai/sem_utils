@@ -508,11 +508,12 @@ echo
 echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
-echo ===== smooth model
-
 mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
 model_dir=${SEM_iter_dir}/model_updated/GLL_smooth
 out_dir=${SEM_iter_dir}/model_updated/GLL_smooth_reparam
+
+[ -d \${out_dir} ] && rm -rf \${out_dir}
+mkdir -p \$out_dir
 
 # copy initial model in case some model parameters are not inverted, e.g., qmu, rho 
 cp -L $SEM_iter_dir/model_initial/*.bin \$out_dir

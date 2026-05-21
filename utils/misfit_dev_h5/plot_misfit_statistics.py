@@ -67,7 +67,7 @@ max_x = len(indices) - 1
 # Create the plot
 fig = plt.figure(figsize=[args.fig_width, args.fig_height])
 ax = fig.add_axes([0.1, 0.1, 0.6, 0.8]) 
-ax_height = 0.8 * 8 # in inches
+ax_height = 0.8 * args.fig_height # in inches
 legend_data = []
 
 # Group by window and index, sum over the same (window, index)

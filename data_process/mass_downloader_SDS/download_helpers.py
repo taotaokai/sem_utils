@@ -1584,38 +1584,40 @@ class ClientDownloadHelper(object):
                     channels.append(new_channel)
 
                 # Group by locations and apply the channel priority filter to each.
-                filtered_channels = []
-
-                def get_loc(x):
-                    return x.location
-
+                filtered_channels = {}
                 for location, _channels in itertools.groupby(
-                    sorted(channels, key=get_loc), get_loc
+                    sorted(channels, key=lambda x: (x.location, x.channel)),
+                    key=lambda x: x.location,
                 ):
-                    filtered_channels.extend(
-                        utils.filter_channel_priority(
-                            list(_channels),
-                            key="channel",
-                            priorities=self.restrictions.channel_priorities,
-                        )
+                    _channels = utils.filter_channel_priority(
+                        list(_channels),
+                        key="channel",
+                        priorities=self.restrictions.channel_priorities,
                     )
-                channels = filtered_channels
+                    if _channels:
+                        filtered_channels[location] = _channels
 
-                # Filter to remove unwanted locations according to the
-                # priority list.
-                has_channels_before_filtering = bool(channels)
-                channels = utils.filter_channel_priority(
-                    channels,
-                    key="location",
-                    priorities=self.restrictions.location_priorities,
-                )
+                # keep locations according to the priority list.
+                channels = []
+                if self.restrictions.location_priorities is not None:
+                    for pattern in self.restrictions.location_priorities:
+                        for location, _channels in filtered_channels.items():
+                            if fnmatch.fnmatch(location, pattern):
+                                channels.extend(_channels)
+                                break
+                        if channels:
+                            break
+                else:
+                    for _, _channels in filtered_channels.items():
+                        channels.extend(_channels)
+
                 # This has been a point of confusion for users so raise a
                 # warning in case this removed all channels and is still
                 # using the default settings.
                 if (
                     not channels
-                    and has_channels_before_filtering
-                    and self.restrictions._loc_prios_are_default_values
+                    # and has_channels_before_filtering
+                    # and self.restrictions._loc_prios_are_default_values
                 ):
                     self.logger.warning(
                         "Client '%s' - No channel at station %s.%s has "

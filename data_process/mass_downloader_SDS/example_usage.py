@@ -93,8 +93,8 @@ for evt in events:
         # network="BQ", station="DREG", location="", channel="HHZ",
         # network="BQ", location="", # channel="HHZ",
         channel="BH?,HH?",
-        channel_priorities=["HH[ZNE12]", "BH[ZNE12]"],
-        # location_priorities=["", "00", "10"]
+        channel_priorities=["BH[ZNE12]", "HH[ZNE12]"],
+        location_priorities=["", "[0-9A-Z][0-9A-Z]"],
         )
 
     event_log_dir = os.path.join(log_dir, evnm)

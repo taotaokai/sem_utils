@@ -46,6 +46,7 @@ parser.add_argument("--out_fig", required=True, help="Output figure")
 parser.add_argument("--out_csv", default=None, help="Output csv file")
 parser.add_argument("--fig_height", default=6, type=float, help="figure height")
 parser.add_argument("--fig_width", default=8, type=float, help="figure width")
+parser.add_argument("--avg_wcc0", action="store_true", default=None, help="plot weighted avg. cc0 instead of wcc0")
 args = parser.parse_args()
 
 # Read list of CSV files
@@ -76,6 +77,12 @@ df['wcc0_avg'] = df['wcc0_sum'] / df['weight_sum']
 if args.out_csv:
     df.to_csv(args.out_csv)
 
+
+if args.avg_wcc0:
+    min_y, max_y = df['wcc0_avg'].min(), df['wcc0_avg'].max()
+else:
+    min_y, max_y = df['wcc0_sum'].min(), df['wcc0_sum'].max()
+
 # Plot data for each window
 # for win, group in df.groupby('window'):
 for win in df.index.get_level_values('window').unique():
@@ -84,15 +91,19 @@ for win in df.index.get_level_values('window').unique():
     # x = [xticks[v] for v in group['index']]
     # wcc = group.groupby("index")['wcc0_sum'].sum()  # sum over same index
     # df_sel = df.sort_index()
-    y = df_sel['wcc0_sum'].tolist()
+    if args.avg_wcc0:
+        y = df_sel['wcc0_avg'].tolist()
+    else:
+        y = df_sel['wcc0_sum'].tolist()
+
     x = [xticks[v] for v in df_sel.index]
     line, = ax.plot(x, y, "-s")
     legend_data.append((y[-1], win, line.get_color()))
 
 # Adjust legend positions to avoid overlap
 y_values = np.array([v[0] for v in legend_data])
-min_y, max_y = y_values.min(), y_values.max()
-text_fontsize = 8
+# min_y, max_y = y_values.min(), y_values.max()
+text_fontsize = 12
 # Calculate minimum gap based on plot height and font size
 min_gap = (max_y - min_y) / ax_height * (text_fontsize / 72) * 1.5
 adjusted_y = adjust_min_gap(y_values, min_gap)
@@ -103,7 +114,10 @@ for i, (original_y, win, color) in enumerate(legend_data):
     ax.text(max_x+0.1, adjusted_y[i], f" {win}", color=color, fontsize=text_fontsize, va="center", clip_on=False)
 
 # Configure plot appearance
-ax.set_ylabel("sum(weight*cc0)")
+if args.avg_wcc0:
+    ax.set_ylabel("weighted average of cc0")
+else:
+    ax.set_ylabel("sum(weight*cc0)")
 ax.set_xticks(range(len(indices)))
 ax.set_xticklabels(indices)
 ax.set_xlim([0, max_x])

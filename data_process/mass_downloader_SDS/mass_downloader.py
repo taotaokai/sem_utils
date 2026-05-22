@@ -188,7 +188,7 @@ class MassDownloader(object):
         fedcat_channels = fedcat.query_channels(
             **arguments, filename=out_fedcat, dc_mappings=dc_mappings
         )
-        logger.debug(f"{fedcat_channels=}")
+        # logger.debug(f"{fedcat_channels=}")
 
         if self.providers is None:
             self.providers = [key for key in fedcat_channels]

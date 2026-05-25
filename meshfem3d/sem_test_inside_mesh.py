@@ -82,7 +82,7 @@ if __name__ == "__main__":
     
     # Read events
     events_df = pd.read_csv(args.events_csvfile, sep="|", header=None)
-    events_df.columns = ["gcmtID", "time", "lat", "lon", "depth", "Mw", "description"]
+    events_df.columns = ["gcmtID", "time", "lat", "lon", "depth", "mag", "description"]
     
     # Compute xi-eta coordinates
     df_xi_eta = compute_xi_eta(events_df, sem_params)

@@ -63,11 +63,11 @@ for i, row in df.iterrows():
     dist = (dx**2 + dy**2 + dz**2)**0.5 / 1000.0 # km
 
     df1 = df_sel[dist <= args.min_dist_in_km]
-    print("----- nearby events: \n", df1)
-
     if len(df1) == 0:
         df_sel.loc[len(df_sel)] = row
         continue
+
+    print("----- nearby events: \n", df1)
 
     dt = df1["time"] - event_time
     ind = abs(dt) < pd.Timedelta(args.min_time_diff_in_days, unit="day")

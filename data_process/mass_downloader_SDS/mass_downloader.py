@@ -136,7 +136,7 @@ class MassDownloader(object):
         restrictions: Restrictions,
         mseed_storage,
         stationxml_storage,
-        download_chunk_size_in_mb=200,
+        download_chunk_size_in_mb=50,
         threads_per_client=1,
         out_fedcat=None,
         print_report=True,

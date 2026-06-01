@@ -375,9 +375,10 @@ class Client(object):
             full_path = os.path.join(self.sds_root, filename)
             if exists_only:
                 # # NOTE use union because glob returns a list
-                # full_paths = full_paths.union(glob.glob(full_path))
-                if os.path.isfile(full_path):
-                    full_paths.add(full_path)
+                full_paths = full_paths.union(glob.glob(full_path))
+                #--- Don't use below since user may use wildcard for filenames
+                # if os.path.isfile(full_path): 
+                #     full_paths.add(full_path)
             else:
                 full_paths.add(full_path)
 

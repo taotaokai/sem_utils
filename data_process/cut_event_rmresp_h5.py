@@ -909,7 +909,9 @@ for net in inv_used:
     if stations:
         net.stations = stations
         networks.append(net)
-inv1.write(out_channel_file, format="stationtxt")
+if networks:
+    inv1.networks = networks
+    inv1.write(out_channel_file, format="stationtxt")
 
 # print("==================================\n")
 # print(f"[INFO] END: {datetime.datetime.now()}")

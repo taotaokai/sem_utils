@@ -897,7 +897,19 @@ for network, station, location, channel in nslc_filtered:
     h5f.flush()
 
 h5f.close()
-inv_used.write(out_channel_file, format="stationtxt")
+
+# inv_used.write(out_channel_file, format="stationtxt")
+# remove empty networks/stations
+inv1 = Inventory()
+networks = []
+for net in inv_used:
+    if len(net.stations) == 0:
+        continue
+    stations = [sta for sta in net if len(sta.channels) > 0]
+    if stations:
+        net.stations = stations
+        networks.append(net)
+inv1.write(out_channel_file, format="stationtxt")
 
 # print("==================================\n")
 # print(f"[INFO] END: {datetime.datetime.now()}")

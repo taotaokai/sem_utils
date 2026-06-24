@@ -690,12 +690,20 @@ for network, station, location, channel in nslc_filtered:
             np.pad(tr.data, (npad, nfft - npts - npad), "mean"), nfft
         )
         # pre-filter
-        lp_sos = scipy.signal.butter(
-            config_lowpass_N, config_lowpass_Wn, "lowpass", fs=fs, output="sos"
-        )
-        hp_sos = scipy.signal.butter(
-            highpass_N, highpass_Wn, "highpass", fs=fs, output="sos"
-        )
+        try:
+            lp_sos = scipy.signal.butter(
+                config_lowpass_N, config_lowpass_Wn, "lowpass", fs=fs, output="sos"
+            )
+            hp_sos = scipy.signal.butter(
+                highpass_N, highpass_Wn, "highpass", fs=fs, output="sos"
+            )
+        except Exception as err:
+            logger.warning(
+                f"failed to create pre-filter, {tr.id} ignored. ({station_id})\n"
+            )
+            logger.debug(f"Error message: {err}")
+            traces_to_remove.append(tr)
+            continue
         # tr.data = scipy.signal.sosfiltfilt(lp_sos, tr.data)
         # tr.data = scipy.signal.sosfiltfilt(hp_sos, tr.data)
         _, h_lp = scipy.signal.freqz_sos(lp_sos, worN=freqs, fs=fs)

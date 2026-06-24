@@ -673,6 +673,12 @@ for network, station, location, channel in nslc_filtered:
     resample_npts = int((t1 - t0) * config_sampling_rate)
     for tr in st:
         fs = tr.stats.sampling_rate
+        if fs < 2.0*config_lowpass_Wn:
+            logger.warning(
+                f"sampling rate ({fs}) <= {2.0*config_lowpass_Wn}, trace ({tr.id}) ignored. ({station_id})"
+            )
+            traces_to_remove.append(tr)
+            continue
         npts = tr.stats.npts
         npad = max(5, 2 * int(1.0 / highpass_Wn * fs))
         # npad = int(2.0 / min(config_lower_corner_taper_width, config_higher_corner_taper_width) * fs)

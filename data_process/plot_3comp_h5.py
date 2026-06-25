@@ -657,9 +657,9 @@ def plot_seismogram_3comp(
 
         num_bins = num_bins + 1
 
-    pdf.close()
-    h5f.close()
-
+    if savefig:
+        pdf.close()
+    
 
 if __name__ == "__main__":
     args = parse_arguments()
@@ -688,3 +688,5 @@ if __name__ == "__main__":
         noise_twin=args.noise_twin,
         noise_min_length=args.noise_min_length,
     )
+
+    h5f.close()

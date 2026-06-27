@@ -696,7 +696,17 @@ class ClientDownloadHelper(object):
 
         existing_stations = []
         for dlh in existing_client_dl_helpers:
-            existing_stations.extend(list(dlh.stations.values()))
+            for station in dlh.stations.values():
+                bad_status = [
+                    interval.status
+                    for channel in station.channels
+                    for interval in channel.intervals
+                    if interval.status != STATUS.DOWNLOADED
+                    and interval.status != STATUS.EXISTS
+                ]
+                if not bad_status:
+                    existing_stations.append(station)
+            # existing_stations.extend(list(dlh.stations.values()))
 
         remaining_stations = []
         rejected_stations = []
@@ -1278,6 +1288,10 @@ class ClientDownloadHelper(object):
                 if not bad_status:
                     station_ids.append(station_id)
                     continue
+
+        self.logger.debug(
+            f"stations to be discarded: {station_ids}"
+        )
 
         for station_id in station_ids:
             try:

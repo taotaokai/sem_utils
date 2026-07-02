@@ -857,7 +857,7 @@ for network, station, location, channel in nslc_filtered:
     gsta._v_attrs["longitude"] = float(st[0].stats.metadata["longitude"])
     gsta._v_attrs["elevation"] = float(st[0].stats.metadata["elevation"])
     gsta._v_attrs["depth"] = float(st[0].stats.metadata["local_depth"])
-    gsta._v_attrs["first_arrival"] = first_arrival_time
+    gsta._v_attrs["first_arrival"] = first_arrival_time.isoformat()
 
     # #DEBUG
     # print(f"{resample_starttime._ns=} ")
@@ -894,9 +894,8 @@ for network, station, location, channel in nslc_filtered:
         for tr in st
     ]
     ca.attrs["channels"] = np.array(channels, dtype=dtype)
-    ca.attrs["starttime"] = (
-        new_starttime  # st[0].stats.starttime.strftime('%Y-%m-%dT%H:%M:%S.%f') # microseconds precision
-    )
+    ca.attrs["starttime"] = new_starttime.isoformat()
+    # st[0].stats.starttime.strftime('%Y-%m-%dT%H:%M:%S.%f') # microseconds precision
     ca.attrs["sampling_rate"] = config_sampling_rate
     ca.attrs["npts"] = resample_npts
     ca.attrs["filter"] = [

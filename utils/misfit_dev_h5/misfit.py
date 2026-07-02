@@ -587,7 +587,7 @@ def _measure_adj_one_sta(
         warnings.warn(msg)
         return None
 
-    data_tb = obs_attrs["starttime"]
+    data_tb = UTCDateTime(obs_attrs["starttime"])
     data_fs = obs_attrs["sampling_rate"]
     data_dt = 1.0 / data_fs
     data_nt = obs_attrs["npts"]
@@ -614,7 +614,7 @@ def _measure_adj_one_sta(
     conv_stf = False
     if syn_attrs["is_grn"]:
         conv_stf = True
-        assert syn_attrs["origin_time"] == event_t0
+        assert UTCDateTime(syn_attrs["origin_time"]) == event_t0
 
     # sum of adjoint sources from all windows
     dchi_du = np.zeros((3, data_nt))
@@ -894,7 +894,7 @@ def _measure_adj_one_sta(
     ]
     adj_attrs = {}
     adj_attrs["channels"] = np.array(channels, dtype=dtype)
-    adj_attrs["starttime"] = data_tb
+    adj_attrs["starttime"] = data_tb.isoformat()
     adj_attrs["sampling_rate"] = data_fs
     adj_attrs["npts"] = data_nt
     adj_attrs["solver_tb"] = syn_attrs["solver_tb"]
@@ -1034,18 +1034,18 @@ def _linearized_search_cc_by_stations(args):
             continue
 
         if "dtau" in dm:
-            assert g_sta[syn_tag].attrs["is_grn"] == True
+            assert g_sta[syn_tag].attrs["is_grn"]
             # for m, tag in dsyn_tags:
             #     assert g_sta[tag].attrs["is_grn"] == True
 
         conv_stf = False
         if g_sta[syn_tag].attrs["is_grn"]:
             conv_stf = True
-            assert g_sta[syn_tag].attrs["origin_time"] == event_t0
-            assert g_sta[dsyn_tag].attrs["origin_time"] == event_t0
+            assert UTCDateTime(g_sta[syn_tag].attrs["origin_time"]) == event_t0
+            assert UTCDateTime(g_sta[dsyn_tag].attrs["origin_time"]) == event_t0
 
         # time samples
-        data_tb = obs.attrs["starttime"]
+        data_tb = UTCDateTime(obs.attrs["starttime"])
         data_fs = obs.attrs["sampling_rate"]
         data_dt = 1.0 / data_fs
         data_nt = obs.attrs["npts"]
@@ -1637,7 +1637,7 @@ class Misfit(object):
                 data = g_sta_obs[obs_tag]
                 data_fs = data.attrs["sampling_rate"]
                 data_dt = 1.0 / data_fs
-                data_starttime = data.attrs["starttime"]
+                data_starttime = UTCDateTime(data.attrs["starttime"])
                 data_npts = data.attrs["npts"]
                 data_endtime = data_starttime + (data_npts - 1) * data_dt
                 data_channels = data.attrs["channels"]
@@ -1799,7 +1799,7 @@ class Misfit(object):
                 # data_win = data[:, idx0:idx1] # * win_func
                 # ca[:] = (data_win - np.mean(data_win, axis=-1, keepdims=True)) * win_func
                 ca[:] = data[:, idx0:idx1]
-                ca.attrs["starttime"] = starttime
+                ca.attrs["starttime"] = starttime.isoformat()
                 ca.attrs["sampling_rate"] = data_fs
                 ca.attrs["npts"] = npts
                 ca.attrs["channels"] = data_channels
@@ -1902,7 +1902,7 @@ class Misfit(object):
                         if not syn.attrs["is_grn"]:
                             msg = f"{syn._v_pathname}.attrs[is_grn]==False but is_grn is set to True!"
                             raise ValueError(msg)
-                        assert syn.attrs["origin_time"] == event_t0
+                        assert UTCDateTime(syn.attrs["origin_time"]) == event_t0
                 else:
                     msg = f"{syn_tag} does not exist under {g_sta._v_pathname}, skip"
                     warnings.warn(msg)
@@ -1916,7 +1916,7 @@ class Misfit(object):
             #     continue
             obs_fs = obs_data.attrs["sampling_rate"]
             obs_dt = 1.0 / obs_fs
-            obs_tb = obs_data.attrs["starttime"]
+            obs_tb = UTCDateTime(obs_data.attrs["starttime"])
             obs_nt = obs_data.attrs["npts"]
             obs_te = obs_tb + (obs_nt - 1) * obs_dt
             obs_filters = obs_data.attrs["filter"]
@@ -1991,7 +1991,7 @@ class Misfit(object):
 
             if is_diff:
                 if (
-                    solver_tb != syn.attrs["solver_tb"]
+                    solver_tb != UTCDateTime(syn.attrs["solver_tb"])
                     or solver_nt != syn.attrs["solver_nt"]
                     or solver_dt != syn.attrs["solver_dt"]
                 ):
@@ -2144,17 +2144,17 @@ class Misfit(object):
                 (syn_st[2].stats.channel, 0, -90),
             ]
             ca.attrs["channels"] = np.array(channels, dtype=dtype)
-            ca.attrs["starttime"] = obs_tb
+            ca.attrs["starttime"] = obs_tb.isoformat()
             ca.attrs["sampling_rate"] = obs_fs
             ca.attrs["npts"] = obs_nt
-            ca.attrs["solver_tb"] = solver_tb
+            ca.attrs["solver_tb"] = solver_tb.isoformat()
             ca.attrs["solver_dt"] = solver_dt
             ca.attrs["solver_nt"] = solver_nt
-            ca.attrs["valid_te"] = valid_te
+            ca.attrs["valid_te"] = valid_te.isoformat()
             ca.attrs["type"] = syn_type
             ca.attrs["is_grn"] = is_grn
             if is_grn:
-                ca.attrs["origin_time"] = event_t0
+                ca.attrs["origin_time"] = event_t0.isoformat()
         h5f.close()
 
     def setup_windows(self, window_yaml=None):
@@ -2238,12 +2238,12 @@ class Misfit(object):
 
             obs = g_sta[obs_tag]
             syn = g_sta[syn_tag]
-            solver_tb = syn.attrs["solver_tb"]
+            solver_tb = UTCDateTime(syn.attrs["solver_tb"])
             solver_nt = syn.attrs["solver_nt"]
             solver_dt = syn.attrs["solver_dt"]
             solver_te = solver_tb + solver_nt * solver_dt
-            solver_valid_te = syn.attrs["valid_te"]
-            obs_tb = obs.attrs["starttime"]
+            solver_valid_te = UTCDateTime(syn.attrs["valid_te"])
+            obs_tb = UTCDateTime(obs.attrs["starttime"])
             obs_nt = obs.attrs["npts"]
             obs_fs = obs.attrs["sampling_rate"]
             obs_te = obs_tb + obs_nt / obs_fs
@@ -2742,9 +2742,9 @@ class Misfit(object):
             conv_stf = False
             if syn_attrs["is_grn"]:
                 conv_stf = True
-                assert syn_attrs["origin_time"] == event_t0
+                assert UTCDateTime(syn_attrs["origin_time"]) == event_t0
 
-            data_tb = obs.attrs["starttime"]
+            data_tb = UTCDateTime(obs.attrs["starttime"])
             data_fs = obs.attrs["sampling_rate"]
             data_dt = 1.0 / data_fs
             data_nt = obs.attrs["npts"]
@@ -3202,7 +3202,7 @@ class Misfit(object):
                 (f"{adj_band_code}Z", 0, -90),
             ]
             ca.attrs["channels"] = np.array(channels, dtype=dtype)
-            ca.attrs["starttime"] = data_tb
+            ca.attrs["starttime"] = data_tb.isoformat()
             ca.attrs["sampling_rate"] = data_fs
             ca.attrs["npts"] = data_nt
             ca.attrs["solver_tb"] = syn.attrs["solver_tb"]
@@ -4017,9 +4017,9 @@ class Misfit(object):
                     conv_stf = False
                     if syn_attrs["is_grn"]:
                         conv_stf = True
-                        assert syn_attrs["origin_time"] == evt0
+                        assert UTCDateTime(syn_attrs["origin_time"]) == evt0
 
-                    data_tb = obs.attrs["starttime"]
+                    data_tb = UTCDateTime(obs.attrs["starttime"])
                     data_fs = obs.attrs["sampling_rate"]
                     data_dt = 1.0 / data_fs
                     data_nt = obs.attrs["npts"]
@@ -4253,13 +4253,13 @@ class Misfit(object):
             tr.stats.location = g_sta._v_attrs["location"]
 
             # time samples
-            data_tb = adj_src.attrs["starttime"]
+            data_tb = UTCDateTime(adj_src.attrs["starttime"])
             data_fs = adj_src.attrs["sampling_rate"]
             data_dt = 1.0 / data_fs
             data_nt = adj_src.attrs["npts"]
             data_te = data_tb + (data_nt - 1) * data_dt
 
-            solver_tb = adj_src.attrs["solver_tb"]
+            solver_tb = UTCDateTime(adj_src.attrs["solver_tb"])
             solver_nt = adj_src.attrs["solver_nt"]
             solver_dt = adj_src.attrs["solver_dt"]
             solver_fs = 1.0 / solver_dt
@@ -4670,8 +4670,8 @@ class Misfit(object):
             conv_stf = False
             if g_sta[syn_tag].attrs["is_grn"]:
                 conv_stf = True
-                assert g_sta[syn_tag].attrs["origin_time"] == event_t0
-                assert g_sta[dsyn_tag].attrs["origin_time"] == event_t0
+                assert UTCDateTime(g_sta[syn_tag].attrs["origin_time"]) == event_t0
+                assert UTCDateTime(g_sta[dsyn_tag].attrs["origin_time"]) == event_t0
 
             # dsyn_dm = {}
             # for model_name in dm:
@@ -4684,7 +4684,7 @@ class Misfit(object):
             #         dsyn_dm[model_name] = dsyn_ENZ
 
             # time samples
-            data_tb = obs.attrs["starttime"]
+            data_tb = UTCDateTime(obs.attrs["starttime"])
             data_fs = obs.attrs["sampling_rate"]
             data_dt = 1.0 / data_fs
             data_nt = obs.attrs["npts"]

@@ -30,7 +30,7 @@ def parse_arguments():
         "-o", "--output",
         type=str,
         default="events_with_xi_eta.csv",
-        help="Output CSV file path (default: events_with_xi_eta.csv)",
+        help="Output CSV file path (default: events_with_xi_eta.csv), pipe-separated",
     )
     return parser.parse_args()
 
@@ -89,5 +89,5 @@ if __name__ == "__main__":
     
     # Save results
     result_df = pd.concat([events_df, df_xi_eta], axis=1)
-    result_df.to_csv(args.output, index=False)
+    result_df.to_csv(args.output, index=False, sep="|")
     print(f"Results saved to {args.output}")

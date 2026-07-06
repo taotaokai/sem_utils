@@ -1689,9 +1689,10 @@ class Misfit(object):
                     cha["azimuth"] = cha1[0]["azimuth"]
                     cha["dip"] = cha1[0]["dip"]
 
+                data_channel_names = [cha["name"] for cha in data_channels]
                 coords = [
                     (cha["latitude"], cha["longitude"], cha["elevation"], cha["depth"])
-                    for cha in channels
+                    for cha in channels if cha["name"] in data_channel_names
                 ]
                 if len(set(coords)) != 1:
                     msg = f"inconsistent coordinates in ({channels}), ignored"

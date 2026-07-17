@@ -1478,12 +1478,12 @@ def sem_mesh_interp_single_slice(
             )
             model_gll[mask, imodel] = old_model_gll[mask]
 
-            write_gll_file(out_dir, model_tag, iproc_target, model_gll[..., imodel])
+            write_gll_file(out_dir, model_tag, iproc_target, model_gll[..., imodel], overwrite=True)
         # save misloc, status
         if output_misloc:
-            write_gll_file(out_dir, "status", iproc_target, status_gll)
-            write_gll_file(out_dir, "misloc", iproc_target, misloc_gll)
-            write_gll_file(out_dir, "misratio", iproc_target, misratio_gll)
+            write_gll_file(out_dir, "status", iproc_target, status_gll, overwrite=True)
+            write_gll_file(out_dir, "misloc", iproc_target, misloc_gll, overwrite=True)
+            write_gll_file(out_dir, "misratio", iproc_target, misratio_gll, overwrite=True)
 
 
 def sem_boundary_mesh_read(mesh_file):

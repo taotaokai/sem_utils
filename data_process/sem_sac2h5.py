@@ -356,7 +356,7 @@ def sac2h5(
             array_name = f"DATA_{data_type}"
             attrs = {
                 "channels": np.array(channel_info, dtype=dtype),
-                "starttime": st[0].stats.starttime,
+                "starttime": st[0].stats.starttime.isoformat(),
                 "sampling_rate": resample_fs,
                 "npts": npts,
                 "filter": [

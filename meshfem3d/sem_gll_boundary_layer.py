@@ -39,6 +39,12 @@ parser.add_argument(
     type=float,
     help="mininum in taper",
 )
+parser.add_argument(
+    "--region",
+    default="reg1",
+    type=str,
+    help="e.g. {mesh_dir}/proc****_{region}_solver_data.bin",
+)
 args = parser.parse_args()
 print(args)
 
@@ -93,4 +99,4 @@ for iproc in range(args.nproc):
     # # multiply by radius to get distance
     # min_dist = min_dist * r[:, None]
 
-    write_gll_file(args.out_dir, args.out_tag, iproc, taper[ibool], overwrite=True)
+    write_gll_file(args.out_dir, args.out_tag, iproc, taper[ibool], region_code=args.region, overwrite=True)

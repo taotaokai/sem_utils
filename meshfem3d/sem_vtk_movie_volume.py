@@ -1,8 +1,6 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-import sys
-import warnings
 import argparse
+
 import numpy as np
 from scipy.io import FortranFile
 
@@ -48,9 +46,8 @@ with FortranFile(filename, 'r') as f:
 
 # read in wavefield snapshot
 filename = "%s/proc%06d_movie3D_%s%06d.bin"%(mesh_dir,iproc,wavefield_name,it)
-with FortranFile(filename, 'r') as f:
-    with FortranFile(filename, 'r') as f:
-        wavefield = f.read_ints(dtype='f4')
+with FortranFile(filename, 'r') as f: 
+   wavefield = f.read_ints(dtype='f4')
 
 # write out VTK file
 num_points = mesh['x'].size

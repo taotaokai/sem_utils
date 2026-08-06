@@ -1,14 +1,11 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """ create horizontal slice of SEM model at a given depth
 """
-import sys
 import argparse
-import numpy as np
-from scipy.io import FortranFile
-import pyvista as pv
 
-from meshfem3d_utils import sem_mesh_read, NGLLX, NGLLY, NGLLZ
+import numpy as np
+import pyvista as pv
+from meshfem3d_utils import NGLLX, NGLLY, NGLLZ, sem_mesh_read
 
 #====== user input
 parser = argparse.ArgumentParser(description='Make vtk file from the teleseismic_boundary.bin files.')

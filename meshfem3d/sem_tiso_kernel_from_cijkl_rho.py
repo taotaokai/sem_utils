@@ -1,12 +1,11 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 import argparse
 import os
-import numpy as np
-from scipy.io import FortranFile
-from mpi4py import MPI
 
+import numpy as np
 from meshfem3d_utils import sem_mesh_read
+from mpi4py import MPI
+from scipy.io import FortranFile
 
 # MPI initialization
 comm_world = MPI.COMM_WORLD

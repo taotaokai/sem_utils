@@ -1,26 +1,22 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """create horizontal slice of SEM model at a given depth"""
 
 import argparse
 import os
 
-import pandas as pd
 import numpy as np
-
+import pandas as pd
 import pyproj
-
-from meshfem3d_utils import (
-    read_sem_parfile,
-    sem_xieta2vec,
-    ecef2latlon_zeroalt,
-    sem_mesh_interp_points,
-    sem_mesh_get_vol_gll,
-    sem_mesh_read,
-    read_gll_file,
-)
-
 from meshfem3d_constants import R_EARTH
+from meshfem3d_utils import (
+    ecef2latlon_zeroalt,
+    read_gll_file,
+    read_sem_parfile,
+    sem_mesh_get_vol_gll,
+    sem_mesh_interp_points,
+    sem_mesh_read,
+    sem_xieta2vec,
+)
 
 
 def parse_arguments():
@@ -96,7 +92,7 @@ def calc_1D_average_model_by_weighted_sum_over_gll_points_in_depth_intervals(
         vol_gll = sem_mesh_get_vol_gll(mesh_data)
 
         xyz_glob = mesh_data["xyz_glob"]
-        lon, lat, height = pyproj.transform(
+        _lon, _lat, height = pyproj.transform(
             ecef,
             lla,
             xyz_glob[0, :] * R_EARTH,
@@ -140,13 +136,13 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
 
     # read SEM parameters
     sem_params = read_sem_parfile(sem_parfile)
-    mesh_nproc_xi = int(sem_params["NPROC_XI"])
-    mesh_nproc_eta = int(sem_params["NPROC_ETA"])
-    mesh_central_lat = float(sem_params["CENTER_LATITUDE_IN_DEGREES"].lower().replace("d", "e"))
-    mesh_central_lon = float(sem_params["CENTER_LONGITUDE_IN_DEGREES"].lower().replace("d", "e"))
-    mesh_width_xi = float(sem_params["ANGULAR_WIDTH_XI_IN_DEGREES"].lower().replace("d", "e"))
-    mesh_width_eta = float(sem_params["ANGULAR_WIDTH_ETA_IN_DEGREES"].lower().replace("d", "e"))
-    mesh_gamma_rot = float(sem_params["GAMMA_ROTATION_AZIMUTH"].lower().replace("d", "e"))
+    mesh_nproc_xi = sem_params["NPROC_XI"]
+    mesh_nproc_eta = sem_params["NPROC_ETA"]
+    mesh_central_lat = sem_params["CENTER_LATITUDE_IN_DEGREES"]
+    mesh_central_lon = sem_params["CENTER_LONGITUDE_IN_DEGREES"]
+    mesh_width_xi = sem_params["ANGULAR_WIDTH_XI_IN_DEGREES"]
+    mesh_width_eta = sem_params["ANGULAR_WIDTH_ETA_IN_DEGREES"]
+    mesh_gamma_rot = sem_params["GAMMA_ROTATION_AZIMUTH"]
 
     # define sampling grids
     # number of blocks along xi/eta
@@ -198,7 +194,7 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
     interp_points /= R_EARTH # non-dimensionalize for SEM mesh
 
     nproc_tot = mesh_nproc_xi * mesh_nproc_eta
-    interp_model, final_status, final_misloc, final_misratio = sem_mesh_interp_points(
+    interp_model, final_status, _final_misloc, _final_misratio = sem_mesh_interp_points(
         nproc_tot, mesh_dir, model_dir, model_names, interp_points
     )
     nmodel = len(model_names)
@@ -220,7 +216,7 @@ def sampling_1D_profiles_over_regular_xi_eta_grid(
     # get mean 1-D profile
     df_mean = df[df["status"] != -1].groupby("depth_km")[model_names].mean()
 
-    root, ext = os.path.splitext(out_csv)
+    root, _ext = os.path.splitext(out_csv)
     df_mean.to_csv(root +  "_mean.csv")
 
 

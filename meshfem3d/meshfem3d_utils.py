@@ -1,29 +1,26 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 import os
 import warnings
 
+import numba
 import numpy as np
-from scipy.io import FortranFile
-
 from meshfem3d_constants import (
+    ANCHOR_GLL_INDEX,
+    ANCHOR_NODES,
+    BOUNDARY_ARRAY_LIST,
     EARTH_FLATTENING_SEM,
-    NGLLX,
-    NGLLY,
-    NGLLZ,
-    MIDX,
-    MIDY,
-    MIDZ,
     GAUSSALPHA,
     GAUSSBETA,
     MESH_ARRAY_LIST,
     MESH_MPI_ARRAY_LIST,
-    BOUNDARY_ARRAY_LIST,
-    ANCHOR_NODES,
-    ANCHOR_GLL_INDEX,
+    MIDX,
+    MIDY,
+    MIDZ,
+    NGLLX,
+    NGLLY,
+    NGLLZ,
 )
-
-import numba
+from scipy.io import FortranFile
 
 # from mpi4py import MPI
 
@@ -119,7 +116,7 @@ def lagrange_poly_derivative(nodes, xx):
     dlag_dx = np.zeros((nz, nx))
     ind = np.arange(nz)
     for i in range(nz):
-        denominator = np.prod((z[i] - z[ind != i]))
+        denominator = np.prod(z[i] - z[ind != i])
         for j in range(nx):
             x = xx[j]
             numerator = 0
@@ -596,10 +593,27 @@ def read_sem_parfile(parfile):
         header=None,
         comment="#",
         names=["key", "value"],
-        dtype=dict(key=object, value=object),
+        dtype={"key": object, "value": object},
         index_col=["key"],
         engine="python",
     ).to_dict()["value"]
+
+    FLOAT_KEYS = [
+        "CENTER_LATITUDE_IN_DEGREES",
+        "CENTER_LONGITUDE_IN_DEGREES",
+        "ANGULAR_WIDTH_XI_IN_DEGREES",
+        "ANGULAR_WIDTH_ETA_IN_DEGREES",
+        "GAMMA_ROTATION_AZIMUTH",
+    ]
+    INT_KEYS = ["NPROC_XI", "NPROC_ETA", ]
+
+    for key in FLOAT_KEYS:
+        if key in sem_params:
+            sem_params[key] = float(sem_params[key].lower().replace("d", "e"))
+    for key in INT_KEYS:
+        if key in sem_params:
+            sem_params[key] = int(sem_params[key])
+
     return sem_params
 
 
@@ -623,8 +637,12 @@ def ecef2latlon_zeroalt(x, y, z, f=EARTH_FLATTENING_SEM, radian=False):
     return lat, lon
 
 
-def sem_latlon2xieta(lat_center, lon_center, gamma_rot, lat_test, lon_test):
-    """convert lat/lon to SEM mesh local coordinates xi/eta"""
+def sem_vec2xieta(lat_center, lon_center, gamma_rot, points):
+    """calculate xi,eta
+    points[n, 3]: SEM ECEF coordinates
+    """
+    assert points.shape[-1] == 3
+
     lat0 = np.deg2rad(lat_center)
     lon0 = np.deg2rad(lon_center)
     # assume zero altitude from the reference ellipsoid
@@ -643,27 +661,67 @@ def sem_latlon2xieta(lat_center, lon_center, gamma_rot, lat_test, lon_test):
     gamma = np.deg2rad(gamma_rot)
     v0_xi = np.cos(gamma) * v0_e + np.sin(gamma) * v0_n
     v0_eta = -np.sin(gamma) * v0_e + np.cos(gamma) * v0_n
-    # print(v_xi, v_eta)
 
-    # conver test point to (xi, eta)
+    # radius
+    r = np.sqrt(np.sum(points**2, axis=-1))
+    v1 = points / r[:, None]
+
+    # project to v0_r, v0_xi, v0_eta
+    l_r = np.dot(v1, v0_r)
+    l_xi = np.dot(v1, v0_xi)
+    l_eta = np.dot(v1, v0_eta)
+    xi = np.rad2deg(np.arctan2(l_xi, l_r))
+    eta = np.rad2deg(np.arctan2(l_eta, l_r))
+
+    # invalide projection for points lies on the opposite side
+    xi[l_r < 0] = np.nan
+    eta[l_r < 0] = np.nan
+
+    # # angular distance from edge
+    # dxi = 0.5*width_xi - np.abs(angle_xi)
+    # deta = 0.5*width_eta - np.abs(angle_eta)
+
+    # min_dist = np.zeros(points.shape[:-1])
+
+    # # points inside the mesh
+    # ind = (dxi >= 0) & (deta >= 0)
+    # min_dist[ind] = np.minimum(dxi[ind], deta[ind])
+
+    # # points outside the mesh (as negative distance)
+    # ind = (dxi < 0) & (deta > 0)
+    # min_dist[ind] = dxi[ind]
+    # ind = (dxi > 0) & (deta < 0)
+    # min_dist[ind] = deta[ind]
+    # ind = (dxi < 0) & (deta < 0)
+    # min_dist[ind] = np.minimum(dxi[ind], deta[ind])
+
+    # # multiply by radius to get distance
+    # min_dist = min_dist * r[:, None]
+
+    return xi, eta
+
+
+def sem_latlon2xieta(lat_center, lon_center, gamma_rot, lat_test, lon_test):
+    """convert lat/lon to SEM mesh local coordinates xi/eta"""
+    lat_test = np.array(lat_test)
+    lon_test = np.array(lon_test)
+    assert np.shape(lat_test) == np.shape(lon_test)
+
     lat1 = np.deg2rad(lat_test)
     lon1 = np.deg2rad(lon_test)
     theta = 0.5 * np.pi - geodetic_lat2geocentric_lat(lat1, radian=True)
     phi = lon1
-    v1 = np.array(
-        [np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)]
-    )
-    # project to v0_r, v0_xi, v0_eta
-    l_r = np.dot(v0_r, v1)
-    l_xi = np.dot(v0_xi, v1)
-    l_eta = np.dot(v0_eta, v1)
-    angle_xi = np.rad2deg(np.arctan2(l_xi, l_r))
-    angle_eta = np.rad2deg(np.arctan2(l_eta, l_r))
-    if l_r < 0:
-        angle_xi = np.nan
-        angle_eta = np.nan 
 
-    return angle_xi, angle_eta
+    v1 = np.zeros((np.size(lat_test), 3))
+    v1[:, 0] = np.sin(theta) * np.cos(phi)
+    v1[:, 1] = np.sin(theta) * np.sin(phi)
+    v1[:, 2] = np.cos(theta)
+
+    xi, eta = sem_vec2xieta(lat_center, lon_center, gamma_rot, v1)
+    xi = np.reshape(xi, lat_test.shape)
+    eta = np.reshape(eta, lat_test.shape)
+
+    return xi, eta
 
 
 def sem_xieta2vec(
@@ -1478,12 +1536,16 @@ def sem_mesh_interp_single_slice(
             )
             model_gll[mask, imodel] = old_model_gll[mask]
 
-            write_gll_file(out_dir, model_tag, iproc_target, model_gll[..., imodel], overwrite=True)
+            write_gll_file(
+                out_dir, model_tag, iproc_target, model_gll[..., imodel], overwrite=True
+            )
         # save misloc, status
         if output_misloc:
             write_gll_file(out_dir, "status", iproc_target, status_gll, overwrite=True)
             write_gll_file(out_dir, "misloc", iproc_target, misloc_gll, overwrite=True)
-            write_gll_file(out_dir, "misratio", iproc_target, misratio_gll, overwrite=True)
+            write_gll_file(
+                out_dir, "misratio", iproc_target, misratio_gll, overwrite=True
+            )
 
 
 def sem_boundary_mesh_read(mesh_file):

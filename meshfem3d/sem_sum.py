@@ -1,12 +1,9 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-import os
 import argparse
-import numpy as np
-from scipy.io import FortranFile
-from mpi4py import MPI
+import os
 
 from meshfem3d_utils import read_gll_file, write_gll_file
+from mpi4py import MPI
 
 # MPI initialization
 mpi_comm = MPI.COMM_WORLD

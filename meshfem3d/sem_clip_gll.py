@@ -1,8 +1,7 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 import argparse
-import numpy as np
 
+import numpy as np
 from meshfem3d_utils import read_gll_file, write_gll_file
 
 

@@ -1,16 +1,15 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-import os
 import argparse
-import numpy as np
-from mpi4py import MPI
+import os
 
+import numpy as np
 from meshfem3d_utils import (
-    sem_mesh_read,
-    sem_mesh_get_vol_gll,
     read_gll_file,
+    sem_mesh_get_vol_gll,
+    sem_mesh_read,
     write_gll_file,
 )
+from mpi4py import MPI
 
 # MPI initialization
 mpi_comm = MPI.COMM_WORLD

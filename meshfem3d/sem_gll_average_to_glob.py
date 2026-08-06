@@ -1,21 +1,19 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """ Average GLL model values to global points by volume-weighted average of co-located GLL points 
 
 """
 import argparse
 
-from mpi4py import MPI
-
 from meshfem3d_utils import (
-    sem_mesh_read,
+    assemble_MPI_scalar,
+    gll2glob,
+    read_gll_file,
     sem_mesh_get_vol_gll,
     sem_mesh_mpi_read,
-    read_gll_file,
+    sem_mesh_read,
     write_gll_file,
-    gll2glob,
-    assemble_MPI_scalar,
 )
+from mpi4py import MPI
 
 comm = MPI.COMM_WORLD
 mpi_size = comm.Get_size()

@@ -1,12 +1,11 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """create horizontal slice of SEM model at a given depth"""
-import os
 import argparse
+import os
+
 import numpy as np
 import pyvista as pv
-
-from meshfem3d_utils import sem_mesh_read, read_gll_file, NGLLX, NGLLY, NGLLZ
+from meshfem3d_utils import NGLLX, NGLLY, NGLLZ, read_gll_file, sem_mesh_read
 
 # ====== user input
 parser = argparse.ArgumentParser(description="Make sem mesh vtk file")

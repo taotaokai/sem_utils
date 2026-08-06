@@ -6,8 +6,8 @@ converts event coordinates to mesh xi-eta coordinates, and outputs the results.
 """
 
 import argparse
-import pandas as pd
 
+import pandas as pd
 from meshfem3d_utils import sem_latlon2xieta
 
 
@@ -43,7 +43,7 @@ def parse_sem_parameters(parfile: str) -> dict:
         header=None,
         comment="#",
         names=["key", "value"],
-        dtype=dict(key=object, value=object),
+        dtype={"key": object, "value": object},
         index_col=["key"],
         engine="python",
     ).to_dict()["value"]

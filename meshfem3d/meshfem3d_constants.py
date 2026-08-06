@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 import numpy as np
 
 """
@@ -14,7 +13,7 @@ EARTH_FLATTENING_WGS84 = 1.0 / 298.257223563
 
 # --- GLL
 
-#! number of GLL points in each direction of an element (degree plus one)
+# number of GLL points in each direction of an element (degree plus one)
 NGLLX = 5
 NGLLY = NGLLX
 NGLLZ = NGLLX
@@ -22,7 +21,7 @@ NGLLZ = NGLLX
 # GLL_NODES = np.array([-1, -((3.0 / 7.0) ** 0.5), 0, (3.0 / 7.0) ** 0.5, 1])
 # GLL_WEIGHTS = np.array([0.1, 49.0 / 90.0, 32.0 / 45.0, 49.0 / 90.0, 0.1])
 
-#! mid-points inside a GLL element
+# mid-points inside a GLL element
 MIDX = NGLLX // 2
 MIDY = NGLLY // 2
 MIDZ = NGLLZ // 2
@@ -117,7 +116,7 @@ ANCHOR_GLL_INDEX = np.array(
     dtype=int,
 )
 
-#! for the Gauss-Lobatto-Legendre points and weights
+# for the Gauss-Lobatto-Legendre points and weights
 GAUSSALPHA = 0
 GAUSSBETA = 0
 

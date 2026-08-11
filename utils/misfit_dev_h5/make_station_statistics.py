@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """ get model update step length from grid search results
 """
 import argparse
-import tables as pt
+
 import numpy as np
 import pandas as pd
+import tables as pt
 
 parser = argparse.ArgumentParser()
 
@@ -31,7 +31,7 @@ with pt.open_file(misfit_h5file, "r") as h5f:
 
     tbl_sta = h5f.get_node("/station")
 
-    net_sta_list = set((net, sta) for net, sta in zip(tbl.cols.network, tbl.cols.station))
+    net_sta_list = set(zip(tbl.cols.network, tbl.cols.station))
     net_sta_list = sorted(net_sta_list)
     for net, sta in net_sta_list:
         print(f"[INFO] {net=}, {sta=}")

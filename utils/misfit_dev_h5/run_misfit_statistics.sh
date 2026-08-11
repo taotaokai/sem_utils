@@ -18,6 +18,7 @@ do
   do
     misfit_dir=$iter_dir/events/$event_name/misfit
     if [ ! -f $misfit_dir/misfit.h5 ]; then
+      echo "# WARN: directory does not exists! $misfit_dir"
       continue
     fi
     echo python sem_utils/misfit/make_misfit_statistics.py \

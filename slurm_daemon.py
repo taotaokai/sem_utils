@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import subprocess
 import time
 
@@ -12,6 +13,7 @@ logging.basicConfig(
     ],
 )
 
+
 class JobNode:
     def __init__(self, name: str, script_path: str, max_retries: int = 2):
         self.name = name
@@ -22,6 +24,24 @@ class JobNode:
         self.status = "UNSUBMITTED"  # UNSUBMITTED, SUBMITTED, RUNNING, COMPLETED, FAILED, CANCELLED
         self.dependencies: set[str] = set()
         self.failure_reason = "UNKNOWN"
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "script_path": self.script_path,
+            "max_retries": self.max_retries,
+            "retries": self.retries,
+            "slurm_id": self.slurm_id,
+            "status": self.status,
+            "dependencies": list(self.dependencies),
+            "failure_reason": self.failure_reason,
+        }
+
+    def load_dict(self, data: dict):
+        self.retries = data["retries"]
+        self.slurm_id = data["slurm_id"]
+        self.status = data["status"]
+        self.failure_reason = data["failure_reason"]
 
 
 class SlurmDaemon:
@@ -42,9 +62,10 @@ class SlurmDaemon:
         self.max_concurrent_submissions = settings.get("max_concurrent_submissions", 5)
         self.ban_duration_seconds = settings.get("ban_duration_seconds", 1800)
         self.log_file = settings.get("log_file", "slurm_daemon.log")
+        self.checkpoint_path = settings.get("checkpoint_path", "checkpoint.json")
 
         self.logger = logging.getLogger(__name__)
-        log_format = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+        log_format = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
         file_handler = logging.FileHandler(self.log_file)
         file_handler.setFormatter(log_format)
         self.logger.addHandler(file_handler)
@@ -69,6 +90,46 @@ class SlurmDaemon:
                     raise ValueError(
                         f"Configuration Error: '{name}' depends on missing job '{dep}'."
                     )
+
+        # Step 2: Overlay active state records if checkpoint file exists
+        if os.path.exists(self.checkpoint_path):
+            self.logger.info(
+                f"Checkpoint file detected at '{self.checkpoint_path}'. Restoring pipeline state..."
+            )
+            try:
+                with open(self.checkpoint_path, "r") as f:
+                    checkpoint = json.load(f)
+
+                # Restore global temporary infrastructure ban metadata
+                self.global_banned_nodes = checkpoint.get("global_banned_nodes", {})
+
+                # Restore execution state matrices
+                for node_name, node_data in checkpoint.get("nodes", {}).items():
+                    if node_name in self.nodes:
+                        self.nodes[node_name].load_dict(node_data)
+                self.logger.info("State pipeline recovery successfully completed.")
+            except Exception as e:
+                self.logger.error(
+                    f"Failed to cleanly load checkpoint file: {e}. Defaulting to fresh execution parameters."
+                )
+        else:
+            self.logger.info(
+                "No active checkpoint found. Starting execution graph from scratch."
+            )
+            self.save_checkpoint()
+
+    def save_checkpoint(self):
+        """Atomic write operation preserving the active execution graph blueprint."""
+        checkpoint_data = {
+            "timestamp": time.time(),
+            "global_banned_nodes": self.global_banned_nodes,
+            "nodes": {name: node.to_dict() for name, node in self.nodes.items()},
+        }
+        # Writing to temporary file first before overriding prevents corrupted data if the daemon drops mid-write
+        temp_path = f"{self.checkpoint_path}.tmp"
+        with open(temp_path, "w") as f:
+            json.dump(checkpoint_data, f, indent=2)
+        os.replace(temp_path, self.checkpoint_path)
 
     def get_currently_banned_nodes(self) -> list[str]:
         """Cleans out expired records and returns currently blocked cluster nodes."""
@@ -113,19 +174,58 @@ class SlurmDaemon:
             )
             return None
 
+    #    def get_submission_order(self) -> list[str]:
+    #        in_degree = {name: len(node.dependencies) for name, node in self.nodes.items()}
+    #        queue = [name for name, count in in_degree.items() if count == 0]
+    #        order = []
+    #        while queue:
+    #            current = queue.pop(0)
+    #            order.append(current)
+    #            for name, node in self.nodes.items():
+    #                if current in node.dependencies:
+    #                    in_degree[name] -= 1
+    #                    if in_degree[name] == 0:
+    #                        queue.append(name)
+    #        return order
+
     def get_submission_order(self) -> list[str]:
-        in_degree = {name: len(node.dependencies) for name, node in self.nodes.items()}
-        queue = [name for name, count in in_degree.items() if count == 0]
+        """Calculates topological sorting execution order using Depth-First Search (DFS)."""
+        visited = set()
+        temp_stack = set()
         order = []
-        while queue:
-            current = queue.pop(0)
-            order.append(current)
-            for name, node in self.nodes.items():
-                if current in node.dependencies:
-                    in_degree[name] -= 1
-                    if in_degree[name] == 0:
-                        queue.append(name)
-        return order
+
+        def dfs(node_name: str):
+            if node_name in temp_stack:
+                raise ValueError(
+                    f"Configuration Error: Circular dependency detected involving '{node_name}'!"
+                )
+            if node_name not in visited:
+                temp_stack.add(node_name)
+                # Find downstream dependent jobs (children)
+                for child_name, child_node in self.nodes.items():
+                    if node_name in child_node.dependencies:
+                        dfs(child_name)
+
+                temp_stack.remove(node_name)
+                visited.add(node_name)
+                # Insert at the beginning to reverse the post-order collection
+                order.insert(0, node_name)
+
+        # Begin DFS from independent root jobs first to build the deepest paths out systematically
+        root_nodes = [
+            name for name, node in self.nodes.items() if not node.dependencies
+        ]
+        for root in root_nodes:
+            if root not in visited:
+                dfs(root)
+
+        # Catch any leftover orphaned structural networks or unvisited islands
+        for name in self.nodes:
+            if name not in visited:
+                dfs(name)
+
+        # Filter submission array down exclusively to items that still need processing
+        return [name for name in order if self.nodes[name].status == "UNSUBMITTED"]
 
     async def update_job_statuses(self):
         tracked_ids = {
@@ -154,20 +254,20 @@ class SlurmDaemon:
                 if not line or "|" not in line:
                     continue
                 parts = line.split("|")
-                raw_id, state, node_list, exit_code = (
-                    parts[0],
-                    parts[1],
-                    parts[2],
-                    parts[3],
-                )
+                raw_id, state, node_list, exit_code = parts
 
                 base_id = raw_id.split(".")[0]
                 if base_id in tracked_ids:
                     node = tracked_ids[base_id]
+                    old_status = node.status
                     self.map_state(node, state)
 
                     if node.status == "FAILED":
                         self.triage_failure_signature(node, state, node_list, exit_code)
+
+                    # Save state immediately if a task crosses into a terminal configuration
+                    if old_status != node.status:
+                        self.save_checkpoint()
         except Exception as e:
             self.logger.error(f"Error querying Slurm states: {e}")
 
@@ -247,7 +347,7 @@ class SlurmDaemon:
                 return False
         return True
 
-    async def run_loop(self, poll_interval: int = 15):
+    async def run_loop(self):
         submission_queue = self.get_submission_order()
         self.logger.info(
             f"Starting scheduling daemon. Default ban time: {self.ban_duration_seconds} seconds."
@@ -259,7 +359,7 @@ class SlurmDaemon:
                 1 for n in self.nodes.values() if n.status in ["SUBMITTED", "RUNNING"]
             )
 
-            # Fill out open sliding window execution channels
+            # 1. Slide window allocation deployments
             for name in list(submission_queue):
                 if active_slots >= self.max_concurrent_submissions:
                     break
@@ -271,8 +371,9 @@ class SlurmDaemon:
                         node.status = "SUBMITTED"
                         active_slots += 1
                         submission_queue.remove(name)
+                        self.save_checkpoint()  # Save checkpoint on successful submissions
 
-            # Cycle evaluation loop
+            # 2. Process active faults or terminations
             active_pipeline = False
             for name, node in self.nodes.items():
                 if node.status == "PENDING":
@@ -287,6 +388,7 @@ class SlurmDaemon:
                         node.status = "CANCELLED"
                         if name in submission_queue:
                             submission_queue.remove(name)
+                            self.save_checkpoint()
                         continue
 
                 if node.status == "FAILED":
@@ -298,13 +400,14 @@ class SlurmDaemon:
 
                         node.slurm_id = self.submit_with_dependencies(node)
                         node.status = "SUBMITTED"
+                        self.save_checkpoint()
 
                         if node.slurm_id:
                             self.update_downstream_dependencies(node, node.slurm_id)
 
                     else:
                         self.logger.error(
-                            f"Job '{node.name}' permanently halted. Hard failure threshold reached."
+                            f"Job '{node.name}' permanently halted. Retries exhausted."
                         )
                         continue
 
@@ -315,6 +418,8 @@ class SlurmDaemon:
                 self.logger.info(
                     "All pipeline processes completed successfully. Exiting daemon loop."
                 )
+                if os.path.exists(self.checkpoint_path):
+                    os.remove(self.checkpoint_path)  # Clean up on successful run finish
                 break
 
             await asyncio.sleep(self.check_interval_seconds)

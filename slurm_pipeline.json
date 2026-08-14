@@ -1,0 +1,26 @@
+{
+  "settings": {
+    "max_retries": 2,
+    "check_interval_seconds": 60,
+    "max_concurrent_submissions": 5,
+    "ban_duration_seconds": 1800,
+    "log_file": "slurm.log"
+  },
+  "jobs": [
+    {
+      "name": "step1",
+      "script": "step1.sh",
+      "dependencies": []
+    },
+    {
+      "name": "step2",
+      "script": "step2.sh",
+      "dependencies": ["step1"]
+    },
+    {
+      "name": "step3",
+      "script": "step3.sh",
+      "dependencies": ["step1","step2"]
+    }
+  ]
+}

@@ -139,7 +139,7 @@ def plot_data(df, fig_title, min_wcc0_sum, max_wcc0_sum):
             [original_y, adjusted_y[i]],
             clip_on=False,
             color=color,
-            linewidth=1.0,
+            linewidth=0.2,
         )
         ax.text(
             max_x + 1.5,
@@ -153,7 +153,7 @@ def plot_data(df, fig_title, min_wcc0_sum, max_wcc0_sum):
 
     # Configure plot appearance
     ax.set_ylabel("weighted average of cc0")
-    ax.set_ylim([min_wcc0_avg-0.1, max_wcc0_avg+0.1])
+    ax.set_ylim([min_wcc0_avg-0.05, max_wcc0_avg+0.01])
     ax.set_xticks(range(len(indices)))
     ax.set_xticklabels(indices, rotation=90, ha="center")
     ax.set_xlim([-1, max_x + 1])

@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import json
 import logging
@@ -426,6 +427,9 @@ class SlurmDaemon:
 
 
 if __name__ == "__main__":
-    # Example initialization: Ban problematic infrastructure nodes for exactly 30 minutes (1800 seconds)
-    daemon = SlurmDaemon("workflow.json")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("workflow", type=str, help="json file of workflow definition")
+    args = parser.parse_args()
+
+    daemon = SlurmDaemon(args.workflow)
     asyncio.run(daemon.run_loop())

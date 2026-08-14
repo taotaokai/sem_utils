@@ -1,31 +1,29 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """smoothing specfem3D GLL model in the lateral and vertical directions using Gaussian window of spatially varying size
 
 ECEF x,y,z coordinates
 
 """
+import argparse
 import sys
 import time
-import argparse
 
-import numpy as np
 import numba
-from mpi4py import MPI
+import numpy as np
 import pyproj
-
 from meshfem3d_constants import R_EARTH, R_EARTH_KM
 from meshfem3d_utils import (
-    sem_mesh_read,
-    sem_mesh_get_vol_gll,
-    sem_mesh_mpi_read,
-    read_gll_file,
-    write_gll_file,
-    gll2glob,
-    laplacian_ani3D,
     assemble_MPI_scalar,
     get_gll_weights,
+    gll2glob,
+    laplacian_ani3D,
+    read_gll_file,
+    sem_mesh_get_vol_gll,
+    sem_mesh_mpi_read,
+    sem_mesh_read,
+    write_gll_file,
 )
+from mpi4py import MPI
 
 comm = MPI.COMM_WORLD
 mpi_size = comm.Get_size()

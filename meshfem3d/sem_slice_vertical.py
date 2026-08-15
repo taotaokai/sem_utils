@@ -8,21 +8,20 @@ values along specified cross-sections and outputs the results in NetCDF and/or
 VTK formats.
 """
 
+import argparse
 import os
 import sys
-import argparse
 
 import numpy as np
 import pandas as pd
-import xarray as xr
 import pyvista as pv
-import mpi4py.MPI as MPI
-
+import xarray as xr
 from meshfem3d_constants import R_EARTH_KM
 from meshfem3d_utils import (
     geodetic_lat2geocentric_lat,
     sem_mesh_interp_points,
 )
+from mpi4py import MPI
 
 # MPI initialization
 mpi_comm = MPI.COMM_WORLD

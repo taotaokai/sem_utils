@@ -47,10 +47,7 @@ class JobNode:
 
 
 class SlurmDaemon:
-    def __init__(
-        self,
-        workflow_config_path: str,
-    ):
+    def __init__(self, workflow_config_path: str, reset_retries: bool = False):
         self.nodes: dict[str, JobNode] = {}
 
         # Central registry tracking banned nodes -> expiration unix timestamp (float)
@@ -78,9 +75,9 @@ class SlurmDaemon:
         file_handler.setFormatter(log_format)
         self.logger.addHandler(file_handler)
 
-        self.load_and_validate_workflow(workflow_config_path)
+        self.load_and_validate_workflow(workflow_config_path, reset_retries)
 
-    def load_and_validate_workflow(self, config_path: str):
+    def load_and_validate_workflow(self, config_path: str, reset_retries: bool):
         with open(config_path, "r") as f:
             config = json.load(f)
         for job_cfg in config["jobs"]:
@@ -116,6 +113,8 @@ class SlurmDaemon:
                 for node_name, node_data in checkpoint.get("nodes", {}).items():
                     if node_name in self.nodes:
                         self.nodes[node_name].load_dict(node_data)
+                        if reset_retries:
+                            self.nodes[node_name]["retries"] = 0
                 self.logger.info("State pipeline recovery successfully completed.")
             except Exception as e:
                 self.logger.error(
@@ -510,7 +509,9 @@ class SlurmDaemon:
                 self.logger.info(
                     "All workflow steps finalized. Cleaning up checkpoint file."
                 )
-                num_failed = sum([1 for node in self.nodes.values() if node.status != "COMPLETED"])
+                num_failed = sum(
+                    [1 for node in self.nodes.values() if node.status != "COMPLETED"]
+                )
                 if num_failed == 0 and os.path.exists(self.checkpoint_path):
                     os.remove(self.checkpoint_path)  # Clean up on successful run finish
                 break
@@ -521,7 +522,12 @@ class SlurmDaemon:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("workflow", type=str, help="json file of workflow definition")
+    parser.add_argument(
+        "--reset_retries",
+        action="store_true",
+        help="reset #retries when reading checkpoint",
+    )
     args = parser.parse_args()
 
-    daemon = SlurmDaemon(args.workflow)
+    daemon = SlurmDaemon(args.workflow, reset_retries=args.reset_retries)
     asyncio.run(daemon.run_loop())

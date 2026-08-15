@@ -114,7 +114,7 @@ class SlurmDaemon:
                     if node_name in self.nodes:
                         self.nodes[node_name].load_dict(node_data)
                         if reset_retries:
-                            self.nodes[node_name]["retries"] = 0
+                            self.nodes[node_name].retries = 0
                 self.logger.info("State pipeline recovery successfully completed.")
             except Exception as e:
                 self.logger.error(

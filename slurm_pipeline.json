@@ -4,6 +4,7 @@
     "check_interval_seconds": 60,
     "max_concurrent_submissions": 5,
     "ban_duration_seconds": 1800,
+    "max_node_strikes": 3,
     "log_file": "slurm.log",
     "checkpoint_path": "checkpoint.json"
   },

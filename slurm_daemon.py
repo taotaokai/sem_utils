@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import subprocess
 import time
 
@@ -53,7 +54,12 @@ class SlurmDaemon:
         self.nodes: dict[str, JobNode] = {}
 
         # Central registry tracking banned nodes -> expiration unix timestamp (float)
-        self.global_banned_nodes: dict[str, float] = {}
+        self.global_banned_nodes: dict[
+            str, float
+        ] = {}  # node_name -> expiration_timestamp
+        self.node_failure_tracker: dict[
+            str, int
+        ] = {}  # node_name -> total_strike_count
 
         with open(workflow_config_path, "r") as f:
             config = json.load(f)
@@ -62,6 +68,7 @@ class SlurmDaemon:
         self.check_interval_seconds = settings.get("check_interval_seconds", 60)
         self.max_concurrent_submissions = settings.get("max_concurrent_submissions", 5)
         self.ban_duration_seconds = settings.get("ban_duration_seconds", 1800)
+        self.max_node_strikes = settings.get("max_node_strikes", 3)
         self.log_file = settings.get("log_file", "slurm_daemon.log")
         self.checkpoint_path = settings.get("checkpoint_path", "checkpoint.json")
 
@@ -103,6 +110,7 @@ class SlurmDaemon:
 
                 # Restore global temporary infrastructure ban metadata
                 self.global_banned_nodes = checkpoint.get("global_banned_nodes", {})
+                self.node_failure_tracker = checkpoint.get("node_failure_tracker", {})
 
                 # Restore execution state matrices
                 for node_name, node_data in checkpoint.get("nodes", {}).items():
@@ -124,6 +132,7 @@ class SlurmDaemon:
         checkpoint_data = {
             "timestamp": time.time(),
             "global_banned_nodes": self.global_banned_nodes,
+            "node_failure_tracker": self.node_failure_tracker,
             "nodes": {name: node.to_dict() for name, node in self.nodes.items()},
         }
         # Writing to temporary file first before overriding prevents corrupted data if the daemon drops mid-write
@@ -229,6 +238,10 @@ class SlurmDaemon:
         return [name for name in order if self.nodes[name].status == "UNSUBMITTED"]
 
     async def update_job_statuses(self):
+        # delimiters to split jobID returned from sacct
+        delimiters = [".", "_"]  # array jobID is in jobID_taskID
+        pattern = "|".join(map(re.escape, delimiters))
+
         tracked_ids = {
             node.slurm_id: node for node in self.nodes.values() if node.slurm_id
         }
@@ -243,6 +256,7 @@ class SlurmDaemon:
             "--format=JobID,State,NodeList,ExitCode",
             "-n",
             "-P",
+            "-X",
         ]
 
         try:
@@ -251,24 +265,38 @@ class SlurmDaemon:
             )
             stdout, _ = await proc.communicate()
 
+            checkpoint_needed = False
             for line in stdout.decode().strip().split("\n"):
                 if not line or "|" not in line:
                     continue
                 parts = line.split("|")
-                raw_id, state, node_list, exit_code = parts
+                if len(parts) < 4:
+                    continue
+                raw_id, state, node_list, exit_code = (
+                    parts[0],
+                    parts[1],
+                    parts[2],
+                    parts[3],
+                )
 
-                base_id = raw_id.split(".")[0]
+                # base_id = raw_id.split(".")[0]
+                # base_id = raw_id.split("_")[0]
+                base_id = re.split(pattern, raw_id)[0]
                 if base_id in tracked_ids:
                     node = tracked_ids[base_id]
                     old_status = node.status
                     self.map_state(node, state)
 
-                    if node.status == "FAILED":
+                    if node.status == "FAILED" and old_status != "FAILED":
                         self.triage_failure_signature(node, state, node_list, exit_code)
 
                     # Save state immediately if a task crosses into a terminal configuration
                     if old_status != node.status:
-                        self.save_checkpoint()
+                        checkpoint_needed = True
+
+            if checkpoint_needed:
+                self.save_checkpoint()
+
         except Exception as e:
             self.logger.error(f"Error querying Slurm states: {e}")
 
@@ -285,42 +313,106 @@ class SlurmDaemon:
         elif any(x in slurm_state for x in ["CANCELLED", "REVOKED"]):
             node.status = "CANCELLED"
 
+    # def triage_failure_signature(
+    #     self, node: JobNode, state: str, node_list: str, exit_code: str
+    # ):
+    #     clean_node = (
+    #         node_list.split(",").strip()
+    #         if node_list and node_list not in ["None", "None assigned", ""]
+    #         else None
+    #     )
+
+    #     if any(x in state for x in ["NODE_FAIL", "TIMEOUT"]):
+    #         node.failure_reason = "CLUSTER_ERROR"
+    #         if clean_node:
+    #             # Add node to central registry with expiration timestamp
+    #             expiration = time.time() + self.ban_duration_seconds
+    #             self.global_banned_nodes[clean_node] = expiration
+    #             self.logger.warning(
+    #                 f"Temporary ban issued for node '{clean_node}' until timestamp {expiration}. Reason: {state}"
+    #             )
+    #         return
+
+    #     if exit_code and ":" in exit_code:
+    #         try:
+    #             app_code = int(exit_code.split(":")[0])
+    #             if app_code != 0:
+    #                 node.failure_reason = "APPLICATION_ERROR"
+    #                 self.logger.error(
+    #                     f"Application crash caught for '{node.name}' (Exit Code: {app_code}). Bypassing cluster node ban."
+    #                 )
+    #                 return
+    #         except ValueError:
+    #             pass
+
+    #     node.failure_reason = "CLUSTER_ERROR"
+    #     if clean_node:
+    #         expiration = time.time() + self.ban_duration_seconds
+    #         self.global_banned_nodes[clean_node] = expiration
+
     def triage_failure_signature(
-        self, node: JobNode, state: str, node_list: str, exit_code: str
+        self, node_node: JobNode, state: str, node_list: str, exit_code: str
     ):
-        clean_node = (
-            node_list.split(",").strip()
-            if node_list and node_list not in ["None", "None assigned", ""]
-            else None
-        )
+        """Analyzes failures, expanding Slurm node ranges into individual node strikes."""
 
-        if any(x in state for x in ["NODE_FAIL", "TIMEOUT"]):
-            node.failure_reason = "CLUSTER_ERROR"
-            if clean_node:
-                # Add node to central registry with expiration timestamp
-                expiration = time.time() + self.ban_duration_seconds
-                self.global_banned_nodes[clean_node] = expiration
-                self.logger.warning(
-                    f"Temporary ban issued for node '{clean_node}' until timestamp {expiration}. Reason: {state}"
-                )
-            return
-
+        # 1. Isolate verified application errors first
         if exit_code and ":" in exit_code:
             try:
                 app_code = int(exit_code.split(":")[0])
                 if app_code != 0:
-                    node.failure_reason = "APPLICATION_ERROR"
+                    node_node.failure_reason = "APPLICATION_ERROR"
                     self.logger.error(
-                        f"Application crash caught for '{node.name}' (Exit Code: {app_code}). Bypassing cluster node ban."
+                        f"Application crash (Exit:{app_code}) on '{node_node.name}'. Skipping node tracking."
                     )
                     return
             except ValueError:
                 pass
 
-        node.failure_reason = "CLUSTER_ERROR"
-        if clean_node:
-            expiration = time.time() + self.ban_duration_seconds
-            self.global_banned_nodes[clean_node] = expiration
+        # 2. Treat as Cluster/Infrastructure Error
+        node_node.failure_reason = "CLUSTER_ERROR"
+        if not node_list or node_list in ["None", "None assigned", ""]:
+            return
+
+        # 3. Expand bracketed Slurm node lists using 'scontrol show hostnames'
+        try:
+            result = subprocess.run(
+                ["scontrol", "show", "hostnames", node_list.strip()],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            expanded_nodes = [
+                line.strip()
+                for line in result.stdout.strip().split("\n")
+                if line.strip()
+            ]
+        except subprocess.CalledProcessError as e:
+            # Fallback to splitting by commas if scontrol encounters an unexpected issue
+            self.logger.error(
+                f"scontrol failed to parse node list '{node_list}': {e.stderr}"
+            )
+            expanded_nodes = [n.strip() for n in node_list.split(",") if n.strip()]
+
+        # 4. Process strike counts for each individual node involved in the failure
+        for individual_node in expanded_nodes:
+            self.node_failure_tracker[individual_node] = (
+                self.node_failure_tracker.get(individual_node, 0) + 1
+            )
+            strikes = self.node_failure_tracker[individual_node]
+            self.logger.warning(
+                f"Infrastructure failure recorded on node '{individual_node}'. Strike count: {strikes}/{self.max_node_strikes}"
+            )
+
+            # If threshold breached, enact time-bounded ban on the specific node
+            if strikes > self.max_node_strikes:
+                expiration = time.time() + self.ban_duration
+                self.global_banned_nodes[individual_node] = expiration
+                self.node_failure_tracker[individual_node] = (
+                    0  # Reset counter for this node
+                )
+                self.logger.error(
+                    f"Node '{individual_node}' breached failure threshold (> {self.max_node_strikes}). Banned for {self.ban_duration}s."
+                )
 
     def update_downstream_dependencies(self, failed_node: JobNode, new_job_id: str):
         for node in self.nodes.values():
@@ -344,7 +436,7 @@ class SlurmDaemon:
 
     def can_submit_node(self, node: JobNode) -> bool:
         for parent_name in node.dependencies:
-            if self.nodes[parent_name].status == "UNSUBMITTED":
+            if self.nodes[parent_name].status == ["UNSUBMITTED", "FAILED", "CANCELLED"]:
                 return False
         return True
 
@@ -384,7 +476,7 @@ class SlurmDaemon:
                     )
                     if parent_failed:
                         self.logger.warning(
-                            f"Job '{node.name}' cancelled due to broken upstream execution tracks."
+                            f"Job '{node.name}' cancelled; parent pipeline broke."
                         )
                         node.status = "CANCELLED"
                         if name in submission_queue:
@@ -396,9 +488,8 @@ class SlurmDaemon:
                     if node.retries < node.max_retries:
                         node.retries += 1
                         self.logger.warning(
-                            f"Retrying '{node.name}' (Attempt {node.retries}/{node.max_retries}). Reason: {node.failure_reason}"
+                            f"Retrying '{node.name}' ({node.retries}/{node.max_retries}). Reason: {node.failure_reason}"
                         )
-
                         node.slurm_id = self.submit_with_dependencies(node)
                         node.status = "SUBMITTED"
                         self.save_checkpoint()
@@ -417,7 +508,7 @@ class SlurmDaemon:
 
             if not active_pipeline and not submission_queue:
                 self.logger.info(
-                    "All pipeline processes completed successfully. Exiting daemon loop."
+                    "All workflow steps finalized. Cleaning up checkpoint file."
                 )
                 if os.path.exists(self.checkpoint_path):
                     os.remove(self.checkpoint_path)  # Clean up on successful run finish

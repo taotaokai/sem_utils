@@ -510,7 +510,8 @@ class SlurmDaemon:
                 self.logger.info(
                     "All workflow steps finalized. Cleaning up checkpoint file."
                 )
-                if os.path.exists(self.checkpoint_path):
+                num_failed = sum([1 for node in self.nodes.values() if node.status != "COMPLETED"])
+                if num_failed == 0 and os.path.exists(self.checkpoint_path):
                     os.remove(self.checkpoint_path)  # Clean up on successful run finish
                 break
 

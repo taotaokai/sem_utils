@@ -580,9 +580,7 @@ class SlurmDaemon:
                     active_pipeline = True
 
             if not active_pipeline and not submission_queue:
-                self.logger.info(
-                    "All workflow steps finalized. Cleaning up checkpoint file."
-                )
+                self.logger.info("All workflow steps finalized.")
                 num_failed = sum(
                     [
                         1
@@ -590,8 +588,10 @@ class SlurmDaemon:
                         if node.status != JobStatus.COMPLETED
                     ]
                 )
-                self.logger.info(f"number of incompleted jobs: {num_failed}")
+                if num_failed > 0:
+                    self.logger.warning(f"Number of incompleted jobs: {num_failed}")
                 if num_failed == 0 and os.path.exists(self.checkpoint_path):
+                    self.logger.info("Cleaning up checkpoint file.")
                     os.remove(self.checkpoint_path)  # Clean up on successful run finish
                 break
 

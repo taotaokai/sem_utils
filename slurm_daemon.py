@@ -523,15 +523,12 @@ class SlurmDaemon:
                         self.logger.warning(
                             f"Retrying '{node.name}' ({node.retries}/{node.max_retries}). Reason: {node.failure_reason}"
                         )
-                        # Rescue downstream jobs cancelled by Slurm before resubmitting the parent
-                        self.reset_downstream_chain(node.name)
                         node.slurm_id = self.submit_with_dependencies(node)
-                        node.status = "SUBMITTED"
-                        self.save_checkpoint()
-
                         if node.slurm_id:
-                            self.update_downstream_dependencies(node, node.slurm_id)
-
+                            # Rescue downstream jobs cancelled by Slurm before resubmitting the parent
+                            self.reset_downstream_chain(node.name)
+                            node.status = "SUBMITTED"
+                            self.save_checkpoint()
                     else:
                         self.logger.error(
                             f"Job '{node.name}' permanently halted. Retries exhausted."

@@ -480,7 +480,7 @@ class SlurmDaemon:
                 node.status = JobStatus.UNSUBMITTED
                 node.slurm_id = None
                 # Cascade recursively down to reset multi-tier children
-                self.reset_downstream_chain(node.name)
+                self.reset_downstream_chain(node.name, status)
 
     def can_submit_node(self, node: JobNode) -> bool:
         for parent_name in node.dependencies:

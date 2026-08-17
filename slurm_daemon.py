@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import time
+from enum import StrEnum
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,6 +17,15 @@ logging.basicConfig(
 )
 
 
+class JobStatus(StrEnum):
+    UNSUBMITTED = 1
+    SUBMITTED = 2
+    RUNNING = 3
+    COMPLETED = 4
+    FAILED = 5
+    CANCELLED = 6
+
+
 class JobNode:
     def __init__(self, name: str, script_path: str, max_retries: int = 2):
         self.name = name
@@ -23,7 +33,9 @@ class JobNode:
         self.max_retries = max_retries
         self.retries = 0
         self.slurm_id = None
-        self.status = "UNSUBMITTED"  # UNSUBMITTED, SUBMITTED, RUNNING, COMPLETED, FAILED, CANCELLED
+        self.status = (
+            JobStatus.UNSUBMITTED
+        )  # UNSUBMITTED, SUBMITTED, RUNNING, COMPLETED, FAILED, CANCELLED
         self.dependencies: set[str] = set()
         self.failure_reason = "UNKNOWN"
 
@@ -34,7 +46,7 @@ class JobNode:
             "max_retries": self.max_retries,
             "retries": self.retries,
             "slurm_id": self.slurm_id,
-            "status": self.status,
+            "status": self.status.name,
             "dependencies": list(self.dependencies),
             "failure_reason": self.failure_reason,
         }
@@ -42,7 +54,7 @@ class JobNode:
     def load_dict(self, data: dict):
         self.retries = data["retries"]
         self.slurm_id = data["slurm_id"]
-        self.status = data["status"]
+        self.status = JobStatus[data["status"]]
         self.failure_reason = data["failure_reason"]
 
 
@@ -240,7 +252,9 @@ class SlurmDaemon:
                 dfs(name)
 
         # Filter submission array down exclusively to items that still need processing
-        return [name for name in order if self.nodes[name].status == "UNSUBMITTED"]
+        return [
+            name for name in order if self.nodes[name].status == JobStatus.UNSUBMITTED
+        ]
 
     async def update_job_statuses(self):
         # delimiters to split jobID returned from sacct
@@ -292,7 +306,10 @@ class SlurmDaemon:
                     old_status = node.status
                     self.map_state(node, state)
 
-                    if node.status == "FAILED" and old_status != "FAILED":
+                    if (
+                        node.status == JobStatus.FAILED
+                        and old_status != JobStatus.FAILED
+                    ):
                         self.triage_failure_signature(node, state, node_list, exit_code)
 
                     # Save state immediately if a task crosses into a terminal configuration
@@ -307,16 +324,16 @@ class SlurmDaemon:
 
     def map_state(self, node: JobNode, slurm_state: str):
         if "COMPLETED" in slurm_state:
-            node.status = "COMPLETED"
+            node.status = JobStatus.COMPLETED
         elif any(
             x in slurm_state
             for x in ["FAILED", "TIMEOUT", "NODE_FAIL", "OUT_OF_MEMORY"]
         ):
-            node.status = "FAILED"
+            node.status = JobStatus.FAILED
         elif any(x in slurm_state for x in ["RUNNING", "COMPLETING"]):
-            node.status = "RUNNING"
+            node.status = JobStatus.RUNNING
         elif any(x in slurm_state for x in ["CANCELLED", "REVOKED"]):
-            node.status = "CANCELLED"
+            node.status = JobStatus.CANCELLED
         else:
             raise ValueError(
                 f"unkown slurm state '{slurm_state}' for node '{node.name}'!"
@@ -448,13 +465,13 @@ class SlurmDaemon:
         for node in self.nodes.values():
             # If Slurm cancelled it or it was never submitted, we force it back to UNSUBMITTED
             if parent_name in node.dependencies and node.status in [
-                "CANCELLED",
-                "SUBMITTED",
+                JobStatus.CANCELLED,
+                JobStatus.SUBMITTED,
             ]:
                 self.logger.warning(
                     f"Resetting downstream job '{node.name}' back to UNSUBMITTED due to parent '{parent_name}' retry."
                 )
-                node.status = "UNSUBMITTED"
+                node.status = JobStatus.UNSUBMITTED
                 node.slurm_id = None
                 # Cascade recursively down to rescue multi-tier children
                 self.reset_downstream_chain(node.name)
@@ -463,9 +480,9 @@ class SlurmDaemon:
         for parent_name in node.dependencies:
             parent_node = self.nodes[parent_name]
             if not parent_node.slurm_id or parent_node.status in [
-                "UNSUBMITTED",
-                "FAILED",
-                "CANCELLED",
+                JobStatus.UNSUBMITTED,
+                JobStatus.FAILED,
+                JobStatus.CANCELLED,
             ]:
                 return False
         return True
@@ -482,7 +499,9 @@ class SlurmDaemon:
             submission_queue = self.get_submission_order()
 
             active_slots = sum(
-                1 for n in self.nodes.values() if n.status in ["SUBMITTED", "RUNNING"]
+                1
+                for n in self.nodes.values()
+                if n.status in [JobStatus.SUBMITTED, JobStatus.RUNNING]
             )
 
             # 1. Slide window allocation deployments
@@ -490,11 +509,11 @@ class SlurmDaemon:
                 if active_slots >= self.max_concurrent_submissions:
                     break
                 node = self.nodes[name]
-                if node.status == "UNSUBMITTED" and self.can_submit_node(node):
+                if node.status == JobStatus.UNSUBMITTED and self.can_submit_node(node):
                     job_id = self.submit_with_dependencies(node)
                     if job_id:
                         node.slurm_id = job_id
-                        node.status = "SUBMITTED"
+                        node.status = JobStatus.SUBMITTED
                         active_slots += 1
                         submission_queue.remove(name)
                         self.save_checkpoint()  # Save checkpoint on successful submissions
@@ -517,7 +536,7 @@ class SlurmDaemon:
                 #             self.save_checkpoint()
                 #         continue
 
-                if node.status == "FAILED":
+                if node.status == JobStatus.FAILED:
                     if node.retries < node.max_retries:
                         node.retries += 1
                         self.logger.warning(
@@ -527,15 +546,20 @@ class SlurmDaemon:
                         if node.slurm_id:
                             # Rescue downstream jobs cancelled by Slurm before resubmitting the parent
                             self.reset_downstream_chain(node.name)
-                            node.status = "SUBMITTED"
+                            node.status = JobStatus.SUBMITTED
                             self.save_checkpoint()
                     else:
                         self.logger.error(
                             f"Job '{node.name}' permanently halted. Retries exhausted."
                         )
+                        node.status = JobStatus.CANCELLED
                         continue
 
-                if node.status in ["UNSUBMITTED", "SUBMITTED", "RUNNING"]:
+                if node.status in [
+                    JobStatus.UNSUBMITTED,
+                    JobStatus.SUBMITTED,
+                    JobStatus.RUNNING,
+                ]:
                     active_pipeline = True
 
             if not active_pipeline and not submission_queue:
@@ -543,7 +567,11 @@ class SlurmDaemon:
                     "All workflow steps finalized. Cleaning up checkpoint file."
                 )
                 num_failed = sum(
-                    [1 for node in self.nodes.values() if node.status != "COMPLETED"]
+                    [
+                        1
+                        for node in self.nodes.values()
+                        if node.status != JobStatus.COMPLETED
+                    ]
                 )
                 if num_failed == 0 and os.path.exists(self.checkpoint_path):
                     os.remove(self.checkpoint_path)  # Clean up on successful run finish

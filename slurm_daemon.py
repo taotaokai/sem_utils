@@ -132,6 +132,7 @@ class SlurmDaemon:
                         # re-submit previously cancelled jobs
                         if self.nodes[node_name].status == JobStatus.CANCELLED:
                             self.nodes[node_name].status = JobStatus.UNSUBMITTED
+                            # self.nodes[node_name].slurm_id = None
                 self.logger.info("State pipeline recovery successfully completed.")
             except Exception as e:
                 self.logger.error(
@@ -265,7 +266,9 @@ class SlurmDaemon:
         pattern = "|".join(map(re.escape, delimiters))
 
         tracked_ids = {
-            node.slurm_id: node for node in self.nodes.values() if node.slurm_id
+            node.slurm_id: node
+            for node in self.nodes.values()
+            if node.slurm_id and node.status != JobStatus.UNSUBMITTED
         }
         if not tracked_ids:
             return
@@ -478,7 +481,8 @@ class SlurmDaemon:
                     f"Resetting downstream job '{node.name}' to status '{status.name}'."
                 )
                 node.status = status
-                node.slurm_id = None
+                if status == JobStatus.UNSUBMITTED:
+                    node.slurm_id = None
                 # Cascade recursively down to reset multi-tier children
                 self.reset_downstream_chain(node.name, status)
 
@@ -546,16 +550,18 @@ class SlurmDaemon:
                     if node.retries < node.max_retries:
                         node.retries += 1
                         self.logger.warning(
-                            f"Retrying '{node.name}' ({node.retries}/{node.max_retries}). Reason: {node.failure_reason}"
+                            f"Reset '{node.name}' to UNSUBMITTED ({node.retries}/{node.max_retries}). Reason: {node.failure_reason}"
                         )
-                        node.slurm_id = self.submit_with_dependencies(node)
-                        if node.slurm_id:
-                            # Rescue downstream jobs cancelled by Slurm
-                            self.reset_downstream_chain(
-                                node.name, JobStatus.UNSUBMITTED
-                            )
-                            node.status = JobStatus.SUBMITTED
-                            self.save_checkpoint()
+                        self.reset_downstream_chain(node.name, JobStatus.UNSUBMITTED)
+                        self.save_checkpoint()
+                        # node.slurm_id = self.submit_with_dependencies(node)
+                        # if node.slurm_id:
+                        #     # Rescue downstream jobs cancelled by Slurm
+                        #     self.reset_downstream_chain(
+                        #         node.name, JobStatus.UNSUBMITTED
+                        #     )
+                        #     node.status = JobStatus.SUBMITTED
+                        #     self.save_checkpoint()
                     else:
                         self.logger.error(
                             f"Job '{node.name}' permanently halted. Retries exhausted."
@@ -572,8 +578,6 @@ class SlurmDaemon:
                 ]:
                     active_pipeline = True
 
-            self.save_checkpoint()
-
             if not active_pipeline and not submission_queue:
                 self.logger.info(
                     "All workflow steps finalized. Cleaning up checkpoint file."
@@ -585,6 +589,7 @@ class SlurmDaemon:
                         if node.status != JobStatus.COMPLETED
                     ]
                 )
+                self.logger.info(f"number of incompleted jobs: {num_failed}")
                 if num_failed == 0 and os.path.exists(self.checkpoint_path):
                     os.remove(self.checkpoint_path)  # Clean up on successful run finish
                 break

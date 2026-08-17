@@ -334,6 +334,8 @@ class SlurmDaemon:
             node.status = JobStatus.RUNNING
         elif any(x in slurm_state for x in ["CANCELLED", "REVOKED"]):
             node.status = JobStatus.CANCELLED
+        elif any(x in slurm_state for x in ["PENDING", ]):
+            node.status = JobStatus.SUBMITTED
         else:
             raise ValueError(
                 f"unkown slurm state '{slurm_state}' for node '{node.name}'!"

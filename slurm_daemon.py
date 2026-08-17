@@ -18,6 +18,7 @@ logging.basicConfig(
 
 
 class JobStatus(Enum):
+    USER_ABORTED = 0
     UNSUBMITTED = 1
     SUBMITTED = 2
     RUNNING = 3
@@ -30,10 +31,10 @@ class JobNode:
     def __init__(self, name: str, script_path: str, max_retries: int = 2):
         self.name = name
         self.script_path = script_path
-        self.max_retries = max_retries
-        self.retries = 0
+        self.max_retries: int = max_retries
+        self.retries: int = 0
         self.slurm_id = None
-        self.status = (
+        self.status: JobStatus = (
             JobStatus.UNSUBMITTED
         )  # UNSUBMITTED, SUBMITTED, RUNNING, COMPLETED, FAILED, CANCELLED
         self.dependencies: set[str] = set()
@@ -129,8 +130,8 @@ class SlurmDaemon:
                         self.nodes[node_name].load_dict(node_data)
                         if reset_retries:
                             self.nodes[node_name].retries = 0
-                        # re-submit previously cancelled jobs
-                        if self.nodes[node_name].status == JobStatus.CANCELLED:
+                        # re-submit previously aborted jobs
+                        if self.nodes[node_name].status == JobStatus.USER_ABORTED:
                             self.nodes[node_name].status = JobStatus.UNSUBMITTED
                             # self.nodes[node_name].slurm_id = None
                 self.logger.info("State pipeline recovery successfully completed.")
@@ -255,10 +256,11 @@ class SlurmDaemon:
             if name not in visited:
                 dfs(name)
 
+        return order
         # Filter submission array down exclusively to items that still need processing
-        return [
-            name for name in order if self.nodes[name].status == JobStatus.UNSUBMITTED
-        ]
+        # return [
+        #     name for name in order if self.nodes[name].status == JobStatus.UNSUBMITTED
+        # ]
 
     async def update_job_statuses(self):
         # delimiters to split jobID returned from sacct
@@ -503,10 +505,16 @@ class SlurmDaemon:
             f"Starting scheduling daemon. Default ban time: {self.ban_duration_seconds} seconds."
         )
 
+        job_queue = self.get_submission_order()
+
         while True:
             await self.update_job_statuses()
-            # Recalculate DFS queue order dynamically to account for rescued/reset jobs
-            submission_queue = self.get_submission_order()
+
+            submission_queue = [
+                name
+                for name in job_queue
+                if self.nodes[name].status == JobStatus.UNSUBMITTED
+            ]
 
             active_slots = sum(
                 1
@@ -515,7 +523,7 @@ class SlurmDaemon:
             )
 
             # 1. Slide window allocation deployments
-            for name in list(submission_queue):
+            for name in submission_queue:
                 if active_slots >= self.max_concurrent_submissions:
                     break
                 node = self.nodes[name]
@@ -530,7 +538,10 @@ class SlurmDaemon:
 
             # 2. Process active faults or terminations
             active_pipeline = False
-            for name, node in self.nodes.items():
+            # for name, node in self.nodes.items():
+            for name in job_queue:
+                node = self.nodes[name]
+
                 # if node.status == "PENDING":
                 #     parent_failed = any(
                 #         self.nodes[p].status in ["FAILED", "CANCELLED"]
@@ -546,9 +557,10 @@ class SlurmDaemon:
                 #             self.save_checkpoint()
                 #         continue
 
-                if node.status == JobStatus.FAILED:
+                if node.status in [JobStatus.FAILED, JobStatus.CANCELLED]:
                     if node.retries < node.max_retries:
-                        node.retries += 1
+                        if node.status == JobStatus.FAILED:
+                            node.retries += 1
                         self.logger.warning(
                             f"Reset '{node.name}' to UNSUBMITTED ({node.retries}/{node.max_retries}). Reason: {node.failure_reason}"
                         )
@@ -567,8 +579,8 @@ class SlurmDaemon:
                         self.logger.error(
                             f"Job '{node.name}' permanently halted. Retries exhausted."
                         )
-                        node.status = JobStatus.CANCELLED
-                        self.reset_downstream_chain(node.name, JobStatus.CANCELLED)
+                        node.status = JobStatus.USER_ABORTED
+                        self.reset_downstream_chain(node.name, JobStatus.USER_ABORTED)
                         self.save_checkpoint()
                         continue
 

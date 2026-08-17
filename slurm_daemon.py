@@ -477,7 +477,7 @@ class SlurmDaemon:
                 self.logger.warning(
                     f"Resetting downstream job '{node.name}' to status '{status.name}'."
                 )
-                node.status = JobStatus.UNSUBMITTED
+                node.status = status
                 node.slurm_id = None
                 # Cascade recursively down to reset multi-tier children
                 self.reset_downstream_chain(node.name, status)
@@ -521,7 +521,7 @@ class SlurmDaemon:
                         node.slurm_id = job_id
                         node.status = JobStatus.SUBMITTED
                         active_slots += 1
-                        submission_queue.remove(name)
+                        # submission_queue.remove(name)
                         self.save_checkpoint()  # Save checkpoint on successful submissions
 
             # 2. Process active faults or terminations

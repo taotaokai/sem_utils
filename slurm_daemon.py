@@ -481,8 +481,8 @@ class SlurmDaemon:
                     f"Resetting downstream job '{node.name}' to status '{status.name}'."
                 )
                 node.status = status
-                if status == JobStatus.UNSUBMITTED:
-                    node.slurm_id = None
+                # if status == JobStatus.UNSUBMITTED:
+                #     node.slurm_id = None
                 # Cascade recursively down to reset multi-tier children
                 self.reset_downstream_chain(node.name, status)
 

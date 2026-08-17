@@ -129,6 +129,9 @@ class SlurmDaemon:
                         self.nodes[node_name].load_dict(node_data)
                         if reset_retries:
                             self.nodes[node_name].retries = 0
+                        # re-submit previously cancelled jobs
+                        if self.nodes[node_name].status == JobStatus.CANCELLED:
+                            self.nodes[node_name].status = JobStatus.UNSUBMITTED
                 self.logger.info("State pipeline recovery successfully completed.")
             except Exception as e:
                 self.logger.error(
@@ -334,7 +337,12 @@ class SlurmDaemon:
             node.status = JobStatus.RUNNING
         elif any(x in slurm_state for x in ["CANCELLED", "REVOKED"]):
             node.status = JobStatus.CANCELLED
-        elif any(x in slurm_state for x in ["PENDING", ]):
+        elif any(
+            x in slurm_state
+            for x in [
+                "PENDING",
+            ]
+        ):
             node.status = JobStatus.SUBMITTED
         else:
             raise ValueError(
@@ -462,20 +470,16 @@ class SlurmDaemon:
     #             ]
     #             subprocess.run(cmd, capture_output=True, text=True)
 
-    def reset_downstream_chain(self, parent_name: str):
-        """Recursively rescues and resets jobs cancelled by an upstream failure."""
+    def reset_downstream_chain(self, parent_name: str, status: JobStatus):
+        """resets jobs to the specified status."""
         for node in self.nodes.values():
-            # If Slurm cancelled it or it was never submitted, we force it back to UNSUBMITTED
-            if parent_name in node.dependencies and node.status in [
-                JobStatus.CANCELLED,
-                JobStatus.SUBMITTED,
-            ]:
+            if parent_name in node.dependencies and node.status != status:
                 self.logger.warning(
-                    f"Resetting downstream job '{node.name}' back to UNSUBMITTED due to parent '{parent_name}' retry."
+                    f"Resetting downstream job '{node.name}' to status '{status.name}'."
                 )
                 node.status = JobStatus.UNSUBMITTED
                 node.slurm_id = None
-                # Cascade recursively down to rescue multi-tier children
+                # Cascade recursively down to reset multi-tier children
                 self.reset_downstream_chain(node.name)
 
     def can_submit_node(self, node: JobNode) -> bool:
@@ -546,8 +550,10 @@ class SlurmDaemon:
                         )
                         node.slurm_id = self.submit_with_dependencies(node)
                         if node.slurm_id:
-                            # Rescue downstream jobs cancelled by Slurm before resubmitting the parent
-                            self.reset_downstream_chain(node.name)
+                            # Rescue downstream jobs cancelled by Slurm
+                            self.reset_downstream_chain(
+                                node.name, JobStatus.UNSUBMITTED
+                            )
                             node.status = JobStatus.SUBMITTED
                             self.save_checkpoint()
                     else:
@@ -555,6 +561,7 @@ class SlurmDaemon:
                             f"Job '{node.name}' permanently halted. Retries exhausted."
                         )
                         node.status = JobStatus.CANCELLED
+                        self.reset_downstream_chain(node.name, JobStatus.CANCELLED)
                         self.save_checkpoint()
                         continue
 

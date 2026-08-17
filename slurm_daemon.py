@@ -6,7 +6,7 @@ import os
 import re
 import subprocess
 import time
-from enum import StrEnum
+from enum import Enum
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 
 
-class JobStatus(StrEnum):
+class JobStatus(Enum):
     UNSUBMITTED = 1
     SUBMITTED = 2
     RUNNING = 3

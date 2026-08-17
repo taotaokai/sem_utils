@@ -553,6 +553,7 @@ class SlurmDaemon:
                             f"Job '{node.name}' permanently halted. Retries exhausted."
                         )
                         node.status = JobStatus.CANCELLED
+                        self.save_checkpoint()
                         continue
 
                 if node.status in [
@@ -561,6 +562,8 @@ class SlurmDaemon:
                     JobStatus.RUNNING,
                 ]:
                     active_pipeline = True
+
+            self.save_checkpoint()
 
             if not active_pipeline and not submission_queue:
                 self.logger.info(

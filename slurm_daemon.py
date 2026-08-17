@@ -95,6 +95,8 @@ class SlurmDaemon:
                     raise ValueError(
                         f"Configuration Error: '{name}' depends on missing job '{dep}'."
                     )
+            if not os.path.isfile(node.script_path):
+                raise FileExistsError(f"'{node.script_path}' does not exist.")
 
         # Step 2: Overlay active state records if checkpoint file exists
         if os.path.exists(self.checkpoint_path):
@@ -155,11 +157,15 @@ class SlurmDaemon:
     def submit_with_dependencies(self, node: JobNode) -> str:
         cmd = ["sbatch", "--parsable"]
 
-        valid_dep_ids = [
-            self.nodes[p].slurm_id for p in node.dependencies if self.nodes[p].slurm_id
-        ]
-        if valid_dep_ids:
-            cmd.append(f"--dependency=afterok:{':'.join(valid_dep_ids)}")
+        if node.dependencies:
+            dep_ids = [self.nodes[p].slurm_id for p in node.dependencies]
+            # Double check defensive guard: ensure no None values slipped through
+            if any(sid is None for sid in dep_ids):
+                self.logger.error(
+                    f"Attempted to submit '{node.name}' before all parents had Slurm IDs."
+                )
+                return None
+            cmd.append(f"--dependency=afterok:{':'.join(dep_ids)}")
 
         # Dynamically evaluate the active ban list at submission time
         active_bans = self.get_currently_banned_nodes()
@@ -311,6 +317,10 @@ class SlurmDaemon:
             node.status = "RUNNING"
         elif any(x in slurm_state for x in ["CANCELLED", "REVOKED"]):
             node.status = "CANCELLED"
+        else:
+            raise ValueError(
+                f"unkown slurm state '{slurm_state}' for node '{node.name}'!"
+            )
 
     # def triage_failure_signature(
     #     self, node: JobNode, state: str, node_list: str, exit_code: str
@@ -413,40 +423,64 @@ class SlurmDaemon:
                     f"Node '{individual_node}' breached failure threshold (> {self.max_node_strikes}). Banned for {self.ban_duration}s."
                 )
 
-    def update_downstream_dependencies(self, failed_node: JobNode, new_job_id: str):
+    # def update_downstream_dependencies(self, failed_node: JobNode, new_job_id: str):
+    #     for node in self.nodes.values():
+    #         if failed_node.name in node.dependencies and node.status in [
+    #             "SUBMITTED",
+    #             "RUNNING",
+    #         ]:
+    #             valid_dep_ids = [
+    #                 self.nodes[p].slurm_id
+    #                 for p in node.dependencies
+    #                 if self.nodes[p].slurm_id
+    #             ]
+    #             dep_str = f"afterok:{':'.join(valid_dep_ids)}"
+    #             cmd = [
+    #                 "scontrol",
+    #                 "update",
+    #                 f"JobId={node.slurm_id}",
+    #                 f"Dependency={dep_str}",
+    #             ]
+    #             subprocess.run(cmd, capture_output=True, text=True)
+
+    def reset_downstream_chain(self, parent_name: str):
+        """Recursively rescues and resets jobs cancelled by an upstream failure."""
         for node in self.nodes.values():
-            if failed_node.name in node.dependencies and node.status in [
+            # If Slurm cancelled it or it was never submitted, we force it back to UNSUBMITTED
+            if parent_name in node.dependencies and node.status in [
+                "CANCELLED",
                 "SUBMITTED",
-                "RUNNING",
             ]:
-                valid_dep_ids = [
-                    self.nodes[p].slurm_id
-                    for p in node.dependencies
-                    if self.nodes[p].slurm_id
-                ]
-                dep_str = f"afterok:{':'.join(valid_dep_ids)}"
-                cmd = [
-                    "scontrol",
-                    "update",
-                    f"JobId={node.slurm_id}",
-                    f"Dependency={dep_str}",
-                ]
-                subprocess.run(cmd, capture_output=True, text=True)
+                self.logger.warning(
+                    f"Resetting downstream job '{node.name}' back to UNSUBMITTED due to parent '{parent_name}' retry."
+                )
+                node.status = "UNSUBMITTED"
+                node.slurm_id = None
+                # Cascade recursively down to rescue multi-tier children
+                self.reset_downstream_chain(node.name)
 
     def can_submit_node(self, node: JobNode) -> bool:
         for parent_name in node.dependencies:
-            if self.nodes[parent_name].status == ["UNSUBMITTED", "FAILED", "CANCELLED"]:
+            parent_node = self.nodes[parent_name]
+            if not parent_node.slurm_id or parent_node.status in [
+                "UNSUBMITTED",
+                "FAILED",
+                "CANCELLED",
+            ]:
                 return False
         return True
 
     async def run_loop(self):
-        submission_queue = self.get_submission_order()
+        # submission_queue = self.get_submission_order()
         self.logger.info(
             f"Starting scheduling daemon. Default ban time: {self.ban_duration_seconds} seconds."
         )
 
         while True:
             await self.update_job_statuses()
+            # Recalculate DFS queue order dynamically to account for rescued/reset jobs
+            submission_queue = self.get_submission_order()
+
             active_slots = sum(
                 1 for n in self.nodes.values() if n.status in ["SUBMITTED", "RUNNING"]
             )
@@ -468,20 +502,20 @@ class SlurmDaemon:
             # 2. Process active faults or terminations
             active_pipeline = False
             for name, node in self.nodes.items():
-                if node.status == "PENDING":
-                    parent_failed = any(
-                        self.nodes[p].status in ["FAILED", "CANCELLED"]
-                        for p in node.dependencies
-                    )
-                    if parent_failed:
-                        self.logger.warning(
-                            f"Job '{node.name}' cancelled; parent pipeline broke."
-                        )
-                        node.status = "CANCELLED"
-                        if name in submission_queue:
-                            submission_queue.remove(name)
-                            self.save_checkpoint()
-                        continue
+                # if node.status == "PENDING":
+                #     parent_failed = any(
+                #         self.nodes[p].status in ["FAILED", "CANCELLED"]
+                #         for p in node.dependencies
+                #     )
+                #     if parent_failed:
+                #         self.logger.warning(
+                #             f"Job '{node.name}' cancelled; parent pipeline broke."
+                #         )
+                #         node.status = "CANCELLED"
+                #         if name in submission_queue:
+                #             submission_queue.remove(name)
+                #             self.save_checkpoint()
+                #         continue
 
                 if node.status == "FAILED":
                     if node.retries < node.max_retries:
@@ -489,6 +523,8 @@ class SlurmDaemon:
                         self.logger.warning(
                             f"Retrying '{node.name}' ({node.retries}/{node.max_retries}). Reason: {node.failure_reason}"
                         )
+                        # Rescue downstream jobs cancelled by Slurm before resubmitting the parent
+                        self.reset_downstream_chain(node.name)
                         node.slurm_id = self.submit_with_dependencies(node)
                         node.status = "SUBMITTED"
                         self.save_checkpoint()

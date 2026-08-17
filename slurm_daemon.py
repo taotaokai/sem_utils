@@ -553,6 +553,7 @@ class SlurmDaemon:
                             f"Reset '{node.name}' to UNSUBMITTED ({node.retries}/{node.max_retries}). Reason: {node.failure_reason}"
                         )
                         self.reset_downstream_chain(node.name, JobStatus.UNSUBMITTED)
+                        node.status = JobStatus.UNSUBMITTED
                         self.save_checkpoint()
                         # node.slurm_id = self.submit_with_dependencies(node)
                         # if node.slurm_id:

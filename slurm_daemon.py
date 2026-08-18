@@ -399,18 +399,18 @@ class SlurmDaemon:
     ):
         """Analyzes failures, expanding Slurm node ranges into individual node strikes."""
 
-        # 1. Isolate verified application errors first
-        if exit_code and ":" in exit_code:
-            try:
-                app_code = int(exit_code.split(":")[0])
-                if app_code != 0:
-                    node_node.failure_reason = "APPLICATION_ERROR"
-                    self.logger.error(
-                        f"Application crash (Exit:{app_code}) on '{node_node.name}'. Skipping node tracking."
-                    )
-                    return
-            except ValueError:
-                pass
+        # # 1. Isolate verified application errors first
+        # if exit_code and ":" in exit_code:
+        #     try:
+        #         app_code = int(exit_code.split(":")[0])
+        #         if app_code != 0:
+        #             node_node.failure_reason = "APPLICATION_ERROR"
+        #             self.logger.error(
+        #                 f"Application crash (Exit:{app_code}) on '{node_node.name}'. Skipping node tracking."
+        #             )
+        #             return
+        #     except ValueError:
+        #         pass
 
         # 2. Treat as Cluster/Infrastructure Error
         node_node.failure_reason = "CLUSTER_ERROR"

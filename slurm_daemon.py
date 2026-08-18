@@ -449,13 +449,13 @@ class SlurmDaemon:
 
             # If threshold breached, enact time-bounded ban on the specific node
             if strikes > self.max_node_strikes:
-                expiration = time.time() + self.ban_duration
+                expiration = time.time() + self.ban_duration_seconds
                 self.global_banned_nodes[individual_node] = expiration
                 self.node_failure_tracker[individual_node] = (
                     0  # Reset counter for this node
                 )
                 self.logger.error(
-                    f"Node '{individual_node}' breached failure threshold (> {self.max_node_strikes}). Banned for {self.ban_duration}s."
+                    f"Node '{individual_node}' breached failure threshold (> {self.max_node_strikes}). Banned for {self.ban_duration_seconds}s."
                 )
 
     # def update_downstream_dependencies(self, failed_node: JobNode, new_job_id: str):

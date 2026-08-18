@@ -94,6 +94,9 @@ class SlurmDaemon:
         with open(config_path, "r") as f:
             config = json.load(f)
         for job_cfg in config["jobs"]:
+            if "name" not in job_cfg or "script" not in job_cfg:
+                self.logger.warning(f"Ignore invalid job node: {job_cfg}")
+                continue
             node = JobNode(
                 name=job_cfg["name"],
                 script_path=job_cfg["script"],

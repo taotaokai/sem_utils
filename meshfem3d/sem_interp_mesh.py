@@ -1,10 +1,7 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
-import time
 import argparse
-
-from mpi4py import MPI
+import time
 
 # from meshfem3d_constants import (
 #     IFLAG_CRUST,
@@ -13,8 +10,8 @@ from mpi4py import MPI
 #     IFLAG_670_220,
 #     IFLAG_DUMMY,
 # )
-
 from meshfem3d_utils import sem_mesh_interp_single_slice
+from mpi4py import MPI
 
 # MPI initialization
 comm_world = MPI.COMM_WORLD

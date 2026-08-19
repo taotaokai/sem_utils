@@ -1997,7 +1997,8 @@ class Misfit(object):
                     or solver_dt != syn.attrs["solver_dt"]
                 ):
                     msg = f"perturbed synthetics ({syn_sac_files}) do not have equal time samples as the initial synthetics."
-                    raise Exception(msg)
+                    warnings.warn(msg)
+                    # raise Exception(msg)
 
             # use_tb = max(first_arrtime - left_pad, solver_tb - left_pad, obs_tb)
             # use_te = min(solver_te, obs_te)

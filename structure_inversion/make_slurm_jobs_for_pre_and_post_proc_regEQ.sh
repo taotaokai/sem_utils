@@ -456,46 +456,46 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb_groups.
 EOF
 
 
-#====== model_smooth
-cat <<EOF > $model_smooth_job
-#!/bin/bash
-#SBATCH -J model_smooth
-#SBATCH -o ${model_smooth_job}.o%A_%a
-#SBATCH --array 0-$(( ${#SEM_model_names[@]} - 1 ))
-#SBATCH ${SLURM_args_kernel_precond}
-
-echo
-echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
-echo
-
-echo ===== smooth model
-
-mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
-model_dir=${SEM_iter_dir}/model_updated/GLL
-
-out_dir=${SEM_iter_dir}/model_updated/GLL_smooth
-[ -d \${out_dir} ] && rm -rf \${out_dir}
-mkdir -p \$out_dir
-
-model_names=(${SEM_model_names[@]})
-model_name=\${model_names[\${SLURM_ARRAY_TASK_ID}]}
-
-${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_VTI3D.py \\
-  ${SEM_nproc_total} \\
-  \${mesh_dir} \\
-  \${model_dir} \\
-  \${model_name} \\
-  ${SEM_model_smooth_reference_dir} \\
-  ${SEM_model_smooth_reference_tag} \\
-  ${SEM_model_smooth_reference_scale} \\
-  \${out_dir} \\
-  --horizontal_scale ${SEM_model_smooth_horizontal_scale} \\
-  --vertical_scale ${SEM_model_smooth_vertical_scale} \\
-  --nstep ${SEM_model_smooth_diffusion_niter} \\
-  --max_iter 50 \\
-  --max_tolerance=1e-3
-
-EOF
+# #====== model_smooth
+# cat <<EOF > $model_smooth_job
+# #!/bin/bash
+# #SBATCH -J model_smooth
+# #SBATCH -o ${model_smooth_job}.o%A_%a
+# #SBATCH --array 0-$(( ${#SEM_model_names[@]} - 1 ))
+# #SBATCH ${SLURM_args_kernel_precond}
+# 
+# echo
+# echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
+# echo
+# 
+# echo ===== smooth model
+# 
+# mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
+# model_dir=${SEM_iter_dir}/model_updated/GLL
+# 
+# out_dir=${SEM_iter_dir}/model_updated/GLL_smooth
+# [ -d \${out_dir} ] && rm -rf \${out_dir}
+# mkdir -p \$out_dir
+# 
+# model_names=(${SEM_model_names[@]})
+# model_name=\${model_names[\${SLURM_ARRAY_TASK_ID}]}
+# 
+# ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusion_VTI3D.py \\
+#   ${SEM_nproc_total} \\
+#   \${mesh_dir} \\
+#   \${model_dir} \\
+#   \${model_name} \\
+#   ${SEM_model_smooth_reference_dir} \\
+#   ${SEM_model_smooth_reference_tag} \\
+#   ${SEM_model_smooth_reference_scale} \\
+#   \${out_dir} \\
+#   --horizontal_scale ${SEM_model_smooth_horizontal_scale} \\
+#   --vertical_scale ${SEM_model_smooth_vertical_scale} \\
+#   --nstep ${SEM_model_smooth_diffusion_niter} \\
+#   --max_iter 50 \\
+#   --max_tolerance=1e-3
+# 
+# EOF
 
 #====== model_reparam
 cat <<EOF > $model_reparam_job
@@ -509,8 +509,8 @@ echo "Start: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
 
 mesh_dir=${SEM_iter_dir}/mesh/DATABASES_MPI
-model_dir=${SEM_iter_dir}/model_updated/GLL_smooth
-out_dir=${SEM_iter_dir}/model_updated/GLL_smooth_reparam
+model_dir=${SEM_iter_dir}/model_updated/GLL #GLL_smooth
+out_dir=${SEM_iter_dir}/model_updated/GLL_reparam #GLL_smooth_reparam
 
 [ -d \${out_dir} ] && rm -rf \${out_dir}
 mkdir -p \$out_dir

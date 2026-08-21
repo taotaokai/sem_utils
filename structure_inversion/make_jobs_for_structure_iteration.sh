@@ -45,7 +45,7 @@ job_file=${SEM_iter_dir}/slurm/mesh.job
 job_name=${SEM_iter_tag}_mesh
 cat <<EOF >> ${workflow_file}
     {
-      "name": "${SEM_iter_tag}_${job_name}",
+      "name": "${job_name}",
       "script": "$job_file",
       "dependencies": [$dep_jobs]
     },

@@ -120,7 +120,7 @@ do
   n=\$(ls -1 \${out_dir}/proc*_\${tag}.bin | wc -l)
   if [ "\$n" -ne "${SEM_nproc_total}" ]; then
     echo "number of \$out_dir/proc*_\${tag}.bin files not equal to ${SEM_nproc_total}"
-    echo "====== kernel_sum job FAILED: $event_id"
+    echo "====== kernel_sum.job FAILED"
     exit 1
   fi
 done
@@ -171,7 +171,7 @@ do
   n=\$(ls -1 \${out_dir}/proc*_\${tag}.bin | wc -l)
   if [ "\$n" -ne "${SEM_nproc_total}" ]; then
     echo "number of \$out_dir/proc*_\${tag}.bin files not equal to ${SEM_nproc_total}"
-    echo "====== kernel_balance job FAILED: $event_id"
+    echo "====== kernel_balance.job FAILED"
     exit 1
   fi
 done
@@ -226,7 +226,7 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusio
 n=\$(ls -1 \${out_dir}/proc*_\${kernel_name}.bin | wc -l)
 if [ "\$n" -ne "${SEM_nproc_total}" ]; then
   echo "number of \$out_dir/proc*_\${kernel_name}.bin files not equal to ${SEM_nproc_total}"
-  echo "====== kernel_smooth job FAILED: $event_id"
+  echo "====== kernel_smooth.job FAILED"
   exit 1
 fi
 
@@ -299,7 +299,7 @@ n=\$(ls -1 \${out_dir}/proc*_${SEM_dmodel_tag}.bin | wc -l)
 nparam=${#SEM_model_names[@]}
 n0=\$(( ${SEM_nproc_total} * \${nparam} ))
 if [ "\$n" -ne "\$n0" ]; then
-  echo "====== dmodel job FAILED: $event_id"
+  echo "====== dmodel.job FAILED"
   exit 1
 fi
 

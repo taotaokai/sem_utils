@@ -311,9 +311,16 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_kernel_repa
   --type ${SEM_parameterization_type} \\
   --mesh_dir \${mesh_dir}
 
+if [ \$? -ne 0 ]
+then
+  echo "${event_id}: sem_VTI_kernel_reparameterization.py has non-zero exit code!"
+  exit 1
+fi
+
 # check if all files are created successfully
 n=\$(ls -1 \$out_dir/*.bin | wc -l)
-n0=\$(( ${SEM_nproc_total} * 6 )) # 6: number of kernel files for each process (alpha,beta,phi,xi,eta,rho)
+nparam=${#SEM_model_names[@]}
+n0=\$(( ${SEM_nproc_total} * \${nparam} )) # 6: number of kernel files for each process (alpha,beta,phi,xi,eta,rho)
 if [ "\$n" -ne "\$n0" ]; then
   echo "====== kernel process job FAILED: $event_id"
   exit 1
@@ -365,6 +372,13 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_make_gaussian_m
   \${out_dir}/mask.lst \\
   \${out_dir}
 
+n=\$(ls -1 \${out_dir}/proc*_reg1_mask.bin | wc -l)
+if [ "\$n" -ne "${SEM_nproc_total}" ]; then
+  echo "number of \${out_dir}/proc*_reg1_mask.bin files not equal to ${SEM_nproc_total}"
+  echo "====== kernel mask process job FAILED: $event_id"
+  exit 1
+fi
+
 echo ====== mask kernels
 
 out_dir=${event_dir}/kernel/GLL_mask
@@ -382,6 +396,13 @@ do
     --out_dir \${out_dir} \\
     --out_tag \${tag} \\
     --overwrite_ok
+
+  n=\$(ls -1 \${out_dir}/proc*_\${tag}.bin | wc -l)
+  if [ "\$n" -ne "${SEM_nproc_total}" ]; then
+    echo "number of \$out_dir/proc*_\${tag}.bin files not equal to ${SEM_nproc_total}"
+    echo "====== kernel mask process job FAILED: $event_id"
+    exit 1
+  fi
 done
 
 echo

@@ -108,12 +108,21 @@ awk 'NF&&\$1!~/#/{printf "%s/events/%s/kernel/GLL_mask\\n", a,\$1}' \\
 
 for model_name in ${SEM_model_names[@]}
 do
+  tag=\${model_name}${SEM_kernel_tag}
+
   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_sum.py \\
     ${SEM_nproc_total} \\
     \${out_dir}/event_kernel_dir.list \\
-    \${model_name}${SEM_kernel_tag} \\
+    \${tag} \\
     \${out_dir} \\
     --ncomp=1
+
+  n=\$(ls -1 \${out_dir}/proc*_\${tag}.bin | wc -l)
+  if [ "\$n" -ne "${SEM_nproc_total}" ]; then
+    echo "number of \$out_dir/proc*_\${tag}.bin files not equal to ${SEM_nproc_total}"
+    echo "====== kernel_sum job FAILED: $event_id"
+    exit 1
+  fi
 done
 
 # delete event kernel directories to save disk space
@@ -148,14 +157,23 @@ mkdir -p \$out_dir
 
 for model_name in ${SEM_model_names[@]}
 do
+  tag=\${model_name}${SEM_kernel_tag}
+
   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_gll_math.py \\
     --nproc ${SEM_nproc_total} \\
     --model_dirs \${in_dir} \${hess_dir} \\
     --model_tags \${model_name}${SEM_kernel_tag} \${model_name}_invhess \\
     --math_expr "v[0] * v[1]" \\
     --out_dir \${out_dir} \\
-    --out_tag \${model_name}${SEM_kernel_tag} \\
+    --out_tag \${tag} \\
     --overwrite_ok
+
+  n=\$(ls -1 \${out_dir}/proc*_\${tag}.bin | wc -l)
+  if [ "\$n" -ne "${SEM_nproc_total}" ]; then
+    echo "number of \$out_dir/proc*_\${tag}.bin files not equal to ${SEM_nproc_total}"
+    echo "====== kernel_balance job FAILED: $event_id"
+    exit 1
+  fi
 done
 
 echo
@@ -204,6 +222,13 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_smooth_diffusio
   --nstep ${SEM_kernel_smooth_diffusion_niter} \\
   --max_iter 50 \\
   --max_tolerance=1e-3
+
+n=\$(ls -1 \${out_dir}/proc*_\${kernel_name}.bin | wc -l)
+if [ "\$n" -ne "${SEM_nproc_total}" ]; then
+  echo "number of \$out_dir/proc*_\${kernel_name}.bin files not equal to ${SEM_nproc_total}"
+  echo "====== kernel_smooth job FAILED: $event_id"
+  exit 1
+fi
 
 echo
 echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
@@ -263,6 +288,21 @@ else
 
 fi
 
+if [ \$? -ne 0 ]
+then
+  echo "dmodel.job has non-zero exit code!"
+  exit 1
+fi
+
+# check if all files are created successfully
+n=\$(ls -1 \${out_dir}/proc*_${SEM_dmodel_tag}.bin | wc -l)
+nparam=${#SEM_model_names[@]}
+n0=\$(( ${SEM_nproc_total} * \${nparam} ))
+if [ "\$n" -ne "\$n0" ]; then
+  echo "====== dmodel job FAILED: $event_id"
+  exit 1
+fi
+
 echo
 echo "End: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"
 echo
@@ -310,6 +350,12 @@ do
     # --model_min_values ${SEM_model_min_values[@]} \\
     # --model_max_values ${SEM_model_max_values[@]}
 
+  if [ \$? -ne 0 ]
+  then
+    echo "model_perturb job: sem_perturb_groups.py has non-zero exit code!"
+    exit 1
+  fi
+
   # convert from alpha,beta,xi,phi,eta,drho to vpv,vph,vsv,vsh,eta,rho
   ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
     --nproc ${SEM_nproc_total} \\
@@ -320,6 +366,12 @@ do
     --type ${SEM_parameterization_type} \\
     --overwrite_ok \\
     --mesh_dir \${mesh_dir}
+
+  if [ \$? -ne 0 ]
+  then
+    echo "model_perturb job: sem_VTI_model_reparameterization.py has non-zero exit code!"
+    exit 1
+  fi
 done
 
 echo
@@ -381,6 +433,12 @@ do
   cd \$mesh_dir
   ${SLURM_mpiexec} $SEM_build_dir/bin/xmeshfem3D
 
+  if [ \$? -ne 0 ]
+  then
+    echo "mesh_perturb job: xmeshfem3D has non-zero exit code!"
+    exit 1
+  fi
+
 done
 
 echo
@@ -418,6 +476,12 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/structure_inversion/grid_sear
   --out_figure \${out_dir}/grid_search.pdf \\
   --out_txt \${out_dir}/grid_search.txt
 
+if [ \$? -ne 0 ]
+then
+  echo "model_update job: grid_search.py has non-zero exit code!"
+  exit 1
+fi
+
 echo ===== get optimal step length for each model search direction
 
 group_names=(${SEM_perturb_group_names[@]})
@@ -452,6 +516,12 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_perturb_groups.
   --model_min_values ${SEM_model_min_values[@]} \\
   --model_max_values ${SEM_model_max_values[@]} \\
   --overwrite_ok
+
+if [ \$? -ne 0 ]
+then
+  echo "model_update job: sem_perturb_groups.py has non-zero exit code!"
+  exit 1
+fi
 
 EOF
 
@@ -527,6 +597,12 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_repar
   --overwrite_ok \\
   --mesh_dir \${mesh_dir} 
 
+if [ \$? -ne 0 ]
+then
+  echo "model_reparam.job: sem_VTI_model_reparameterization.py has non-zero exit code!"
+  exit 1
+fi
+
 echo ====== re-generate alpha,beta,phi,xi,eta,drho to ensure compatibility for isotropic elements
 
 ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_reparameterization.py \\
@@ -537,6 +613,12 @@ ${SLURM_mpiexec} ${SEM_python_exec} $SEM_utils_dir/meshfem3d/sem_VTI_model_repar
   --type ${SEM_parameterization_type} \\
   --overwrite_ok \\
   --mesh_dir \${mesh_dir} \\
+
+if [ \$? -ne 0 ]
+then
+  echo "model_reparam.job: sem_VTI_model_reparameterization.py has non-zero exit code!"
+  exit 1
+fi
 
 echo
 echo "Done: JOB_ID=\${SLURM_JOB_ID} [\$(date -Is)]"

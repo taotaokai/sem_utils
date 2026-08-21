@@ -52,7 +52,7 @@ EOF
     }, 
 EOF
 
-    $SEM_utils_dir/make_jobs_for_structure_iteration.sh \
+    $SEM_utils_dir/structure_inversion/make_jobs_for_structure_iteration.sh \
         $SEM_iter_dir $SEM_iter_dir $event_list $workflow_file \"$job_name\"
 
     dep_job=${SEM_iter_tag}_model_reparam

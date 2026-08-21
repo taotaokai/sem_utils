@@ -51,7 +51,7 @@ cat <<EOF >> ${workflow_file}
     },
 EOF
 
-job_list=submitted_job.lst
+job_list=$(mktemp -p .) #submitted_job.lst
 [ -f ${job_list} ] && rm ${job_list} || touch ${job_list}
 
 dep_job=${job_name}
@@ -100,8 +100,9 @@ EOF
   dep_jobs=\"${job_name}\"
 done
 
-job_list=submitted_job.lst
-[ -f ${job_list} ] && rm ${job_list} || touch ${job_list}
+rm $job_list
+job_list=$(mktemp -p .)
+# [ -f ${job_list} ] && rm ${job_list} || touch ${job_list}
 
 for event_id in $(awk 'NF&&$1!~/#/{print $1}' $event_list)
 do
@@ -137,6 +138,7 @@ do
 EOF
   dep_jobs=\"${job_name}\"
 done
+rm $job_list
 
 # cat <<EOF >> ${workflow_file}
 #   {}

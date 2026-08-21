@@ -28,6 +28,8 @@ cat <<EOF > ${workflow_file}
   "jobs": [
 EOF
 
+dep_job=
+
 for iter in $(seq $start_iter_num $end_iter_num)
 do
     
@@ -48,14 +50,14 @@ EOF
     {
       "name": "${job_name}",
       "script": "$job_file",
-      "dependencies": ["$dep_job"]
+      "dependencies": [$dep_job]
     }, 
 EOF
 
     $SEM_utils_dir/structure_inversion/make_jobs_for_structure_iteration.sh \
         $SEM_iter_dir $SEM_iter_dir $event_list $workflow_file \"$job_name\"
 
-    dep_job=${SEM_iter_tag}_model_reparam
+    dep_job=\"${SEM_iter_tag}_model_reparam\"
 
 done
 

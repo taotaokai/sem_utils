@@ -295,7 +295,7 @@ then
 fi
 
 # check if all files are created successfully
-n=\$(ls -1 \${out_dir}/proc*_${SEM_dmodel_tag}.bin | wc -l)
+n=\$(ls -1 \${out_dir}/proc*${SEM_dmodel_tag}.bin | wc -l)
 nparam=${#SEM_model_names[@]}
 n0=\$(( ${SEM_nproc_total} * \${nparam} ))
 if [ "\$n" -ne "\$n0" ]; then

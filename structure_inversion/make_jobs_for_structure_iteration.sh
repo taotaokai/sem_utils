@@ -61,7 +61,7 @@ do
   prev_job=${dep_job}
   for job in forward misfit kernel reparam mask
   do
-    job_file=${event_dir}/slurm/${tag}.job
+    job_file=${event_dir}/slurm/${job}.job
     job_name=${SEM_iter_tag}_${event_id}_${job}
     cat <<EOF >> ${workflow_file}
     {
@@ -88,7 +88,7 @@ done
 dep_jobs=$(awk 'NR>1 {printf "\"%s\",",last } {last=$1} END{printf "\"%s\"",last}' $job_list)
 for job in kernel_sum kernel_balance kernel_smooth dmodel model_perturb mesh_perturb
 do
-  job_file=${SEM_iter_dir}/slurm/${tag}.job
+  job_file=${SEM_iter_dir}/slurm/${job}.job
   job_name=${SEM_iter_tag}_$job
   cat <<EOF >> ${workflow_file}
     {
@@ -110,7 +110,7 @@ do
   prev_job=$dep_jobs
   for job in perturb search
   do
-    job_file=${event_dir}/slurm/${tag}.job
+    job_file=${event_dir}/slurm/${job}.job
     job_name=${SEM_iter_tag}_${event_id}_${job}
     cat <<EOF >> ${workflow_file}
     {
@@ -127,7 +127,7 @@ done
 dep_jobs=$(awk 'NR>1 {printf "\"%s\",",last } {last=$1} END{printf "\"%s\"",last}' $job_list)
 for job in model_update model_reparam
 do
-  job_file=${SEM_iter_dir}/slurm/${tag}.job
+  job_file=${SEM_iter_dir}/slurm/${job}.job
   job_name=${SEM_iter_tag}_${job}
   cat <<EOF >> ${workflow_file}
     {

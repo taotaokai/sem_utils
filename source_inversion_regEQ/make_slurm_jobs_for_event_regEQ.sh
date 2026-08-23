@@ -82,13 +82,7 @@ then
 fi
 
 rm -f CMTSOLUTION
-cp $initial_cmt_file CMTSOLUTION
-sed -i "/^tau(s)/s/.*/tau(s):            +0.0E+00/" CMTSOLUTION
-
-sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
-sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
-sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
-sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" Par_file
+cp -L $initial_cmt_file CMTSOLUTION
 
 # set USER_T0 in Par_file to at least 3 * tau
 tau=\$(grep "tau" CMTSOLUTION | awk -F: '{printf "%f", \$2}')
@@ -99,6 +93,15 @@ then
 fi
 min_user_t0=\$(echo "3 * \$tau + 1" | bc -l | awk '{printf "%d", \$1}')
 sed -i "/^T0/s/=.*/= \$min_user_t0/" Par_file
+
+# set zero tau to get Green's function
+sed -i "/^tau(s)/s/.*/tau(s):            +0.0E+00/" CMTSOLUTION
+
+sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
+sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
+sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
+sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" Par_file
+
 
 cd $event_dir
 
@@ -136,7 +139,7 @@ mv $event_dir/\$out_dir/*.sac $event_dir/\$out_dir/sac
 # modify initial CMTSOLUTION with the source location actually used in the simulation
 # e.g. the initial source might locate slightly above the ground from the line search in the previou inversion,
 #      in this case, SPECFEM will pull the source back onto the ground 
-cp $initial_cmt_file $misfit_dir/CMTSOLUTION_initial
+cp -L $initial_cmt_file $misfit_dir/CMTSOLUTION_initial
 tmpfile=\$(mktemp)
 grep -A4 "position of the source that will be used:" $event_dir/\$out_dir/output_solver.txt > \$tmpfile
 if [ \$? -ne 0 ]

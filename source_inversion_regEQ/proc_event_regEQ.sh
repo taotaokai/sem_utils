@@ -71,20 +71,26 @@ do
   then
     # cmt_file=$SEM_data_dir/${event_id}/CMTSOLUTION.ecef
     cmt_file=${SEM_initial_cmtsolution_dir}/${event_id}.cmt
+    if [ ! -f "$cmt_file" ]
+    then
+      echo "[ERROR] $cmt_file NOT found!"
+      exit -1
+    fi
   else
     cmt_file=$SEM_prev_iter_dir/CMTSOLUTION_updated/${event_id}.cmt
   fi
-  if [ ! -f "$cmt_file" ]
-  then
-    echo "[ERROR] $cmt_file NOT found!"
-    exit -1
-  fi
+  ln -sf $cmt_file $SEM_iter_dir/CMTSOLUTION_initial/${event_id}.cmt
+  # if [ ! -f "$cmt_file" ]
+  # then
+  #   echo "[ERROR] $cmt_file NOT found!"
+  #   exit -1
+  # fi
   # init_cmt_file=$event_dir/DATA/CMTSOLUTION.init
   # if [ -f "$init_cmt_file" ]
   # then
   #   rm -f $init_cmt_file
   # fi
-  cp -L $cmt_file $SEM_iter_dir/CMTSOLUTION_initial/${event_id}.cmt
+  # cp -L $cmt_file $SEM_iter_dir/CMTSOLUTION_initial/${event_id}.cmt
 
   echo ------ use: $(readlink -f $cmt_file)
 

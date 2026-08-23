@@ -58,6 +58,7 @@ EOF
 done
 
 dep_jobs=$(awk 'NR>1 {printf "\"%s\",",last } {last=$1} END{printf "\"%s\"",last}' $job_list)
+mkdir -p ${SEM_iter_dir}/slurm
 job_file=${SEM_iter_dir}/slurm/sync.job
 job_name=${SEM_iter_tag}_sync
 

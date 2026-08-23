@@ -47,11 +47,11 @@ then
 fi
 # initial cmt file
 initial_cmt_file=$SEM_iter_dir/CMTSOLUTION_initial/${event_id}.cmt
-if [ ! -f "$initial_cmt_file" ]
-then
-  echo "[WARN] $initial_cmt_file does NOT exist!"
-  exit -1
-fi
+# if [ ! -f "$initial_cmt_file" ]
+# then
+#   echo "[WARN] $initial_cmt_file does NOT exist!"
+#   exit -1
+# fi
 # misfit par file
 misfit_par_file=$event_dir/DATA/misfit.yaml
 if [ ! -f "$misfit_par_file" ]
@@ -59,16 +59,6 @@ then
   echo "[ERROR] $misfit_par_file does NOT exist!"
   exit -1
 fi
-
-# set USER_T0 in Par_file to at least 3 * tau
-tau=$(grep "tau" ${initial_cmt_file} | awk -F: '{printf "%f", $2}')
-if [ -z "$tau" ]
-then
-  echo "[ERROR] failed to get tau value from $initial_cmt_file!"
-  exit -1
-fi
-min_user_t0=$(echo "3 * $tau + 1" | bc -l | awk '{printf "%d", $1}')
-sed -i "/^T0/s/=.*/= $min_user_t0/" ${sem_par_file}
 
 #====== green's function
 cat <<EOF > $green_job
@@ -85,6 +75,12 @@ out_dir=output_green
 
 cd $event_dir/DATA
 
+if [ ! -f "$initial_cmt_file" ]
+then
+  echo "[WARN] $initial_cmt_file does NOT exist!"
+  exit -1
+fi
+
 rm -f CMTSOLUTION
 cp $initial_cmt_file CMTSOLUTION
 sed -i "/^tau(s)/s/.*/tau(s):            +0.0E+00/" CMTSOLUTION
@@ -93,6 +89,16 @@ sed -i "/^SIMULATION_TYPE/s/=.*/= 1/" Par_file
 sed -i "/^SAVE_FORWARD/s/=.*/= .false./" Par_file
 sed -i "/^USE_ECEF_COORDINATE/s/=.*/= .true./" Par_file
 sed -i "/^USE_FORCE_POINT_SOURCE/s/=.*/= .false./" Par_file
+
+# set USER_T0 in Par_file to at least 3 * tau
+tau=\$(grep "tau" CMTSOLUTION | awk -F: '{printf "%f", \$2}')
+if [ -z "\$tau" ]
+then
+  echo "[ERROR] failed to get tau value from CMTSOLUTION!"
+  exit -1
+fi
+min_user_t0=\$(echo "3 * \$tau + 1" | bc -l | awk '{printf "%d", \$1}')
+sed -i "/^T0/s/=.*/= \$min_user_t0/" Par_file
 
 cd $event_dir
 

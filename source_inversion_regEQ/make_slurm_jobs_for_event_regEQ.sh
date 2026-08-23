@@ -121,7 +121,7 @@ then
   rm -rf $event_dir/DATABASES_MPI
 fi
 mkdir -p $event_dir/DATABASES_MPI
-ln -s $SEM_mesh_dir/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
+ln -sf $SEM_mesh_dir/DATABASES_MPI/*.bin $event_dir/DATABASES_MPI
 
 $SLURM_mpiexec $SEM_build_dir/bin/xspecfem3D
 

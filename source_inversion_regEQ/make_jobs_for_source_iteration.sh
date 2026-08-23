@@ -66,9 +66,9 @@ cat <<EOF > ${job_file}
 #!/bin/bash
 #SBATCH -J ${job_name}
 #SBATCH -o ${job_file}.o%j
-#sbatch -n 1
-#sbatch -p ${SLURM_partition_cpu}
-#sbatch -t 00:01:00
+#SBATCH -n 1
+#SBATCH -p ${SLURM_partition_cpu}
+#SBATCH -t 00:01:00
 echo ${job_name}
 EOF
 

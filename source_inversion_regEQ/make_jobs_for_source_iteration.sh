@@ -62,7 +62,7 @@ mkdir -p ${SEM_iter_dir}/slurm
 job_file=${SEM_iter_dir}/slurm/sync.job
 job_name=${SEM_iter_tag}_sync
 
-cat <<EOF >> ${job_file}
+cat <<EOF > ${job_file}
 #!/bin/bash
 #SBATCH -J ${job_name}
 #SBATCH -o ${job_file}.o%j

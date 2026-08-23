@@ -34,7 +34,7 @@ for iter in $(seq $start_iter_num $end_iter_num)
 do
     
     # iteration directory
-    # SEM_iter_num=$(echo "$iter" | awk '{printf "%02d", $1}')
+    SEM_iter_num=$(echo "$iter" | awk '{printf "%02d", $1}')
     # SEM_iter_dir=${SEM_stage_dir}/iter${SEM_iter_num}
     SEM_iter_tag=s${SEM_stage_num}i${SEM_iter_num}
 

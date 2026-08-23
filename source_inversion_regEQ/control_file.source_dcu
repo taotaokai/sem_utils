@@ -63,7 +63,7 @@ SEM_data_dir=${SEM_base_dir}/events # data_dir/<gcmtID>/STATIONS, channel.txt. C
 
 # stage directory, e.g. stage00.source/
 SEM_stage_num=$(echo "$SEM_stage_num" | awk '{printf "%02d", $1}')
-SEM_stage_dir=${SEM_base_dir}/stage${SEM_stage_num}.${SEM_stage_tag}
+SEM_stage_dir=${SEM_base_dir}/stage${SEM_stage_num}_${SEM_stage_tag}
 
 # iteration directory, e.g. iter01/
 SEM_iter_num=$(echo "$SEM_iter_num" | awk '{printf "%02d", $1}')

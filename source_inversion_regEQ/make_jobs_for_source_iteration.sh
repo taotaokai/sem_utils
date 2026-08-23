@@ -21,7 +21,7 @@ then
   exit -1
 fi
 
-$SEM_utils_dir/source_inversion/proc_event_regEQ.sh ${control_file} ${event_list}
+$SEM_utils_dir/source_inversion_regEQ/proc_event_regEQ.sh ${control_file} ${event_list}
 
 SEM_iter_tag=s${SEM_stage_num}i${SEM_iter_num}
 

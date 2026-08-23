@@ -42,7 +42,7 @@ do
 
     # $SEM_utils_dir/source_inversion/proc_event_regEQ.sh ${control_file} ${event_list}
 
-    $SEM_utils_dir/source_inversion/make_jobs_for_source_iteration.sh \
+    $SEM_utils_dir/source_inversion_regEQ/make_jobs_for_source_iteration.sh \
         ${control_file} $event_list $workflow_file "$dep_job"
 
     dep_job=\"${SEM_iter_tag}_sync\"

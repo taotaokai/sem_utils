@@ -1,17 +1,15 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Convert station file to VTK"""
-import pandas as pd
-import numpy as np
-import pyvista as pv
-import pyproj
-
 # import simplekml
 import argparse
+
+import numpy as np
+import pandas as pd
+import pyproj
+import pyvista as pv
+from meshfem3d_constants import R_EARTH
 from netCDF4 import Dataset
 from scipy.interpolate import RegularGridInterpolator
-
-from meshfem3d_constants import R_EARTH
 
 parser = argparse.ArgumentParser()
 

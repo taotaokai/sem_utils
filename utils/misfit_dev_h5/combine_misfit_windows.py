@@ -1,15 +1,14 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """ get model update step length from grid search results
 """
-import sys
 import argparse
-# from datetime import datetime
-import tables as pt
+import sys
+
 # from scipy.interpolate import RegularGridInterpolator
 import numpy as np
-from matplotlib import pyplot as plt
-import xarray as xr
+
+# from datetime import datetime
+import tables as pt
 
 parser = argparse.ArgumentParser()
 parser.add_argument("misfit_h5_list" )  # list of misfit.h5 of each events
@@ -17,7 +16,7 @@ parser.add_argument("out_h5")
 args = parser.parse_args()
 
 with open(args.misfit_h5_list, 'r') as f:
-    misfit_h5_list = [ l.strip() for l in f.readlines() ]
+    misfit_h5_list = [ l.strip() for l in f ]
 
 # create table
 misfit_h5file = misfit_h5_list[0]

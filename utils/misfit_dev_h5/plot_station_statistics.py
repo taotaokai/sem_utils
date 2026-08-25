@@ -61,12 +61,12 @@ for i in range(nsta):
     annot_Z = f"{info["mean_snr_Z"]:.0f}({info["nwin_Z"]})"
     annot_R = f"{info["mean_snr_R"]:.0f}({info["nwin_R"]})"
     annot_T = f"{info["mean_snr_T"]:.0f}({info["nwin_T"]})"
-    ax.text(1, y[i], f"{annot_Z},{annot_R},{annot_T}", fontsize=5, zorder=3)
+    ax.text(1, y[i], f" {annot_Z},{annot_R},{annot_T}", fontsize=5, zorder=3)
 
-    annot_Z = f"{info["mean_ccdt_Z"]:.1f}({info["std_ccdt_Z"]})"
-    annot_R = f"{info["mean_ccdt_R"]:.1f}({info["std_ccdt_R"]})"
-    annot_T = f"{info["mean_ccdt_T"]:.1f}({info["std_ccdt_T"]})"
-    ax.text(-1, y[i], f"{annot_Z},{annot_R},{annot_T}", fontsize=5, zorder=3)
+    annot_Z = f"{info["mean_ccdt_Z"]:.1f}({info["std_ccdt_Z"]:.1f})"
+    annot_R = f"{info["mean_ccdt_R"]:.1f}({info["std_ccdt_R"]:.1f})"
+    annot_T = f"{info["mean_ccdt_T"]:.1f}({info["std_ccdt_T"]:.1f})"
+    ax.text(-1, y[i], f" {annot_Z},{annot_R},{annot_T}", fontsize=5, zorder=3)
 
 
 ax.set_xticks([-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1])

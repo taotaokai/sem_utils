@@ -22,6 +22,20 @@ then
   exit -1
 fi
 
+if [ ! -d "${initial_model_dir}" ]
+then
+  echo "[ERROR] initial_model_dir(${initial_model_dir}) does NOT exist"
+  exit -1
+fi
+initial_model_dir=$(readlink -f $initial_model_dir)
+
+if [ ! -d "${perturbed_model_dir}" ]
+then
+  echo "[ERROR] perturbed_model_dir(${perturbed_model_dir}) does NOT exist"
+  exit -1
+fi
+perturbed_model_dir=$(readlink -f $perturbed_model_dir)
+
 cat <<EOF > ${workflow_file}
 {
   "settings": {

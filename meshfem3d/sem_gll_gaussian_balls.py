@@ -1,11 +1,10 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 import argparse
-import numpy as np
-from mpi4py import MPI
 
+import numpy as np
 from meshfem3d_constants import R_EARTH_KM
 from meshfem3d_utils import sem_mesh_read, write_gll_file
+from mpi4py import MPI
 
 # MPI initialization
 comm_world = MPI.COMM_WORLD
@@ -25,20 +24,26 @@ def parse_arguments():
         "point_list",
         help="list of x,y,z,[sigma_km,amplitude], where x,y,z are non-dimensionalized by R_EARTH (e.g. 6371 km), sigma_km is optional",
     )
-    parser.add_argument("--sigma_km", default=10.0, type=float, help="sigma of Gaussian balls in km")
-    parser.add_argument("--amplitude", default=1.0, type=float, help="amplitude of Gaussian balls")
+    parser.add_argument(
+        "--sigma_km", default=10.0, type=float, help="sigma of Gaussian balls in km"
+    )
+    parser.add_argument(
+        "--amplitude", default=1.0, type=float, help="amplitude of Gaussian balls"
+    )
     parser.add_argument("--out_dir", default="./", help="output directory of GLL file")
     parser.add_argument(
         "--out_tag",
         default="gauss",
         help="model tag for output GLL file as proc*_reg1_[out_tag].bin",
     )
-    parser.add_argument("--overwrite_ok", action="store_true", help="allow overwrites existing file")
+    parser.add_argument(
+        "--overwrite_ok", action="store_true", help="allow overwrites existing file"
+    )
     return parser.parse_args()
 
 
 def read_mesh_file(mesh_dir, iproc):
-    mesh_file = "%s/proc%06d_reg1_solver_data.bin" % (mesh_dir, iproc)
+    mesh_file = f"{mesh_dir}/proc{iproc:06d}_reg1_solver_data.bin"
     mesh_data = sem_mesh_read(mesh_file)
     return mesh_data
 
@@ -62,7 +67,7 @@ def read_list(point_list, sigma_km, amplitude):
 
     if "sigma_km" in df.columns:
         sigmas = df["sigma_km"].to_numpy(dtype=float)
-    else:   
+    else:
         sigmas = np.full(npts, sigma_km)
     sigmas = sigmas / R_EARTH_KM
 
@@ -92,7 +97,9 @@ def main():
     if rank_world == 0:
         print(args)
 
-    points, sigmas, amplitudes = read_list(args.point_list, args.sigma_km, args.amplitude)
+    points, sigmas, amplitudes = read_list(
+        args.point_list, args.sigma_km, args.amplitude
+    )
 
     for iproc in range(rank_world, args.nproc, size_world):
         mesh_data = read_mesh_file(args.mesh_dir, iproc)
@@ -101,7 +108,9 @@ def main():
         # toc = time.time() - tic
         # print("iproc=%d, time=%f" % (iproc, toc))
         ibool = mesh_data["ibool"]
-        write_gll_file(args.out_dir, args.out_tag, iproc, model[ibool], overwrite=args.overwrite_ok)
+        write_gll_file(
+            args.out_dir, args.out_tag, iproc, model[ibool], overwrite=args.overwrite_ok
+        )
 
 
 if __name__ == "__main__":

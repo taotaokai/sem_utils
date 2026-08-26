@@ -40,7 +40,7 @@ def parse_arguments():
 
 
 def read_mesh_file(mesh_dir, iproc):
-    mesh_file = "%s/proc%06d_reg1_solver_data.bin" % (mesh_dir, iproc)
+    mesh_file = f"{mesh_dir}/proc{iproc:06d}_reg1_solver_data.bin"
     mesh_data = sem_mesh_read(mesh_file)
 
     return mesh_data
@@ -131,13 +131,13 @@ def main():
         tic = time.time()
         weight_mask = make_gaussian_mask(mesh_data["xyz_glob"], xyz_mask, sigma_mask)
         toc = time.time() - tic
-        print("iproc=%d, time=%f" % (iproc, toc))
+        print(f"iproc={iproc}, time={toc}")
 
         if args.reverse:
             weight_mask = 1.0 - weight_mask
 
         ibool = mesh_data["ibool"]
-        out_file = "%s/proc%06d_reg1_mask.bin" % (args.out_dir, iproc)
+        out_file = f"{args.out_dir}/proc{iproc:06d}_reg1_mask.bin"
         with FortranFile(out_file, "w") as f:
             f.write_record(np.array(weight_mask[ibool], dtype="f4"))
 

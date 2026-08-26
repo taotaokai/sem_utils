@@ -7,8 +7,6 @@
 
 # set -x
 
-# SEM_iter_dir=${1:?[arg] SEM_iter_dir, e.g. stage00_source/iter00}
-# SEM_iter_tag=${2:?[arg] SEM_iter_tag, e.g. s00i01, job name prefix}
 control_file=${1:?[arg]need control_file}
 event_list=${2:?[arg] event_list, e.g. events.lst]}
 workflow_file=${3:?[arg] workflow_file, e.g. workflow.json}

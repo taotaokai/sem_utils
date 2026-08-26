@@ -1,53 +1,28 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-import os
-import warnings
-
-# import os.path
-from collections import OrderedDict
 import multiprocessing
+import os
 import queue
+import warnings
+from collections import OrderedDict
 
-#
-import numpy as np
-import scipy
-import scipy.signal as signal
-
-# from scipy import interpolate
-#
-import tables as pt
-import pandas as pd
-
-# import hashlib
-
-#
-from obspy import UTCDateTime, read, Trace, Stream
-
-# from obspy.geodetics import gps2dist_azimuth, kilometer2degrees
-from obspy.taup import TauPyModel
-from obspy.imaging.beachball import beach
-from obspy.signal.invsim import cosine_sac_taper
-from obspy.signal.interpolation import lanczos_interpolation
-
-#
-import pyproj
-
-# from lanczos_interp1 import lanczos_interp1
-
-# from obspy.signal.interpolation import lanczos_interpolation
-
-#
 import matplotlib
+import numpy as np
+import pandas as pd
+import pyproj
+import scipy
+import tables as pt
+from obspy import Stream, Trace, UTCDateTime, read
+from obspy.imaging.beachball import beach
+from obspy.signal.interpolation import lanczos_interpolation
+from obspy.signal.invsim import cosine_sac_taper
+from obspy.taup import TauPyModel
+from scipy import signal
 
 matplotlib.use("pdf")
-from matplotlib.backends.backend_pdf import PdfPages
-import matplotlib.pyplot as plt
-
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-
-#
+import matplotlib.pyplot as plt
 import yaml
+from matplotlib.backends.backend_pdf import PdfPages
 
 # NOTE
 # 1. spectrum relation between DFT and FT
@@ -72,7 +47,7 @@ def stf_gauss_spectrum(f, tau):
       here, we take t0 = 0, then
       F_stf = exp(- pi^2 * f^2 * tau^2)
     """
-    F_src = np.exp(-np.pi**2 * f**2 * tau**2)
+    F_src = np.exp(-(np.pi**2) * f**2 * tau**2)
     # F_ds_dt0 = -2.0j * np.pi * f * F_src
     # F_ds_dtau = -2.0 * (np.pi*f)**2 * tau * F_src
     # return F_src, F_ds_dt0, F_ds_dtau
@@ -412,8 +387,8 @@ def _get_syn_ENZ(g_sta, syn_tag):
 
     # rotate syn to ENZ
     data_nt = syn.attrs["npts"]
-    data_fs = syn.attrs["sampling_rate"]
-    data_dt = 1.0 / data_fs
+    # data_fs = syn.attrs["sampling_rate"]
+    # data_dt = 1.0 / data_fs
     syn_ENZ = np.zeros((3, data_nt))
     syn_ENZ[:] = syn[:]
     proj_matrix = np.zeros((3, 3))
@@ -591,7 +566,7 @@ def _measure_adj_one_sta(
     data_fs = obs_attrs["sampling_rate"]
     data_dt = 1.0 / data_fs
     data_nt = obs_attrs["npts"]
-    data_te = data_tb + (data_nt - 1) * data_dt
+    # data_te = data_tb + (data_nt - 1) * data_dt
     data_times = np.arange(data_nt, dtype=float) * data_dt
     noise_te = (first_arrtime - data_tb) - cfg_noise_before_first_arrival
     # noise_idx1 = int(noise_te * data_fs)  # 0:idx1 as noise
@@ -634,11 +609,15 @@ def _measure_adj_one_sta(
         butter_N = win["butter_N"]
         butter_Wn = win["butter_Wn"]
         # fft
-        pad_length = max(20.0, 2.0 / min(butter_Wn)) # pad both ends before apply filter to reduce edge effect
+        pad_length = max(
+            20.0, 2.0 / min(butter_Wn)
+        )  # pad both ends before apply filter to reduce edge effect
         npad = int(pad_length * data_fs)
         # nfft = scipy.fft.next_fast_len(data_nt + npad)
         nfft = scipy.fft.next_fast_len(data_nt + 2 * npad)
-        taper = cosine_taper(np.arange(nfft), [0, npad, npad + data_nt, nfft-1]) # applied before filtering
+        taper = cosine_taper(
+            np.arange(nfft), [0, npad, npad + data_nt, nfft - 1]
+        )  # applied before filtering
         freqs = np.fft.rfftfreq(nfft, d=data_dt)
         # window filter
         sos = scipy.signal.butter(
@@ -711,11 +690,19 @@ def _measure_adj_one_sta(
         # apply filter to obs, syn
         # obs = Fw * (Fd * d), obs_ENZ = Fd * d, d = disp. or vel.
         # obs_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ, nfft), nfft)[:, :data_nt]
-        obs_ENZ_pad = np.pad(obs_ENZ, ((0,0), (npad, nfft-data_nt-npad)), "edge") * taper[None, :]
-        obs_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ_pad, nfft), nfft)[:, npad:(npad+data_nt)]
+        obs_ENZ_pad = (
+            np.pad(obs_ENZ, ((0, 0), (npad, nfft - data_nt - npad)), "edge")
+            * taper[None, :]
+        )
+        obs_filt = np.fft.irfft(Fw * np.fft.rfft(obs_ENZ_pad, nfft), nfft)[
+            :, npad : (npad + data_nt)
+        ]
         # syn = Fw * (Fd * [Ft] * [S] * u), (syn_ENZ = Fd * u)
         # f_syn = np.fft.rfft(syn_ENZ, nfft)
-        syn_ENZ_pad = np.pad(syn_ENZ, ((0,0), (npad, nfft-data_nt-npad)), "edge") * taper[None, :]
+        syn_ENZ_pad = (
+            np.pad(syn_ENZ, ((0, 0), (npad, nfft - data_nt - npad)), "edge")
+            * taper[None, :]
+        )
         f_syn = np.fft.rfft(syn_ENZ_pad, nfft)
         if syn_to_vel:
             f_syn *= Ft
@@ -723,7 +710,7 @@ def _measure_adj_one_sta(
             f_src = stf_gauss_spectrum(freqs, event_tau)
             f_syn *= f_src
         # syn_filt = np.fft.irfft(Fw * f_syn, nfft)[:, :data_nt]
-        syn_filt = np.fft.irfft(Fw * f_syn, nfft)[:, npad:(npad+data_nt)]
+        syn_filt = np.fft.irfft(Fw * f_syn, nfft)[:, npad : (npad + data_nt)]
         # noise
         taper_width = 0.5 / min(butter_Wn)
         noise_win = cosine_sac_taper(
@@ -1002,7 +989,7 @@ def _linearized_search_cc_by_stations(args):
 
         assert obs_tag in g_sta
         assert syn_tag in g_sta
-        for _, tag in dsyn_tags.items():
+        for tag in dsyn_tags.values():
             assert tag in g_sta
 
         obs = g_sta[obs_tag]
@@ -1018,13 +1005,13 @@ def _linearized_search_cc_by_stations(args):
             msg = f"unknown obs/syn types ({obs_type}/{syn_type}) in {g_sta._v_name}"
             raise ValueError(msg)
 
-        for _, dsyn_tag in dsyn_tags.items():
+        for dsyn_tag in dsyn_tags.values():
             assert g_sta[dsyn_tag].attrs["is_grn"] == g_sta[syn_tag].attrs["is_grn"]
             assert g_sta[dsyn_tag].attrs["type"] == g_sta[syn_tag].attrs["type"]
 
         try:
             dsyn_dm = {}
-            obs_ENZ, no_Hchan = _get_obs_ENZ(g_sta, obs_tag)
+            obs_ENZ, _no_Hchan = _get_obs_ENZ(g_sta, obs_tag)
             syn_ENZ = _get_syn_ENZ(g_sta, syn_tag)
             for m, tag in dsyn_tags.items():
                 dsyn_dm[m] = _get_syn_ENZ(g_sta, tag)
@@ -1154,7 +1141,7 @@ def _linearized_search_cc_by_stations(args):
     return wcc_sum, weight_sum
 
 
-class Misfit(object):
+class Misfit:
     """Class managing all misfit windows
 
         Unit: kg,m,s
@@ -1238,7 +1225,7 @@ class Misfit(object):
             else:
                 raise FileExistsError(f"{h5_path} is not a valid HDF5 file!")
         else:
-            with pt.open_file(h5_path, "w") as h5f:
+            with pt.open_file(h5_path, "w"):
                 pass
         self.h5_path = h5_path
 
@@ -1248,7 +1235,7 @@ class Misfit(object):
 
         with pt.open_file(self.h5_path, "r+") as h5f:
             if "config" in h5f.root._v_attrs:
-                msg = f"config field exists, overwrite!"
+                msg = "config field exists, overwrite!"
                 warnings.warn(msg)
             h5f.root._v_attrs["config"] = self.config
 
@@ -1262,13 +1249,13 @@ class Misfit(object):
             header=None,
             comment="#",
             names=["key", "value"],
-            dtype=dict(key=object, value=object),
+            dtype={"key": object, "value": object},
             index_col=["key"],
         ).to_dict()["value"]
 
         with pt.open_file(self.h5_path, "r+") as h5f:
             if "solver" in h5f.root._v_attrs:
-                msg = f"solver field exists, overwrite!"
+                msg = "solver field exists, overwrite!"
                 warnings.warn(msg)
             h5f.root._v_attrs["solver"] = self.solver_param
 
@@ -1276,7 +1263,7 @@ class Misfit(object):
         """cmt_file (str): CMTSOLUTION format file"""
 
         with open(cmt_file, "r") as f:
-            lines = [x for x in f.readlines() if not (x.startswith("#"))]
+            lines = [x for x in f if not (x.startswith("#"))]
 
         header = lines[0].split()
         year = header[1]
@@ -1316,18 +1303,16 @@ class Misfit(object):
             # x, y, z = pyproj.transform(lla, ecef, lon, lat, alt)
 
         # centroid time: t0
-        isotime = "{:s}-{:s}-{:s}T{:s}:{:s}:{:s}Z".format(
-            year, month, day, hour, minute, second
-        )
+        isotime = f"{year:s}-{month:s}-{day:s}T{hour:s}:{minute:s}:{second:s}Z"
         t0 = UTCDateTime(isotime) + time_shift
         # modify origin time in header line to the centroid origin time
-        header[1] = "{:04d}".format(t0.year)
-        header[2] = "{:02d}".format(t0.month)
-        header[3] = "{:02d}".format(t0.day)
-        header[4] = "{:02d}".format(t0.hour)
-        header[5] = "{:02d}".format(t0.minute)
+        header[1] = f"{t0.year:04d}"
+        header[2] = f"{t0.month:02d}"
+        header[3] = f"{t0.day:02d}"
+        header[4] = f"{t0.hour:02d}"
+        header[5] = f"{t0.minute:02d}"
         minisecond = round(t0.microsecond * 1e-3)
-        header[6] = "{:02d}.{:03d}".format(t0.second, minisecond)
+        header[6] = f"{t0.second:02d}.{minisecond:03d}"
         header_line = " ".join(header)
         t0 = t0.replace(microsecond=minisecond * 1000)
 
@@ -1368,8 +1353,8 @@ class Misfit(object):
             mt_rtp = mt * 1.0e-7
             mt_xyz = np.dot(np.dot(a, mt_rtp), np.transpose(a))
         # get moment magnitude Mw
-        m0 = (np.sum(mt_xyz**2) / 2.0)**0.5 # scalar moment
-        mw = (np.log10(m0) - 9.05) / 1.5 # definition by Kanamori
+        m0 = (np.sum(mt_xyz**2) / 2.0) ** 0.5  # scalar moment
+        mw = (np.log10(m0) - 9.05) / 1.5  # definition by Kanamori
 
         with pt.open_file(self.h5_path, "r+") as h5f:
             src_path = "/source"
@@ -1497,7 +1482,7 @@ class Misfit(object):
         with open(channel_file, "r") as f:
             lines = [
                 x.replace("\n", "").split("|")
-                for x in f.readlines()
+                for x in f
                 if not (x.startswith("#"))
             ]
 
@@ -1680,7 +1665,7 @@ class Misfit(object):
                 for cha in data_channels:
                     cha1 = [c for c in channels if c["channel"] == cha["name"]]
                     if len(cha1) == 0:
-                        msg = f"no channel info found for {cha["name"]} ({g_sta_obs._v_name}),  use az/dip given in the data"
+                        msg = f"no channel info found for {cha['name']} ({g_sta_obs._v_name}),  use az/dip given in the data"
                         warnings.warn(msg)
                         continue
                     if len(cha1) > 1:
@@ -1692,7 +1677,8 @@ class Misfit(object):
                 data_channel_names = [cha["name"] for cha in data_channels]
                 coords = [
                     (cha["latitude"], cha["longitude"], cha["elevation"], cha["depth"])
-                    for cha in channels if cha["channel"] in data_channel_names
+                    for cha in channels
+                    if cha["channel"] in data_channel_names
                 ]
                 if len(set(coords)) != 1:
                     msg = f"inconsistent coordinates in ({channels}), ignored"
@@ -1739,8 +1725,7 @@ class Misfit(object):
                 baz = baz % 360
                 dist_degree = np.rad2deg(dist / R_earth)
                 evdp_km = event["depth"]
-                if evdp_km < 0.0:
-                    evdp_km = 0.0
+                evdp_km = max(evdp_km, 0.0)
                 ttp = taup_model.get_travel_times(
                     source_depth_in_km=evdp_km,
                     distance_in_degree=dist_degree,
@@ -1990,15 +1975,14 @@ class Misfit(object):
                 err = f"{g_sta._v_name}: Inconsistent origin time between sac headers ({syn_origin_time}) and event['t0'] ({event_t0})"
                 raise Exception(err)
 
-            if is_diff:
-                if (
-                    solver_tb != UTCDateTime(syn.attrs["solver_tb"])
-                    or solver_nt != syn.attrs["solver_nt"]
-                    or solver_dt != syn.attrs["solver_dt"]
-                ):
-                    msg = f"perturbed synthetics ({syn_sac_files}) do not have equal time samples as the initial synthetics."
-                    warnings.warn(msg)
-                    # raise Exception(msg)
+            if is_diff and (
+                solver_tb != UTCDateTime(syn.attrs["solver_tb"])
+                or solver_nt != syn.attrs["solver_nt"]
+                or solver_dt != syn.attrs["solver_dt"]
+            ):
+                msg = f"perturbed synthetics ({syn_sac_files}) do not have equal time samples as the initial synthetics."
+                warnings.warn(msg)
+                # raise Exception(msg)
 
             # use_tb = max(first_arrtime - left_pad, solver_tb - left_pad, obs_tb)
             # use_te = min(solver_te, obs_te)
@@ -2049,7 +2033,6 @@ class Misfit(object):
             # avoid filter response from edge
             valid_te = solver_te - 1.0 / min_cutoff_freq
 
-            #
             taper = cosine_taper(
                 np.arange(nfft),
                 [0, npad + nt_lpad, npad + nt_lpad + solver_nt, nfft - 1],
@@ -2160,7 +2143,6 @@ class Misfit(object):
         h5f.close()
 
     def setup_windows(self, window_yaml=None):
-        """ """
         h5f = pt.open_file(self.h5_path, "r+")
 
         config = h5f.root._v_attrs["config"]
@@ -2178,7 +2160,7 @@ class Misfit(object):
         if window_cfg is not None:
             if "window" in config:
                 msg = f"root._v_attrs[window] exists in {h5f.filename}, overwrite!"
-                warnings.warn(msg)    
+                warnings.warn(msg)
             config["window"] = window_cfg
         elif "window" in config:
             window_cfg = config["window"]
@@ -2187,9 +2169,9 @@ class Misfit(object):
             raise AssertionError(msg)
 
         win_taper = config["window_taper"]
-        win_ids = set([w["id"] for w in window_cfg])
+        win_ids = {w["id"] for w in window_cfg}
         if len(win_ids) != len(window_cfg):
-            msg = "window's id is not unique in {window_cfg}"
+            msg = f"window's id is not unique in {window_cfg}"
             raise AssertionError(msg)
 
         cache = OrderedDict()
@@ -2205,8 +2187,7 @@ class Misfit(object):
         event = tbl_src[0]
         event_t0 = UTCDateTime(event["t0"])
         evdp_km = event["depth"]
-        if evdp_km < 0.0:
-            evdp_km = 0.0
+        evdp_km = max(evdp_km, 0.0)
 
         obs_tag = config["data"]["tag"]
         syn_tag = config["syn"]["tag"]
@@ -2240,10 +2221,10 @@ class Misfit(object):
 
             obs = g_sta[obs_tag]
             syn = g_sta[syn_tag]
-            solver_tb = UTCDateTime(syn.attrs["solver_tb"])
-            solver_nt = syn.attrs["solver_nt"]
-            solver_dt = syn.attrs["solver_dt"]
-            solver_te = solver_tb + solver_nt * solver_dt
+            # solver_tb = UTCDateTime(syn.attrs["solver_tb"])
+            # solver_nt = syn.attrs["solver_nt"]
+            # solver_dt = syn.attrs["solver_dt"]
+            # solver_te = solver_tb + solver_nt * solver_dt
             solver_valid_te = UTCDateTime(syn.attrs["valid_te"])
             obs_tb = UTCDateTime(obs.attrs["starttime"])
             obs_nt = obs.attrs["npts"]
@@ -2301,8 +2282,9 @@ class Misfit(object):
                 win_type = win["type"]
                 win_phase = win["phase"]
                 cmpnm = win["cmp"]
-                win_bp = win["bp"] # filter parameter defined as [order, freq_min, freq_max]
-                bp_long_period = 1.0 / min(win_bp[1:])
+                # filter parameter defined as [order, freq_min, freq_max]
+                win_bp = win["bp"]  
+                # bp_long_period = 1.0 / min(win_bp[1:])
                 evdp_limit = win["evdp"]
                 gcarc_limit = win["gcarc"]
                 win_weight = win["weight"]
@@ -2367,7 +2349,7 @@ class Misfit(object):
                 #     valid_te - bp_long_period, event_t0 + te
                 # )  # +/-bp_long_period: to avoid filter edge effect in the later bandpass process
                 win_tb = max(valid_tb, event_t0 + tb)
-                win_te = min(valid_te, event_t0 + te)  
+                win_te = min(valid_te, event_t0 + te)
 
                 # print(solver_te, obs_te, solver_valid_te, win_te)
 
@@ -2394,7 +2376,7 @@ class Misfit(object):
                     cmpaz = float("nan")
                     cmpdip = float("nan")
                 else:
-                    warnings.warn("[WARN] %s: unrecognized component, SKIP." % (cmpnm))
+                    warnings.warn(f"[WARN] {cmpnm}: unrecognized component, SKIP.")
                     continue
 
                 #
@@ -3223,7 +3205,6 @@ class Misfit(object):
         h5f.close()
 
     class FileAccess(multiprocessing.Process):
-
         def __init__(self, h5_path, read_queue, result_queues, write_queue, shutdown):
             self.h5_path = h5_path
             self.read_queue = read_queue
@@ -3327,7 +3308,6 @@ class Misfit(object):
             tbl_win.flush()
 
     class DataProcessor(multiprocessing.Process):
-
         def __init__(
             self,
             read_queue,
@@ -3530,7 +3510,7 @@ class Misfit(object):
 
         plot_clip = float(clip_ratio)
         if plot_clip < 1.0:
-            raise Exception("clip_ratio(%f) should be larger than 1.0" % (plot_clip))
+            raise Exception(f"clip_ratio({plot_clip}) should be larger than 1.0")
 
         h5f = pt.open_file(self.h5_path, "r")
 
@@ -3573,8 +3553,7 @@ class Misfit(object):
         evdp = event["depth"]
         evnm = event["id"].decode()
         # evdp has to be >=0 otherwise taup would crash
-        if evdp < 0.0:
-            evdp = 0.0
+        evdp = max(evdp, 0.0)
         mt = event["mt_rtp"]
         Mrr = mt[0][0]
         Mtt = mt[1][1]
@@ -3590,7 +3569,7 @@ class Misfit(object):
         windows = [
             (win, g_wav[stnm])
             for win in tbl_win.read_where(f'id == b"{win_id}"')
-            if (stnm := f'{win["network"].decode()}_{win["station"].decode()}') in g_wav
+            if (stnm := f"{win['network'].decode()}_{win['station'].decode()}") in g_wav
             and win["cmpnm"].decode() in cmpnm_select
         ]
         if not windows:
@@ -3622,7 +3601,7 @@ class Misfit(object):
         # )
 
         # ------ calculate traveltime curves (only for body wave)
-        phases = set([w["phase"].decode() for w, _ in windows if w["type"] == b"body"])
+        phases = {w["phase"].decode() for w, _ in windows if w["type"] == b"body"}
         phase_list = [a for p in phases for a in p.split(",")]
         if windows[0][0]["type"] == b"Pwin":
             phase_list.extend(["p", "P"])
@@ -3684,7 +3663,7 @@ class Misfit(object):
                 nwin_bin = 0
                 while bin_idx0 < nwin:
                     winfo, g_sta = windows[bin_idx0]
-                    bin_idx0 += 1 # index of next window
+                    bin_idx0 += 1  # index of next window
                     if not winfo["valid"]:
                         msg = f"invalid window: {winfo}, skip"
                         warnings.warn(msg)
@@ -4191,7 +4170,12 @@ class Misfit(object):
                     )
                     # ax_1comp.text(160, dist_degree, str_annot,
                     #    verticalalignment='center', fontsize=7)
-                ax_1comp.text(max(plot_time), plot_ymax, "net,sta(cc0,ccmax,dt,SNR,weight)", fontsize=7,)
+                ax_1comp.text(
+                    max(plot_time),
+                    plot_ymax,
+                    "net,sta(cc0,ccmax,dt,SNR,weight)",
+                    fontsize=7,
+                )
                 # -- set axes limits and lables, annotation
                 ax_1comp.set_xlim(min(plot_time), max(plot_time))
                 # ax_1comp.set_xlim(80,160)
@@ -4269,8 +4253,8 @@ class Misfit(object):
 
             # npad_left = npad_right = 0
             # if solver_tb < data_tb:
-            npad_left = int(max(0, data_tb - solver_tb) * data_fs) + 1 
-            #NOTE +1 to work out the rounding error in epoch time conversion in UTCDateTime 
+            npad_left = int(max(0, data_tb - solver_tb) * data_fs) + 1
+            # NOTE +1 to work out the rounding error in epoch time conversion in UTCDateTime
             # if solver_te > data_te:
             npad_right = int(max(0, solver_te - data_te) * data_fs) + 1
 
@@ -4338,7 +4322,7 @@ class Misfit(object):
 
         # read source gradient (src_frechet.000001)
         with open(srcfrechet_file, "r") as f:
-            lines = [x for x in f.readlines() if not (x.startswith("#"))]
+            lines = [x for x in f if not (x.startswith("#"))]
 
         lines = [x.split() for x in lines]
 
@@ -5191,8 +5175,7 @@ class Misfit(object):
         evdp = event["depth"]
         evnm = event["id"].decode()
         # evdp has to be >=0 otherwise taup would crash
-        if evdp < 0.0:
-            evdp = 0.0
+        evdp = max(evdp, 0.0)
         mt = event["mt_rtp"]
         Mrr = mt[0][0]
         Mtt = mt[1][1]
@@ -5206,7 +5189,7 @@ class Misfit(object):
         data = [
             (win, g_wav[stnm])
             for win in tbl_win.read()
-            if (stnm := f'{win["network"].decode()}_{win["station"].decode()}') in g_wav
+            if (stnm := f"{win['network'].decode()}_{win['station'].decode()}") in g_wav
         ]
         if not data:
             warnings.warn("No data to plot!")
@@ -5230,7 +5213,7 @@ class Misfit(object):
         #     [*stla_all, evla], [*stlo_all, evlo], 1.1
         # )
 
-        window_ids = list(set([win["id"].decode() for win, _ in data]))
+        window_ids = list({win["id"].decode() for win, _ in data})
 
         # projection = ccrs.TransverseMercator(central_latitude=map_latc, central_longitude=map_lonc)
         # projection = ccrs.Mercator(central_longitude=map_lonc, min_latitude=min_lat, max_latitude=max_lat,
@@ -5396,13 +5379,13 @@ class Misfit(object):
         data = [
             (win, g_wav[stnm])
             for win in tbl_win.read()
-            if (stnm := f'{win["network"].decode()}_{win["station"].decode()}') in g_wav
+            if (stnm := f"{win['network'].decode()}_{win['station'].decode()}") in g_wav
         ]
         if not data:
             warnings.warn("No data to plot!")
             return
 
-        window_ids = sorted(set([win["id"].decode() for win, _ in data]))
+        window_ids = sorted({win["id"].decode() for win, _ in data})
 
         with PdfPages(out_fig) as pdf:
             snr_list = np.array([win["SNR"] for win, _ in data])

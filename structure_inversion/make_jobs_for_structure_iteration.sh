@@ -7,39 +7,21 @@
 
 # set -x
 
-SEM_iter_dir=${1:?[arg] SEM_iter_dir, e.g. stage00_structure/iter00}
-SEM_iter_tag=${2:?[arg] SEM_iter_tag, e.g. s00i01, job name prefix}
-event_list=${3:?[arg] event_list, e.g. events.lst]}
-workflow_file=${4:?[arg] workflow_file, e.g. workflow.json}
-dep_jobs=${5:-}
+control_file=${1:?[arg]need control_file}
+event_list=${2:?[arg] event_list, e.g. events.lst]}
+workflow_file=${3:?[arg] workflow_file, e.g. workflow.json}
+dep_jobs=${4:-}
 
-# control_file=stage00_structure/config/control_file_structure
-# event_list=events.lst
-# dep_jobs=""
-# workflow_file=workflow.json
+source ${control_file}
+if [ $? -ne 0 ]
+then
+  echo "[ERROR] failed to source $control_file"
+  exit -1
+fi
 
-# ./sem_utils/structure_inversion/proc_event_regEQ.sh ${control_file} ${event_list}
+$SEM_utils_dir/structure_inversion/proc_event_regEQ.sh ${control_file} ${event_list}
 
-# source ${control_file}
-# if [ $? -ne 0 ]
-# then
-#   echo "[ERROR] failed to source $control_file"
-#   exit -1
-# fi
-
-# cat <<EOF > ${workflow_file}
-# {
-#   "settings": {
-#     "max_retries": 5,
-#     "check_interval_seconds": 60,
-#     "max_concurrent_submissions": 100,
-#     "ban_duration_seconds": 3600,
-#     "max_node_strikes": 3,
-#     "log_file": "slurm.log",
-#     "checkpoint_path": "checkpoint.json"
-#   },
-#   "jobs": [
-# EOF
+SEM_iter_tag=s${SEM_stage_num}i${SEM_iter_num}
 
 job_file=${SEM_iter_dir}/slurm/mesh.job
 job_name=${SEM_iter_tag}_mesh

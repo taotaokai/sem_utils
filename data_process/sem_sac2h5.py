@@ -1,23 +1,21 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 Convert SEM sac files to h5 format with filtering and resampling.
 
 This module provides functionality to convert seismic waveform data from SAC format
 to HDF5 format, applying low-pass filtering and resampling as needed.
 """
-import os
 import argparse
+import os
 import warnings
-from typing import List, Optional, Tuple
 
-import scipy
-import scipy.signal
-import scipy.fft
 import numpy as np
-import tables
-import pandas as pd
 import obspy
+import pandas as pd
+import scipy
+import scipy.fft
+import scipy.signal
+import tables
 from obspy import Stream, Trace, read_events
 
 
@@ -54,7 +52,7 @@ def parse_arguments():
         "--sac_suffix", default=".sem.sac", help="suffix of SEM sac files"
     )
     parser.add_argument(
-        "--data_type", default="DISP", help="data type of SEM sac files, e.g. VEL, DISP"
+        "--data_type", default="DISP", help="data type of the output .h5 file, e.g. DISP, VEL"
     )
     parser.add_argument(
         "--pad_before",
@@ -67,7 +65,7 @@ def parse_arguments():
 
 
 def apply_lowpass_filter(
-    trace: Trace, low_pass_freq: float, low_pass_order: int
+    trace: Trace, low_pass_freq: float, low_pass_order: int, num_derivative: int = 0
 ) -> None:
     """
     Apply low-pass filter to a trace using a Butterworth filter.
@@ -95,6 +93,11 @@ def apply_lowpass_filter(
     # Transform to frequency domain, apply filter, transform back
     sig_spectrum = np.fft.rfft(np.pad(trace.data, (npad, nfft-npts-npad), mode='edge'), nfft)
     sig_spectrum *= abs(h_lp)
+    # time derivative in frequency domain
+    if num_derivative != 0:
+        Ft = 2j * np.pi * freqs
+        ind = freqs != 0
+        sig_spectrum[ind] *= np.power(Ft[ind], num_derivative)
     filtered_data = np.fft.irfft(sig_spectrum, nfft)[npad:(npts+npad)]
 
     trace.data = filtered_data
@@ -139,13 +142,14 @@ def process_station_traces(
     net: str,
     sta: str,
     loc: str,
-    channels: List[str],
+    channels: list[str],
     sac_suffix: str,
     resample_fs: float,
     low_pass_freq: float,
     low_pass_order: int,
     pad_before: float,
-) -> Optional[Stream]:
+    num_derivative: int = 0,
+) -> Stream | None:
     """
     Process all traces for a single station.
 
@@ -200,7 +204,7 @@ def process_station_traces(
             pad_npts = int((tr.stats.starttime - resample_starttime) * tr.stats.sampling_rate) + 5
             tr.data = np.pad(tr.data, (pad_npts, 0), mode="edge")
             tr.stats.starttime -= pad_npts / tr.stats.sampling_rate
-        apply_lowpass_filter(tr, low_pass_freq, low_pass_order)
+        apply_lowpass_filter(tr, low_pass_freq, low_pass_order, num_derivative=num_derivative)
         interpolate_trace(tr, resample_fs, resample_starttime, resample_npts)
 
     return st
@@ -247,11 +251,11 @@ def sac2h5(
     sac_dir: str,
     station_file: str,
     h5_file: str,
-    cmt_file: Optional[str] = None,
+    cmt_file: str | None = None,
     resample_fs: float = 2.0,
     low_pass_freq: float = 0.5,
     low_pass_order: int = 15,
-    channels: List[str] = None,
+    channels: list[str] | None = None,
     sac_suffix: str = ".sem.sac",
     data_type: str = "DISP",
     pad_before: float = 0,
@@ -273,6 +277,15 @@ def sac2h5(
     """
     if channels is None:
         channels = ["BXE", "BXN", "BXZ"]
+
+    if data_type == "DISP":
+        num_derivative = 0
+    elif data_type == "VEL":
+        num_derivative = 1
+    elif data_type == "ACC":
+        num_derivative = 2
+    else:
+        raise ValueError(f"Unknown data type '{data_type}'")
 
     # Open HDF5 file
     with tables.open_file(h5_file, mode="w") as h5f:
@@ -308,6 +321,7 @@ def sac2h5(
                 low_pass_freq,
                 low_pass_order,
                 pad_before,
+                num_derivative=num_derivative
             )
 
             if st is None:

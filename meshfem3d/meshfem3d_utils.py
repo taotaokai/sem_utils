@@ -1316,7 +1316,7 @@ def sem_mesh_interp_points(
     # --- loop over each slice of SEM mesh
     for iproc in range(mesh_nproc):
         # read in source SEM mesh
-        mesh_file = "%s/proc%06d_reg1_solver_data.bin" % (mesh_dir, iproc)
+        mesh_file = f"{mesh_dir}/proc{iproc:06d}_reg1_solver_data.bin"
         mesh_data = sem_mesh_read(mesh_file)
 
         # read in source model
@@ -1440,8 +1440,7 @@ def sem_mesh_interp_single_slice(
         npts_per_rank = (npts_glob + mpi_size - 1) // mpi_size
         part_ind0 = mpi_rank * npts_per_rank
         part_ind1 = part_ind0 + npts_per_rank
-        if part_ind1 > npts_glob:
-            part_ind1 = npts_glob
+        part_ind1 = min(part_ind1, npts_glob)
         npts_part = part_ind1 - part_ind0
         xyz_part = xyz_glob_reg[part_ind0:part_ind1, :]
 

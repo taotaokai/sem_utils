@@ -1,9 +1,9 @@
-import os
-import pandas as pd
-import numpy as np
-import pyvista as pv
 import argparse
+import os
 
+import numpy as np
+import pandas as pd
+import pyvista as pv
 from meshfem3d_constants import R_EARTH_KM
 from meshfem3d_utils import ecef2latlon_zeroalt, geodetic_lat2geocentric_lat
 
@@ -123,7 +123,7 @@ for i, xi in enumerate(grid_xi):
                     "x": points[i, j, k, 0],
                     "y": points[i, j, k, 1],
                     "z": points[i, j, k, 2],
-                    "amplitude": (-1.0)**(i + j + k)
+                    "amplitude": (-1.0) ** (i + j + k),
                 }
             )
         # points[i, j, :, :] = grid_radius[:, None] * v[None, :]

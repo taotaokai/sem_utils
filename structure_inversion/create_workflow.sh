@@ -35,30 +35,15 @@ do
     
     # iteration directory
     SEM_iter_num=$(echo "$iter" | awk '{printf "%02d", $1}')
-    SEM_iter_dir=${SEM_stage_dir}/iter${SEM_iter_num}
+    # SEM_iter_dir=${SEM_stage_dir}/iter${SEM_iter_num}
     SEM_iter_tag=s${SEM_stage_num}i${SEM_iter_num}
 
-#     mkdir -p $SEM_iter_dir/slurm
-#     cat<<EOF > $SEM_iter_dir/slurm/create_slurm_jobs.job
-# sed -i "0,/^SEM_iter_num/s/^SEM_iter_num=.*/SEM_iter_num=${SEM_iter_num}/" ${control_file}
-# $SEM_utils_dir/structure_inversion/proc_event_regEQ.sh ${control_file} ${event_list}
-# EOF
-
-#     job_name=${SEM_iter_tag}_create_jobs
-#     job_file=$SEM_iter_dir/slurm/create_slurm_jobs.job
-#     cat<<EOF >> $workflow_file
-#     {
-#       "name": "${job_name}",
-#       "script": "$job_file",
-#       "dependencies": [$dep_job]
-#     }, 
-# EOF
-
     sed -i "0,/^SEM_iter_num/s/^SEM_iter_num=.*/SEM_iter_num=${SEM_iter_num}/" ${control_file}
-    $SEM_utils_dir/structure_inversion/proc_event_regEQ.sh ${control_file} ${event_list}
+
+    # $SEM_utils_dir/structure_inversion/proc_event_regEQ.sh ${control_file} ${event_list}
 
     $SEM_utils_dir/structure_inversion/make_jobs_for_structure_iteration.sh \
-        $SEM_iter_dir $SEM_iter_tag $event_list $workflow_file "$dep_job"
+        $control_file $event_list $workflow_file "$dep_job"
 
     dep_job=\"${SEM_iter_tag}_model_reparam\"
 

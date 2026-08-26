@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """ smoothing specfem3D GLL model in the lateral and vertical directions using Gaussian window of spatially varying size 
 
 ECEF x,y,z coordinates
@@ -9,12 +8,10 @@ import sys
 import time
 
 import numpy as np
-from scipy.io import FortranFile
-
 import pyproj
-
-from meshfem3d_utils import sem_mesh_read
 from meshfem3d_constants import R_EARTH
+from meshfem3d_utils import sem_mesh_read
+from scipy.io import FortranFile
 
 #====== parameters
 nproc = int(sys.argv[1])

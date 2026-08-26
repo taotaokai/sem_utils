@@ -94,7 +94,7 @@ if __name__ == "__main__":
     xi, eta = sem_latlon2xieta(
         mesh_central_lat, mesh_central_lon, mesh_gamma_rot, lats, lons
     )
-    dist_from_edge = np.minimum(0.5 * mesh_width_xi - xi, 0.5 * mesh_width_eta - eta)
+    dist_from_edge = np.minimum(0.5 * mesh_width_xi - np.abs(xi), 0.5 * mesh_width_eta - np.abs(eta))
 
     df_filter = df.iloc[dist_from_edge >= args.min_dist]
 

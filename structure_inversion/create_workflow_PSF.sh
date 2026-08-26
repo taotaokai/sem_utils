@@ -57,6 +57,8 @@ $SEM_utils_dir/structure_inversion/proc_event_regEQ.sh ${control_file} ${event_l
 
 source ${control_file}
 
+SEM_iter_tag=s${SEM_stage_num}i${SEM_iter_num}
+
 rm $SEM_iter_dir/model_initial
 ln -sf ${perturbed_model_dir} $SEM_iter_dir/model_initial
 
@@ -80,6 +82,10 @@ do
   # run forward simulation
   job_file=${event_dir}/slurm/forward.job
   job_name=${SEM_iter_tag}_${event_id}_forward
+
+  # no need to save wavefield snapshots
+  sed  '/^sed -i.*SAVE_FORWARD/s/true/false/'
+
   cat <<EOF >> ${workflow_file}
   {
     "name": "${job_name}",
@@ -146,6 +152,8 @@ sed -i "0,/^SEM_data_dir/s/^SEM_data_dir=.*/SEM_data_dir=${SEM_data_dir}/" ${con
 $SEM_utils_dir/structure_inversion/proc_event_regEQ.sh ${control_file} ${event_list}
 
 source ${control_file}
+
+SEM_iter_tag=s${SEM_stage_num}i${SEM_iter_num}
 
 rm $SEM_iter_dir/model_initial
 ln -sf ${initial_model_dir} $SEM_iter_dir/model_initial

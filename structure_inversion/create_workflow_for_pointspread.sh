@@ -9,10 +9,11 @@
 
 control_file=${1:?[arg]need control_file}
 event_list=${2:?[arg] event_list, e.g. events.lst]}
-initial_model_dir=${3:?[arg] initial_model_dir, e.g. mesh_initial/GLL_initial}
-perturbed_model_dir=${4?:[arg] perturbed_model_dir, e.g. mesh_initial/GLL_initial_psf_alpha}
-workflow_file=${5:?[arg] workflow_file, e.g. workflow.json}
-dep_jobs=${6:-}
+workflow_file=${3:?[arg] workflow_file, e.g. workflow.json}
+initial_model_dir=${4:?[arg] initial_model_dir, e.g. mesh_initial/GLL_initial}
+perturbed_model_dir=${5?:[arg] perturbed_model_dir, e.g. mesh_initial/GLL_initial_psf_alpha}
+data_type=${6?:[arg]data_type, e.g. DISP, VEL}
+dep_jobs=${7:-}
 
 source ${control_file}
 if [ $? -ne 0 ]
@@ -94,7 +95,7 @@ python $SEM_utils_dir/data_process/sem_sac2h5.py \
   \$sac_dir \$station_file \$out_h5 \
   --cmt_file \$cmt_file \
   --pad_before 600 \
-  --data_type VEL
+  --data_type ${data_type}
 
 awk '
 BEGIN {

@@ -103,7 +103,7 @@ EOF
 #SBATCH -o ${job_file}.o%j
 #SBATCH -n 1
 #SBATCH -p ${SLURM_partition_cpu}
-#SBATCH -t 00:01:00
+#SBATCH -t 00:30:00
 
 sac_dir=${event_dir}/output_forward/sac
 station_file=${event_dir}/DATA/STATIONS

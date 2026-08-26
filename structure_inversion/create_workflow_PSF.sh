@@ -84,7 +84,7 @@ do
   job_name=${SEM_iter_tag}_${event_id}_forward
 
   # no need to save wavefield snapshots
-  sed  '/^sed -i.*SAVE_FORWARD/s/true/false/'
+  sed -i '/^sed -i.*SAVE_FORWARD/s/true/false/' ${job_file}
 
   cat <<EOF >> ${workflow_file}
   {
@@ -133,11 +133,11 @@ cp \$station_file ${event_dir}/STATIONS
 EOF
 
   cat <<EOF >> ${workflow_file}
-    {
-      "name": "${job_name}",
-      "script": "$job_file",
-      "dependencies": ["${SEM_iter_tag}_${event_id}_forward"]
-    },
+  {
+    "name": "${job_name}",
+    "script": "$job_file",
+    "dependencies": ["${SEM_iter_tag}_${event_id}_forward"]
+  },
 EOF
   echo $job_name >> $job_list
 

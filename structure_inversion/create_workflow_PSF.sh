@@ -87,11 +87,11 @@ do
   sed -i '/^sed -i.*SAVE_FORWARD/s/true/false/' ${job_file}
 
   cat <<EOF >> ${workflow_file}
-  {
-    "name": "${job_name}",
-    "script": "$job_file",
-    "dependencies": ["$prev_job"]
-  },
+    {
+      "name": "${job_name}",
+      "script": "$job_file",
+      "dependencies": ["$prev_job"]
+    },
 EOF
 
   # convert sac fils to .h5 file
@@ -133,11 +133,11 @@ cp \$station_file ${event_dir}/STATIONS
 EOF
 
   cat <<EOF >> ${workflow_file}
-  {
-    "name": "${job_name}",
-    "script": "$job_file",
-    "dependencies": ["${SEM_iter_tag}_${event_id}_forward"]
-  },
+    {
+      "name": "${job_name}",
+      "script": "$job_file",
+      "dependencies": ["${SEM_iter_tag}_${event_id}_forward"]
+    },
 EOF
   echo $job_name >> $job_list
 
@@ -217,7 +217,7 @@ EOF
 done
 
 cat <<EOF >> ${workflow_file}
-  {}
+    {}
   ]
 }
 EOF

@@ -148,7 +148,7 @@ done
 SEM_data_dir=${SEM_iter_dir}/events
 
 sed -i "0,/^SEM_iter_num/s/^SEM_iter_num=.*/SEM_iter_num=1/" ${control_file}
-sed -i "0,/^SEM_data_dir/s/^SEM_data_dir=.*/SEM_data_dir=${SEM_data_dir}/" ${control_file}
+sed -i "0,/^SEM_data_dir/s#^SEM_data_dir=.*#SEM_data_dir=${SEM_data_dir}#" ${control_file}
 $SEM_utils_dir/structure_inversion/proc_event_regEQ.sh ${control_file} ${event_list}
 
 source ${control_file}

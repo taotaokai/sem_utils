@@ -170,6 +170,7 @@ cat <<EOF >> ${workflow_file}
     },
 EOF
 
+cat /dev/null > $job_list
 dep_job=${job_name}
 for event_id in $(awk 'NF&&$1!~/#/{print $1}' $event_list)
 do

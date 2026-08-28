@@ -12,8 +12,9 @@ event_list=${2:?[arg] event_list, e.g. events.lst]}
 workflow_file=${3:?[arg] workflow_file, e.g. workflow.json}
 initial_model_dir=${4:?[arg] initial_model_dir, e.g. mesh_initial/GLL_initial}
 perturbed_model_dir=${5?:[arg] perturbed_model_dir, e.g. mesh_initial/GLL_initial_psf_alpha}
-data_type=${6?:[arg]data_type, e.g. DISP, VEL}
-dep_jobs=${7:-}
+perturbed_data_dir=${6?:[arg] perturbed_data_dir, e.g. stage00_PSF/data_psf_alpha}
+data_type=${7?:[arg]data_type, e.g. DISP, VEL}
+dep_jobs=${8:-}
 
 source ${control_file}
 if [ $? -ne 0 ]
@@ -36,6 +37,14 @@ then
 fi
 perturbed_model_dir=$(readlink -f $perturbed_model_dir)
 
+[ -d "${perturbed_data_dir}"] || mkdir -p ${perturbed_data_dir}
+if [ ! -d "${perturbed_data_dir}" ]
+then
+  echo "[ERROR] perturbed_data_dir(${perturbed_data_dir}) does NOT exist"
+  exit -1
+fi
+perturbed_data_dir=$(readlink -f $perturbed_data_dir)
+
 cat <<EOF > ${workflow_file}
 {
   "settings": {
@@ -57,7 +66,7 @@ $SEM_utils_dir/structure_inversion/proc_event_regEQ.sh ${control_file} ${event_l
 
 source ${control_file}
 
-SEM_iter_tag=s${SEM_stage_num}i${SEM_iter_num}
+SEM_iter_tag=data
 
 rm $SEM_iter_dir/model_initial
 ln -sf ${perturbed_model_dir} $SEM_iter_dir/model_initial
@@ -95,6 +104,9 @@ do
 EOF
 
   # convert sac fils to .h5 file
+  out_dir=$perturbed_data_dir/$event_id
+  [ -d "${out_dir}"] || mkdir -p ${out_dir}
+
   job_name=${SEM_iter_tag}_${event_id}_sac2h5
   job_file=${event_dir}/slurm/sac2h5.job
   cat <<EOF > ${job_file}
@@ -108,8 +120,8 @@ EOF
 sac_dir=${event_dir}/output_forward/sac
 station_file=${event_dir}/DATA/STATIONS
 cmt_file=${SEM_data_dir}/${event_id}/CMTSOLUTION
-out_h5=${event_dir}/data.h5
-channel_file=${event_dir}/channel.txt
+out_h5=${out_dir}/data.h5
+channel_file=${out_dir}/channel.txt
 
 python $SEM_utils_dir/data_process/sem_sac2h5.py \
   \$sac_dir \$station_file \$out_h5 \
@@ -129,7 +141,8 @@ BEGIN {
   printf "%s|%s|%s|BXN|%f|%f|%f|%f|0|0||||||1999-01-01|2030-01-01\n",\$1,sta,loc,\$3,\$4,\$5,\$6;
 }' \$station_file > \$channel_file
 
-cp \$station_file ${event_dir}/STATIONS 
+cp \$station_file ${out_dir}/STATIONS 
+cp \${event_dir}/DATA/CMTSOLUTION ${out_dir}/CMTSOLUTION_ECEF
 EOF
 
   cat <<EOF >> ${workflow_file}
@@ -145,15 +158,13 @@ done
 
 #2. calculate kernel from initial model with perturbed model synthetics as data
 
-SEM_data_dir=${SEM_iter_dir}/events
-
-sed -i "0,/^SEM_iter_num/s/^SEM_iter_num=.*/SEM_iter_num=1/" ${control_file}
-sed -i "0,/^SEM_data_dir/s#^SEM_data_dir=.*#SEM_data_dir=${SEM_data_dir}#" ${control_file}
+sed -i "0,/^SEM_iter_num/s/^SEM_iter_num=.*/SEM_iter_num=0/" ${control_file}
+sed -i "0,/^SEM_data_dir/s#^SEM_data_dir=.*#SEM_data_dir=${perturbed_data_dir}#" ${control_file}
 $SEM_utils_dir/structure_inversion/proc_event_regEQ.sh ${control_file} ${event_list}
 
 source ${control_file}
 
-SEM_iter_tag=s${SEM_stage_num}i${SEM_iter_num}
+SEM_iter_tag=kernel
 
 rm $SEM_iter_dir/model_initial
 ln -sf ${initial_model_dir} $SEM_iter_dir/model_initial
